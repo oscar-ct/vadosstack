@@ -1,0 +1,361 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id              String                @id @default(cuid())
+  ownerId         String
+  name            String
+  email           String?
+  billingStatus   String                @default("Pending")
+  notes           String?
+  joinedAt        DateTime              @default(now())
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  owner           User                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  addresses       CustomerAddress[]
+  phoneNumbers    CustomerPhoneNumber[]
+  jobs            Job[]
+  estimateRecords EstimateRecord[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, email])
+  @@index([ownerId])
+  @@map("customers")
+}
+
+model Job {
+  id              String       @id @default(cuid())
+  ownerId         String
+  customerId      String?
+  description     String
+  serviceLocation String?
+  dateBegin       DateTime?
+  dateEnd         DateTime?
+  estimatedCost   Decimal?
+  laborCost       Decimal?     @default(0)
+  laborItems      String       @default("[]")
+  materialTaxRate Decimal?     @default(0)
+  materials       String       @default("[]")
+  paymentStatus   String       @default("Pending Payment")
+  amountPaid      Decimal?     @default(0)
+  finalCost       Decimal?
+  scope           String?
+  category        String
+  status          String       @default("Scheduled")
+  pictures        String[]     @default([])
+  notes           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  owner           User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customer        Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  invoice         Invoice?
+  estimate        Estimate?
+  payments        JobPayment[]
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([customerId])
+  @@index([status])
+  @@index([dateBegin])
+  @@index([category])
+  @@map("jobs")
+}
+
+model JobPayment {
+  id              String   @id @default(cuid())
+  ownerId         String
+  jobId           String
+  paidOn          DateTime @default(now())
+  amount          Decimal
+  method          String
+  referenceNumber String?
+  description     String
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([jobId])
+  @@index([paidOn])
+  @@map("job_payments")
+}
+
+model User {
+  id                 String             @id @default(cuid())
+  name               String?
+  companyName        String
+  companyEmail       String?
+  companyPhone       String?
+  companyLogoDataUrl String?
+  email              String             @unique
+  passwordHash       String
+  admin              Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  customers          Customer[]
+  jobs               Job[]
+  jobPayments        JobPayment[]
+  invoices           Invoice[]
+  estimates          Estimate[]
+  estimateRecords    EstimateRecord[]
+  serviceTemplates   ServiceTemplate[]
+  employees          Employee[]
+  timeEntries        TimeEntry[]
+  timeEntryRequests  TimeEntryRequest[]
+  sessions           Session[]
+
+  @@map("users")
+}
+
+model EstimateRecord {
+  id                String    @id @default(cuid())
+  ownerId           String
+  customerId        String?
+  description       String
+  serviceLocation   String?
+  dateBegin         DateTime?
+  dateEnd           DateTime?
+  laborCost         Decimal?  @default(0)
+  laborItems        String    @default("[]")
+  materialTaxRate   Decimal?  @default(0)
+  materials         String    @default("[]")
+  estimatedTotal    Decimal?  @default(0)
+  scope             String?
+  category          String
+  status            String    @default("Estimate Provided")
+  notes             String?
+  convertedJobId    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  owner             User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customer          Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  printableEstimate Estimate?
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("estimate_records")
+}
+
+model Invoice {
+  id                String    @id @default(cuid())
+  ownerId           String
+  jobId             String    @unique
+  customerId        String?
+  customerName      String?
+  customerEmail     String?
+  customerPhone     String?
+  jobTitle          String
+  jobDescription    String?
+  serviceLocation   String?
+  dateBegin         DateTime?
+  dateEnd           DateTime?
+  laborCost         Decimal   @default(0)
+  materialTaxRate   Decimal   @default(0)
+  materials         String    @default("[]")
+  materialsSubtotal Decimal   @default(0)
+  materialTaxAmount Decimal   @default(0)
+  finalCost         Decimal   @default(0)
+  amountPaid        Decimal   @default(0)
+  balanceDue        Decimal   @default(0)
+  paymentStatus     String
+  jobStatus         String
+  issuedAt          DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  owner             User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  job               Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([jobId])
+  @@index([customerId])
+  @@index([issuedAt])
+  @@map("invoices")
+}
+
+model Estimate {
+  id                String          @id @default(cuid())
+  ownerId           String
+  jobId             String?         @unique
+  estimateRecordId  String?         @unique
+  customerId        String?
+  customerName      String?
+  customerEmail     String?
+  customerPhone     String?
+  jobTitle          String
+  jobDescription    String?
+  serviceLocation   String?
+  dateBegin         DateTime?
+  dateEnd           DateTime?
+  laborCost         Decimal         @default(0)
+  materialTaxRate   Decimal         @default(0)
+  materials         String          @default("[]")
+  materialsSubtotal Decimal         @default(0)
+  materialTaxAmount Decimal         @default(0)
+  estimatedTotal    Decimal         @default(0)
+  jobStatus         String
+  issuedAt          DateTime        @default(now())
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  owner             User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  job               Job?            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  estimateRecord    EstimateRecord? @relation(fields: [estimateRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([jobId])
+  @@index([estimateRecordId])
+  @@index([customerId])
+  @@index([issuedAt])
+  @@map("estimates")
+}
+
+model ServiceTemplate {
+  id              String   @id @default(cuid())
+  ownerId         String
+  title           String
+  description     String?
+  category        String   @default("Other")
+  notes           String?
+  laborItems      String   @default("[]")
+  materialTaxRate Decimal  @default(8.25)
+  materials       String   @default("[]")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([category])
+  @@map("service_templates")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Employee {
+  id                String             @id @default(cuid())
+  ownerId           String
+  employeeNumber    String
+  name              String
+  email             String?
+  phone             String?
+  active            Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  owner             User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  timeEntries       TimeEntry[]
+  timeEntryRequests TimeEntryRequest[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, employeeNumber])
+  @@index([ownerId])
+  @@index([active])
+  @@map("employees")
+}
+
+model TimeEntry {
+  id           String   @id @default(cuid())
+  ownerId      String
+  employeeId   String
+  workedOn     DateTime
+  startTime    String?
+  endTime      String?
+  hours        Decimal
+  deductLunch  Boolean  @default(true)
+  lunchMinutes Int      @default(60)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  owner        User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([employeeId])
+  @@index([workedOn])
+  @@map("time_entries")
+}
+
+model TimeEntryRequest {
+  id           String    @id @default(cuid())
+  ownerId      String
+  employeeId   String
+  timeEntryId  String?
+  action       String
+  status       String    @default("Pending")
+  workedOn     DateTime?
+  startTime    String?
+  endTime      String?
+  hours        Decimal?
+  deductLunch  Boolean   @default(true)
+  lunchMinutes Int       @default(60)
+  notes        String?
+  requestedAt  DateTime  @default(now())
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  owner    User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([requestedAt])
+  @@map("time_entry_requests")
+}
+
+model CustomerAddress {
+  id         String   @id @default(cuid())
+  customerId String
+  label      String?
+  line1      String
+  line2      String?
+  city       String?
+  state      String?
+  postalCode String?
+  country    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+model CustomerPhoneNumber {
+  id         String   @id @default(cuid())
+  customerId String
+  label      String?
+  value      String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_phone_numbers")
+}
