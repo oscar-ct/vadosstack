@@ -19,6 +19,7 @@ import {
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
+import { useDashboardNavigationLoader } from "../dashboard-navigation-loader";
 import { NavMain } from "./nav-main";
 import { NavUser } from "./nav-user";
 
@@ -47,14 +48,16 @@ export function AppSidebar({
   const collapsible = isSynced ? sidebarCollapsible : props.collapsible;
   const companyName = currentUser?.companyName ?? "Company Dashboard";
   const { isMobile, setOpenMobile } = useSidebar();
+  const { startNavigation } = useDashboardNavigationLoader();
   const [logoVersion, setLogoVersion] = React.useState(0);
   const logoSrc = logoVersion ? `/dashboard/company-logo?v=${logoVersion}` : "/dashboard/company-logo";
   const refreshCompanyLogo = React.useCallback(() => {
     setLogoVersion(Date.now());
   }, []);
   const handleNavigate = React.useCallback(() => {
+    startNavigation("/dashboard/overview");
     if (isMobile) setOpenMobile(false);
-  }, [isMobile, setOpenMobile]);
+  }, [isMobile, setOpenMobile, startNavigation]);
 
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>

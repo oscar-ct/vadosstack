@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/sidebar";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
+import { useDashboardNavigationLoader } from "../dashboard-navigation-loader";
 import { type CompanySettingsState, updateCompanySettingsAction } from "./actions";
 
 interface NavMainProps {
@@ -73,7 +74,7 @@ const NavItemExpanded = ({
   item: NavMainItem;
   isActive: (url: string, subItems?: NavMainItem["subItems"]) => boolean;
   isSubmenuOpen: (subItems?: NavMainItem["subItems"]) => boolean;
-  onNavigate: () => void;
+  onNavigate: (url: string, isNewTab?: boolean) => void;
 }) => {
   return (
     <Collapsible key={item.title} asChild defaultOpen={isSubmenuOpen(item.subItems)} className="group/collapsible">
@@ -97,7 +98,12 @@ const NavItemExpanded = ({
               isActive={isActive(item.url)}
               tooltip={item.title}
             >
-              <Link prefetch={false} href={item.url} target={item.newTab ? "_blank" : undefined} onClick={onNavigate}>
+              <Link
+                prefetch={false}
+                href={item.url}
+                target={item.newTab ? "_blank" : undefined}
+                onClick={() => onNavigate(item.url, item.newTab)}
+              >
                 {item.icon && <item.icon />}
                 <span>{item.title}</span>
                 {item.comingSoon && <IsComingSoon />}
@@ -115,7 +121,7 @@ const NavItemExpanded = ({
                       prefetch={false}
                       href={subItem.url}
                       target={subItem.newTab ? "_blank" : undefined}
-                      onClick={onNavigate}
+                      onClick={() => onNavigate(subItem.url, subItem.newTab)}
                     >
                       {subItem.icon && <subItem.icon />}
                       <span>{subItem.title}</span>
@@ -139,7 +145,7 @@ const NavItemCollapsed = ({
 }: {
   item: NavMainItem;
   isActive: (url: string, subItems?: NavMainItem["subItems"]) => boolean;
-  onNavigate: () => void;
+  onNavigate: (url: string, isNewTab?: boolean) => void;
 }) => {
   return (
     <SidebarMenuItem key={item.title}>
@@ -169,7 +175,7 @@ const NavItemCollapsed = ({
                   prefetch={false}
                   href={subItem.url}
                   target={subItem.newTab ? "_blank" : undefined}
-                  onClick={onNavigate}
+                  onClick={() => onNavigate(subItem.url, subItem.newTab)}
                 >
                   {subItem.icon && <subItem.icon className="[&>svg]:text-sidebar-foreground" />}
                   <span>{subItem.title}</span>
@@ -327,9 +333,15 @@ export function NavMain({
 }: NavMainProps) {
   const path = usePathname();
   const { state, isMobile, setOpenMobile } = useSidebar();
-  const handleNavigate = React.useCallback(() => {
-    if (isMobile) setOpenMobile(false);
-  }, [isMobile, setOpenMobile]);
+  const { startNavigation } = useDashboardNavigationLoader();
+
+  const handleNavigate = React.useCallback(
+    (url: string, isNewTab?: boolean) => {
+      startNavigation(url, isNewTab);
+      if (isMobile) setOpenMobile(false);
+    },
+    [isMobile, setOpenMobile, startNavigation],
+  );
 
   const isItemActive = (url: string, subItems?: NavMainItem["subItems"]) => {
     if (subItems?.length) {
@@ -388,7 +400,7 @@ export function NavMain({
                             prefetch={false}
                             href={item.url}
                             target={item.newTab ? "_blank" : undefined}
-                            onClick={handleNavigate}
+                            onClick={() => handleNavigate(item.url, item.newTab)}
                           >
                             {item.icon && <item.icon />}
                             <span>{item.title}</span>
