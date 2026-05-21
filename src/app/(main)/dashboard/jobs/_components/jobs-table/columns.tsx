@@ -200,7 +200,7 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
       header: "Status",
       filterFn: "equalsString",
       cell: ({ row }) => (
-        <div className="grid gap-0.5">
+        <div className="grid gap-0.5 min-w-[6.5em]">
           <Badge variant="outline" className="w-fit px-1.5 text-muted-foreground">
             {statusIcon(row.original.status)}
             {row.original.status}
