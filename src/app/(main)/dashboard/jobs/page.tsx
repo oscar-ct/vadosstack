@@ -21,6 +21,10 @@ function formatMoney(value: { toString: () => string } | null) {
   return value === null ? undefined : value.toString();
 }
 
+function normalizeJobStatus(status: string) {
+  return status === "In Progress" ? "Scheduled" : status;
+}
+
 async function getJobs(ownerId: string): Promise<JobRow[]> {
   const jobs = await prisma.job.findMany({
     where: {
@@ -37,46 +41,50 @@ async function getJobs(ownerId: string): Promise<JobRow[]> {
     orderBy: [{ createdAt: "desc" }, { dateBegin: "desc" }],
   });
 
-  return jobs.map((job) => ({
-    id: job.id,
-    customerId: job.customerId ?? undefined,
-    customerName: job.customer?.name ?? undefined,
-    description: job.description,
-    serviceLocation: job.serviceLocation ?? undefined,
-    dateBegin: job.dateBegin?.toISOString(),
-    dateEnd: job.dateEnd?.toISOString(),
-    estimatedCost: formatMoney(job.estimatedCost),
-    laborCost: formatMoney(job.laborCost),
-    laborItems: parsePricingItems(job.laborItems),
-    materialTaxRate: formatMoney(job.materialTaxRate),
-    materials: parseMaterials(job.materials),
-    paymentStatus: job.paymentStatus,
-    amountPaid: formatMoney(job.amountPaid),
-    outstandingBalance: formatMoney(
-      calculateOutstandingBalance(job.status, job.finalCost?.toString(), job.amountPaid?.toString()),
-    ),
-    finalCost: formatMoney(job.finalCost),
-    scope: job.scope ?? undefined,
-    category: job.category,
-    status: job.status,
-    pictures: job.pictures,
-    notes: job.notes ?? undefined,
-    payments: job.payments.map((payment) => ({
-      id: payment.id,
-      paidOn: payment.paidOn.toISOString(),
-      amount: payment.amount.toString(),
-      method: payment.method,
-      referenceNumber: payment.referenceNumber ?? undefined,
-      description: payment.description,
-      notes: payment.notes ?? undefined,
-      createdAt: payment.createdAt.toISOString(),
-    })),
-    invoiceId: job.invoice?.id,
-    invoiceIssuedAt: job.invoice?.issuedAt.toISOString(),
-    estimateId: job.estimate?.id,
-    estimateIssuedAt: job.estimate?.issuedAt.toISOString(),
-    createdAt: job.createdAt.toISOString(),
-  }));
+  return jobs.map((job) => {
+    const status = normalizeJobStatus(job.status);
+
+    return {
+      id: job.id,
+      customerId: job.customerId ?? undefined,
+      customerName: job.customer?.name ?? undefined,
+      description: job.description,
+      serviceLocation: job.serviceLocation ?? undefined,
+      dateBegin: job.dateBegin?.toISOString(),
+      dateEnd: job.dateEnd?.toISOString(),
+      estimatedCost: formatMoney(job.estimatedCost),
+      laborCost: formatMoney(job.laborCost),
+      laborItems: parsePricingItems(job.laborItems),
+      materialTaxRate: formatMoney(job.materialTaxRate),
+      materials: parseMaterials(job.materials),
+      paymentStatus: job.paymentStatus,
+      amountPaid: formatMoney(job.amountPaid),
+      outstandingBalance: formatMoney(
+        calculateOutstandingBalance(status, job.finalCost?.toString(), job.amountPaid?.toString()),
+      ),
+      finalCost: formatMoney(job.finalCost),
+      scope: job.scope ?? undefined,
+      category: job.category,
+      status,
+      pictures: job.pictures,
+      notes: job.notes ?? undefined,
+      payments: job.payments.map((payment) => ({
+        id: payment.id,
+        paidOn: payment.paidOn.toISOString(),
+        amount: payment.amount.toString(),
+        method: payment.method,
+        referenceNumber: payment.referenceNumber ?? undefined,
+        description: payment.description,
+        notes: payment.notes ?? undefined,
+        createdAt: payment.createdAt.toISOString(),
+      })),
+      invoiceId: job.invoice?.id,
+      invoiceIssuedAt: job.invoice?.issuedAt.toISOString(),
+      estimateId: job.estimate?.id,
+      estimateIssuedAt: job.estimate?.issuedAt.toISOString(),
+      createdAt: job.createdAt.toISOString(),
+    };
+  });
 }
 
 async function getCustomers(ownerId: string): Promise<JobCustomer[]> {

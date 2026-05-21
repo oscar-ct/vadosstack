@@ -5,16 +5,7 @@ import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { endOfDay, format, isBefore, parseISO, startOfDay } from "date-fns";
-import {
-  CalendarOff,
-  CircleCheckIcon,
-  Clock3Icon,
-  LoaderIcon,
-  PauseCircle,
-  Pencil,
-  ReceiptText,
-  XCircle,
-} from "lucide-react";
+import { CalendarOff, CircleCheckIcon, Clock3Icon, PauseCircle, Pencil, ReceiptText, XCircle } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
 import { Badge } from "@/components/ui/badge";
@@ -27,8 +18,6 @@ export function statusIcon(status: string) {
   switch (status) {
     case "Completed":
       return <CircleCheckIcon className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />;
-    case "In Progress":
-      return <LoaderIcon />;
     case "On Hold":
       return <PauseCircle className="text-amber-600 dark:text-amber-500" />;
     case "Cancelled":

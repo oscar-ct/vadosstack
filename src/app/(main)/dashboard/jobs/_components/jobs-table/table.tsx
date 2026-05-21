@@ -71,7 +71,6 @@ const statusOptions = [
   { value: "all", label: "All" },
   { value: "Unscheduled", label: "Unscheduled" },
   { value: "Scheduled", label: "Scheduled" },
-  { value: "In Progress", label: "In Progress" },
   { value: "Completed", label: "Completed" },
   { value: "On Hold", label: "On Hold" },
   { value: "Cancelled", label: "Cancelled" },
@@ -494,6 +493,12 @@ export function JobsTable({
                             : "Not scheduled"}
                         </span>
                       </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground text-xs">End Date</span>
+                        <span>
+                          {row.original.dateEnd ? new Date(row.original.dateEnd).toLocaleDateString() : "Not scheduled"}
+                        </span>
+                      </div>
                       {/*<div className="flex items-center justify-between gap-3">*/}
                       {/*<span className="text-muted-foreground text-xs">Status</span>*/}
                       {/*<Badge variant="outline" className={`px-1.5 text-[11px] ${amountDue.badgeClassName}`}>*/}
@@ -501,18 +506,16 @@ export function JobsTable({
                       {/*</Badge>*/}
                       {/*</div>*/}
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground text-xs">Cost</span>
+                        <span className="text-muted-foreground text-xs">Final Cost</span>
                         <span>{row.original.finalCost ? `$${row.original.finalCost}` : "Not set"}</span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-muted-foreground text-xs">Paid</span>
                         <span>{row.original.amountPaid ? `$${row.original.amountPaid}` : "Not set"}</span>
                       </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground text-xs">Current Position</span>
-                        {/*<span className={`font-medium ${amountDue.amountClassName}`}>{amountDue.amountLabel}</span>*/}
-                        <span className={`text-sm ${amountDue.amountClassName}`}>{amountDue.label}</span>
-                      </div>
+                      {row.original.finalCost !== row.original.amountPaid && row.original.status === "Completed" && (
+                        <span className={`text-right text-sm ${amountDue.amountClassName}`}>{amountDue.label}</span>
+                      )}
                     </div>
                     <div>
                       {row.original.invoiceId ? (

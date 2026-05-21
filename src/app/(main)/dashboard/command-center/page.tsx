@@ -19,7 +19,7 @@ import { CommandCenterDashboard, type CommandCenterData } from "./_components/co
 
 export const dynamic = "force-dynamic";
 
-const ACTIVE_JOB_STATUSES = new Set(["Scheduled", "In Progress"]);
+const ACTIVE_JOB_STATUSES = new Set(["Scheduled"]);
 const WON_ESTIMATE_STATUSES = new Set(["Converted", "Approved", "Accepted", "Won"]);
 const LOST_ESTIMATE_STATUSES = new Set(["Declined", "Cancelled", "Lost"]);
 

@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { calculateSignedMaterialTotal, parseMaterials } from "./_components/materials";
 import { parsePricingItems } from "./_components/pricing-items";
 
-const jobStatuses = ["Unscheduled", "Scheduled", "In Progress", "Completed", "On Hold", "Cancelled"] as const;
+const jobStatuses = ["Unscheduled", "Scheduled", "Completed", "On Hold", "Cancelled"] as const;
 
 export type JobMutationState = {
   success: boolean;

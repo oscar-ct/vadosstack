@@ -49,7 +49,7 @@ const jobTemplates: DemoJobTemplate[] = [
     scope:
       "Diagnose leak under sink, replace supply lines, install new faucet cartridge, and verify pressure and seal.",
     category: "Repair",
-    status: "In Progress",
+    status: "Scheduled",
     paymentStatus: "Partial Payment",
     estimatedCost: "420.00",
     laborCost: "180.00",

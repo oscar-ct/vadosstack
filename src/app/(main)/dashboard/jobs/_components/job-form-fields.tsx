@@ -27,7 +27,7 @@ import {
 } from "./materials";
 import { type PricingLineItem, stringifyPricingItems } from "./pricing-items";
 
-const jobStatuses = ["Unscheduled", "Scheduled", "In Progress", "Completed", "On Hold", "Cancelled"] as const;
+const jobStatuses = ["Unscheduled", "Scheduled", "Completed", "On Hold", "Cancelled"] as const;
 const jobCategories = ["Repair", "Installation", "Other"] as const;
 const newCustomerValue = "new-customer";
 const customLocationValue = "custom-location";
