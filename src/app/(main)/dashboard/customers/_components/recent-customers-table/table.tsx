@@ -384,7 +384,7 @@ export function RecentCustomersTable({
               const billingDisplay = getCustomerBillingDisplay(row.original);
 
               return (
-                <Card key={row.id} size="sm" className="gap-0 bg-muted py-0">
+                <Card key={row.id} size="sm" className="gap-0 py-0">
                   <CardContent className="grid gap-4 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">

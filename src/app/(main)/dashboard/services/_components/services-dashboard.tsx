@@ -102,7 +102,7 @@ export function ServicesDashboard({
                   <CardContent className="grid gap-4 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h3 className="truncate font-semibold text-base">{service.title}</h3>
+                        <div className="truncate font-semibold text-sm">{service.title}</div>
                         <p className="line-clamp-2 text-muted-foreground text-sm">
                           {service.description || "No description saved."}
                         </p>
