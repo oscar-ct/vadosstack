@@ -77,7 +77,10 @@ export function ServicePicker({
           Add service
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-hidden sm:max-w-2xl">
+      <DialogContent
+        className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-hidden sm:max-w-2xl"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         {selectedService ? (
           <>
             <DialogHeader>
