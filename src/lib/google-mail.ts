@@ -1,0 +1,157 @@
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+
+export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+export const GOOGLE_MAIL_OAUTH_STATE_COOKIE_NAME = "studio-google-mail-oauth-state";
+export const GOOGLE_MAIL_RETURN_TO_COOKIE_NAME = "studio-google-mail-return-to";
+export const GOOGLE_MAIL_OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
+
+type GmailSendMessage = {
+  from: string;
+  html: string;
+  subject: string;
+  text: string;
+  to: string;
+};
+
+type GoogleApiErrorResponse = {
+  error?: {
+    code?: number;
+    message?: string;
+    status?: string;
+  };
+};
+
+function base64UrlEncode(value: string | Buffer) {
+  return Buffer.from(value).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function getTokenEncryptionKey() {
+  const secret = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY ?? process.env.AUTH_SECRET ?? process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!secret) {
+    throw new Error("Set GOOGLE_TOKEN_ENCRYPTION_KEY, AUTH_SECRET, or GOOGLE_CLIENT_SECRET to store Gmail tokens.");
+  }
+
+  return createHash("sha256").update(secret).digest();
+}
+
+export function encryptGoogleToken(token: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", getTokenEncryptionKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  return [iv, authTag, ciphertext].map((part) => part.toString("base64url")).join(".");
+}
+
+export function decryptGoogleToken(ciphertext: string) {
+  const [iv, authTag, encrypted] = ciphertext.split(".").map((part) => Buffer.from(part, "base64url"));
+
+  if (!iv || !authTag || !encrypted) {
+    throw new Error("Stored Gmail token is invalid.");
+  }
+
+  const decipher = createDecipheriv("aes-256-gcm", getTokenEncryptionKey(), iv);
+  decipher.setAuthTag(authTag);
+
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+}
+
+export async function refreshGoogleAccessToken(refreshToken: string) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Google OAuth is not configured.");
+  }
+
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Gmail connection could not be refreshed.");
+  }
+
+  const tokenResponse = (await response.json()) as { access_token?: string };
+
+  if (!tokenResponse.access_token) {
+    throw new Error("Google did not return a Gmail access token.");
+  }
+
+  return tokenResponse.access_token;
+}
+
+function encodeSubject(value: string) {
+  return `=?UTF-8?B?${Buffer.from(value).toString("base64")}?=`;
+}
+
+function sanitizeHeader(value: string) {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function createRawMessage({ from, html, subject, text, to }: GmailSendMessage) {
+  const boundary = `vadosstack-${randomBytes(12).toString("hex")}`;
+  const message = [
+    `From: ${sanitizeHeader(from)}`,
+    `To: ${sanitizeHeader(to)}`,
+    `Subject: ${encodeSubject(sanitizeHeader(subject))}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    text,
+    "",
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    html,
+    "",
+    `--${boundary}--`,
+  ].join("\r\n");
+
+  return base64UrlEncode(message);
+}
+
+export async function sendGmailMessage(accessToken: string, message: GmailSendMessage) {
+  const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      raw: createRawMessage(message),
+    }),
+  });
+
+  if (!response.ok) {
+    let detail = "";
+
+    try {
+      const errorResponse = (await response.json()) as GoogleApiErrorResponse;
+      detail = errorResponse.error?.message || errorResponse.error?.status || "";
+    } catch {
+      detail = await response.text().catch(() => "");
+    }
+
+    throw new Error(
+      detail
+        ? `Gmail could not send the invoice email. Google said: ${detail}`
+        : `Gmail could not send the invoice email. Google returned HTTP ${response.status}.`,
+    );
+  }
+}
