@@ -1584,7 +1584,12 @@ export function TimeTrackingDashboard({
             : "md:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]",
         )}
       >
-        <Card>
+        <Card
+          className={cn(
+            "order-2",
+            showEmployeeControls ? "xl:order-none xl:row-span-3" : "md:order-none md:row-span-3",
+          )}
+        >
           <CardHeader>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -1698,65 +1703,67 @@ export function TimeTrackingDashboard({
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 self-start">
-          {approveTimeEntryRequestAction && rejectTimeEntryRequestAction ? (
+        {approveTimeEntryRequestAction && rejectTimeEntryRequestAction ? (
+          <div className={cn("order-1 self-start", showEmployeeControls ? "xl:order-none" : "md:order-none")}>
             <PendingTimeRequestsCard
               approveAction={approveTimeEntryRequestAction}
               pendingRequests={pendingRequests}
               rejectAction={rejectTimeEntryRequestAction}
               selectedRequestId={selectedRequestId}
             />
-          ) : null}
-          {!showEmployeeControls ? (
+          </div>
+        ) : null}
+        {!showEmployeeControls ? (
+          <div className={cn("order-3 self-start", showEmployeeControls ? "xl:order-none" : "md:order-none")}>
             <EmployeeRequestsCard
               deleteAction={deleteEmployeeTimeRequestAction}
               requests={employeeTimeRequests}
               updateAction={updateEmployeeTimeRequestAction}
             />
-          ) : null}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                <span>Weekly Hour Summary</span>
-              </CardTitle>
-              <CardDescription>Hours worked for {periodLabel}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {weeklyEmployees.length ? (
-                weeklyEmployees.map((employee) => {
-                  const accent = getEmployeeAccent(employee.id, employees);
+          </div>
+        ) : null}
+        <Card className={cn("order-4 self-start", showEmployeeControls ? "xl:order-none" : "md:order-none")}>
+          <CardHeader>
+            <CardTitle className="text-base">
+              <span>Weekly Hour Summary</span>
+            </CardTitle>
+            <CardDescription>Hours worked for {periodLabel}</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {weeklyEmployees.length ? (
+              weeklyEmployees.map((employee) => {
+                const accent = getEmployeeAccent(employee.id, employees);
 
-                  return (
-                    <div key={employee.id} className={cn("rounded-lg border p-3", accent.panel)}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 gap-2">
-                          <span className={cn("mt-1 size-2.5 shrink-0 rounded-full", accent.dot)} />
-                          <div className="min-w-0">
-                            <div className="truncate font-medium text-sm">{employee.name}</div>
-                            <div className="truncate text-muted-foreground text-xs">
-                              #{employee.employeeNumber}
-                              {" · "}
-                              {employee.lastWorkedOn
-                                ? `Last worked ${format(parseISO(employee.lastWorkedOn), "MMM d")}`
-                                : "No hours yet"}
-                            </div>
+                return (
+                  <div key={employee.id} className={cn("rounded-lg border p-3", accent.panel)}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 gap-2">
+                        <span className={cn("mt-1 size-2.5 shrink-0 rounded-full", accent.dot)} />
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-sm">{employee.name}</div>
+                          <div className="truncate text-muted-foreground text-xs">
+                            #{employee.employeeNumber}
+                            {" · "}
+                            {employee.lastWorkedOn
+                              ? `Last worked ${format(parseISO(employee.lastWorkedOn), "MMM d")}`
+                              : "No hours yet"}
                           </div>
                         </div>
-                        <Badge variant="secondary" className={cn("bg-background/80", accent.text)}>
-                          {formatHours(employee.totalHours)}
-                        </Badge>
                       </div>
+                      <Badge variant="secondary" className={cn("bg-background/80", accent.text)}>
+                        {formatHours(employee.totalHours)}
+                      </Badge>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-md border bg-muted/20 p-4 text-center text-muted-foreground text-sm">
-                  Add your first employee to start tracking hours.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="rounded-md border bg-muted/20 p-4 text-center text-muted-foreground text-sm">
+                Add your first employee to start tracking hours.
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
