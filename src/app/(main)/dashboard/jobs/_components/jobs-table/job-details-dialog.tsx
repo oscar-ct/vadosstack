@@ -288,10 +288,6 @@ export function JobDetailsDialog({
                     </Button>
                   </form>
                 )}
-                <Button type="button" variant="outline" size="sm" disabled>
-                  <Mail />
-                  Email invoice
-                </Button>
               </div>
               {invoiceState.message ? (
                 <p className={invoiceState.success ? "mt-2 text-emerald-700 text-sm" : "mt-2 text-destructive text-sm"}>
