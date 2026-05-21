@@ -312,23 +312,43 @@ export default function Home() {
         </section>
 
         <section className="bg-[#171412] px-5 py-20 text-[#f6f1e8] md:px-8 lg:px-12 2xl:px-16">
-          <div className="grid w-full gap-8 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <ShieldCheck className="mb-5 size-9 text-[#f5c451]" />
-              <h2 className="text-balance font-semibold text-4xl tracking-normal md:text-5xl">
-                Ready when your live site is.
-              </h2>
-              <p className="mt-5 max-w-2xl text-[#f6f1e8]/72 text-lg leading-8">
-                A public front door for the product, direct sign-in for customers, and a dedicated route for employees.
-              </p>
+          <div className="w-full">
+            <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
+              <div>
+                <ShieldCheck className="mb-5 size-9 text-[#f5c451]" />
+                <h2 className="text-balance font-semibold text-4xl tracking-normal md:text-5xl">
+                  Ready when your live site is.
+                </h2>
+                <p className="mt-5 max-w-2xl text-[#f6f1e8]/72 text-lg leading-8">
+                  A public front door for the product, direct sign-in for customers, and a dedicated route for
+                  employees.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button asChild size="lg" className="bg-[#f5c451] text-[#171412] hover:bg-[#f5c451]/90">
+                  <Link href="/register">Create account</Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="lg"
+                  className="border-[#f6f1e8]/25 bg-transparent text-[#f6f1e8]"
+                >
+                  <Link href="/login">Sign in</Link>
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="bg-[#f5c451] text-[#171412] hover:bg-[#f5c451]/90">
-                <Link href="/register">Create account</Link>
-              </Button>
-              <Button asChild variant="outline" size="lg" className="border-[#f6f1e8]/25 bg-transparent text-[#f6f1e8]">
-                <Link href="/login">Sign in</Link>
-              </Button>
+
+            <div className="mt-14 flex flex-col gap-3 border-[#f6f1e8]/12 border-t pt-6 text-[#f6f1e8]/60 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <p>{APP_CONFIG.copyright}</p>
+              <nav aria-label="Legal links" className="flex gap-4">
+                <Link href="/privacy" className="transition-colors hover:text-[#f6f1e8]">
+                  Privacy
+                </Link>
+                <Link href="/terms" className="transition-colors hover:text-[#f6f1e8]">
+                  Terms
+                </Link>
+              </nav>
             </div>
           </div>
         </section>
