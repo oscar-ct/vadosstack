@@ -40,6 +40,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
 import { useDashboardNavigationLoader } from "../dashboard-navigation-loader";
@@ -212,7 +213,16 @@ function CompanySettingsDialog({
   const [open, setOpen] = React.useState(false);
   const [deleteLogo, setDeleteLogo] = React.useState(false);
   const [logoError, setLogoError] = React.useState("");
+  const [companyPhoneDigits, setCompanyPhoneDigits] = React.useState(() =>
+    normalizePhoneNumber(companyPhone).slice(0, 10),
+  );
   const [state, formAction, isPending] = React.useActionState(updateCompanySettingsAction, initialCompanySettingsState);
+
+  React.useEffect(() => {
+    if (open) {
+      setCompanyPhoneDigits(normalizePhoneNumber(companyPhone).slice(0, 10));
+    }
+  }, [companyPhone, open]);
 
   React.useEffect(() => {
     if (state.success) {
@@ -270,7 +280,16 @@ function CompanySettingsDialog({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="company-phone">Company phone</Label>
-            <Input id="company-phone" name="companyPhone" type="tel" defaultValue={companyPhone ?? ""} />
+            <Input
+              id="company-phone"
+              name="companyPhone"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              maxLength={12}
+              value={formatPhoneNumber(companyPhoneDigits)}
+              onChange={(event) => setCompanyPhoneDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
+            />
           </div>
           <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-2">
             <div className="grid gap-2">

@@ -49,6 +49,16 @@ export function AppSidebar({
   const variant = isSynced ? sidebarVariant : props.variant;
   const collapsible = isSynced ? sidebarCollapsible : props.collapsible;
   const companyName = currentUser?.companyName ?? "Company Dashboard";
+  const visibleSidebarItems = React.useMemo(
+    () =>
+      sidebarItems
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => !item.adminOnly || currentUser?.admin),
+        }))
+        .filter((group) => group.items.length > 0),
+    [currentUser?.admin],
+  );
   const { isMobile, setOpenMobile } = useSidebar();
   const { startNavigation } = useDashboardNavigationLoader();
   const [logoVersion, setLogoVersion] = React.useState(0);
@@ -84,7 +94,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain
-          items={sidebarItems}
+          items={visibleSidebarItems}
           companyName={companyName}
           companyEmail={currentUser?.companyEmail ?? null}
           companyPhone={currentUser?.companyPhone ?? null}

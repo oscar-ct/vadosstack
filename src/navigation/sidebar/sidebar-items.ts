@@ -6,6 +6,7 @@ import {
   NotebookText,
   PackageCheck,
   ReceiptText,
+  ShieldCheck,
   Timer,
   UserCog,
   Users,
@@ -18,6 +19,7 @@ export interface NavSubItem {
   comingSoon?: boolean;
   newTab?: boolean;
   isNew?: boolean;
+  adminOnly?: boolean;
 }
 
 export interface NavMainItem {
@@ -28,6 +30,7 @@ export interface NavMainItem {
   comingSoon?: boolean;
   newTab?: boolean;
   isNew?: boolean;
+  adminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -87,6 +90,18 @@ export const sidebarItems: NavGroup[] = [
         url: "/employee-time-tracking",
         icon: UserCog,
         newTab: true,
+      },
+    ],
+  },
+  {
+    id: 2,
+    label: "Admin",
+    items: [
+      {
+        title: "Users",
+        url: "/dashboard/admin/users",
+        icon: ShieldCheck,
+        adminOnly: true,
       },
     ],
   },

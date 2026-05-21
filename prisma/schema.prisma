@@ -98,6 +98,7 @@ model User {
   companyLogoDataUrl String?
   estimateValidDays  Int                @default(15)
   invoiceDueDays     Int                @default(15)
+  authProviders       String[]           @default(["email"])
   email              String             @unique
   passwordHash       String
   admin              Boolean            @default(false)

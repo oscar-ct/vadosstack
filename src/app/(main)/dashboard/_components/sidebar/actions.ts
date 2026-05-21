@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
+import { isValidOptionalPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
 export type CompanySettingsState = {
@@ -28,7 +29,12 @@ const companySettingsSchema = z.object({
     .trim()
     .optional()
     .refine((value) => !value || z.string().email().safeParse(value).success, "Enter a valid company email."),
-  companyPhone: z.string().trim().max(40, "Company phone is too long.").optional(),
+  companyPhone: z
+    .string()
+    .trim()
+    .optional()
+    .refine(isValidOptionalPhoneNumber, "Enter a 10-digit company phone number.")
+    .transform((value) => normalizePhoneNumber(value)),
   estimateValidDays: z.coerce
     .number()
     .int("Estimate valid days must be a whole number.")

@@ -100,6 +100,7 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
 
   const createdUser = await prisma.user.create({
     data: {
+      authProviders: ["email"],
       name: parsed.data.name?.trim() || getDisplayName(parsed.data),
       companyName: parsed.data.companyName,
       companyEmail: parsed.data.email,

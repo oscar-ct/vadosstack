@@ -62,21 +62,38 @@ export async function GET(request: NextRequest) {
     }
 
     const email = userInfo.email.toLowerCase();
-    const user =
-      (await prisma.user.findUnique({
-        where: {
-          email,
-        },
-      })) ??
-      (await prisma.user.create({
-        data: {
-          companyName: getGoogleWorkspaceName({ email, hd: userInfo.hd, name: userInfo.name }),
-          companyEmail: email,
-          email,
-          name: userInfo.name || getDisplayName({ email }),
-          passwordHash: hashPassword(randomBytes(32).toString("hex")),
-        },
-      }));
+    const existingUser = await prisma.user.findUnique({
+      where: {
+        email,
+      },
+      select: {
+        authProviders: true,
+        id: true,
+      },
+    });
+    const user = existingUser
+      ? await prisma.user.update({
+          where: {
+            id: existingUser.id,
+          },
+          data: existingUser.authProviders.includes("google")
+            ? {}
+            : {
+                authProviders: {
+                  push: "google",
+                },
+              },
+        })
+      : await prisma.user.create({
+          data: {
+            authProviders: ["google"],
+            companyName: getGoogleWorkspaceName({ email, hd: userInfo.hd, name: userInfo.name }),
+            companyEmail: email,
+            email,
+            name: userInfo.name || getDisplayName({ email }),
+            passwordHash: hashPassword(randomBytes(32).toString("hex")),
+          },
+        });
 
     const response = NextResponse.redirect(new URL("/dashboard/overview", request.nextUrl.origin));
     await createUserSessionResponse(user.id, response, true);
