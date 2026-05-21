@@ -15,7 +15,7 @@ import { prisma } from "@/lib/prisma";
 
 import { DeleteInvoiceButton } from "../_components/delete-invoice-button";
 import { InvoiceActions } from "../_components/invoice-actions";
-import { deleteInvoiceAction } from "../actions";
+import { deleteInvoiceAction, emailInvoiceAction } from "../actions";
 
 type InvoiceMaterial = {
   description: string;
@@ -71,6 +71,17 @@ function createUniqueRowKey(baseKey: string, seenKeys: Map<string, number>) {
   return count ? `${baseKey}-${count}` : baseKey;
 }
 
+const gmailErrorMessages: Record<string, string> = {
+  callback: "Gmail could not be connected. Please try again.",
+  config: "Google OAuth is not configured for Gmail sending yet.",
+  denied: "Gmail connection was cancelled.",
+  mismatch: "Connect the same Google account you use to sign in.",
+  refresh: "Google did not return offline Gmail access. Please try connecting again.",
+  scope: "Gmail send permission was not granted.",
+  state: "Gmail connection expired. Please try again.",
+  unverified: "Google has not verified that email address.",
+};
+
 export default async function Page({
   params,
   searchParams,
@@ -80,6 +91,8 @@ export default async function Page({
   }>;
   searchParams?: Promise<{
     from?: string;
+    gmail_connected?: string;
+    gmail_error?: string;
   }>;
 }) {
   const currentUser = await getCurrentUser();
@@ -164,6 +177,18 @@ export default async function Page({
   const payments = invoice.job.payments;
   const invoiceNumber = formatDocumentNumber("INV", invoiceSequence);
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
+  const googleMailAccount = await prisma.googleMailAccount.findUnique({
+    where: {
+      userId: currentUser.id,
+    },
+  });
+  const currentHref = `/dashboard/invoices/${invoice.id}?from=${resolvedSearchParams?.from ?? "invoices"}`;
+  const gmailError = resolvedSearchParams?.gmail_error;
+  const gmailNotice = resolvedSearchParams?.gmail_connected
+    ? { message: "Gmail is connected. You can email invoices from this account.", type: "success" as const }
+    : gmailError
+      ? { message: gmailErrorMessages[gmailError] ?? "Gmail could not be connected.", type: "error" as const }
+      : null;
 
   return (
     <div className="mx-auto grid max-w-3xl gap-4 print:max-w-none print:gap-0 print:p-0 print:text-[10px]">
@@ -175,7 +200,18 @@ export default async function Page({
           </Link>
         </Button>
         <div className="flex flex-wrap items-center gap-2">
-          <InvoiceActions />
+          <InvoiceActions
+            action={emailInvoiceAction}
+            balanceDue={formatMoney(invoice.balanceDue)}
+            customerEmail={invoice.customerEmail}
+            customerName={invoice.customerName}
+            dueDate={format(addDays(invoice.issuedAt, 15), "MMM d, yyyy")}
+            gmailConnected={Boolean(googleMailAccount)}
+            invoiceId={invoice.id}
+            invoiceNumber={invoiceNumber}
+            notice={gmailNotice}
+            returnTo={currentHref}
+          />
           <DeleteInvoiceButton action={deleteInvoiceAction} invoiceId={invoice.id} redirectTo={backHref} />
         </div>
       </div>
