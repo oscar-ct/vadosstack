@@ -40,32 +40,36 @@ const optionalMoney = z
 
 const lineItemsSchema = z.array(
   z.object({
-    description: z.string().trim().min(1, "Line item description is required."),
+    description: z.string().trim().optional(),
     price: z
       .string()
       .trim()
-      .refine((value) => value.length > 0 && !Number.isNaN(Number(value)), "Enter a valid line item price."),
+      .optional()
+      .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid line item price."),
   }),
 );
 
 const materialsSchema = z.array(
   z.object({
-    description: z.string().trim().min(1, "Material description is required."),
+    description: z.string().trim().optional(),
     quantity: z
       .string()
       .trim()
+      .optional()
       .refine(
-        (value) => value.length > 0 && !Number.isNaN(Number(value)) && Number(value) > 0,
+        (value) => !value || (!Number.isNaN(Number(value)) && Number(value) > 0),
         "Enter a valid material quantity.",
       ),
     unitPrice: z
       .string()
       .trim()
-      .refine((value) => value.length > 0 && !Number.isNaN(Number(value)), "Enter a valid material unit price."),
+      .optional()
+      .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid material unit price."),
     price: z
       .string()
       .trim()
-      .refine((value) => value.length > 0 && !Number.isNaN(Number(value)), "Enter a valid material total."),
+      .optional()
+      .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid material total."),
   }),
 );
 
@@ -118,12 +122,33 @@ function getEstimatePayload(formData: FormData) {
   };
 }
 
-function normalizeItems(items: Array<{ description: string; price: string }>) {
-  return items.filter((item) => item.description.trim() && item.price.trim());
+function normalizeItems(items: Array<{ description?: string; price?: string }>) {
+  return items
+    .filter((item) => item.description?.trim() || item.price?.trim())
+    .filter((item): item is { description: string; price: string } =>
+      Boolean(item.description?.trim() && item.price?.trim()),
+    );
 }
 
-function normalizeMaterials<T extends { description: string; unitPrice: string; price: string }>(items: T[]) {
-  return items.filter((item) => item.description.trim() && item.unitPrice.trim());
+function normalizeMaterials<T extends { description?: string; quantity?: string; unitPrice?: string; price?: string }>(
+  items: T[],
+) {
+  return items
+    .map((item) => ({
+      ...item,
+      description: item.description ?? "",
+      quantity: item.quantity ?? "",
+      unitPrice: item.unitPrice ?? "",
+      price: item.price ?? "",
+    }))
+    .filter(
+      (item) =>
+        item.description.trim() ||
+        item.quantity.trim() ||
+        item.unitPrice.trim() ||
+        (item.price.trim() && Number(item.price) !== 0),
+    )
+    .filter((item) => item.description.trim() && item.unitPrice.trim());
 }
 
 function calculateTotal(input: {
@@ -176,8 +201,8 @@ async function createCustomerForEstimate({
   phone?: string;
   serviceLocation?: string;
 }) {
-  if (!name || !phone) {
-    throw new Error("Enter a customer name and phone number before creating the estimate.");
+  if (!name || !email || !phone) {
+    throw new Error("Enter a customer name, email, and phone number before creating the estimate.");
   }
 
   const normalizedPhone = normalizePhoneNumber(phone);
@@ -186,36 +211,32 @@ async function createCustomerForEstimate({
     throw new Error("Enter a valid 10-digit phone number before creating the estimate.");
   }
 
-  const parsedEmail = email ? z.string().trim().email("Enter a valid customer email.").safeParse(email) : undefined;
+  const parsedEmail = z.string().trim().email("Enter a valid customer email.").safeParse(email);
 
-  if (parsedEmail && !parsedEmail.success) {
+  if (!parsedEmail.success) {
     throw new Error(parsedEmail.error.issues[0]?.message ?? "Enter a valid customer email.");
   }
 
   try {
-    if (parsedEmail?.data) {
-      const existingCustomer = await prisma.customer.findFirst({
-        where: {
-          email: parsedEmail.data,
-          ownerId,
-        },
-        select: {
-          id: true,
-        },
-      });
+    const existingCustomer = await prisma.customer.findFirst({
+      where: {
+        email: parsedEmail.data,
+        ownerId,
+      },
+      select: {
+        id: true,
+      },
+    });
 
-      if (existingCustomer) {
-        throw new Error(
-          "A customer with that email already exists in your account. Select them from the customer list.",
-        );
-      }
+    if (existingCustomer) {
+      throw new Error("A customer with that email already exists in your account. Select them from the customer list.");
     }
 
     return await prisma.customer.create({
       data: {
         ownerId,
         name,
-        email: parsedEmail?.data ?? null,
+        email: parsedEmail.data,
         billingStatus: "No Balance",
         addresses: serviceLocation
           ? {
@@ -237,7 +258,7 @@ async function createCustomerForEstimate({
       },
     });
   } catch (error) {
-    if (parsedEmail?.data && error instanceof Error && error.message.includes("Unique constraint failed")) {
+    if (error instanceof Error && error.message.includes("Unique constraint failed")) {
       throw new Error("A customer with that email already exists in your account. Select them from the customer list.");
     }
 

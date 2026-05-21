@@ -15,7 +15,7 @@ export type CreateCustomerState = {
 
 export type CustomerMutationState = CreateCustomerState;
 
-const createCustomerSchema = z.object({
+const customerDetailsSchema = z.object({
   name: z.string().trim().min(1, "Name is required."),
   email: z.preprocess((value) => {
     const email = String(value ?? "").trim();
@@ -43,6 +43,19 @@ const createCustomerSchema = z.object({
     )
     .max(5)
     .optional(),
+});
+
+const createCustomerSchema = customerDetailsSchema.extend({
+  email: z.preprocess((value) => {
+    const email = String(value ?? "").trim();
+    return email;
+  }, z.string().min(1, "Email is required.").email("Enter a valid email address.")),
+  phone: z
+    .string()
+    .trim()
+    .min(1, "Phone is required.")
+    .refine((value) => isValidOptionalPhoneNumber(value), "Enter a valid 10-digit phone number.")
+    .transform((value) => normalizePhoneNumber(value)),
 });
 
 async function findCustomerByEmail(ownerId: string, email?: string, excludeCustomerId?: string) {
@@ -183,7 +196,7 @@ export async function createCustomerAction(
   };
 }
 
-const updateCustomerSchema = createCustomerSchema.extend({
+const updateCustomerSchema = customerDetailsSchema.extend({
   id: z.string().trim().min(1, "Customer is required."),
 });
 

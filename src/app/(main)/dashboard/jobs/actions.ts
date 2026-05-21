@@ -41,7 +41,7 @@ const optionalMoney = z
 const materialsSchema = z.array(
   z.object({
     type: z.enum(["purchase", "return"]).optional(),
-    description: z.string().trim().min(1, "Material description is required."),
+    description: z.string().trim().optional(),
     vendor: z.string().trim().optional(),
     purchaseDate: z.string().trim().optional(),
     quantity: z
@@ -60,17 +60,19 @@ const materialsSchema = z.array(
     price: z
       .string()
       .trim()
-      .refine((value) => value.length > 0 && !Number.isNaN(Number(value)), "Enter a valid material amount."),
+      .optional()
+      .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid material amount."),
   }),
 );
 
 const laborItemsSchema = z.array(
   z.object({
-    description: z.string().trim().min(1, "Labor description is required."),
+    description: z.string().trim().optional(),
     price: z
       .string()
       .trim()
-      .refine((value) => value.length > 0 && !Number.isNaN(Number(value)), "Enter a valid labor price."),
+      .optional()
+      .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid labor price."),
   }),
 );
 
@@ -143,8 +145,8 @@ async function createCustomerForJob({
   phone?: string;
   serviceLocation?: string;
 }) {
-  if (!name || !phone) {
-    throw new Error("Enter a customer name and phone number before creating the job.");
+  if (!name || !email || !phone) {
+    throw new Error("Enter a customer name, email, and phone number before creating the job.");
   }
 
   const normalizedPhone = normalizePhoneNumber(phone);
@@ -153,36 +155,32 @@ async function createCustomerForJob({
     throw new Error("Enter a valid 10-digit phone number before creating the job.");
   }
 
-  const parsedEmail = email ? z.string().trim().email("Enter a valid customer email.").safeParse(email) : undefined;
+  const parsedEmail = z.string().trim().email("Enter a valid customer email.").safeParse(email);
 
-  if (parsedEmail && !parsedEmail.success) {
+  if (!parsedEmail.success) {
     throw new Error(parsedEmail.error.issues[0]?.message ?? "Enter a valid customer email.");
   }
 
   try {
-    if (parsedEmail?.data) {
-      const existingCustomer = await prisma.customer.findFirst({
-        where: {
-          email: parsedEmail.data,
-          ownerId,
-        },
-        select: {
-          id: true,
-        },
-      });
+    const existingCustomer = await prisma.customer.findFirst({
+      where: {
+        email: parsedEmail.data,
+        ownerId,
+      },
+      select: {
+        id: true,
+      },
+    });
 
-      if (existingCustomer) {
-        throw new Error(
-          "A customer with that email already exists in your account. Select them from the customer list.",
-        );
-      }
+    if (existingCustomer) {
+      throw new Error("A customer with that email already exists in your account. Select them from the customer list.");
     }
 
     return await prisma.customer.create({
       data: {
         ownerId,
         name,
-        email: parsedEmail?.data ?? null,
+        email: parsedEmail.data,
         billingStatus: "No Balance",
         addresses: serviceLocation
           ? {
@@ -204,7 +202,7 @@ async function createCustomerForJob({
       },
     });
   } catch (error) {
-    if (parsedEmail?.data && error instanceof Error && error.message.includes("Unique constraint failed")) {
+    if (error instanceof Error && error.message.includes("Unique constraint failed")) {
       throw new Error("A customer with that email already exists in your account. Select them from the customer list.");
     }
 
@@ -214,30 +212,42 @@ async function createCustomerForJob({
 
 function normalizeMaterials(
   materials: Array<{
-    description: string;
+    description?: string;
     type?: "purchase" | "return";
     vendor?: string;
     purchaseDate?: string;
     quantity?: string;
     unitPrice?: string;
-    price: string;
+    price?: string;
   }>,
 ) {
   return materials
     .map((material) => ({
-      description: material.description,
+      description: material.description ?? "",
       type: material.type ?? "purchase",
       vendor: material.vendor ?? "",
       purchaseDate: material.purchaseDate ?? "",
       quantity: material.quantity ?? "",
       unitPrice: material.unitPrice ?? "",
-      price: material.price,
+      price: material.price ?? "",
     }))
+    .filter(
+      (material) =>
+        material.description.trim() ||
+        material.vendor.trim() ||
+        material.quantity.trim() ||
+        material.unitPrice.trim() ||
+        (material.price.trim() && Number(material.price) !== 0),
+    )
     .filter((material) => material.description.trim() && material.price.trim());
 }
 
-function normalizeLaborItems(laborItems: Array<{ description: string; price: string }>) {
-  return laborItems.filter((item) => item.description.trim() && item.price.trim());
+function normalizeLaborItems(laborItems: Array<{ description?: string; price?: string }>) {
+  return laborItems
+    .filter((item) => item.description?.trim() || item.price?.trim())
+    .filter((item): item is { description: string; price: string } =>
+      Boolean(item.description?.trim() && item.price?.trim()),
+    );
 }
 
 function calculateFinalCost(job: {
