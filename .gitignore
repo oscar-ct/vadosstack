@@ -40,3 +40,6 @@ prisma/*.db-journal
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+*.dump
+render-backup.dump
