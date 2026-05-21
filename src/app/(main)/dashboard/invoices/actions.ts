@@ -590,7 +590,7 @@ export async function emailInvoiceAction(
       },
     });
     const invoiceNumber = formatDocumentNumber("INV", invoiceSequence);
-    const dueDate = addDays(invoice.issuedAt, 15);
+    const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);
     const materials = parseInvoiceMaterials(invoice.materials);
     const { html, subject, text } = createInvoiceEmailContent({
       companyName: currentUser.companyName,

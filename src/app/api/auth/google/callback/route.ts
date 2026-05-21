@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
       (await prisma.user.create({
         data: {
           companyName: getGoogleWorkspaceName({ email, hd: userInfo.hd, name: userInfo.name }),
+          companyEmail: email,
           email,
           name: userInfo.name || getDisplayName({ email }),
           passwordHash: hashPassword(randomBytes(32).toString("hex")),

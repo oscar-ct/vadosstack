@@ -17,7 +17,9 @@ export type CurrentUser = {
   companyName: string;
   companyEmail: string | null;
   companyPhone: string | null;
+  estimateValidDays: number;
   email: string;
+  invoiceDueDays: number;
   admin: boolean;
 };
 
@@ -41,7 +43,9 @@ function toCurrentUser(user: {
   companyName: string;
   companyEmail: string | null;
   companyPhone: string | null;
+  estimateValidDays: number;
   email: string;
+  invoiceDueDays: number;
   admin: boolean;
 }): CurrentUser {
   return {
@@ -50,7 +54,9 @@ function toCurrentUser(user: {
     companyName: user.companyName,
     companyEmail: user.companyEmail,
     companyPhone: user.companyPhone,
+    estimateValidDays: user.estimateValidDays,
     email: user.email,
+    invoiceDueDays: user.invoiceDueDays,
     admin: user.admin,
   };
 }
@@ -84,7 +90,9 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
           companyName: true,
           companyEmail: true,
           companyPhone: true,
+          estimateValidDays: true,
           email: true,
+          invoiceDueDays: true,
           admin: true,
         },
       },

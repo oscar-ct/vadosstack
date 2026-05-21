@@ -150,8 +150,8 @@ export async function sendGmailMessage(accessToken: string, message: GmailSendMe
 
     throw new Error(
       detail
-        ? `Gmail could not send the invoice email. Google said: ${detail}`
-        : `Gmail could not send the invoice email. Google returned HTTP ${response.status}.`,
+        ? `Gmail could not send this email. Google said: ${detail}`
+        : `Gmail could not send this email. Google returned HTTP ${response.status}.`,
     );
   }
 }

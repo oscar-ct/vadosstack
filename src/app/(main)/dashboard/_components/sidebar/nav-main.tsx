@@ -50,6 +50,8 @@ interface NavMainProps {
   readonly companyName: string;
   readonly companyEmail: string | null;
   readonly companyPhone: string | null;
+  readonly estimateValidDays: number;
+  readonly invoiceDueDays: number;
   readonly logoSrc: string;
   readonly onCompanySettingsSaved: () => void;
 }
@@ -194,12 +196,16 @@ function CompanySettingsDialog({
   companyEmail,
   companyName,
   companyPhone,
+  estimateValidDays,
+  invoiceDueDays,
   logoSrc,
   onSaved,
 }: {
   readonly companyEmail: string | null;
   readonly companyName: string;
   readonly companyPhone: string | null;
+  readonly estimateValidDays: number;
+  readonly invoiceDueDays: number;
   readonly logoSrc: string;
   readonly onSaved: () => void;
 }) {
@@ -266,6 +272,36 @@ function CompanySettingsDialog({
             <Label htmlFor="company-phone">Company phone</Label>
             <Input id="company-phone" name="companyPhone" type="tel" defaultValue={companyPhone ?? ""} />
           </div>
+          <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="estimate-valid-days">Estimate valid days</Label>
+              <Input
+                id="estimate-valid-days"
+                name="estimateValidDays"
+                type="number"
+                min={1}
+                max={365}
+                step={1}
+                defaultValue={estimateValidDays}
+                required
+              />
+              <p className="text-muted-foreground text-xs">Used for estimate valid-through dates.</p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="invoice-due-days">Invoice due days</Label>
+              <Input
+                id="invoice-due-days"
+                name="invoiceDueDays"
+                type="number"
+                min={1}
+                max={365}
+                step={1}
+                defaultValue={invoiceDueDays}
+                required
+              />
+              <p className="text-muted-foreground text-xs">Used for invoice due-by dates.</p>
+            </div>
+          </div>
           <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
             <div className="flex items-center gap-3">
               <div className="flex size-12 items-center justify-center overflow-hidden rounded-lg border bg-background">
@@ -328,6 +364,8 @@ export function NavMain({
   companyEmail,
   companyName,
   companyPhone,
+  estimateValidDays,
+  invoiceDueDays,
   logoSrc,
   onCompanySettingsSaved,
 }: NavMainProps) {
@@ -364,6 +402,8 @@ export function NavMain({
                 companyName={companyName}
                 companyEmail={companyEmail}
                 companyPhone={companyPhone}
+                estimateValidDays={estimateValidDays}
+                invoiceDueDays={invoiceDueDays}
                 logoSrc={logoSrc}
                 onSaved={onCompanySettingsSaved}
               />

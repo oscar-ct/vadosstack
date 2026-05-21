@@ -17,7 +17,7 @@ import { parseMaterials as parseJobMaterials } from "../../jobs/_components/mate
 import { parsePricingItems } from "../../jobs/_components/pricing-items";
 import { DeleteEstimateButton } from "../_components/delete-estimate-button";
 import { EstimateActions } from "../_components/estimate-actions";
-import { deleteEstimateAction } from "../actions";
+import { deleteEstimateAction, emailEstimateAction } from "../actions";
 
 type EstimateMaterial = {
   description: string;
@@ -55,12 +55,31 @@ function formatMaybeDate(value: Date | null) {
   return value ? format(value, "MMM d, yyyy") : "Not scheduled";
 }
 
+function formatEstimateSchedule(dateBegin: Date | null, dateEnd: Date | null) {
+  if (!dateBegin && !dateEnd) {
+    return "Unscheduled";
+  }
+
+  return `Begin: ${formatMaybeDate(dateBegin)}${dateEnd ? `\nEnd: ${formatMaybeDate(dateEnd)}` : ""}`;
+}
+
 function createUniqueRowKey(baseKey: string, seenKeys: Map<string, number>) {
   const count = seenKeys.get(baseKey) ?? 0;
   seenKeys.set(baseKey, count + 1);
 
   return count ? `${baseKey}-${count}` : baseKey;
 }
+
+const gmailErrorMessages: Record<string, string> = {
+  callback: "Gmail could not be connected. Please try again.",
+  config: "Google OAuth is not configured for Gmail sending yet.",
+  denied: "Gmail connection was cancelled.",
+  mismatch: "Connect the same Google account you use to sign in.",
+  refresh: "Google did not return offline Gmail access. Please try connecting again.",
+  scope: "Gmail send permission was not granted.",
+  state: "Gmail connection expired. Please try again.",
+  unverified: "Google has not verified that email address.",
+};
 
 export default async function Page({
   params,
@@ -71,6 +90,8 @@ export default async function Page({
   }>;
   searchParams?: Promise<{
     from?: string;
+    gmail_connected?: string;
+    gmail_error?: string;
   }>;
 }) {
   const currentUser = await getCurrentUser();
@@ -144,6 +165,19 @@ export default async function Page({
   const paymentAmount = Number(estimate.estimatedTotal.toString()) / 2;
   const estimateNumber = formatDocumentNumber("EST", estimateSequence);
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
+  const validThrough = addDays(estimate.issuedAt, currentUser.estimateValidDays);
+  const googleMailAccount = await prisma.googleMailAccount.findUnique({
+    where: {
+      userId: currentUser.id,
+    },
+  });
+  const currentHref = `/dashboard/estimates/${estimate.id}?from=${resolvedSearchParams?.from ?? "estimates"}`;
+  const gmailError = resolvedSearchParams?.gmail_error;
+  const gmailNotice = resolvedSearchParams?.gmail_connected
+    ? { message: "Gmail is connected. You can email estimates from this account.", type: "success" as const }
+    : gmailError
+      ? { message: gmailErrorMessages[gmailError] ?? "Gmail could not be connected.", type: "error" as const }
+      : null;
 
   return (
     <div className="mx-auto grid max-w-3xl gap-4 print:max-w-none print:gap-0 print:p-0 print:text-[10px]">
@@ -155,15 +189,37 @@ export default async function Page({
           </Link>
         </Button>
         <div className="flex flex-wrap items-center gap-2">
-          <EstimateActions />
+          <EstimateActions
+            action={emailEstimateAction}
+            customerEmail={estimate.customerEmail}
+            customerName={estimate.customerName}
+            estimateId={estimate.id}
+            estimateNumber={estimateNumber}
+            estimatedTotal={formatMoney(estimate.estimatedTotal)}
+            gmailConnected={Boolean(googleMailAccount)}
+            notice={gmailNotice}
+            returnTo={currentHref}
+            validThrough={format(validThrough, "MMM d, yyyy")}
+          />
           <DeleteEstimateButton action={deleteEstimateAction} estimateId={estimate.id} redirectTo={backHref} />
         </div>
       </div>
 
       <article className="grid gap-5 rounded-md border bg-card p-5 shadow-sm print:min-h-[9.6in] print:gap-3 print:border-0 print:bg-white print:p-5 print:text-neutral-950 print:shadow-none">
-        <header className="border-b pb-4 print:border-neutral-300 print:pb-2">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 print:grid-cols-[1fr_auto_1fr] print:items-center">
-            <div className="w-full pt-3 print:justify-self-start">
+        <header className="grid gap-4 border-b pb-2 sm:grid-cols-[1fr_auto] print:gap-2 print:border-neutral-300 print:pb-2">
+          <div className="grid gap-1">
+            <div className="mb-2 flex items-start gap-3">
+              <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 print:size-10 print:border-neutral-300 print:bg-neutral-50">
+                <Image
+                  src="/dashboard/company-logo"
+                  alt=""
+                  width={48}
+                  height={48}
+                  unoptimized
+                  className="size-full object-contain p-1"
+                  priority
+                />
+              </div>
               <div className="grid gap-0.5">
                 <div className="font-semibold text-lg leading-none print:text-sm">{currentUser.companyName}</div>
                 <div className="text-muted-foreground text-xs">{companyEmail}</div>
@@ -172,30 +228,22 @@ export default async function Page({
                 ) : null}
               </div>
             </div>
-            <div className="hidden size-36 w-full shrink-0 items-center justify-center justify-self-center overflow-hidden rounded-lg bg-muted/20 sm:flex print:size-36 print:border-neutral-300 print:bg-neutral-50">
-              <Image
-                src="/dashboard/company-logo"
-                alt=""
-                width={100}
-                height={100}
-                unoptimized
-                className="size-full object-contain p-1"
-                priority
-              />
+            <div className="mt-3 flex items-center gap-2 font-semibold text-xl print:mt-2 print:text-base">
+              <NotebookText className="size-5 text-muted-foreground print:size-4" />
+              Estimate
             </div>
-            <div className="flex w-full justify-end pt-2 print:justify-self-end">
-              <div className={"text-right"}>
-                <div className="flex items-center justify-end gap-1 font-semibold text-xl print:text-base">
-                  <NotebookText className="size-4 text-muted-foreground print:size-4" />
-                  Estimate
-                </div>
-                <div className="grid gap-0.5 text-muted-foreground text-xs">
-                  <span>Estimate #{estimateNumber}</span>
-                  <span>Issued {format(estimate.issuedAt, "MMM d, yyyy")}</span>
-                  <span>Valid through {format(addDays(estimate.issuedAt, 15), "MMM d, yyyy")}</span>
-                </div>
-              </div>
+            <div className="grid gap-0.5 text-muted-foreground text-xs">
+              <span>Estimate #{estimateNumber}</span>
+              <span>Issued {format(estimate.issuedAt, "MMM d, yyyy")}</span>
+              <span>Valid through {format(validThrough, "MMM d, yyyy")}</span>
             </div>
+          </div>
+          <div className="grid gap-1 rounded-md border bg-muted/20 p-3 text-left sm:text-right print:border-neutral-300 print:bg-neutral-50 print:p-2">
+            <span className="text-muted-foreground text-xs">Estimated total</span>
+            <span className="font-semibold text-2xl text-sky-700 dark:text-sky-400 print:text-xl">
+              {formatMoney(estimate.estimatedTotal)}
+            </span>
+            <span className="text-muted-foreground text-xs">valid through {format(validThrough, "MMM d, yyyy")}</span>
           </div>
         </header>
         <section className="grid gap-3 sm:grid-cols-2 print:grid-cols-2 print:gap-2">
@@ -229,9 +277,8 @@ export default async function Page({
               <CalendarDays className="size-3.5 text-muted-foreground" />
               Schedule
             </div>
-            <div className="grid h-16 gap-0.5 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
-              <div>Begin: {formatMaybeDate(estimate.dateBegin)}</div>
-              <div>End: {formatMaybeDate(estimate.dateEnd)}</div>
+            <div className="grid h-16 gap-0.5 whitespace-pre-line rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
+              {formatEstimateSchedule(estimate.dateBegin, estimate.dateEnd)}
             </div>
           </div>
           <div className="grid gap-2">

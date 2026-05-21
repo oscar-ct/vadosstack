@@ -48,7 +48,9 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
                   companyName: currentUser.companyName,
                   companyEmail: currentUser.companyEmail,
                   companyPhone: currentUser.companyPhone,
+                  estimateValidDays: currentUser.estimateValidDays,
                   email: currentUser.email,
+                  invoiceDueDays: currentUser.invoiceDueDays,
                   admin: currentUser.admin,
                 }
               : null

@@ -1,11 +1,23 @@
 "use client";
 
-import Link from "next/link";
+import * as React from "react";
 
-import { BadgeCheck, EllipsisVertical, LogOut, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+import { BadgeCheck, EllipsisVertical, LogOut, ShieldCheck, UserRound } from "lucide-react";
 
 import { logoutAction } from "@/app/(main)/auth/actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,8 +27,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FieldError } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { getInitials } from "@/lib/utils";
+
+import { type AccountProfileState, updateAccountProfileAction } from "./actions";
+
+const initialAccountProfileState: AccountProfileState = {
+  success: false,
+  message: "",
+};
 
 export function NavUser({
   user,
@@ -29,6 +51,18 @@ export function NavUser({
   } | null;
 }) {
   const { isMobile } = useSidebar();
+  const router = useRouter();
+  const [profileOpen, setProfileOpen] = React.useState(false);
+  const [state, formAction, isPending] = React.useActionState(updateAccountProfileAction, initialAccountProfileState);
+
+  React.useEffect(() => {
+    if (!state.success) {
+      return;
+    }
+
+    setProfileOpen(false);
+    router.refresh();
+  }, [router, state.success]);
 
   if (!user) {
     return (
@@ -89,6 +123,15 @@ export function NavUser({
                 <BadgeCheck />
                 {user.admin ? "Administrator" : "User"}
               </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setProfileOpen(true);
+                }}
+              >
+                <UserRound />
+                Edit profile
+              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <form action={logoutAction}>
@@ -101,6 +144,35 @@ export function NavUser({
             </form>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit profile</DialogTitle>
+              <DialogDescription>
+                Update the account name shown in the sidebar. Your sign-in email stays the same.
+              </DialogDescription>
+            </DialogHeader>
+            <form action={formAction} className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="account-name">Account name</Label>
+                <Input id="account-name" name="name" defaultValue={user.name} required />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="account-email">Sign-in email</Label>
+                <Input id="account-email" value={user.email} disabled />
+              </div>
+              {state.message && !state.success ? <FieldError errors={[{ message: state.message }]} /> : null}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isPending}>
+                  {isPending ? "Saving..." : "Save profile"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </SidebarMenuItem>
     </SidebarMenu>
   );

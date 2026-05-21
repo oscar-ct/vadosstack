@@ -177,6 +177,7 @@ export default async function Page({
   const payments = invoice.job.payments;
   const invoiceNumber = formatDocumentNumber("INV", invoiceSequence);
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
+  const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);
   const googleMailAccount = await prisma.googleMailAccount.findUnique({
     where: {
       userId: currentUser.id,
@@ -205,7 +206,7 @@ export default async function Page({
             balanceDue={formatMoney(invoice.balanceDue)}
             customerEmail={invoice.customerEmail}
             customerName={invoice.customerName}
-            dueDate={format(addDays(invoice.issuedAt, 15), "MMM d, yyyy")}
+            dueDate={format(dueDate, "MMM d, yyyy")}
             gmailConnected={Boolean(googleMailAccount)}
             invoiceId={invoice.id}
             invoiceNumber={invoiceNumber}
@@ -252,9 +253,7 @@ export default async function Page({
             <span className="font-semibold text-2xl text-rose-700 dark:text-rose-400 print:text-xl">
               {formatMoney(invoice.balanceDue)}
             </span>
-            <span className="text-muted-foreground text-xs">
-              by {format(addDays(invoice.issuedAt, 15), "MMM d, yyyy")}
-            </span>
+            <span className="text-muted-foreground text-xs">by {format(dueDate, "MMM d, yyyy")}</span>
           </div>
         </header>
 

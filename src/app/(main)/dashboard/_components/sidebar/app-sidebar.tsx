@@ -32,7 +32,9 @@ export function AppSidebar({
     companyName: string;
     companyEmail: string | null;
     companyPhone: string | null;
+    estimateValidDays: number;
     email: string;
+    invoiceDueDays: number;
     admin: boolean;
   } | null;
 }) {
@@ -86,6 +88,8 @@ export function AppSidebar({
           companyName={companyName}
           companyEmail={currentUser?.companyEmail ?? null}
           companyPhone={currentUser?.companyPhone ?? null}
+          estimateValidDays={currentUser?.estimateValidDays ?? 15}
+          invoiceDueDays={currentUser?.invoiceDueDays ?? 15}
           logoSrc={logoSrc}
           onCompanySettingsSaved={refreshCompanyLogo}
         />

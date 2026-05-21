@@ -102,6 +102,7 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
     data: {
       name: parsed.data.name?.trim() || getDisplayName(parsed.data),
       companyName: parsed.data.companyName,
+      companyEmail: parsed.data.email,
       email: parsed.data.email,
       passwordHash: hashPassword(parsed.data.password),
     },
