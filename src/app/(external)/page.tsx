@@ -19,7 +19,6 @@ import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import { APP_CONFIG } from "@/config/app-config";
 
-import dashboardImage from "../../../media/dashboard.png";
 import vadosstackLogo from "../../../media/vadosstack-logo-transparent.png";
 import vadosstackLogoSmall from "../../../media/vadosstack-logo-transparent-small.png";
 
@@ -47,6 +46,14 @@ export const metadata: Metadata = {
   openGraph: {
     title,
     description,
+    images: [
+      {
+        alt: "VadosStack management software for service businesses",
+        height: 630,
+        url: "/opengraph-image",
+        width: 1200,
+      },
+    ],
     url: siteUrl,
     siteName: APP_CONFIG.name,
     type: "website",
@@ -66,6 +73,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title,
     description,
+    images: ["/opengraph-image"],
   },
 };
 
@@ -142,7 +150,7 @@ export default function Home() {
       <main className="min-h-screen bg-[#f6f1e8] text-[#171412]">
         <section className="relative isolate flex min-h-[88svh] overflow-hidden bg-[#efe6d7]">
           <Image
-            src={dashboardImage}
+            src="/vadosstack-dashboard-preview.svg"
             alt="VadosStack dashboard showing service business operations, jobs, customers, estimates, and invoices"
             fill
             priority

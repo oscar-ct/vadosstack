@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 1260" role="img" aria-label="VadosStack dashboard preview">
+  <defs>
+    <linearGradient id="background" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f6f1e8"/>
+      <stop offset="0.48" stop-color="#efe6d7"/>
+      <stop offset="1" stop-color="#dbe9e2"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#faf8f3"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="28" stdDeviation="32" flood-color="#3b241b" flood-opacity="0.18"/>
+    </filter>
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#3b241b" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect width="2400" height="1260" fill="url(#background)"/>
+  <circle cx="2010" cy="190" r="410" fill="#c9e3d4" opacity="0.75"/>
+  <circle cx="1780" cy="980" r="520" fill="#e8c7a7" opacity="0.38"/>
+  <circle cx="640" cy="1040" r="430" fill="#b8d9e8" opacity="0.28"/>
+
+  <g filter="url(#shadow)" transform="translate(545 126)">
+    <rect width="1680" height="1008" rx="44" fill="#171412"/>
+    <rect x="18" y="18" width="1644" height="972" rx="34" fill="#f8f6f0"/>
+
+    <g>
+      <rect x="18" y="18" width="280" height="972" rx="34" fill="#171412"/>
+      <rect x="18" y="18" width="280" height="972" rx="34" fill="#171412"/>
+      <circle cx="72" cy="78" r="24" fill="#f6f1e8"/>
+      <text x="112" y="88" fill="#f6f1e8" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">VadosStack</text>
+
+      <g fill="#f6f1e8" font-family="Arial, Helvetica, sans-serif" font-size="24" opacity="0.9">
+        <rect x="48" y="152" width="210" height="54" rx="16" fill="#f6f1e8" opacity="0.12"/>
+        <text x="84" y="187">Overview</text>
+        <text x="84" y="263" opacity="0.72">Customers</text>
+        <text x="84" y="329" opacity="0.72">Jobs</text>
+        <text x="84" y="395" opacity="0.72">Estimates</text>
+        <text x="84" y="461" opacity="0.72">Invoices</text>
+        <text x="84" y="527" opacity="0.72">Time Tracking</text>
+        <text x="84" y="593" opacity="0.72">Services</text>
+      </g>
+
+      <rect x="48" y="852" width="210" height="82" rx="22" fill="#f6f1e8" opacity="0.10"/>
+      <text x="72" y="888" fill="#f6f1e8" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700">Field Services</text>
+      <text x="72" y="916" fill="#f6f1e8" font-family="Arial, Helvetica, sans-serif" font-size="17" opacity="0.68">Administrator</text>
+    </g>
+
+    <g transform="translate(342 64)">
+      <text x="0" y="48" fill="#171412" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800">Command Center</text>
+      <text x="0" y="88" fill="#594431" font-family="Arial, Helvetica, sans-serif" font-size="22">Customers, jobs, estimates, invoices, and team time in one workspace.</text>
+
+      <g transform="translate(0 140)" filter="url(#soft-shadow)">
+        <rect width="286" height="158" rx="24" fill="url(#panel)"/>
+        <text x="28" y="48" fill="#594431" font-family="Arial, Helvetica, sans-serif" font-size="20">Open jobs</text>
+        <text x="28" y="106" fill="#171412" font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="800">24</text>
+        <rect x="202" y="38" width="48" height="48" rx="14" fill="#dceee4"/>
+      </g>
+      <g transform="translate(318 140)" filter="url(#soft-shadow)">
+        <rect width="286" height="158" rx="24" fill="url(#panel)"/>
+        <text x="28" y="48" fill="#594431" font-family="Arial, Helvetica, sans-serif" font-size="20">Estimates</text>
+        <text x="28" y="106" fill="#171412" font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="800">12</text>
+        <rect x="202" y="38" width="48" height="48" rx="14" fill="#e9ddfb"/>
+      </g>
+      <g transform="translate(636 140)" filter="url(#soft-shadow)">
+        <rect width="286" height="158" rx="24" fill="url(#panel)"/>
+        <text x="28" y="48" fill="#594431" font-family="Arial, Helvetica, sans-serif" font-size="20">Invoices due</text>
+        <text x="28" y="106" fill="#171412" font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="800">$8.4k</text>
+        <rect x="202" y="38" width="48" height="48" rx="14" fill="#f8d9d1"/>
+      </g>
+      <g transform="translate(954 140)" filter="url(#soft-shadow)">
+        <rect width="286" height="158" rx="24" fill="url(#panel)"/>
+        <text x="28" y="48" fill="#594431" font-family="Arial, Helvetica, sans-serif" font-size="20">Hours logged</text>
+        <text x="28" y="106" fill="#171412" font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="800">186</text>
+        <rect x="202" y="38" width="48" height="48" rx="14" fill="#d9e9f6"/>
+      </g>
+
+      <g transform="translate(0 340)" filter="url(#soft-shadow)">
+        <rect width="780" height="520" rx="28" fill="url(#panel)"/>
+        <text x="32" y="54" fill="#171412" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="800">Today&apos;s work</text>
+        <text x="32" y="90" fill="#594431" font-family="Arial, Helvetica, sans-serif" font-size="18">Scheduled jobs and active customer requests</text>
+        <g font-family="Arial, Helvetica, sans-serif">
+          <rect x="32" y="132" width="716" height="72" rx="18" fill="#f1eadf"/>
+          <text x="58" y="164" fill="#171412" font-size="21" font-weight="700">Kitchen tile repair</text>
+          <text x="58" y="190" fill="#594431" font-size="17">Ana Morales · 10:30 AM · Scheduled</text>
+          <rect x="604" y="154" width="112" height="28" rx="14" fill="#dceee4"/>
+
+          <rect x="32" y="222" width="716" height="72" rx="18" fill="#f1eadf"/>
+          <text x="58" y="254" fill="#171412" font-size="21" font-weight="700">Estimate follow-up</text>
+          <text x="58" y="280" fill="#594431" font-size="17">Green Valley Market · Pending approval</text>
+          <rect x="604" y="244" width="112" height="28" rx="14" fill="#e9ddfb"/>
+
+          <rect x="32" y="312" width="716" height="72" rx="18" fill="#f1eadf"/>
+          <text x="58" y="344" fill="#171412" font-size="21" font-weight="700">Invoice payment</text>
+          <text x="58" y="370" fill="#594431" font-size="17">North Ridge HOA · Balance due</text>
+          <rect x="604" y="334" width="112" height="28" rx="14" fill="#f8d9d1"/>
+
+          <rect x="32" y="402" width="716" height="72" rx="18" fill="#f1eadf"/>
+          <text x="58" y="434" fill="#171412" font-size="21" font-weight="700">Employee time review</text>
+          <text x="58" y="460" fill="#594431" font-size="17">4 pending time entries</text>
+          <rect x="604" y="424" width="112" height="28" rx="14" fill="#d9e9f6"/>
+        </g>
+      </g>
+
+      <g transform="translate(824 340)" filter="url(#soft-shadow)">
+        <rect width="416" height="520" rx="28" fill="url(#panel)"/>
+        <text x="30" y="54" fill="#171412" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="800">Revenue</text>
+        <text x="30" y="90" fill="#594431" font-family="Arial, Helvetica, sans-serif" font-size="18">Invoice and estimate momentum</text>
+        <polyline points="34,374 92,330 150,350 208,252 266,282 324,178 382,210" fill="none" stroke="#24533d" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="34,420 92,398 150,384 208,356 266,338 324,304 382,286" fill="none" stroke="#b84a2b" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.72"/>
+        <rect x="30" y="122" width="154" height="50" rx="16" fill="#f1eadf"/>
+        <text x="54" y="154" fill="#171412" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700">$18,420</text>
+        <rect x="30" y="448" width="356" height="36" rx="18" fill="#f1eadf"/>
+      </g>
+    </g>
+  </g>
+</svg>
