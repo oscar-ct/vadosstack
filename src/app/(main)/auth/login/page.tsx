@@ -3,17 +3,37 @@ import { redirect } from "next/navigation";
 
 import { Command } from "lucide-react";
 
+import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
 
 import { LoginForm } from "../_components/login-form";
+import { GoogleButton } from "../_components/social-auth/google-button";
 import { loginAction } from "../actions";
 
-export default async function LoginV1() {
+const googleErrorMessages: Record<string, string> = {
+  callback: "Google sign-in could not be completed. Please try again.",
+  config: "Google sign-in is not configured yet.",
+  denied: "Google sign-in was cancelled.",
+  state: "Google sign-in expired. Please try again.",
+  unverified: "Google has not verified that email address.",
+};
+
+type LoginPageProps = {
+  searchParams?: Promise<{
+    google_error?: string | string[];
+  }>;
+};
+
+export default async function LoginV1({ searchParams }: LoginPageProps) {
   const user = await getCurrentUser();
 
   if (user) {
     redirect("/dashboard/overview");
   }
+
+  const params = await searchParams;
+  const googleError = Array.isArray(params?.google_error) ? params.google_error[0] : params?.google_error;
+  const googleErrorMessage = googleError ? googleErrorMessages[googleError] : null;
 
   return (
     <div className="flex h-dvh">
@@ -38,6 +58,15 @@ export default async function LoginV1() {
             </div>
           </div>
           <div className="space-y-4">
+            <form action="/api/auth/google" method="get">
+              <GoogleButton className="w-full" type="submit" />
+            </form>
+            {googleErrorMessage ? <p className="text-center text-destructive text-sm">{googleErrorMessage}</p> : null}
+            <div className="flex items-center gap-3 text-muted-foreground text-xs">
+              <Separator className="flex-1" />
+              <span>or</span>
+              <Separator className="flex-1" />
+            </div>
             <LoginForm action={loginAction} />
             <p className="text-center text-muted-foreground text-xs">
               Don&apos;t have an account?{" "}
