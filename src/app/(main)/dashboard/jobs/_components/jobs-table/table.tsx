@@ -459,8 +459,8 @@ export function JobsTable({
           {table.getRowModel().rows.length ? (
             table.getRowModel().rows.map((row, index) => {
               const amountDue = getAmountDueDisplay(row.original);
-              const rowNumber =
-                table.getState().pagination.pageIndex * table.getState().pagination.pageSize + index + 1;
+              // const rowNumber =
+              //   table.getState().pagination.pageIndex * table.getState().pagination.pageSize + index + 1;
 
               return (
                 <Card key={row.id} size="sm" className="gap-0 py-0">
