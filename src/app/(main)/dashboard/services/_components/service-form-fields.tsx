@@ -47,40 +47,33 @@ function formatMoney(value: string) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
-function LineItemsEditor({
-  items,
-  label,
-  onChange,
-}: {
-  items: LineItem[];
-  label: string;
-  onChange: (items: LineItem[]) => void;
-}) {
-  const lowerLabel = label.toLowerCase();
-  const sectionClassName =
-    label === "Labor"
-      ? "grid gap-4 rounded-lg border border-sky-200/80 bg-sky-50/60 p-4 dark:border-sky-900/60 dark:bg-sky-950/20"
-      : "grid gap-4 rounded-lg border border-amber-200/80 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20";
-
+function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (items: LineItem[]) => void }) {
   return (
-    <div className={sectionClassName}>
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
+    <div
+      className={
+        "grid gap-4 pb-4 rounded-lg border border-sky-200/80 bg-sky-50/60 dark:border-sky-900/60 dark:bg-sky-950/20"
+      }
+    >
+      <div className="grid gap-4 px-4 pt-4 pb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
         <div className="grid gap-1">
-          <Label>{label}</Label>
-          <p className="text-muted-foreground text-xs">Reusable {lowerLabel} line items for this service.</p>
+          <Label>Labor</Label>
+          <p className="text-muted-foreground text-xs">Reusable labor line items for this service.</p>
         </div>
         <Button type="button" variant="outline" onClick={() => onChange([createLineItem(), ...items])}>
           <Plus />
-          Add {lowerLabel}
+          Add labor
         </Button>
       </div>
       <div className="grid gap-3">
         {items.map((item, index) => (
-          <div key={item.id} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px_auto]">
-            <div className="grid gap-2">
+          <div
+            key={item.id}
+            className="grid grid-cols-[minmax(0,1fr)_3rem] gap-3 p-3 odd:py-0 even:bg-sky-100/80 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
+          >
+            <div className="col-span-2 grid gap-2 sm:col-span-1">
               {index === 0 ? <Label>Description</Label> : null}
               <Input
-                aria-label={`${label} ${index + 1} description`}
+                aria-label={`Labor} ${index + 1} description`}
                 value={item.description}
                 onChange={(event) =>
                   onChange(
@@ -89,14 +82,14 @@ function LineItemsEditor({
                     ),
                   )
                 }
-                placeholder={`${label} description`}
+                placeholder={`Labor description`}
                 className={mobileFieldClassName}
               />
             </div>
             <div className="grid gap-2">
               {index === 0 ? <Label>Price</Label> : null}
               <Input
-                aria-label={`${label} ${index + 1} price`}
+                aria-label={`Labor ${index + 1} price`}
                 value={item.price}
                 type="number"
                 min="0"
@@ -112,14 +105,14 @@ function LineItemsEditor({
                 className={mobileFieldClassName}
               />
             </div>
-            <div className={index === 0 ? "flex items-end" : undefined}>
+            <div className="flex justify-end items-end">
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
                 disabled={items.length === 1}
                 onClick={() => onChange(items.length === 1 ? items : items.filter((current) => current.id !== item.id))}
-                aria-label={`Remove ${lowerLabel} ${index + 1}`}
+                aria-label={`Remove labor ${index + 1}`}
               >
                 <Trash2 className="size-4 text-red-500" />
               </Button>
@@ -139,8 +132,8 @@ function MaterialItemsEditor({
   onChange: (items: MaterialLineItem[]) => void;
 }) {
   return (
-    <div className="grid gap-4 rounded-lg border border-amber-200/80 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
+    <div className="grid gap-4 pb-4 rounded-lg border border-amber-200/80 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20">
+      <div className="grid gap-4 px-4 pt-4 pb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
         <div className="grid gap-1">
           <Label>Materials</Label>
           <p className="text-muted-foreground text-xs">Reusable material line items with quantity and unit pricing.</p>
@@ -157,9 +150,9 @@ function MaterialItemsEditor({
           return (
             <div
               key={item.id}
-              className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_60px_100px_75px_auto] lg:items-end"
+              className="grid grid-cols-[minmax(3rem,0.6fr)_minmax(5rem,1fr)_minmax(3rem,0.6fr)_auto] items-end gap-3 p-3 odd:py-0 even:bg-amber-100/80 lg:grid-cols-[minmax(0,1fr)_60px_100px_75px_auto]"
             >
-              <div className="col-span-2 grid gap-2 lg:col-span-1">
+              <div className="col-span-4 grid gap-2 lg:pb-0 lg:col-span-1">
                 {index === 0 ? <Label>Description</Label> : null}
                 <Input
                   aria-label={`Material ${index + 1} description`}
@@ -212,9 +205,11 @@ function MaterialItemsEditor({
                   className={mobileFieldClassName}
                 />
               </div>
-              <div className="grid h-full rounded-md bg-muted/30 px-3 py-2 lg:bg-transparent lg:p-0">
+              <div className="grid h-full rounded-md lg:bg-transparent lg:p-0">
                 {index === 0 ? <Label className={"flex items-start"}>Total</Label> : null}
-                <span className="flex items-center font-medium text-sm tabular-nums">{formatMoney(total)}</span>
+                <span className="flex items-center truncate font-medium text-xs tabular-nums sm:text-sm">
+                  {formatMoney(total)}
+                </span>
               </div>
               <div className={index === 0 ? "flex items-end justify-end" : "flex justify-end"}>
                 <Button
@@ -337,7 +332,7 @@ export function ServiceFormFields({ service }: { service?: ServiceTemplateRow })
         </div>
       </div>
 
-      <LineItemsEditor label="Labor" items={laborItems} onChange={setLaborItems} />
+      <LineItemsEditor items={laborItems} onChange={setLaborItems} />
       <MaterialItemsEditor items={materials} onChange={setMaterials} />
     </div>
   );

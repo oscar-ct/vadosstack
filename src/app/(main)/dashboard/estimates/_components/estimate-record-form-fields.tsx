@@ -93,40 +93,33 @@ function formatCurrency(value: number) {
   return value.toFixed(2);
 }
 
-function LineItemsEditor({
-  items,
-  label,
-  onChange,
-}: {
-  items: LineItem[];
-  label: string;
-  onChange: (items: LineItem[]) => void;
-}) {
-  const lowerLabel = label.toLowerCase();
-  const sectionClassName =
-    label === "Labor"
-      ? "grid gap-4 rounded-lg border border-sky-200/80 bg-sky-50/60 p-4 dark:border-sky-900/60 dark:bg-sky-950/20"
-      : "grid gap-4 rounded-lg border border-amber-200/80 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20";
-
+function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (items: LineItem[]) => void }) {
   return (
-    <div className={sectionClassName}>
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
+    <div
+      className={
+        "grid gap-4 pb-4 rounded-lg border border-sky-200/80 bg-sky-50/60 dark:border-sky-900/60 dark:bg-sky-950/20"
+      }
+    >
+      <div className="grid gap-4 px-4 pt-4 pb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
         <div className="grid gap-1">
-          <Label>{label}</Label>
-          <p className="text-muted-foreground text-xs">Add optional {lowerLabel} line items for this estimate.</p>
+          <Label>Labor</Label>
+          <p className="text-muted-foreground text-xs">Add optional labor line items for this estimate.</p>
         </div>
         <Button type="button" variant="outline" onClick={() => onChange([createLineItem(), ...items])}>
           <Plus />
-          Add {lowerLabel}
+          Add labor
         </Button>
       </div>
       <div className="grid gap-3">
         {items.map((item, index) => (
-          <div key={item.id} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px_auto]">
-            <div className="grid gap-2">
+          <div
+            key={item.id}
+            className="grid grid-cols-[minmax(0,1fr)_3rem] gap-3 py-3 px-4 odd:py-0 even:bg-sky-100/80 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
+          >
+            <div className="col-span-2 grid gap-2 sm:col-span-1">
               {index === 0 ? <Label>Description</Label> : null}
               <Input
-                aria-label={`${label} ${index + 1} description`}
+                aria-label={`Labor ${index + 1} description`}
                 value={item.description}
                 onChange={(event) =>
                   onChange(
@@ -135,14 +128,14 @@ function LineItemsEditor({
                     ),
                   )
                 }
-                placeholder={`${label} description`}
+                placeholder={`Labor description`}
                 className={mobileFieldClassName}
               />
             </div>
             <div className="grid gap-2">
               {index === 0 ? <Label>Price</Label> : null}
               <Input
-                aria-label={`${label} ${index + 1} price`}
+                aria-label={`Labor ${index + 1} price`}
                 value={item.price}
                 type="number"
                 min="0"
@@ -158,14 +151,14 @@ function LineItemsEditor({
                 className={mobileFieldClassName}
               />
             </div>
-            <div className={index === 0 ? "flex items-end" : undefined}>
+            <div className="flex items-end justify-end">
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
                 disabled={items.length === 1}
                 onClick={() => onChange(items.length === 1 ? items : items.filter((current) => current.id !== item.id))}
-                aria-label={`Remove ${lowerLabel} ${index + 1}`}
+                aria-label={`Remove labor ${index + 1}`}
               >
                 <Trash2 className="size-4 text-red-500" />
               </Button>
@@ -185,8 +178,8 @@ function MaterialItemsEditor({
   onChange: (items: MaterialLineItem[]) => void;
 }) {
   return (
-    <div className="grid gap-4 rounded-lg border border-amber-200/80 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
+    <div className="grid gap-4 pb-4 rounded-lg border border-amber-200/80 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20">
+      <div className="grid gap-4 px-4 pt-4 pb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
         <div className="grid gap-1">
           <Label>Materials</Label>
           <p className="text-muted-foreground text-xs">Add optional material quantities and unit prices.</p>
@@ -203,9 +196,9 @@ function MaterialItemsEditor({
           return (
             <div
               key={item.id}
-              className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_60px_100px_75px_auto] lg:items-end"
+              className="grid grid-cols-[minmax(3rem,0.6fr)_minmax(5rem,1fr)_minmax(3rem,0.6fr)_auto] items-end gap-3 px-4 py-3 odd:py-0 even:bg-amber-100/80 lg:grid-cols-[minmax(0,1fr)_60px_100px_75px_auto]"
             >
-              <div className="col-span-2 grid gap-2 lg:col-span-1">
+              <div className="col-span-4 grid gap-2 lg:col-span-1">
                 {index === 0 ? <Label>Description</Label> : null}
                 <Input
                   aria-label={`Material ${index + 1} description`}
@@ -258,9 +251,9 @@ function MaterialItemsEditor({
                   className={mobileFieldClassName}
                 />
               </div>
-              <div className="grid h-full rounded-md bg-muted/30 px-3 py-2 lg:bg-transparent lg:p-0">
+              <div className="grid h-full rounded-md lg:bg-transparent lg:p-0">
                 {index === 0 ? <Label className={"flex items-start"}>Total</Label> : null}
-                <span className="flex items-center font-medium text-sm tabular-nums">
+                <span className="flex items-center truncate font-medium text-xs tabular-nums sm:text-sm">
                   ${formatCurrency(toNumber(total))}
                 </span>
               </div>
@@ -596,16 +589,19 @@ export function EstimateRecordFormFields({
         </div>
         {addressOptions.length ? (
           <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-            <SelectTrigger id={`estimate-location-${estimate?.id ?? "new"}`} className="w-full">
+            <SelectTrigger
+              id={`estimate-location-${estimate?.id ?? "new"}`}
+              className="w-full min-w-0 overflow-hidden [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate"
+            >
               <SelectValue placeholder="Select service location" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-[calc(100vw-2rem)]">
               <SelectGroup>
                 {addressOptions.map((address) => {
                   const value = formatAddress(address);
                   return (
-                    <SelectItem key={address.id} value={value}>
-                      {address.label ? `${address.label}: ${value}` : value}
+                    <SelectItem key={address.id} value={value} className="max-w-[calc(100vw-2rem)]">
+                      <span className="block truncate">{address.label ? `${address.label}: ${value}` : value}</span>
                     </SelectItem>
                   );
                 })}
@@ -701,7 +697,7 @@ export function EstimateRecordFormFields({
         </p>
       </div>
 
-      <LineItemsEditor label="Labor" items={laborItems} onChange={setLaborItems} />
+      <LineItemsEditor items={laborItems} onChange={setLaborItems} />
       <MaterialItemsEditor items={materials} onChange={setMaterials} />
 
       <div className="grid gap-4 rounded-lg border bg-muted/20 p-4">

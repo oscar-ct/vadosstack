@@ -568,16 +568,19 @@ export function JobFormFields({
         </div>
         {addressOptions.length ? (
           <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-            <SelectTrigger id={`job-location-${job?.id ?? "new"}`} className="w-full">
+            <SelectTrigger
+              id={`job-location-${job?.id ?? "new"}`}
+              className="w-full min-w-0 overflow-hidden [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate"
+            >
               <SelectValue placeholder="Select service location" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-[calc(100vw-2rem)]">
               <SelectGroup>
                 {addressOptions.map((address) => {
                   const value = formatAddress(address);
                   return (
-                    <SelectItem key={address.id} value={value}>
-                      {address.label ? `${address.label}: ${value}` : value}
+                    <SelectItem key={address.id} value={value} className="max-w-[calc(100vw-2rem)]">
+                      <span className="block truncate">{address.label ? `${address.label}: ${value}` : value}</span>
                     </SelectItem>
                   );
                 })}
@@ -673,8 +676,8 @@ export function JobFormFields({
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-lg border border-sky-200/80 bg-sky-50/60 p-4 dark:border-sky-900/60 dark:bg-sky-950/20">
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
+      <div className="grid gap-4 pb-4 rounded-lg border border-sky-200/80 bg-sky-50/60 dark:border-sky-900/60 dark:bg-sky-950/20">
+        <div className="grid pt-4 px-4 pb-2 gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
           <div className="grid gap-1">
             <Label>Labor</Label>
             <p className="text-muted-foreground text-xs">Add each labor line item with a description and price.</p>
@@ -689,11 +692,14 @@ export function JobFormFields({
           </Button>
         </div>
 
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {laborItems.map((item, index) => (
-            <div key={item.id} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
-              <div className="grid gap-2">
-                {index === 0 ? <Label>Description</Label> : null}
+            <div
+              key={item.id}
+              className="grid grid-cols-[minmax(0,1fr)_3rem] gap-3 p-4 odd:py-0 even:bg-sky-100/80 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
+            >
+              <div className="col-span-2 grid gap-2 sm:col-span-1">
+                <Label>Description</Label>
                 <Input
                   id={`job-labor-description-${job?.id ?? "new"}-${index}`}
                   aria-label={`Labor ${index + 1} description`}
@@ -710,7 +716,7 @@ export function JobFormFields({
                 />
               </div>
               <div className="grid gap-2">
-                {index === 0 ? <Label>Price</Label> : null}
+                <Label>Price</Label>
                 <Input
                   id={`job-labor-price-${job?.id ?? "new"}-${index}`}
                   aria-label={`Labor ${index + 1} price`}
@@ -729,7 +735,7 @@ export function JobFormFields({
                   className={mobileFieldClassName}
                 />
               </div>
-              <div className={index === 0 ? "flex items-end" : undefined}>
+              <div className="flex items-end justify-end">
                 <Button
                   type="button"
                   variant="outline"
@@ -750,8 +756,8 @@ export function JobFormFields({
         </div>
       </div>
 
-      <div className="grid gap-4 rounded-lg border border-amber-200/80 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
+      <div className="grid gap-4 pb-4 rounded-lg border border-amber-200/80 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20">
+        <div className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
           <div className="grid gap-1">
             <Label>Materials</Label>
             <p className="text-muted-foreground text-xs">
@@ -768,12 +774,12 @@ export function JobFormFields({
           </Button>
         </div>
 
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {materials.map((material, index) => {
             return (
-              <div key={material.id} className="grid gap-3 rounded-md border bg-background/75 p-3">
-                <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 sm:grid-cols-[120px_minmax(0,1fr)_120px_auto] sm:items-end">
-                  <div className="grid gap-2">
+              <div key={material.id} className="grid gap-3 p-4 odd:py-0 even:bg-amber-100/80">
+                <div className="grid grid-cols-[7rem_minmax(0,1fr)_2.25rem] gap-3 sm:grid-cols-[120px_minmax(0,1fr)_120px_auto] sm:items-end">
+                  <div className="order-3 grid gap-2 sm:order-none">
                     <Label>Type</Label>
                     <Select
                       value={material.type ?? "purchase"}
@@ -800,7 +806,7 @@ export function JobFormFields({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid gap-2 sm:col-span-1">
+                  <div className="order-1 col-span-3 grid gap-2 sm:order-none sm:col-span-1">
                     <Label>Description</Label>
                     <Input
                       id={`job-material-description-${job?.id ?? "new"}-${index}`}
@@ -817,7 +823,7 @@ export function JobFormFields({
                       className={mobileFieldClassName}
                     />
                   </div>
-                  <div className="col-span-2 grid gap-2 sm:col-span-1">
+                  <div className="order-2 grid gap-2 sm:order-none sm:col-span-1">
                     <Label>Line total</Label>
                     <Input
                       id={`job-material-amount-${job?.id ?? "new"}-${index}`}
@@ -837,7 +843,7 @@ export function JobFormFields({
                       className={mobileFieldClassName}
                     />
                   </div>
-                  <div className="flex items-end justify-end">
+                  <div className="order-4 flex items-end justify-end sm:order-none">
                     <Button
                       type="button"
                       variant="outline"
@@ -855,8 +861,8 @@ export function JobFormFields({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-[minmax(0,1fr)_5rem] gap-3 sm:grid-cols-[minmax(0,1fr)_150px_90px_120px]">
-                  <div className="col-span-2 grid gap-2 sm:col-span-1">
+                <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_150px_90px_120px]">
+                  <div className="order-4 grid gap-2 sm:order-none sm:col-span-1">
                     <Label>Vendor</Label>
                     <Input
                       id={`job-material-vendor-${job?.id ?? "new"}-${index}`}
@@ -880,7 +886,7 @@ export function JobFormFields({
                       className={mobileFieldClassName}
                     />
                   </div>
-                  <div className="col-span-2 grid gap-2 sm:col-span-1">
+                  <div className="order-3 grid gap-2 sm:order-none sm:col-span-1">
                     <Label>{material.type === "return" ? "Return date" : "Purchase date"}</Label>
                     <Input
                       id={`job-material-date-${job?.id ?? "new"}-${index}`}
@@ -897,7 +903,7 @@ export function JobFormFields({
                       className={mobileFieldClassName}
                     />
                   </div>
-                  <div className="grid gap-2">
+                  <div className="order-1 grid gap-2 sm:order-none">
                     <Label>Qty</Label>
                     <Input
                       id={`job-material-quantity-${job?.id ?? "new"}-${index}`}
@@ -925,7 +931,7 @@ export function JobFormFields({
                       className={mobileFieldClassName}
                     />
                   </div>
-                  <div className="grid gap-2">
+                  <div className="order-2 grid gap-2 sm:order-none">
                     <Label>Unit price</Label>
                     <Input
                       id={`job-material-unit-price-${job?.id ?? "new"}-${index}`}
