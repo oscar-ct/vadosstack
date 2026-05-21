@@ -139,7 +139,7 @@ export function CreateCustomerDialog({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="customer-email">Email</Label>
-              <Input id="customer-email" name="email" type="email" placeholder="jane@example.com" />
+              <Input id="customer-email" name="email" type="email" placeholder="jane@example.com" required />
             </div>
           </div>
 
@@ -152,9 +152,11 @@ export function CreateCustomerDialog({
                 type="tel"
                 inputMode="numeric"
                 autoComplete="tel"
+                maxLength={12}
                 value={formatPhoneNumber(phoneDigits)}
                 onChange={(event) => setPhoneDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
                 placeholder="555-555-1234"
+                required
               />
             </div>
             <div className="grid gap-2">

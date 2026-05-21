@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { UsStateSelect } from "@/components/us-state-select";
+import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
 import type { JobCustomer } from "../../jobs/_components/jobs-table/schema";
@@ -293,6 +294,9 @@ export function EstimateRecordFormFields({
   const [description, setDescription] = React.useState(estimate?.scope ?? "");
   const [category, setCategory] = React.useState(estimate?.category ?? "Other");
   const [notes, setNotes] = React.useState(estimate?.notes ?? "");
+  const [newCustomerName, setNewCustomerName] = React.useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = React.useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = React.useState("");
   const [selectedCustomerId, setSelectedCustomerId] = React.useState(estimate?.customerId ?? selectCustomerValue);
   const [laborItems, setLaborItems] = React.useState<LineItem[]>(
     estimate?.laborItems.length ? estimate.laborItems.map((item) => createLineItem(item)) : [createLineItem()],
@@ -341,6 +345,9 @@ export function EstimateRecordFormFields({
     setDescription(estimate?.scope ?? "");
     setCategory(estimate?.category ?? "Other");
     setNotes(estimate?.notes ?? "");
+    setNewCustomerName("");
+    setNewCustomerEmail("");
+    setNewCustomerPhone("");
     setTaxRate(Number(estimate?.materialTaxRate ?? "8.25"));
     setSelectedLocation(nextHasSavedInitialLocation && nextInitialLocation ? nextInitialLocation : customLocationValue);
     setCustomLocationFields(createCustomLocationFields(nextHasSavedInitialLocation ? "" : nextInitialLocation));
@@ -541,7 +548,7 @@ export function EstimateRecordFormFields({
           <div className="grid gap-1 sm:col-span-2">
             <Label>New customer</Label>
             <p className="text-muted-foreground text-xs">
-              This customer will be created and linked to the estimate. Only name and phone are required.
+              This customer will be created and linked to the estimate. Name, email, and phone are required.
             </p>
           </div>
           <div className="grid gap-2">
@@ -549,6 +556,8 @@ export function EstimateRecordFormFields({
             <Input
               id={`estimate-new-customer-name-${estimate?.id ?? "new"}`}
               name="newCustomerName"
+              value={newCustomerName}
+              onChange={(event) => setNewCustomerName(event.target.value)}
               placeholder="Jane Smith"
               className={mobileFieldClassName}
               required
@@ -560,8 +569,11 @@ export function EstimateRecordFormFields({
               id={`estimate-new-customer-email-${estimate?.id ?? "new"}`}
               name="newCustomerEmail"
               type="email"
+              value={newCustomerEmail}
+              onChange={(event) => setNewCustomerEmail(event.target.value)}
               placeholder="customer@example.com"
               className={mobileFieldClassName}
+              required
             />
           </div>
           <div className="grid gap-2 sm:col-span-2">
@@ -570,6 +582,11 @@ export function EstimateRecordFormFields({
               id={`estimate-new-customer-phone-${estimate?.id ?? "new"}`}
               name="newCustomerPhone"
               type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              maxLength={12}
+              value={formatPhoneNumber(newCustomerPhone)}
+              onChange={(event) => setNewCustomerPhone(normalizePhoneNumber(event.target.value).slice(0, 10))}
               placeholder="(555) 555-1234"
               className={mobileFieldClassName}
               required

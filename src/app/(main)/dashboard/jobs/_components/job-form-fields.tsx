@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { UsStateSelect } from "@/components/us-state-select";
+import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
 import { ServicePicker } from "../../services/_components/service-picker";
@@ -157,6 +158,9 @@ export function JobFormFields({
   const [category, setCategory] = React.useState(job?.category ?? "Other");
   const [status, setStatus] = React.useState<(typeof jobStatuses)[number]>(() => getDefaultJobStatus(job));
   const [notes, setNotes] = React.useState(job?.notes ?? "");
+  const [newCustomerName, setNewCustomerName] = React.useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = React.useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = React.useState("");
   const [selectedCustomerId, setSelectedCustomerId] = React.useState(job?.customerId ?? selectCustomerValue);
   const [laborItems, setLaborItems] = React.useState<LaborItemEntry[]>(
     job?.laborItems.length ? job.laborItems.map((item) => createLaborItemEntry(item)) : [createLaborItemEntry()],
@@ -207,6 +211,9 @@ export function JobFormFields({
     setCategory(job?.category ?? "Other");
     setStatus(getDefaultJobStatus(job));
     setNotes(job?.notes ?? "");
+    setNewCustomerName("");
+    setNewCustomerEmail("");
+    setNewCustomerPhone("");
     setSelectedLocation(nextHasSavedInitialLocation && nextInitialLocation ? nextInitialLocation : customLocationValue);
     setCustomLocationFields(createCustomLocationFields(nextHasSavedInitialLocation ? "" : nextInitialLocation));
   }, [customers, job]);
@@ -494,7 +501,7 @@ export function JobFormFields({
           <div className="grid gap-1 sm:col-span-2">
             <Label>New customer</Label>
             <p className="text-muted-foreground text-xs">
-              This customer will be created and linked to the job. Only name and phone are required.
+              This customer will be created and linked to the job. Name, email, and phone are required.
             </p>
           </div>
           <div className="grid gap-2">
@@ -502,6 +509,8 @@ export function JobFormFields({
             <Input
               id={`job-new-customer-name-${job?.id ?? "new"}`}
               name="newCustomerName"
+              value={newCustomerName}
+              onChange={(event) => setNewCustomerName(event.target.value)}
               placeholder="Jane Smith"
               className={mobileFieldClassName}
               required
@@ -513,8 +522,11 @@ export function JobFormFields({
               id={`job-new-customer-email-${job?.id ?? "new"}`}
               name="newCustomerEmail"
               type="email"
+              value={newCustomerEmail}
+              onChange={(event) => setNewCustomerEmail(event.target.value)}
               placeholder="customer@example.com"
               className={mobileFieldClassName}
+              required
             />
           </div>
           <div className="grid gap-2 sm:col-span-2">
@@ -523,6 +535,11 @@ export function JobFormFields({
               id={`job-new-customer-phone-${job?.id ?? "new"}`}
               name="newCustomerPhone"
               type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              maxLength={12}
+              value={formatPhoneNumber(newCustomerPhone)}
+              onChange={(event) => setNewCustomerPhone(normalizePhoneNumber(event.target.value).slice(0, 10))}
               placeholder="(555) 555-1234"
               className={mobileFieldClassName}
               required
