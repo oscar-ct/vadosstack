@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 
@@ -19,6 +20,16 @@ export type CurrentUser = {
   email: string;
   admin: boolean;
 };
+
+function getSessionCookieOptions(expiresAt: Date) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    expires: expiresAt,
+  };
+}
 
 function hashSessionToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -164,13 +175,22 @@ export async function createUserSession(userId: string, remember = false) {
   });
 
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: expiresAt,
+  cookieStore.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions(expiresAt));
+}
+
+export async function createUserSessionResponse(userId: string, response: NextResponse, remember = false) {
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + (remember ? THIRTY_DAYS_IN_MS : ONE_DAY_IN_MS));
+
+  await prisma.session.create({
+    data: {
+      tokenHash: hashSessionToken(token),
+      userId,
+      expiresAt,
+    },
   });
+
+  response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions(expiresAt));
 }
 
 export async function clearCurrentSession() {
