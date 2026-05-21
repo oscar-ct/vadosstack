@@ -61,7 +61,7 @@ const initialCompanySettingsState: CompanySettingsState = {
   success: false,
   message: "",
 };
-const maxLogoSize = 500 * 1024;
+const maxLogoSize = 2 * 1024 * 1024;
 const allowedLogoTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
 
 const IsComingSoon = () => (
@@ -229,7 +229,9 @@ function CompanySettingsDialog({
       setDeleteLogo(false);
       setLogoError("");
       onSaved();
-      setOpen(false);
+      const timeout = window.setTimeout(() => setOpen(false), 1600);
+
+      return () => window.clearTimeout(timeout);
     }
   }, [state.success, onSaved]);
 
@@ -241,7 +243,7 @@ function CompanySettingsDialog({
 
     if (file.size > maxLogoSize) {
       event.currentTarget.value = "";
-      setLogoError("Logo must be 500 KB or smaller. Try exporting the SVG smaller or using a compressed PNG.");
+      setLogoError("Logo must be 2 MB or smaller. Try exporting the SVG smaller or using a compressed PNG.");
       return;
     }
 
@@ -339,7 +341,7 @@ function CompanySettingsDialog({
               </div>
               <div className="grid gap-0.5">
                 <Label htmlFor="company-logo">Company logo</Label>
-                <p className="text-muted-foreground text-xs">PNG, JPG, WebP, or SVG. Maximum 500 KB.</p>
+                <p className="text-muted-foreground text-xs">PNG, JPG, WebP, or SVG. Maximum 2 MB.</p>
               </div>
             </div>
             <Input
@@ -363,6 +365,11 @@ function CompanySettingsDialog({
           </div>
           {logoError || (state.message && !state.success) ? (
             <FieldError errors={[{ message: logoError || state.message }]} />
+          ) : null}
+          {state.success && state.message ? (
+            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700 text-sm dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+              {state.message}
+            </p>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

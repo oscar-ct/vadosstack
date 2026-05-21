@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getR2Object, getR2PublicUrl } from "@/lib/r2";
 
 const fallbackLogo = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Default company logo">
   <rect width="64" height="64" rx="16" fill="#111827"/>
@@ -32,8 +33,32 @@ export async function GET() {
     },
     select: {
       companyLogoDataUrl: true,
+      companyLogoKey: true,
+      companyLogoType: true,
     },
   });
+
+  if (user?.companyLogoKey) {
+    try {
+      const publicUrl = getR2PublicUrl(user.companyLogoKey);
+
+      if (publicUrl) {
+        return Response.redirect(publicUrl);
+      }
+
+      const object = await getR2Object(user.companyLogoKey);
+      const bytes = await object.Body?.transformToByteArray();
+
+      if (bytes) {
+        return imageResponse(
+          Buffer.from(bytes),
+          object.ContentType ?? user.companyLogoType ?? "application/octet-stream",
+        );
+      }
+    } catch {
+      return fallbackResponse();
+    }
+  }
 
   const logoDataUrl = user?.companyLogoDataUrl;
 

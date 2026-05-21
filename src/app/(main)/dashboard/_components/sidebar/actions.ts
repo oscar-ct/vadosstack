@@ -7,6 +7,9 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { isValidOptionalPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { deleteR2Object, uploadR2Object } from "@/lib/r2";
+
+import { randomUUID } from "node:crypto";
 
 export type CompanySettingsState = {
   success: boolean;
@@ -48,14 +51,33 @@ const companySettingsSchema = z.object({
   deleteLogo: z.coerce.boolean().optional(),
 });
 
-const maxLogoSize = 500 * 1024;
+const maxLogoSize = 2 * 1024 * 1024;
+const maxFallbackLogoSize = 500 * 1024;
 const allowedLogoTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
 
-async function getLogoDataUrl(file: FormDataEntryValue | null) {
+function getFileExtension(file: File) {
+  const extension = file.name
+    .split(".")
+    .pop()
+    ?.replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+
+  if (extension) {
+    return extension;
+  }
+
+  if (file.type === "image/svg+xml") return "svg";
+  if (file.type === "image/jpeg") return "jpg";
+  if (file.type === "image/webp") return "webp";
+
+  return "png";
+}
+
+async function getLogoUpload(file: FormDataEntryValue | null, userId: string) {
   if (!(file instanceof File) || file.size === 0) return undefined;
 
   if (file.size > maxLogoSize) {
-    throw new Error("Logo must be 500 KB or smaller.");
+    throw new Error("Logo must be 2 MB or smaller.");
   }
 
   if (!allowedLogoTypes.has(file.type)) {
@@ -63,7 +85,21 @@ async function getLogoDataUrl(file: FormDataEntryValue | null) {
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
-  return `data:${file.type};base64,${bytes.toString("base64")}`;
+  const key = `company-logos/${userId}/${randomUUID()}.${getFileExtension(file)}`;
+
+  return {
+    bytes,
+    contentType: file.type,
+    key,
+  };
+}
+
+function getFallbackLogoDataUrl(logoUpload: NonNullable<Awaited<ReturnType<typeof getLogoUpload>>>) {
+  if (logoUpload.bytes.byteLength > maxFallbackLogoSize) {
+    throw new Error("R2 upload failed. Try a logo under 500 KB or try again later.");
+  }
+
+  return `data:${logoUpload.contentType};base64,${logoUpload.bytes.toString("base64")}`;
 }
 
 function emptyToNull(value?: string) {
@@ -100,10 +136,10 @@ export async function updateCompanySettingsAction(
     };
   }
 
-  let companyLogoDataUrl: string | undefined;
+  let logoUpload: Awaited<ReturnType<typeof getLogoUpload>>;
 
   try {
-    companyLogoDataUrl = await getLogoDataUrl(formData.get("companyLogo"));
+    logoUpload = await getLogoUpload(formData.get("companyLogo"), currentUser.id);
   } catch (error) {
     return {
       success: false,
@@ -111,19 +147,63 @@ export async function updateCompanySettingsAction(
     };
   }
 
-  await prisma.user.update({
+  const existingUser = await prisma.user.findUnique({
     where: {
       id: currentUser.id,
     },
-    data: {
-      companyName: parsed.data.companyName,
-      companyEmail: emptyToNull(parsed.data.companyEmail),
-      companyPhone: emptyToNull(parsed.data.companyPhone),
-      estimateValidDays: parsed.data.estimateValidDays,
-      invoiceDueDays: parsed.data.invoiceDueDays,
-      ...(parsed.data.deleteLogo ? { companyLogoDataUrl: null } : companyLogoDataUrl ? { companyLogoDataUrl } : {}),
+    select: {
+      companyLogoKey: true,
     },
   });
+
+  try {
+    let logoFallbackDataUrl: string | undefined;
+
+    if (logoUpload) {
+      try {
+        await uploadR2Object({
+          body: logoUpload.bytes,
+          contentType: logoUpload.contentType,
+          key: logoUpload.key,
+        });
+      } catch {
+        logoFallbackDataUrl = getFallbackLogoDataUrl(logoUpload);
+      }
+    }
+
+    await prisma.user.update({
+      where: {
+        id: currentUser.id,
+      },
+      data: {
+        companyName: parsed.data.companyName,
+        companyEmail: emptyToNull(parsed.data.companyEmail),
+        companyPhone: emptyToNull(parsed.data.companyPhone),
+        estimateValidDays: parsed.data.estimateValidDays,
+        invoiceDueDays: parsed.data.invoiceDueDays,
+        ...(parsed.data.deleteLogo
+          ? { companyLogoDataUrl: null, companyLogoKey: null, companyLogoType: null }
+          : logoUpload
+            ? logoFallbackDataUrl
+              ? { companyLogoDataUrl: logoFallbackDataUrl, companyLogoKey: null, companyLogoType: null }
+              : { companyLogoDataUrl: null, companyLogoKey: logoUpload.key, companyLogoType: logoUpload.contentType }
+            : {}),
+      },
+    });
+
+    if ((parsed.data.deleteLogo || logoUpload) && existingUser?.companyLogoKey) {
+      await deleteR2Object(existingUser.companyLogoKey).catch(() => undefined);
+    }
+  } catch (error) {
+    if (logoUpload) {
+      await deleteR2Object(logoUpload.key).catch(() => undefined);
+    }
+
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Company settings could not be updated.",
+    };
+  }
 
   revalidatePath("/dashboard");
 

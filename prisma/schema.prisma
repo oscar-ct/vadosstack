@@ -96,6 +96,8 @@ model User {
   companyEmail       String?
   companyPhone       String?
   companyLogoDataUrl String?
+  companyLogoKey     String?
+  companyLogoType    String?
   estimateValidDays  Int                @default(15)
   invoiceDueDays     Int                @default(15)
   authProviders       String[]           @default(["email"])
