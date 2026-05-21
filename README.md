@@ -25,9 +25,23 @@ Create a local `.env` file:
 ```bash
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 NEXT_PUBLIC_SITE_URL="http://localhost:3000"
+GOOGLE_CLIENT_ID="YOUR_GOOGLE_CLIENT_ID"
+GOOGLE_CLIENT_SECRET="YOUR_GOOGLE_CLIENT_SECRET"
+GOOGLE_TOKEN_ENCRYPTION_KEY="A_LONG_RANDOM_SECRET"
 ```
 
 `DATABASE_URL` is required by Prisma. `NEXT_PUBLIC_SITE_URL` is used for public metadata, sitemap, robots, and SEO URLs. In production, set it to the deployed domain.
+
+For Google sign-in, create an OAuth 2.0 Client ID in Google Cloud and add this authorized redirect URI for local development:
+
+```text
+http://localhost:3000/api/auth/google/callback
+http://localhost:3000/api/auth/google/mail/callback
+```
+
+The first callback is for Google sign-in. The second callback is for Gmail invoice sending and requires the Gmail API `gmail.send` scope. `GOOGLE_TOKEN_ENCRYPTION_KEY` is used to encrypt stored Gmail refresh tokens.
+
+If production is behind a proxy or needs a different callback than `NEXT_PUBLIC_SITE_URL`, set `GOOGLE_REDIRECT_URI` and `GOOGLE_MAIL_REDIRECT_URI` explicitly.
 
 ## Local Setup
 
