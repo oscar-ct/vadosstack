@@ -7,8 +7,10 @@
   },
   "scripts": {
     "dev": "next dev",
+    "prebuild": "prisma generate",
     "build": "next build --webpack",
     "start": "next start",
+    "pretypecheck": "prisma generate",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "biome lint",
     "format": "biome format --write",
