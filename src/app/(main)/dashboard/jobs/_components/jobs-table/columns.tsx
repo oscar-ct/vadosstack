@@ -174,7 +174,7 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
       header: "Status",
       filterFn: "equalsString",
       cell: ({ row }) => (
-        <div className="grid gap-0.5 min-w-[6.5em]">
+        <div className="grid min-w-[6.5em] gap-0.5">
           <Badge variant="outline" className="w-fit px-1.5 text-muted-foreground">
             {statusIcon(row.original.status)}
             {row.original.status}
@@ -222,23 +222,22 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
       id: "documents",
       header: "",
       cell: ({ row }) => (
-        <div className={"w-min"}>
+        <div className="flex justify-start">
           {row.original.invoiceId ? (
-            <Button
+            <Badge
               asChild
               variant="outline"
-              size="xs"
-              className="flex h-7 justify-center border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
+              className="h-7 border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
             >
               <Link prefetch={false} href={`/dashboard/invoices/${row.original.invoiceId}?from=jobs`}>
                 <ReceiptText className="size-3.5" />
-                Open Invoice
+                View invoice
               </Link>
-            </Button>
+            </Badge>
           ) : (
-            <Badge variant="outline" className="flex h-7 justify-center px-2 text-muted-foreground text-xs">
+            <Badge variant="outline" className="h-7 bg-muted/30 px-2 text-muted-foreground">
               <ReceiptText className="size-3.5" />
-              Invoice Not Created
+              Not invoiced
             </Badge>
           )}
         </div>

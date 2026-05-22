@@ -456,7 +456,7 @@ export function JobsTable({
 
         <div className="grid gap-6 md:hidden">
           {table.getRowModel().rows.length ? (
-            table.getRowModel().rows.map((row, index) => {
+            table.getRowModel().rows.map((row) => {
               const amountDue = getAmountDueDisplay(row.original);
               // const rowNumber =
               //   table.getState().pagination.pageIndex * table.getState().pagination.pageSize + index + 1;
@@ -519,16 +519,20 @@ export function JobsTable({
                     </div>
                     <div>
                       {row.original.invoiceId ? (
-                        <Button asChild variant="outline" size="sm" className="border-sky-200 bg-sky-50 text-sky-700">
+                        <Badge
+                          asChild
+                          variant="outline"
+                          className="h-7 border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800"
+                        >
                           <Link prefetch={false} href={`/dashboard/invoices/${row.original.invoiceId}?from=jobs`}>
                             <ReceiptText className="size-3.5" />
-                            <span className={""}>Open Invoice</span>
+                            View invoice
                           </Link>
-                        </Button>
+                        </Badge>
                       ) : (
-                        <Badge variant="outline" className="flex h-7 w-min justify-center px-2 text-muted-foreground">
+                        <Badge variant="outline" className="h-7 bg-muted/30 px-2 text-muted-foreground">
                           <ReceiptText className="size-3.5" />
-                          Invoice Not Created
+                          Not invoiced
                         </Badge>
                       )}
                     </div>
