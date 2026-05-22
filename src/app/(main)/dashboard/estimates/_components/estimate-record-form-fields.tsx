@@ -22,7 +22,7 @@ import { ServicePicker } from "../../services/_components/service-picker";
 import type { ServiceTemplateRow } from "../../services/types";
 import type { EstimateRecordRow } from "./schema";
 
-const statuses = ["Draft", "Estimate Provided", "Won", "Lost"] as const;
+const statuses = ["Draft", "Ready to Send", "Waiting on Customer", "Won", "Lost"] as const;
 const categories = ["Repair", "Installation", "Other"] as const;
 const newCustomerValue = "new-customer";
 const customLocationValue = "custom-location";

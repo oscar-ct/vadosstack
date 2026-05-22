@@ -20,16 +20,21 @@ import { format, parseISO } from "date-fns";
 import {
   ArrowUpDown,
   BriefcaseBusiness,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   CircleDollarSign,
+  Clock3,
   FileText,
   NotebookText,
   Pencil,
+  RotateCcw,
   Search,
+  Send,
   SlidersHorizontal,
+  XCircle,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +72,7 @@ import {
   DeleteEstimateRecordDialog,
   EditEstimateRecordDialog,
   PrintableEstimateButton,
+  UpdateEstimateStatusButton,
 } from "./estimate-record-dialogs";
 import { getEstimateRecordsColumns } from "./estimate-records-table/columns";
 import type { EstimateRecordRow } from "./schema";
@@ -75,9 +81,42 @@ const pageSize = 10;
 const statusOptions = [
   { value: "all", label: "All statuses" },
   { value: "Draft", label: "Draft" },
-  { value: "Estimate Provided", label: "Estimate provided" },
+  { value: "Ready to Send", label: "Ready to send" },
+  { value: "Waiting on Customer", label: "Waiting" },
   { value: "Won", label: "Won" },
   { value: "Lost", label: "Lost" },
+] as const;
+const pipelineStages = [
+  {
+    action: "Write estimate",
+    description: "Work has been discussed and the estimate is still being prepared.",
+    label: "Drafts",
+    status: "Draft",
+  },
+  {
+    action: "Send estimate",
+    description: "Estimate is prepared and ready to provide to the customer.",
+    label: "Ready",
+    status: "Ready to Send",
+  },
+  {
+    action: "Follow up",
+    description: "Estimate has been sent and you are waiting for a decision.",
+    label: "Waiting",
+    status: "Waiting on Customer",
+  },
+  {
+    action: "Convert to job",
+    description: "Customer approved the estimate.",
+    label: "Won",
+    status: "Won",
+  },
+  {
+    action: "Reopen if needed",
+    description: "Customer declined or the opportunity is no longer active.",
+    label: "Lost",
+    status: "Lost",
+  },
 ] as const;
 const sortOptions = [
   { value: "newest", label: "Newest first" },
@@ -158,8 +197,53 @@ function getMaterialTaxAmount(estimate: EstimateRecordRow) {
 function estimateStatusClassName(status: string) {
   if (status === "Won") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900";
   if (status === "Lost") return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900";
-  if (status === "Estimate Provided") return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900";
+  if (status === "Ready to Send") return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900";
+  if (status === "Waiting on Customer") return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900";
   return "bg-muted-foreground/10 text-muted-foreground";
+}
+
+function getEstimateWorkflow(status: string) {
+  if (status === "Draft") {
+    return {
+      action: "Continue estimate",
+      nextStep: "Finish writing the scope and pricing, then mark the estimate ready to send.",
+      title: "Drafting",
+    };
+  }
+  if (status === "Ready to Send") {
+    return {
+      action: "Send estimate",
+      nextStep: "Create or open the PDF, email it to the customer, then move it to waiting.",
+      title: "Ready to send",
+    };
+  }
+  if (status === "Waiting on Customer") {
+    return {
+      action: "Follow up",
+      nextStep: "Follow up with the customer, then mark the estimate won or lost.",
+      title: "Waiting on customer",
+    };
+  }
+  if (status === "Won") {
+    return {
+      action: "Convert to job",
+      nextStep: "Convert the approved estimate into a job.",
+      title: "Won",
+    };
+  }
+  if (status === "Lost") {
+    return {
+      action: "Reopen if needed",
+      nextStep: "Keep the record for history, or reopen it if the customer changes their mind.",
+      title: "Lost",
+    };
+  }
+
+  return {
+    action: "Review",
+    nextStep: "Review this estimate and choose the next workflow step.",
+    title: status,
+  };
 }
 
 function EstimateDetailsDialog({
@@ -168,6 +252,7 @@ function EstimateDetailsDialog({
   estimate,
   onEditEstimate,
   onOpenChange,
+  updateEstimateStatusAction,
 }: {
   convertEstimateToJobAction: (
     state: EstimateRecordMutationState,
@@ -180,9 +265,14 @@ function EstimateDetailsDialog({
   estimate: EstimateRecordRow | null;
   onEditEstimate: (estimate: EstimateRecordRow) => void;
   onOpenChange: (open: boolean) => void;
+  updateEstimateStatusAction: (
+    state: EstimateRecordMutationState,
+    formData: FormData,
+  ) => Promise<EstimateRecordMutationState>;
 }) {
   const laborItems = React.useMemo(() => withLineItemKeys(estimate?.laborItems ?? []), [estimate?.laborItems]);
   const materials = React.useMemo(() => withLineItemKeys(estimate?.materials ?? []), [estimate?.materials]);
+  const workflow = estimate ? getEstimateWorkflow(estimate.status) : null;
 
   return (
     <Dialog open={!!estimate} onOpenChange={onOpenChange}>
@@ -201,12 +291,12 @@ function EstimateDetailsDialog({
                     </DialogTitle>
                     <p className="truncate text-muted-foreground text-sm">{estimate.customerName ?? "No customer"}</p>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className={`h-8 w-fit shrink-0 px-2 ${estimateStatusClassName(estimate.status)}`}
-                  >
-                    {estimate.status}
-                  </Badge>
+                  {/*<Badge*/}
+                  {/*  variant="outline"*/}
+                  {/*  className={`h-8 w-fit shrink-0 px-2 ${estimateStatusClassName(estimate.status)}`}*/}
+                  {/*>*/}
+                  {/*  {estimate.status}*/}
+                  {/*</Badge>*/}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -222,17 +312,96 @@ function EstimateDetailsDialog({
                   <Pencil />
                   Edit estimate
                 </Button>
-                <PrintableEstimateButton
-                  action={createPrintableEstimateAction}
-                  className=""
-                  estimate={estimate}
-                  size="sm"
-                />
-                <ConvertEstimateButton action={convertEstimateToJobAction} className="" estimate={estimate} size="sm" />
+                {estimate.status === "Draft" ? (
+                  <>
+                    <UpdateEstimateStatusButton
+                      action={updateEstimateStatusAction}
+                      estimate={estimate}
+                      status="Ready to Send"
+                    >
+                      <CheckCircle2 />
+                      Mark ready
+                    </UpdateEstimateStatusButton>
+                    <PrintableEstimateButton
+                      action={createPrintableEstimateAction}
+                      className=""
+                      estimate={estimate}
+                      size="sm"
+                    />
+                  </>
+                ) : null}
+                {estimate.status === "Ready to Send" ? (
+                  <>
+                    <PrintableEstimateButton
+                      action={createPrintableEstimateAction}
+                      className=""
+                      estimate={estimate}
+                      size="sm"
+                    />
+                    {estimate.printableEstimateId ? (
+                      <Button asChild size="sm">
+                        <Link href={`/dashboard/estimates/${estimate.printableEstimateId}?from=estimates`}>
+                          <Send />
+                          Email estimate
+                        </Link>
+                      </Button>
+                    ) : null}
+                    <UpdateEstimateStatusButton
+                      action={updateEstimateStatusAction}
+                      estimate={estimate}
+                      status="Waiting on Customer"
+                    >
+                      <Clock3 />
+                      Mark waiting
+                    </UpdateEstimateStatusButton>
+                  </>
+                ) : null}
+                {estimate.status === "Waiting on Customer" ? (
+                  <>
+                    <UpdateEstimateStatusButton
+                      action={updateEstimateStatusAction}
+                      estimate={estimate}
+                      status="Won"
+                      variant="default"
+                    >
+                      <CheckCircle2 />
+                      Mark won
+                    </UpdateEstimateStatusButton>
+                    <UpdateEstimateStatusButton action={updateEstimateStatusAction} estimate={estimate} status="Lost">
+                      <XCircle />
+                      Mark lost
+                    </UpdateEstimateStatusButton>
+                  </>
+                ) : null}
+                {estimate.status === "Won" ? (
+                  <ConvertEstimateButton
+                    action={convertEstimateToJobAction}
+                    className=""
+                    estimate={estimate}
+                    size="sm"
+                  />
+                ) : null}
+                {estimate.status === "Lost" ? (
+                  <UpdateEstimateStatusButton action={updateEstimateStatusAction} estimate={estimate} status="Draft">
+                    <RotateCcw />
+                    Reopen
+                  </UpdateEstimateStatusButton>
+                ) : null}
               </div>
             </DialogHeader>
 
             <div className="grid gap-4">
+              {workflow ? (
+                <section className="grid gap-2 rounded-lg border bg-muted/20 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium text-sm">{workflow.title}</div>
+                    <Badge variant="outline" className={estimateStatusClassName(estimate.status)}>
+                      {estimate.status}
+                    </Badge>
+                  </div>
+                  <p className="text-muted-foreground text-sm">{workflow.nextStep}</p>
+                </section>
+              ) : null}
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
                 <section className="grid gap-4 rounded-lg border p-4">
                   <div className="grid gap-1">
@@ -360,6 +529,7 @@ export function EstimateRecordsTable({
   data,
   deleteEstimateRecordAction,
   services,
+  updateEstimateStatusAction,
   updateEstimateRecordAction,
 }: {
   convertEstimateToJobAction: (
@@ -377,6 +547,10 @@ export function EstimateRecordsTable({
     formData: FormData,
   ) => Promise<EstimateRecordMutationState>;
   services: ServiceTemplateRow[];
+  updateEstimateStatusAction: (
+    state: EstimateRecordMutationState,
+    formData: FormData,
+  ) => Promise<EstimateRecordMutationState>;
   updateEstimateRecordAction: (
     state: EstimateRecordMutationState,
     formData: FormData,
@@ -430,6 +604,20 @@ export function EstimateRecordsTable({
   const searchQuery = (table.getColumn("search")?.getFilterValue() as string) ?? "";
   const statusFilter = (table.getColumn("status")?.getFilterValue() as string) ?? "all";
   const paginatedData = table.getRowModel().rows.map((row) => row.original);
+  const pipelineCounts = React.useMemo(
+    () =>
+      pipelineStages.map((stage) => {
+        const estimates = data.filter((estimate) => estimate.status === stage.status);
+        const total = estimates.reduce((sum, estimate) => sum + Number(estimate.estimatedTotal ?? 0), 0);
+
+        return {
+          ...stage,
+          count: estimates.length,
+          total,
+        };
+      }),
+    [data],
+  );
   const sortValue = React.useMemo(() => {
     const currentSort = sorting[0];
 
@@ -453,6 +641,11 @@ export function EstimateRecordsTable({
             : [{ id: "createdAt", desc: true }];
 
     table.setSorting(nextSorting);
+    table.setPageIndex(0);
+  }
+
+  function updateStatusFilter(value: string) {
+    table.getColumn("status")?.setFilterValue(value === "all" ? undefined : value);
     table.setPageIndex(0);
   }
 
@@ -507,6 +700,46 @@ export function EstimateRecordsTable({
         services={services}
       />
       <div className="grid gap-4">
+        <div className="grid gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-sm">Estimate pipeline</h2>
+              <p className="text-muted-foreground text-xs">Move each estimate from draft to customer decision.</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => updateStatusFilter("all")}>
+              All estimates
+            </Button>
+          </div>
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+            {pipelineCounts.map((stage) => {
+              const isActive = statusFilter === stage.status;
+
+              return (
+                <button
+                  key={stage.status}
+                  type="button"
+                  className={cn(
+                    "grid gap-2 rounded-lg border bg-card p-3 text-left transition hover:border-primary/40 hover:bg-muted/20",
+                    isActive && "border-primary bg-primary/5",
+                  )}
+                  onClick={() => updateStatusFilter(isActive ? "all" : stage.status)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-sm">{stage.label}</span>
+                    <Badge variant="outline" className={estimateStatusClassName(stage.status)}>
+                      {stage.count}
+                    </Badge>
+                  </div>
+                  <p className="min-h-8 text-muted-foreground text-xs">{stage.description}</p>
+                  <div className="flex items-center justify-between gap-2 border-t pt-2">
+                    <span className="text-muted-foreground text-xs">{stage.action}</span>
+                    <span className="font-medium text-xs tabular-nums">{formatMoney(stage.total.toFixed(2))}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full lg:w-80">
@@ -688,7 +921,13 @@ export function EstimateRecordsTable({
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground text-xs">Status</span>
-                    <span>{estimate.status}</span>
+                    <Badge variant="outline" className={estimateStatusClassName(estimate.status)}>
+                      {estimate.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground text-xs">Next step</span>
+                    <span className="text-right">{getEstimateWorkflow(estimate.status).action}</span>
                   </div>
                 </div>
 
@@ -700,7 +939,7 @@ export function EstimateRecordsTable({
                         href={`/dashboard/estimates/${estimate.printableEstimateId}?from=estimates`}
                       >
                         <NotebookText />
-                        Open Estimate PDF
+                        View PDF
                       </Link>
                     </Button>
                   ) : (
@@ -709,7 +948,7 @@ export function EstimateRecordsTable({
                       className="flex h-7 w-min justify-center px-2 text-muted-foreground text-xs"
                     >
                       <NotebookText className="size-3.5" />
-                      PDF Not Created
+                      No PDF
                     </Badge>
                   )}
                 </div>
@@ -817,6 +1056,7 @@ export function EstimateRecordsTable({
         onOpenChange={(open) => {
           if (!open) setSelectedEstimate(null);
         }}
+        updateEstimateStatusAction={updateEstimateStatusAction}
       />
     </>
   );

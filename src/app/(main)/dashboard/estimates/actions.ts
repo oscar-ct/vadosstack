@@ -434,7 +434,11 @@ export async function emailEstimateAction(
 
     const statusUpdates = [];
 
-    if (estimate.jobStatus === "Draft") {
+    if (
+      estimate.jobStatus === "Draft" ||
+      estimate.jobStatus === "Ready to Send" ||
+      estimate.jobStatus === "Estimate Provided"
+    ) {
       statusUpdates.push(
         prisma.estimate.update({
           where: {
@@ -444,13 +448,17 @@ export async function emailEstimateAction(
             },
           },
           data: {
-            jobStatus: "Estimate Provided",
+            jobStatus: "Waiting on Customer",
           },
         }),
       );
     }
 
-    if (estimate.estimateRecord?.status === "Draft") {
+    if (
+      estimate.estimateRecord?.status === "Draft" ||
+      estimate.estimateRecord?.status === "Ready to Send" ||
+      estimate.estimateRecord?.status === "Estimate Provided"
+    ) {
       statusUpdates.push(
         prisma.estimateRecord.update({
           where: {
@@ -460,7 +468,7 @@ export async function emailEstimateAction(
             },
           },
           data: {
-            status: "Estimate Provided",
+            status: "Waiting on Customer",
           },
         }),
       );

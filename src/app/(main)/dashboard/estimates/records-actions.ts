@@ -17,7 +17,7 @@ export type EstimateRecordMutationState = {
   message: string;
 };
 
-const estimateRecordStatuses = ["Draft", "Estimate Provided", "Won", "Lost"] as const;
+const estimateRecordStatuses = ["Draft", "Ready to Send", "Waiting on Customer", "Won", "Lost"] as const;
 
 const emptyToUndefined = (value: FormDataEntryValue | null) => {
   const text = String(value ?? "").trim();
@@ -101,6 +101,11 @@ const updateEstimateRecordSchema = createEstimateRecordSchema.and(
     id: z.string().trim().min(1, "Estimate is required."),
   }),
 );
+
+const updateEstimateStatusSchema = z.object({
+  id: z.string().trim().min(1, "Estimate is required."),
+  status: z.enum(estimateRecordStatuses),
+});
 
 function getEstimatePayload(formData: FormData) {
   return {
@@ -473,6 +478,81 @@ export async function deleteEstimateRecordAction(
   return { success: true, message: "Estimate deleted." };
 }
 
+export async function updateEstimateStatusAction(
+  _previousState: EstimateRecordMutationState,
+  formData: FormData,
+): Promise<EstimateRecordMutationState> {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return { success: false, message: "You must be signed in to update an estimate." };
+  }
+
+  const parsed = updateEstimateStatusSchema.safeParse({
+    id: formData.get("id"),
+    status: formData.get("status"),
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Choose a status and try again." };
+  }
+
+  try {
+    const estimate = await prisma.estimateRecord.findUnique({
+      where: {
+        id_ownerId: {
+          id: parsed.data.id,
+          ownerId: currentUser.id,
+        },
+      },
+      include: {
+        printableEstimate: true,
+      },
+    });
+
+    if (!estimate) {
+      return { success: false, message: "Estimate not found." };
+    }
+
+    await prisma.$transaction([
+      prisma.estimateRecord.update({
+        where: {
+          id_ownerId: {
+            id: parsed.data.id,
+            ownerId: currentUser.id,
+          },
+        },
+        data: {
+          status: parsed.data.status,
+        },
+      }),
+      ...(estimate.printableEstimate
+        ? [
+            prisma.estimate.update({
+              where: {
+                id_ownerId: {
+                  id: estimate.printableEstimate.id,
+                  ownerId: currentUser.id,
+                },
+              },
+              data: {
+                jobStatus: parsed.data.status,
+              },
+            }),
+          ]
+        : []),
+    ]);
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Estimate status could not be updated.",
+    };
+  }
+
+  revalidatePath("/dashboard/estimates");
+  return { success: true, message: "Estimate status updated." };
+}
+
 export async function convertEstimateToJobAction(
   _previousState: EstimateRecordMutationState,
   formData: FormData,
@@ -625,9 +705,23 @@ export async function createPrintableEstimateAction(
         materialsSubtotal: materialsSubtotal.toFixed(2),
         materialTaxAmount: materialTaxAmount.toFixed(2),
         estimatedTotal: estimate.estimatedTotal ?? "0",
-        jobStatus: estimate.status,
+        jobStatus: estimate.status === "Draft" ? "Ready to Send" : estimate.status,
       },
     });
+
+    if (estimate.status === "Draft") {
+      await prisma.estimateRecord.update({
+        where: {
+          id_ownerId: {
+            id: estimate.id,
+            ownerId: currentUser.id,
+          },
+        },
+        data: {
+          status: "Ready to Send",
+        },
+      });
+    }
   } catch (error) {
     return {
       success: false,

@@ -17,6 +17,23 @@ function formatMoney(value?: string) {
   return value ? `$${Number(value).toFixed(2)}` : "$0.00";
 }
 
+function estimateStatusClassName(status: string) {
+  if (status === "Won") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900";
+  if (status === "Lost") return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900";
+  if (status === "Ready to Send") return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900";
+  if (status === "Waiting on Customer") return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900";
+  return "bg-muted-foreground/10 text-muted-foreground";
+}
+
+function nextActionLabel(status: string) {
+  if (status === "Draft") return "Continue estimate";
+  if (status === "Ready to Send") return "Send estimate";
+  if (status === "Waiting on Customer") return "Follow up";
+  if (status === "Won") return "Convert to job";
+  if (status === "Lost") return "Reopen if needed";
+  return "Review";
+}
+
 export function getEstimateRecordsColumns({
   onEditEstimate,
 }: {
@@ -77,6 +94,14 @@ export function getEstimateRecordsColumns({
       accessorKey: "status",
       header: "Status",
       filterFn: "equalsString",
+      cell: ({ row }) => (
+        <div className="grid gap-1">
+          <Badge variant="outline" className={estimateStatusClassName(row.original.status)}>
+            {row.original.status}
+          </Badge>
+          <span className="px-1 text-muted-foreground text-xs">{nextActionLabel(row.original.status)}</span>
+        </div>
+      ),
     },
     {
       id: "documents",
@@ -92,13 +117,13 @@ export function getEstimateRecordsColumns({
             >
               <Link prefetch={false} href={`/dashboard/estimates/${row.original.printableEstimateId}?from=estimates`}>
                 <NotebookText className="size-3.5" />
-                Open Estimate PDF
+                View PDF
               </Link>
             </Button>
           ) : (
             <Badge variant="outline" className="flex h-7 justify-center px-2 text-muted-foreground text-xs">
               <NotebookText className="size-3.5" />
-              PDF Not Created
+              No PDF
             </Badge>
           )}
         </div>

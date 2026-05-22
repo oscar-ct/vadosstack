@@ -76,7 +76,7 @@ export function CreateEstimateRecordDialog({
       <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-4xl">
         <DialogHeader className="border-b pb-4">
           <DialogTitle className="font-semibold text-lg tracking-tight">Create estimate</DialogTitle>
-          <DialogDescription>Add estimate details, customer, line items, notes, and status.</DialogDescription>
+          <DialogDescription>Capture the requested work, build pricing, and save it as a draft.</DialogDescription>
         </DialogHeader>
         <form ref={formRef} action={formAction} className="grid gap-4">
           <EstimateRecordFormFields customers={customers} services={services} />
@@ -138,7 +138,7 @@ export function EditEstimateRecordDialog({
       <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-4xl">
         <DialogHeader className="border-b pb-4">
           <DialogTitle className="font-semibold text-lg tracking-tight">Edit estimate</DialogTitle>
-          <DialogDescription>Update estimate details, line items, and status.</DialogDescription>
+          <DialogDescription>Update the scope, pricing, customer details, and workflow status.</DialogDescription>
         </DialogHeader>
         {estimate ? (
           <form ref={formRef} action={formAction} className="grid gap-4">
@@ -263,6 +263,43 @@ export function ConvertEstimateButton({
       <Button type="submit" size={size} className={className} disabled={isPending}>
         <BriefcaseBusiness />
         {isPending ? "Converting..." : "Convert to Job"}
+      </Button>
+      {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+    </form>
+  );
+}
+
+export function UpdateEstimateStatusButton({
+  action,
+  children,
+  className,
+  estimate,
+  size = "sm",
+  status,
+  variant = "outline",
+}: {
+  action: (state: EstimateRecordMutationState, formData: FormData) => Promise<EstimateRecordMutationState>;
+  children: React.ReactNode;
+  className?: string;
+  estimate: EstimateRecordRow;
+  size?: React.ComponentProps<typeof Button>["size"];
+  status: string;
+  variant?: React.ComponentProps<typeof Button>["variant"];
+}) {
+  const router = useRouter();
+  const [state, formAction, isPending] = React.useActionState(action, initialState);
+
+  React.useEffect(() => {
+    if (!state.success) return;
+    router.refresh();
+  }, [router, state.success]);
+
+  return (
+    <form action={formAction} className="grid gap-2">
+      <input type="hidden" name="id" value={estimate.id} />
+      <input type="hidden" name="status" value={status} />
+      <Button type="submit" size={size} variant={variant} className={className} disabled={isPending}>
+        {isPending ? "Updating..." : children}
       </Button>
       {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
     </form>

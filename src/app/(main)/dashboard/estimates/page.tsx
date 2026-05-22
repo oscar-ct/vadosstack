@@ -19,10 +19,15 @@ import {
   createPrintableEstimateAction,
   deleteEstimateRecordAction,
   updateEstimateRecordAction,
+  updateEstimateStatusAction,
 } from "./records-actions";
 
 function formatMoney(value: { toString: () => string } | null) {
   return value ? value.toString() : undefined;
+}
+
+function normalizeEstimateStatus(status: string) {
+  return status === "Estimate Provided" ? "Waiting on Customer" : status;
 }
 
 async function getCustomers(ownerId: string): Promise<JobCustomer[]> {
@@ -85,7 +90,7 @@ async function getEstimateRecords(ownerId: string): Promise<EstimateRecordRow[]>
     estimatedTotal: formatMoney(estimate.estimatedTotal),
     scope: estimate.scope ?? undefined,
     category: estimate.category,
-    status: estimate.status,
+    status: normalizeEstimateStatus(estimate.status),
     notes: estimate.notes ?? undefined,
     createdAt: estimate.createdAt.toISOString(),
   }));
@@ -143,7 +148,9 @@ export default async function Page() {
               <NotebookText className="size-4 text-muted-foreground" />
             </div>
           </CardTitle>
-          <CardDescription>Track requested estimates, estimate value, status, and conversion to jobs.</CardDescription>
+          <CardDescription>
+            Work estimates from draft, to sending, to customer decision, to job conversion.
+          </CardDescription>
           <CardAction className="flex items-center gap-2">
             <CreateEstimateRecordDialog action={createEstimateRecordAction} customers={customers} services={services} />
             <Button variant="outline" size="sm" className="w-7 px-0 sm:w-auto sm:px-2.5">
@@ -160,6 +167,7 @@ export default async function Page() {
             data={estimates}
             deleteEstimateRecordAction={deleteEstimateRecordAction}
             services={services}
+            updateEstimateStatusAction={updateEstimateStatusAction}
             updateEstimateRecordAction={updateEstimateRecordAction}
           />
         </CardContent>
