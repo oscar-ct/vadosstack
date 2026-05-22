@@ -15,26 +15,18 @@ export function toMoneyNumber(value: string | number | null | undefined) {
 }
 
 export function calculateOutstandingBalance(
-  status: string | null | undefined,
+  _status: string | null | undefined,
   finalCost: string | number | null | undefined,
   amountPaid: string | number | null | undefined,
 ) {
-  if (status === "Cancelled") {
-    return 0;
-  }
-
   return Math.max(0, toMoneyNumber(finalCost) - toMoneyNumber(amountPaid));
 }
 
 export function deriveJobPaymentStatus(
-  status: string | null | undefined,
+  _status: string | null | undefined,
   finalCost: string | number | null | undefined,
   amountPaid: string | number | null | undefined,
 ): JobPaymentStatus {
-  if (status === "Cancelled") {
-    return "Pending Payment";
-  }
-
   const total = toMoneyNumber(finalCost);
   const paid = toMoneyNumber(amountPaid);
 
@@ -57,7 +49,7 @@ export function deriveCustomerBillingStatus(
     amountPaid?: string | number | null;
   }>,
 ): CustomerBillingStatus {
-  const activeJobs = jobs.filter((job) => job.status !== "Cancelled");
+  const activeJobs = jobs;
 
   if (!activeJobs.length) {
     return "No Balance";

@@ -119,7 +119,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceTableItem[] }) {
   if (!invoices.length) {
     return (
       <div className="rounded-md border bg-muted/20 p-8 text-center text-muted-foreground text-sm">
-        No invoices yet. Create invoices from completed jobs.
+        No invoices yet. Create invoices from billable jobs.
       </div>
     );
   }

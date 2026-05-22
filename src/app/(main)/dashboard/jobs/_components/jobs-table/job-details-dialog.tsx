@@ -78,6 +78,32 @@ function formatMoney(value?: string) {
   return Number.isFinite(amount) ? `$${amount.toFixed(2)}` : `$${value}`;
 }
 
+function toMoneyNumber(value?: string) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getInvoiceEligibility(job: JobRow) {
+  if (!job.customerId) {
+    return {
+      canCreate: false,
+      message: "Add a customer before creating an invoice.",
+    };
+  }
+
+  if (toMoneyNumber(job.finalCost) <= 0) {
+    return {
+      canCreate: false,
+      message: "Add billable totals before creating an invoice.",
+    };
+  }
+
+  return {
+    canCreate: true,
+    message: undefined,
+  };
+}
+
 function getMaterialsSubtotal(job: JobRow) {
   return job.materials
     .reduce((total, material) => total + Number(calculateSignedMaterialTotal(material)), 0)
@@ -185,6 +211,7 @@ export function JobDetailsDialog({
   const paymentFormRef = React.useRef<HTMLFormElement>(null);
   const laborItems = React.useMemo(() => withLineItemKeys(job?.laborItems ?? []), [job?.laborItems]);
   const materials = React.useMemo(() => withLineItemKeys(job?.materials ?? []), [job?.materials]);
+  const invoiceEligibility = React.useMemo(() => (job ? getInvoiceEligibility(job) : null), [job]);
   const [invoiceState, createInvoiceFormAction, isCreatingInvoice] = React.useActionState(
     createInvoiceAction,
     initialInvoiceState,
@@ -280,8 +307,8 @@ export function JobDetailsDialog({
                     <Button
                       type="submit"
                       size="sm"
-                      disabled={isCreatingInvoice || job.status !== "Completed"}
-                      title={job.status === "Completed" ? undefined : "Complete the job before creating an invoice."}
+                      disabled={isCreatingInvoice || !invoiceEligibility?.canCreate}
+                      title={invoiceEligibility?.message}
                     >
                       <ReceiptText />
                       {isCreatingInvoice ? "Creating..." : "Create invoice"}
@@ -294,8 +321,8 @@ export function JobDetailsDialog({
                   {invoiceState.message}
                 </p>
               ) : null}
-              {!job.invoiceId && job.status !== "Completed" ? (
-                <p className="mt-2 text-muted-foreground text-xs">Invoices can be created once the job is completed.</p>
+              {!job.invoiceId && invoiceEligibility?.message ? (
+                <p className="mt-2 text-muted-foreground text-xs">{invoiceEligibility.message}</p>
               ) : null}
             </DialogHeader>
 

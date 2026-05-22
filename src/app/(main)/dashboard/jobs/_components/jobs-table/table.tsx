@@ -513,7 +513,7 @@ export function JobsTable({
                         <span className="text-muted-foreground text-xs">Paid</span>
                         <span>{row.original.amountPaid ? `$${row.original.amountPaid}` : "Not set"}</span>
                       </div>
-                      {row.original.finalCost !== row.original.amountPaid && row.original.status === "Completed" && (
+                      {Number(row.original.outstandingBalance ?? 0) > 0 && (
                         <span className={`text-right text-sm ${amountDue.amountClassName}`}>{amountDue.label}</span>
                       )}
                     </div>

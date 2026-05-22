@@ -452,10 +452,17 @@ export async function createInvoiceAction(
       };
     }
 
-    if (job.status !== "Completed") {
+    if (!job.customerId) {
       return {
         success: false,
-        message: "Complete the job before creating an invoice.",
+        message: "Add a customer to this job before creating an invoice.",
+      };
+    }
+
+    if (Number(job.finalCost ?? 0) <= 0) {
+      return {
+        success: false,
+        message: "Add billable totals before creating an invoice.",
       };
     }
 

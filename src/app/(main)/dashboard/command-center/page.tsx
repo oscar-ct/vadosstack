@@ -263,8 +263,8 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
       return dueDate ? isBefore(dueDate, today) : false;
     })
     .sort((a, b) => (a.dateEnd ?? a.dateBegin ?? today).getTime() - (b.dateEnd ?? b.dateBegin ?? today).getTime());
-  const unpaidCompleted = jobs
-    .filter((job) => job.status === "Completed" && Math.max(0, money(job.finalCost) - money(job.amountPaid)) > 0)
+  const unpaidBillableJobs = jobs
+    .filter((job) => Math.max(0, money(job.finalCost) - money(job.amountPaid)) > 0)
     .sort(
       (a, b) =>
         Math.max(0, money(b.finalCost) - money(b.amountPaid)) - Math.max(0, money(a.finalCost) - money(a.amountPaid)),
@@ -307,11 +307,11 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
         value: job.status,
       };
     }),
-    ...unpaidCompleted.slice(0, 4).map((job) => ({
+    ...unpaidBillableJobs.slice(0, 4).map((job) => ({
       id: job.id,
       type: "Receivable",
-      title: compactTitle(job.description, "Completed job has balance"),
-      detail: `${job.customer?.name ?? "Customer not assigned"} · completed but unpaid`,
+      title: compactTitle(job.description, "Job has balance"),
+      detail: `${job.customer?.name ?? "Customer not assigned"} · ${job.status.toLowerCase()} with balance`,
       href: "/dashboard/invoices",
       priority: "Collect",
       severity: "emerald" as const,

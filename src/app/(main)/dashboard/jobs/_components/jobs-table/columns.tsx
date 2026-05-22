@@ -57,21 +57,6 @@ export function getAmountDueDisplay(job: JobRow) {
   const balance = toMoneyNumber(job.outstandingBalance);
   const finalCost = toMoneyNumber(job.finalCost);
 
-  if (job.status === "Cancelled") {
-    return {
-      amountClassName: "text-muted-foreground",
-      amountLabel: "$0.00",
-      label: "Cancelled",
-    };
-  }
-  if (job.status === "Scheduled" || job.status === "Unscheduled") {
-    return {
-      amountClassName: "text-muted-foreground",
-      amountLabel: "$0.00",
-      label: "Not Started",
-    };
-  }
-
   if (finalCost <= 0) {
     return {
       amountClassName: "text-muted-foreground",
