@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -93,20 +94,23 @@ export function CreateCustomerDialog({
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [visibleMessage, setVisibleMessage] = React.useState("");
 
-  React.useEffect(() => {
-    if (!state.success) {
-      setVisibleMessage(state.message);
-    }
-  }, [state]);
-
-  React.useEffect(() => {
-    if (!state.success) return;
-
+  const resetForm = React.useCallback(() => {
     formRef.current?.reset();
     setAddressFields(initialAddressFields);
     setPhoneDigits("");
+  }, []);
+
+  React.useEffect(() => {
+    if (!state.success) {
+      setVisibleMessage(state.message);
+      return;
+    }
+
+    resetForm();
+    setVisibleMessage("");
     setOpen(false);
-  }, [state.success]);
+    toast.success(state.message || "Customer created.");
+  }, [state, resetForm]);
 
   return (
     <Dialog
@@ -114,7 +118,7 @@ export function CreateCustomerDialog({
       onOpenChange={(open) => {
         setOpen(open);
         if (!open) {
-          setAddressFields(initialAddressFields);
+          resetForm();
           setVisibleMessage("");
         }
       }}
