@@ -710,7 +710,7 @@ export function EstimateRecordsTable({
               All estimates
             </Button>
           </div>
-          <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))] sm:[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
             {pipelineCounts.map((stage) => {
               const isActive = statusFilter === stage.status;
 
@@ -731,7 +731,7 @@ export function EstimateRecordsTable({
                     </Badge>
                   </div>
                   <p className="min-h-8 text-muted-foreground text-xs">{stage.description}</p>
-                  <div className="flex items-center justify-between gap-2 border-t pt-2">
+                  <div className="flex flex-col items-center justify-between gap-2 border-t pt-2 min-[420px]:flex-row">
                     <span className="text-muted-foreground text-xs">{stage.action}</span>
                     <span className="font-medium text-xs tabular-nums">{formatMoney(stage.total.toFixed(2))}</span>
                   </div>
