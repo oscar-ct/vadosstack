@@ -256,7 +256,7 @@ function InvoiceDetailsDialog({
                 {formatCustomerName(invoice.customerName)} · issued {formatDate(invoice.issuedAt)}
               </DialogDescription>
             </div>
-            <div className={"w-full flex justify-between"}>
+            <div className={"flex w-full justify-between"}>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline" className={`w-fit ${getStatusClassName(status)}`}>
                   {status}
@@ -299,11 +299,11 @@ function InvoiceDetailsDialog({
                 <span className="text-muted-foreground text-xs">Labor</span>
                 <span className="font-medium tabular-nums">{formatMoney(invoice.laborCost)}</span>
               </div>
-              <div className="grid gap-0.5 p-2 ">
+              <div className="grid gap-0.5 p-2">
                 <span className="text-muted-foreground text-xs">Materials</span>
                 <span className="font-medium tabular-nums">{formatMoney(invoice.materialsSubtotal)}</span>
               </div>
-              <div className="grid gap-0.5 p-2 ">
+              <div className="grid gap-0.5 p-2">
                 <span className="text-muted-foreground text-xs">Tax</span>
                 <span className="font-medium tabular-nums">{formatMoney(invoice.materialTaxAmount)}</span>
               </div>

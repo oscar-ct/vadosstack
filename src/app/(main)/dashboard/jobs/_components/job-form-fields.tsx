@@ -693,8 +693,8 @@ export function JobFormFields({
         </p>
       </div>
 
-      <div className="grid gap-4 pb-4 rounded-lg border border-sky-200/80 bg-sky-50/60 dark:border-sky-900/60 dark:bg-sky-950/20">
-        <div className="grid pt-4 px-4 pb-2 gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
+      <div className="grid gap-4 rounded-lg border border-sky-200/80 bg-sky-50/60 pb-4 dark:border-sky-900/60 dark:bg-sky-950/20">
+        <div className="grid gap-4 px-4 pt-4 pb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
           <div className="grid gap-1">
             <Label>Labor</Label>
             <p className="text-muted-foreground text-xs">Add each labor line item with a description and price.</p>
@@ -773,7 +773,7 @@ export function JobFormFields({
         </div>
       </div>
 
-      <div className="grid gap-4 pb-4 rounded-lg border border-amber-200/80 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20">
+      <div className="grid gap-4 rounded-lg border border-amber-200/80 bg-amber-50/60 pb-4 dark:border-amber-900/60 dark:bg-amber-950/20">
         <div className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
           <div className="grid gap-1">
             <Label>Materials</Label>

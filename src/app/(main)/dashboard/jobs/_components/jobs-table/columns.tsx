@@ -166,7 +166,7 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
           <span className="truncate font-medium text-sm">{row.original.description}</span>
           <div className={"flex gap-1.5 text-xs leading-none"}>
             <span className={"text-muted-foreground"}>Cost:</span>
-            <span className={"text-green-700 font-medium"}>
+            <span className={"font-medium text-green-700"}>
               {row.original.finalCost ? `$${parseFloat(row.original.finalCost).toFixed(2)}` : "0.00"}
             </span>
           </div>
@@ -181,7 +181,7 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
       cell: ({ row }) => (
         <div className="grid min-w-0 gap-1.5">
           <span className="truncate text-sm leading-none">{row.original.customerName ?? "No customer"}</span>
-          <span className="truncate  text-muted-foreground text-xs leading-none">
+          <span className="truncate text-muted-foreground text-xs leading-none">
             {row.original.serviceLocation ?? "No address on file"}
           </span>
         </div>
@@ -238,7 +238,7 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
         const amountDue = getAmountDueDisplay(row.original);
         return (
           <div className="grid gap-0.5">
-            <span className={`text-[12px] font-medium ${amountDue.amountClassName}`}>{amountDue.label}</span>
+            <span className={`font-medium text-[12px] ${amountDue.amountClassName}`}>{amountDue.label}</span>
             {/*<span className="w-fit px-1.5 text-[11px] text-muted-foreground">*/}
             {/*  {row.original.invoiceId ? "Invoiced" : "Not invoiced"}*/}
             {/*</span>*/}

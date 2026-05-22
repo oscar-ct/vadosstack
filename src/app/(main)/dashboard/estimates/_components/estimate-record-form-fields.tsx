@@ -98,7 +98,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
   return (
     <div
       className={
-        "grid gap-4 pb-4 rounded-lg border border-sky-200/80 bg-sky-50/60 dark:border-sky-900/60 dark:bg-sky-950/20"
+        "grid gap-4 rounded-lg border border-sky-200/80 bg-sky-50/60 pb-4 dark:border-sky-900/60 dark:bg-sky-950/20"
       }
     >
       <div className="grid gap-4 px-4 pt-4 pb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
@@ -115,7 +115,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
         {items.map((item, index) => (
           <div
             key={item.id}
-            className="grid grid-cols-[minmax(0,1fr)_3rem] gap-3 py-3 px-4 odd:py-0 even:bg-sky-100/80 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
+            className="grid grid-cols-[minmax(0,1fr)_3rem] gap-3 px-4 py-3 odd:py-0 even:bg-sky-100/80 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
           >
             <div className="col-span-2 grid gap-2 sm:col-span-1">
               {index === 0 ? <Label>Description</Label> : null}
@@ -179,7 +179,7 @@ function MaterialItemsEditor({
   onChange: (items: MaterialLineItem[]) => void;
 }) {
   return (
-    <div className="grid gap-4 pb-4 rounded-lg border border-amber-200/80 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20">
+    <div className="grid gap-4 rounded-lg border border-amber-200/80 bg-amber-50/60 pb-4 dark:border-amber-900/60 dark:bg-amber-950/20">
       <div className="grid gap-4 px-4 pt-4 pb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
         <div className="grid gap-1">
           <Label>Materials</Label>

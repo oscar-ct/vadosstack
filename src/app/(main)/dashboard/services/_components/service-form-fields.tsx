@@ -51,7 +51,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
   return (
     <div
       className={
-        "grid gap-4 pb-4 rounded-lg border border-sky-200/80 bg-sky-50/60 dark:border-sky-900/60 dark:bg-sky-950/20"
+        "grid gap-4 rounded-lg border border-sky-200/80 bg-sky-50/60 pb-4 dark:border-sky-900/60 dark:bg-sky-950/20"
       }
     >
       <div className="grid gap-4 px-4 pt-4 pb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
@@ -105,7 +105,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="flex justify-end items-end">
+            <div className="flex items-end justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -132,7 +132,7 @@ function MaterialItemsEditor({
   onChange: (items: MaterialLineItem[]) => void;
 }) {
   return (
-    <div className="grid gap-4 pb-4 rounded-lg border border-amber-200/80 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20">
+    <div className="grid gap-4 rounded-lg border border-amber-200/80 bg-amber-50/60 pb-4 dark:border-amber-900/60 dark:bg-amber-950/20">
       <div className="grid gap-4 px-4 pt-4 pb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
         <div className="grid gap-1">
           <Label>Materials</Label>
@@ -152,7 +152,7 @@ function MaterialItemsEditor({
               key={item.id}
               className="grid grid-cols-[minmax(3rem,0.6fr)_minmax(5rem,1fr)_minmax(3rem,0.6fr)_auto] items-end gap-3 p-3 odd:py-0 even:bg-amber-100/80 lg:grid-cols-[minmax(0,1fr)_60px_100px_75px_auto]"
             >
-              <div className="col-span-4 grid gap-2 lg:pb-0 lg:col-span-1">
+              <div className="col-span-4 grid gap-2 lg:col-span-1 lg:pb-0">
                 {index === 0 ? <Label>Description</Label> : null}
                 <Input
                   aria-label={`Material ${index + 1} description`}

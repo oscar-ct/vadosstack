@@ -32,13 +32,6 @@ function getInvoiceStatus(invoice: InvoiceTableItem) {
   return "Unpaid";
 }
 
-function getStatusClassName(status: string) {
-  if (status === "Paid") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "Partial") return "border-amber-200 bg-amber-50 text-amber-700";
-  if (status === "Overpaid") return "border-sky-200 bg-sky-50 text-sky-700";
-  return "border-rose-200 bg-rose-50 text-rose-700";
-}
-
 function getDueState(invoice: InvoiceTableItem) {
   if (Number(invoice.balanceDue) <= 0) {
     return {
@@ -150,7 +143,7 @@ export function getInvoicesColumns({
       accessorKey: "jobTitle",
       header: "Job Description",
       cell: ({ row }) => (
-        <div className="min-w-48 grid gap-1.5">
+        <div className="grid min-w-48 gap-1.5">
           <span className="truncate font-medium text-sm">{row.original.jobTitle}</span>
           <span className="truncate text-muted-foreground text-xs leading-none">
             {row.original.jobServiceLocation ?? "No address on file"}
@@ -187,19 +180,6 @@ export function getInvoicesColumns({
       ),
       sortingFn: (rowA, rowB) => Number(rowA.original.balanceDue ?? 0) - Number(rowB.original.balanceDue ?? 0),
     },
-    // {
-    //   id: "status",
-    //   header: "Status",
-    //   cell: ({ row }) => {
-    //     const status = getInvoiceStatus(row.original);
-    //     return (
-    //       <Badge variant="outline" className={getStatusClassName(status)}>
-    //         {status}
-    //       </Badge>
-    //     );
-    //   },
-    //   sortingFn: (rowA, rowB) => getInvoiceStatus(rowA.original).localeCompare(getInvoiceStatus(rowB.original)),
-    // },
     {
       id: "actions",
       header: () => <span className="sr-only">Actions</span>,

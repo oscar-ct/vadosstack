@@ -511,7 +511,7 @@ export function JobsTable({
                       </div>
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-muted-foreground text-xs">Billing</span>
-                        <span className={amountDue.amountClassName}>{amountDue.amountLabel}</span>
+                        <span className={amountDue.amountClassName}>{amountDue.label}</span>
                       </div>
                     </div>
                     <div>
