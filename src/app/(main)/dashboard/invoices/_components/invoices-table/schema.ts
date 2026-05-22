@@ -32,7 +32,7 @@ export const invoiceTableItemSchema = z.object({
   amountPaid: z.string(),
   balanceDue: z.string(),
   total: z.string(),
-  jobServiceLocation: z.string(),
+  jobServiceLocation: z.string().optional(),
   payments: z.array(invoicePaymentSchema),
 });
 
