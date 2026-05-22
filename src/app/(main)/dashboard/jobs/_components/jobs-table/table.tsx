@@ -1,5 +1,8 @@
 "use client";
-"use no memo";
+
+import { cn } from "@/lib/utils";
+
+("use no memo");
 
 import * as React from "react";
 
@@ -465,7 +468,7 @@ export function JobsTable({
                 <Card key={row.id} size="sm" className="gap-0 py-0">
                   <CardContent className="grid gap-4 p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <div className={"min-w-0 border-l-2 border-foreground/10 pl-3"}>
                         <div className="flex items-center gap-2">
                           {/*<span className="text-muted-foreground text-xs tabular-nums">#{rowNumber}</span>*/}
                           <div className="truncate text-wrap font-medium text-sm">{row.original.description}</div>
@@ -517,7 +520,7 @@ export function JobsTable({
                         <span className={`text-right text-sm ${amountDue.amountClassName}`}>{amountDue.label}</span>
                       )}
                     </div>
-                    <div>
+                    <div className={"border-t pt-4"}>
                       {row.original.invoiceId ? (
                         <Badge
                           asChild

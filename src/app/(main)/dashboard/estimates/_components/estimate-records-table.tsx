@@ -938,7 +938,7 @@ export function EstimateRecordsTable({
                   </div>
                 </div>
 
-                <div className={"flex items-center justify-between gap-2 border-t pt-3"}>
+                <div className={"flex items-center justify-between gap-2 border-t pt-4"}>
                   {estimate.printableEstimateId ? (
                     <Button asChild variant="outline" size="sm" className="border-sky-200 bg-sky-50 text-sky-700">
                       <Link
