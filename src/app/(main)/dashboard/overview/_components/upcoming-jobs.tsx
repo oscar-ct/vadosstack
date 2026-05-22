@@ -29,7 +29,7 @@ export function UpcomingJobs({ jobs }: { jobs: UpcomingJob[] }) {
           </CardTitle>
           <CardDescription className="mt-1 text-xs">
             {jobs.length
-              ? `${jobs.length} scheduled or overdue service ${jobs.length === 1 ? "job" : "jobs"}`
+              ? `${jobs.length} upcoming scheduled ${jobs.length === 1 ? "job" : "jobs"}`
               : "No jobs scheduled"}
           </CardDescription>
         </div>

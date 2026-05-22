@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { endOfDay, format, isBefore, startOfToday } from "date-fns";
+import { format, startOfToday } from "date-fns";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight,
@@ -14,7 +14,9 @@ import {
 } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser, getDisplayName } from "@/lib/auth";
 import { calculateOutstandingBalance, formatCurrency, toMoneyNumber } from "@/lib/customer-billing";
 import { prisma } from "@/lib/prisma";
@@ -24,26 +26,23 @@ import { type OutstandingJob, OutstandingJobs } from "./_components/outstanding-
 import { type PendingTimeReview, PendingTimeReviews } from "./_components/pending-time-reviews";
 import { type UpcomingJob, UpcomingJobs } from "./_components/upcoming-jobs";
 
+type JobAttentionItem = {
+  id: string;
+  customerName: string;
+  detail: string;
+  priority: "Schedule" | "Review hold";
+  status: "Unscheduled" | "On Hold";
+  title: string;
+};
+
 async function getUpcomingJobs(ownerId: string): Promise<UpcomingJob[]> {
   const today = startOfToday();
   const jobs = await prisma.job.findMany({
     where: {
       ownerId,
-      OR: [
-        {
-          dateBegin: {
-            gte: today,
-          },
-        },
-        {
-          dateEnd: {
-            lt: today,
-          },
-          status: {
-            notIn: ["Completed", "Cancelled"],
-          },
-        },
-      ],
+      dateBegin: {
+        gte: today,
+      },
       status: {
         not: "Cancelled",
       },
@@ -61,8 +60,7 @@ async function getUpcomingJobs(ownerId: string): Promise<UpcomingJob[]> {
     id: job.id,
     customerName: job.customer?.name ?? "Customer not assigned",
     dateBegin: job.dateBegin?.toISOString() ?? new Date().toISOString(),
-    isOverdue:
-      Boolean(job.dateEnd) && job.status !== "Completed" && isBefore(endOfDay(job.dateEnd ?? new Date()), new Date()),
+    isOverdue: false,
     status: job.status,
     title: job.description,
   }));
@@ -136,6 +134,76 @@ async function getPendingTimeReviews(ownerId: string): Promise<{
       requestedAt: request.requestedAt.toISOString(),
       workedOn: request.workedOn?.toISOString(),
     })),
+  };
+}
+
+async function getJobAttention(ownerId: string): Promise<{
+  items: JobAttentionItem[];
+  onHoldCount: number;
+  unscheduledCount: number;
+}> {
+  const [unscheduledJobs, onHoldJobs, unscheduledCount, onHoldCount] = await Promise.all([
+    prisma.job.findMany({
+      where: {
+        ownerId,
+        status: "Unscheduled",
+      },
+      include: {
+        customer: true,
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      take: 4,
+    }),
+    prisma.job.findMany({
+      where: {
+        ownerId,
+        status: "On Hold",
+      },
+      include: {
+        customer: true,
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      take: 4,
+    }),
+    prisma.job.count({
+      where: {
+        ownerId,
+        status: "Unscheduled",
+      },
+    }),
+    prisma.job.count({
+      where: {
+        ownerId,
+        status: "On Hold",
+      },
+    }),
+  ]);
+
+  return {
+    items: [
+      ...unscheduledJobs.map((job) => ({
+        id: job.id,
+        customerName: job.customer?.name ?? "Customer not assigned",
+        detail: "Needs a scheduled date or next field-work plan.",
+        priority: "Schedule" as const,
+        status: "Unscheduled" as const,
+        title: job.description,
+      })),
+      ...onHoldJobs.map((job) => ({
+        id: job.id,
+        customerName: job.customer?.name ?? "Customer not assigned",
+        detail: "Review the blocker and decide the next step.",
+        priority: "Review hold" as const,
+        status: "On Hold" as const,
+        title: job.description,
+      })),
+    ].slice(0, 6),
+    onHoldCount,
+    unscheduledCount,
   };
 }
 
@@ -245,6 +313,84 @@ function FocusRow({
   );
 }
 
+function JobAttention({
+  items,
+  onHoldCount,
+  unscheduledCount,
+}: {
+  items: JobAttentionItem[];
+  onHoldCount: number;
+  unscheduledCount: number;
+}) {
+  const total = unscheduledCount + onHoldCount;
+
+  return (
+    <Card className="rounded-lg border-border bg-card shadow-sm">
+      <CardHeader className="border-b pb-4">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <span className="grid size-8 place-items-center rounded-md bg-rose-50 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/25">
+              <BriefcaseBusiness className="size-4" />
+            </span>
+            Job attention
+          </CardTitle>
+          <CardDescription className="mt-1 text-xs">
+            {total ? `${unscheduledCount} unscheduled · ${onHoldCount} on hold` : "No job scheduling blockers"}
+          </CardDescription>
+        </div>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link prefetch={false} href="/dashboard/jobs">
+              Review <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 pt-0">
+        {items.length ? (
+          items.map((job) => (
+            <Link
+              key={job.id}
+              prefetch={false}
+              href={`/dashboard/jobs?job=${job.id}`}
+              className="grid min-w-0 gap-3 rounded-md border border-border bg-muted/35 p-3 transition-colors hover:bg-muted/60 sm:grid-cols-[1fr_auto]"
+            >
+              <div className="min-w-0">
+                <div className="truncate font-medium text-sm">{job.title}</div>
+                <div className="truncate text-muted-foreground text-xs">{job.customerName}</div>
+                <div className="mt-1 text-muted-foreground text-xs">{job.detail}</div>
+              </div>
+              <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-end">
+                <Badge
+                  variant="outline"
+                  className={
+                    job.status === "Unscheduled"
+                      ? "rounded-md border-rose-300 text-rose-700 dark:border-rose-900 dark:text-rose-400"
+                      : "rounded-md border-amber-300 text-amber-700 dark:border-amber-900 dark:text-amber-400"
+                  }
+                >
+                  {job.priority}
+                </Badge>
+                <ArrowRight className="size-4 text-muted-foreground" />
+              </div>
+            </Link>
+          ))
+        ) : (
+          <div className="grid min-h-36 place-items-center rounded-md border border-dashed bg-muted/20 p-6 text-center">
+            <div>
+              <div className="mx-auto grid size-10 place-items-center rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25">
+                <CheckCircle2 className="size-4" />
+              </div>
+              <p className="mt-3 font-medium text-sm">Jobs are assigned</p>
+              <p className="mt-1 text-muted-foreground text-xs">Unscheduled and on-hold jobs will appear here.</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default async function Page() {
   const currentUser = await getCurrentUser();
 
@@ -257,16 +403,22 @@ export default async function Page() {
     );
   }
 
-  const [upcomingJobs, outstandingJobs, pendingTimeReviews] = await Promise.all([
+  const [upcomingJobs, outstandingJobs, pendingTimeReviews, jobAttention] = await Promise.all([
     getUpcomingJobs(currentUser.id),
     getOutstandingJobs(currentUser.id),
     getPendingTimeReviews(currentUser.id),
+    getJobAttention(currentUser.id),
   ]);
   const displayName = getDisplayName(currentUser).split(" ")[0];
   const outstandingTotal = outstandingJobs.reduce((total, job) => total + job.balanceDue, 0);
   const readinessScore = Math.max(
     48,
-    100 - pendingTimeReviews.pendingCount * 9 - outstandingJobs.length * 5 - Math.max(0, 3 - upcomingJobs.length) * 3,
+    100 -
+      pendingTimeReviews.pendingCount * 9 -
+      outstandingJobs.length * 5 -
+      jobAttention.unscheduledCount * 8 -
+      jobAttention.onHoldCount * 6 -
+      Math.max(0, 3 - upcomingJobs.length) * 3,
   );
   const nextJob = upcomingJobs[0];
   const largestBalance = outstandingJobs[0];
@@ -332,11 +484,17 @@ export default async function Page() {
               />
               <OverviewSignal
                 accent="cyan"
-                detail={nextJob ? `Next: ${nextJob.title}` : "Your schedule is clear for now."}
+                detail={
+                  jobAttention.unscheduledCount || jobAttention.onHoldCount
+                    ? `${jobAttention.unscheduledCount} unscheduled · ${jobAttention.onHoldCount} on hold.`
+                    : nextJob
+                      ? `Next: ${nextJob.title}`
+                      : "Your schedule is clear for now."
+                }
                 href="/dashboard/jobs"
                 icon={BriefcaseBusiness}
-                label="Upcoming work"
-                value={`${upcomingJobs.length} jobs`}
+                label="Job attention"
+                value={`${jobAttention.unscheduledCount + jobAttention.onHoldCount} jobs`}
               />
               <OverviewSignal
                 accent="emerald"
@@ -384,12 +542,16 @@ export default async function Page() {
               />
               <FocusRow
                 href="/dashboard/jobs"
-                icon={CalendarClock}
-                label={nextJob ? nextJob.title : "No scheduled jobs"}
+                icon={jobAttention.items[0] ? BriefcaseBusiness : CalendarClock}
+                label={
+                  jobAttention.items[0] ? jobAttention.items[0].title : nextJob ? nextJob.title : "No scheduled jobs"
+                }
                 value={
-                  nextJob
-                    ? `${format(new Date(nextJob.dateBegin), "MMM d")} with ${nextJob.customerName}`
-                    : "Schedule is open"
+                  jobAttention.items[0]
+                    ? `${jobAttention.items[0].status} with ${jobAttention.items[0].customerName}`
+                    : nextJob
+                      ? `${format(new Date(nextJob.dateBegin), "MMM d")} with ${nextJob.customerName}`
+                      : "Schedule is open"
                 }
               />
               <FocusRow
@@ -407,6 +569,11 @@ export default async function Page() {
         <section className="grid min-w-0 gap-5">
           <div className="grid gap-5 lg:grid-cols-2">
             <PendingTimeReviews pendingCount={pendingTimeReviews.pendingCount} reviews={pendingTimeReviews.reviews} />
+            <JobAttention
+              items={jobAttention.items}
+              onHoldCount={jobAttention.onHoldCount}
+              unscheduledCount={jobAttention.unscheduledCount}
+            />
             <UpcomingJobs jobs={upcomingJobs} />
           </div>
           <OutstandingJobs jobs={outstandingJobs} />

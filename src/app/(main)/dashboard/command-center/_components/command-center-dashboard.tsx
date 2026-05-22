@@ -15,20 +15,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  RadialBar,
-  RadialBarChart,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,7 +37,8 @@ export type CommandCenterData = {
     activeJobs: number;
     scheduledNext30: number;
     estimates: number;
-    openEstimateValue: number;
+    estimateOutcomeCount: number;
+    waitingEstimateValue: number;
     invoices: number;
     issuedTotal: number;
     collectedTotal: number;
@@ -68,10 +56,11 @@ export type CommandCenterData = {
     receivable: number;
     hours: number;
   }>;
-  funnel: Array<{
-    stage: string;
+  estimateOutcomes: Array<{
+    status: string;
     count: number;
     value: number;
+    share: number;
   }>;
   topCustomers: Array<{
     id: string;
@@ -125,13 +114,6 @@ const cashFlowLabels: Record<string, string> = {
   receivable: "Receivable",
 };
 
-const funnelConfig = {
-  value: {
-    label: "Value",
-    color: "oklch(0.58 0.2 275)",
-  },
-} satisfies ChartConfig;
-
 const statusConfig = {
   value: {
     label: "Jobs",
@@ -153,6 +135,18 @@ const statusColors = [
   "oklch(0.58 0.2 275)",
   "oklch(0.52 0.14 25)",
 ];
+
+const estimateOutcomeConfig = {
+  value: {
+    label: "Value",
+  },
+} satisfies ChartConfig;
+
+const estimateOutcomeColors: Record<string, string> = {
+  "Waiting on Customer": "oklch(0.58 0.18 232)",
+  Won: "oklch(0.62 0.17 150)",
+  Lost: "oklch(0.62 0.2 330)",
+};
 
 const severityClasses: Record<Severity, string> = {
   amber: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
@@ -238,19 +232,7 @@ function InsightPill({ icon: Icon, label, value }: { icon: typeof Users; label: 
 
 export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
   const hasRevenueData = data.monthlyFlow.some((point) => point.billed || point.collected || point.receivable);
-  const maxFunnelValue = Math.max(...data.funnel.map((item) => item.value), 1);
-  const funnelChartData = data.funnel.map((item) => ({
-    ...item,
-    chartValue: Math.max(4, Math.round((item.value / maxFunnelValue) * 86)),
-  }));
   const generatedAt = format(new Date(data.generatedAt), "MMM d, h:mm a");
-  const collectionGauge = [
-    {
-      name: "Collected",
-      value: data.totals.collectionRate,
-      fill: "oklch(0.62 0.17 150)",
-    },
-  ];
 
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-6">
@@ -307,9 +289,9 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
             />
             <KpiCard
               icon={Banknote}
-              label="Estimate pipeline"
-              value={formatCompactCurrency(data.totals.openEstimateValue)}
-              detail={`${data.totals.estimates} estimates · ${data.totals.estimateWinRate}% value conversion`}
+              label="Waiting estimates"
+              value={formatCompactCurrency(data.totals.waitingEstimateValue)}
+              detail={`${data.totals.estimateOutcomeCount} customer-decision estimates · ${data.totals.estimateWinRate}% won value`}
               tone="cyan"
             />
             <KpiCard
@@ -426,16 +408,16 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
               />
             </div>
             <Separator />
-            <div className="grid gap-3">
+            <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground text-sm">Collection health</span>
                 <span className="font-medium text-sm tabular-nums">{data.totals.collectionRate}%</span>
               </div>
-              <ChartContainer config={{ value: { label: "Collection" } }} className="mx-auto h-36 w-full">
-                <RadialBarChart data={collectionGauge} endAngle={180} innerRadius={58} outerRadius={86} startAngle={0}>
-                  <RadialBar background cornerRadius={10} dataKey="value" />
-                </RadialBarChart>
-              </ChartContainer>
+              <Progress value={data.totals.collectionRate} />
+              <div className="flex justify-between gap-3 text-muted-foreground text-xs">
+                <span>{formatCompactCurrency(data.totals.collectedTotal)} collected</span>
+                <span>{formatCompactCurrency(data.totals.receivablesTotal)} open</span>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -444,48 +426,74 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
       <div className="grid gap-6 xl:grid-cols-12">
         <Card className="min-w-0 shadow-xs xl:col-span-5">
           <CardHeader>
-            <CardTitle>Estimate to invoice flow</CardTitle>
-            <CardDescription>Live funnel built from customers, estimates, jobs, and invoices.</CardDescription>
+            <CardTitle>Estimate decisions</CardTitle>
+            <CardDescription>
+              Customer-facing estimate outcomes, excluding drafts and ready-to-send work.
+            </CardDescription>
+            <CardAction>
+              <Badge variant="outline" className="rounded-md">
+                {data.totals.estimateWinRate}% won value
+              </Badge>
+            </CardAction>
           </CardHeader>
           <CardContent className="grid min-w-0 gap-4">
-            <ChartContainer config={funnelConfig} className="aspect-auto h-64 w-full overflow-visible">
-              <BarChart data={funnelChartData} layout="vertical" margin={{ left: 8, right: 20, top: 4, bottom: 4 }}>
-                <CartesianGrid horizontal={false} />
-                <XAxis hide type="number" domain={[0, 100]} />
-                <YAxis dataKey="stage" type="category" axisLine={false} tickLine={false} width={112} tickMargin={8} />
-                <ChartTooltip
-                  content={
-                    <ChartTooltipContent
-                      formatter={(_value, _name, item) => (
-                        <div className="grid min-w-40 gap-1">
-                          <span className="font-medium">{item.payload.stage}</span>
-                          <span className="text-muted-foreground text-xs">
-                            {item.payload.count.toLocaleString()} records ·{" "}
-                            {formatCompactCurrency(Number(item.payload.value))}
-                          </span>
-                        </div>
-                      )}
+            {data.estimateOutcomes.length ? (
+              <>
+                <ChartContainer config={estimateOutcomeConfig} className="mx-auto aspect-square h-56 max-w-56">
+                  <PieChart>
+                    <Pie
+                      data={data.estimateOutcomes}
+                      dataKey="value"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      nameKey="status"
+                      outerRadius={84}
+                      paddingAngle={3}
+                    >
+                      {data.estimateOutcomes.map((item) => (
+                        <Cell key={item.status} fill={estimateOutcomeColors[item.status] ?? statusColors[0]} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          formatter={(value, _name, item) => (
+                            <div className="grid min-w-40 gap-1">
+                              <span className="font-medium">{item.payload.status}</span>
+                              <span className="text-muted-foreground text-xs">
+                                {item.payload.count.toLocaleString()} estimates · {formatCompactCurrency(Number(value))}
+                              </span>
+                            </div>
+                          )}
+                        />
+                      }
                     />
-                  }
-                />
-                <Bar dataKey="chartValue" fill="var(--color-value)" isAnimationActive={false} radius={6} />
-              </BarChart>
-            </ChartContainer>
-            <div className="grid min-w-0 gap-2">
-              {data.funnel.map((item) => (
-                <div key={item.stage} className="grid min-w-0 gap-1">
-                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-sm">
-                    <span className="truncate">{item.stage}</span>
-                    <span className="min-w-0 truncate text-right text-muted-foreground tabular-nums">
-                      {item.count.toLocaleString()} · {formatCompactCurrency(item.value)}
-                    </span>
-                  </div>
-                  <div className="min-w-0 pr-1">
-                    <Progress value={Math.min(96, Math.max(4, Math.round((item.value / maxFunnelValue) * 100)))} />
-                  </div>
+                  </PieChart>
+                </ChartContainer>
+                <div className="grid min-w-0 gap-3">
+                  {data.estimateOutcomes.map((item) => (
+                    <div key={item.status} className="grid gap-1.5">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="size-2.5 shrink-0 rounded-sm"
+                            style={{ backgroundColor: estimateOutcomeColors[item.status] ?? statusColors[0] }}
+                          />
+                          <span className="truncate font-medium">{item.status}</span>
+                        </span>
+                        <span className="text-muted-foreground tabular-nums">
+                          {item.count.toLocaleString()} · {formatCompactCurrency(item.value)}
+                        </span>
+                      </div>
+                      <Progress value={Math.max(5, item.share)} />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <EmptyState label="Sent estimates will appear here once customers are waiting, won, or lost." />
+            )}
           </CardContent>
         </Card>
 
@@ -580,7 +588,8 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
           <CardHeader>
             <CardTitle>Manager action queue</CardTitle>
             <CardDescription>
-              Time reviews, stale estimates, overdue jobs, and receivables sorted into one queue.
+              Time reviews, ready/waiting estimates, unscheduled jobs, on-hold jobs, and receivables sorted into one
+              queue.
             </CardDescription>
             <CardAction>
               <Badge variant="outline" className="rounded-md">

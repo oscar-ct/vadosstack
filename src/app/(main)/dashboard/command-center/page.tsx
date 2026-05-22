@@ -22,6 +22,8 @@ export const dynamic = "force-dynamic";
 const ACTIVE_JOB_STATUSES = new Set(["Scheduled"]);
 const WON_ESTIMATE_STATUSES = new Set(["Converted", "Approved", "Accepted", "Won"]);
 const LOST_ESTIMATE_STATUSES = new Set(["Declined", "Cancelled", "Lost"]);
+const FOLLOW_UP_ESTIMATE_STATUSES = new Set(["Estimate Provided", "Waiting on Customer"]);
+const READY_ESTIMATE_STATUSES = new Set(["Ready to Send"]);
 
 function money(value: { toString(): string } | number | string | null | undefined) {
   const parsed = Number(value ?? 0);
@@ -128,16 +130,50 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
   const activeJobs = jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status));
   const completedJobs = jobs.filter((job) => job.status === "Completed");
   const pendingTimeRequests = timeRequests.filter((request) => request.status === "Pending");
-  const estimatePipeline = estimates.filter(
-    (estimate) => !WON_ESTIMATE_STATUSES.has(estimate.status) && !LOST_ESTIMATE_STATUSES.has(estimate.status),
+  const waitingEstimates = estimates.filter((estimate) => FOLLOW_UP_ESTIMATE_STATUSES.has(estimate.status));
+  const wonEstimates = estimates.filter(
+    (estimate) => WON_ESTIMATE_STATUSES.has(estimate.status) || Boolean(estimate.convertedJobId),
   );
-  const openEstimateValue = estimatePipeline.reduce((total, estimate) => total + money(estimate.estimatedTotal), 0);
-  const totalEstimateValue = estimates.reduce((total, estimate) => total + money(estimate.estimatedTotal), 0);
-  const wonEstimateValue = estimates
-    .filter((estimate) => WON_ESTIMATE_STATUSES.has(estimate.status) || Boolean(estimate.convertedJobId))
+  const lostEstimates = estimates.filter((estimate) => LOST_ESTIMATE_STATUSES.has(estimate.status));
+  const estimateOutcomeValue = [...waitingEstimates, ...wonEstimates, ...lostEstimates].reduce(
+    (total, estimate) => total + money(estimate.estimatedTotal),
+    0,
+  );
+  const waitingEstimateValue = waitingEstimates.reduce((total, estimate) => total + money(estimate.estimatedTotal), 0);
+  const wonEstimateValue = wonEstimates.reduce((total, estimate) => total + money(estimate.estimatedTotal), 0);
+  const lostEstimateValue = lostEstimates.reduce((total, estimate) => total + money(estimate.estimatedTotal), 0);
+  const estimateOutcomeCount = waitingEstimates.length + wonEstimates.length + lostEstimates.length;
+  const estimateOutcomes = [
+    {
+      status: "Waiting on Customer",
+      count: waitingEstimates.length,
+      value: Math.round(waitingEstimateValue),
+      share: percent(waitingEstimateValue, estimateOutcomeValue),
+    },
+    {
+      status: "Won",
+      count: wonEstimates.length,
+      value: Math.round(wonEstimateValue),
+      share: percent(wonEstimateValue, estimateOutcomeValue),
+    },
+    {
+      status: "Lost",
+      count: lostEstimates.length,
+      value: Math.round(lostEstimateValue),
+      share: percent(lostEstimateValue, estimateOutcomeValue),
+    },
+  ].filter((item) => item.count > 0 || item.value > 0);
+  const totalEstimateDecisionValue = estimates
+    .filter(
+      (estimate) =>
+        FOLLOW_UP_ESTIMATE_STATUSES.has(estimate.status) ||
+        WON_ESTIMATE_STATUSES.has(estimate.status) ||
+        LOST_ESTIMATE_STATUSES.has(estimate.status) ||
+        Boolean(estimate.convertedJobId),
+    )
     .reduce((total, estimate) => total + money(estimate.estimatedTotal), 0);
   const completionRate = percent(completedJobs.length, jobs.filter((job) => job.status !== "Cancelled").length);
-  const estimateWinRate = percent(wonEstimateValue, totalEstimateValue);
+  const estimateWinRate = percent(wonEstimateValue, totalEstimateDecisionValue);
   const collectionRate = percent(collectedTotal, issuedTotal);
   const scheduledNext30 = jobs.filter((job) => {
     if (!job.dateBegin || job.status === "Cancelled") {
@@ -255,14 +291,17 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
     }));
 
   const staleEstimates = estimates
-    .filter((estimate) => estimate.status === "Estimate Provided" && isBefore(estimate.createdAt, staleCutoff))
+    .filter((estimate) => FOLLOW_UP_ESTIMATE_STATUSES.has(estimate.status) && isBefore(estimate.createdAt, staleCutoff))
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const overdueJobs = activeJobs
-    .filter((job) => {
-      const dueDate = job.dateEnd ?? job.dateBegin;
-      return dueDate ? isBefore(dueDate, today) : false;
-    })
-    .sort((a, b) => (a.dateEnd ?? a.dateBegin ?? today).getTime() - (b.dateEnd ?? b.dateBegin ?? today).getTime());
+  const readyEstimates = estimates
+    .filter((estimate) => READY_ESTIMATE_STATUSES.has(estimate.status))
+    .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+  const unscheduledJobs = jobs
+    .filter((job) => job.status === "Unscheduled")
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  const onHoldJobs = jobs
+    .filter((job) => job.status === "On Hold")
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   const unpaidBillableJobs = jobs
     .filter((job) => Math.max(0, money(job.finalCost) - money(job.amountPaid)) > 0)
     .sort(
@@ -283,6 +322,36 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
       severity: "amber" as const,
       value: request.hours ? `${money(request.hours)}h` : "Pending",
     })),
+    ...unscheduledJobs.slice(0, 4).map((job) => ({
+      id: job.id,
+      type: "Job",
+      title: compactTitle(job.description, "Job needs scheduling"),
+      detail: `${job.customer?.name ?? "Customer not assigned"} · no scheduled date`,
+      href: `/dashboard/jobs?job=${job.id}`,
+      priority: "Schedule",
+      severity: "rose" as const,
+      value: "Unscheduled",
+    })),
+    ...onHoldJobs.slice(0, 4).map((job) => ({
+      id: job.id,
+      type: "Job",
+      title: compactTitle(job.description, "Job is on hold"),
+      detail: `${job.customer?.name ?? "Customer not assigned"} · review blocker or next step`,
+      href: `/dashboard/jobs?job=${job.id}`,
+      priority: "Review hold",
+      severity: "amber" as const,
+      value: "On hold",
+    })),
+    ...readyEstimates.slice(0, 4).map((estimate) => ({
+      id: estimate.id,
+      type: "Estimate",
+      title: compactTitle(estimate.description, "Estimate ready to send"),
+      detail: `${estimate.customer?.name ?? "Customer not assigned"} · ready to email`,
+      href: "/dashboard/estimates",
+      priority: "Send",
+      severity: "cyan" as const,
+      value: Math.round(money(estimate.estimatedTotal)),
+    })),
     ...staleEstimates.slice(0, 4).map((estimate) => ({
       id: estimate.id,
       type: "Estimate",
@@ -293,20 +362,6 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
       severity: "cyan" as const,
       value: Math.round(money(estimate.estimatedTotal)),
     })),
-    ...overdueJobs.slice(0, 4).map((job) => {
-      const dueDate = job.dateEnd ?? job.dateBegin ?? today;
-
-      return {
-        id: job.id,
-        type: "Job",
-        title: compactTitle(job.description, "Job needs attention"),
-        detail: `${job.customer?.name ?? "Customer not assigned"} · ${differenceInCalendarDays(today, dueDate)} days overdue`,
-        href: "/dashboard/jobs",
-        priority: "Reschedule",
-        severity: "rose" as const,
-        value: job.status,
-      };
-    }),
     ...unpaidBillableJobs.slice(0, 4).map((job) => ({
       id: job.id,
       type: "Receivable",
@@ -319,33 +374,6 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
     })),
   ].slice(0, 8);
 
-  const funnel = [
-    {
-      stage: "Customers",
-      count: customers.length,
-      value: Math.round(
-        customerRevenue.size
-          ? [...customerRevenue.values()].reduce((total, customer) => total + customer.revenue, 0)
-          : issuedTotal,
-      ),
-    },
-    {
-      stage: "Open estimates",
-      count: estimatePipeline.length,
-      value: Math.round(openEstimateValue),
-    },
-    {
-      stage: "Active jobs",
-      count: activeJobs.length,
-      value: Math.round(activeJobs.reduce((total, job) => total + money(job.finalCost ?? job.estimatedCost), 0)),
-    },
-    {
-      stage: "Invoices",
-      count: invoices.length,
-      value: Math.round(issuedTotal),
-    },
-  ];
-
   return {
     companyName,
     generatedAt: new Date().toISOString(),
@@ -356,7 +384,8 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
       activeJobs: activeJobs.length,
       scheduledNext30: scheduledNext30.length,
       estimates: estimates.length,
-      openEstimateValue: Math.round(openEstimateValue),
+      estimateOutcomeCount,
+      waitingEstimateValue: Math.round(waitingEstimateValue),
       invoices: invoices.length,
       issuedTotal: Math.round(issuedTotal),
       collectedTotal: Math.round(collectedTotal),
@@ -368,7 +397,7 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
       collectionRate,
     },
     monthlyFlow,
-    funnel,
+    estimateOutcomes,
     topCustomers,
     jobStatus,
     serviceMix,
