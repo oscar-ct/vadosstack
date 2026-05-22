@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { toast } from "sonner";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +41,8 @@ export function DeleteCustomerDialog({
     if (!state.success) return;
 
     onOpenChange(false);
-  }, [onOpenChange, state.success]);
+    toast.success(state.message || "Customer deleted.");
+  }, [onOpenChange, state]);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>

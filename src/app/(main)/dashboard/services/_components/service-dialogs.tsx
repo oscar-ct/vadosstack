@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -55,7 +56,8 @@ export function CreateServiceDialog({
     formRef.current?.reset();
     captureInitialSnapshot();
     closeWithoutPrompt();
-  }, [captureInitialSnapshot, closeWithoutPrompt, state.success]);
+    toast.success(state.message || "Service created.");
+  }, [captureInitialSnapshot, closeWithoutPrompt, state]);
 
   return (
     <Dialog open={open} onOpenChange={requestOpenChange}>
@@ -116,7 +118,8 @@ export function EditServiceDialog({
   React.useEffect(() => {
     if (!state.success) return;
     closeWithoutPrompt();
-  }, [closeWithoutPrompt, state.success]);
+    toast.success(state.message || "Service updated.");
+  }, [closeWithoutPrompt, state]);
 
   return (
     <Dialog open={open} onOpenChange={requestOpenChange}>
@@ -184,7 +187,8 @@ export function DeleteServiceDialog({
   React.useEffect(() => {
     if (!state.success) return;
     onOpenChange(false);
-  }, [onOpenChange, state.success]);
+    toast.success(state.message || "Service deleted.");
+  }, [onOpenChange, state]);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>

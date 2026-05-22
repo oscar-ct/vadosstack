@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { Building2, ChevronRight, Command, MailIcon, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -229,11 +230,12 @@ function CompanySettingsDialog({
       setDeleteLogo(false);
       setLogoError("");
       onSaved();
+      toast.success(state.message || "Company settings saved.");
       const timeout = window.setTimeout(() => setOpen(false), 1600);
 
       return () => window.clearTimeout(timeout);
     }
-  }, [state.success, onSaved]);
+  }, [state, onSaved]);
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];

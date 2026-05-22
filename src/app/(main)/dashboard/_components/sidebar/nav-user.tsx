@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { BadgeCheck, EllipsisVertical, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { toast } from "sonner";
 
 import { logoutAction } from "@/app/(main)/auth/actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -62,7 +63,8 @@ export function NavUser({
 
     setProfileOpen(false);
     router.refresh();
-  }, [router, state.success]);
+    toast.success(state.message || "Profile updated.");
+  }, [router, state]);
 
   if (!user) {
     return (

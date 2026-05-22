@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 
 import { format, parseISO } from "date-fns";
 import { ChevronLeft, ChevronRight, LogOut, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -258,6 +259,7 @@ function AddEmployeeDialog({
       if (result.success) {
         form.reset();
         setOpen(false);
+        toast.success(result.message || "Employee added.");
       }
     });
   }
@@ -388,6 +390,7 @@ function EditEmployeeDialog({
         setConfirmOpen(false);
         setPendingFormData(null);
         onOpenChange(false);
+        toast.success(result.message || "Employee updated.");
       }
     });
   }
@@ -503,7 +506,10 @@ function DeleteEmployeeDialog({
       const result = await action(initialState, formData);
       setState(result);
 
-      if (result.success) setOpen(false);
+      if (result.success) {
+        setOpen(false);
+        toast.success(result.message || "Employee deleted.");
+      }
     });
   }
 
@@ -681,6 +687,7 @@ function AddHoursDialog({
         form.reset();
         setDeductLunch(true);
         setOpen(false);
+        toast.success(result.message || (requiresApproval ? "Hours submitted for review." : "Hours saved."));
       }
     });
   }
@@ -785,7 +792,10 @@ function EditHoursDialog({
       const result = await action(initialState, formData);
       setState(result);
 
-      if (result.success) setOpen(false);
+      if (result.success) {
+        setOpen(false);
+        toast.success(result.message || (requiresApproval ? "Hours update submitted for review." : "Hours updated."));
+      }
     });
   }
 
@@ -895,7 +905,10 @@ function DeleteHoursDialog({
       const result = await action(initialState, formData);
       setState(result);
 
-      if (result.success) setOpen(false);
+      if (result.success) {
+        setOpen(false);
+        toast.success(result.message || "Hours deleted.");
+      }
     });
   }
 
@@ -940,6 +953,16 @@ function ReviewTimeRequestButtons({
   const [approveState, approveFormAction, isApproving] = React.useActionState(approveAction, initialState);
   const [rejectState, rejectFormAction, isRejecting] = React.useActionState(rejectAction, initialState);
   const message = !approveState.success ? approveState.message : !rejectState.success ? rejectState.message : "";
+
+  React.useEffect(() => {
+    if (!approveState.success) return;
+    toast.success(approveState.message || "Time request approved.");
+  }, [approveState]);
+
+  React.useEffect(() => {
+    if (!rejectState.success) return;
+    toast.success(rejectState.message || "Time request rejected.");
+  }, [rejectState]);
 
   return (
     <div className="grid gap-2">
@@ -1202,7 +1225,10 @@ function EditEmployeeRequestDialog({
       const result = await action(initialState, formData);
       setState(result);
 
-      if (result.success) setOpen(false);
+      if (result.success) {
+        setOpen(false);
+        toast.success(result.message || "Request updated.");
+      }
     });
   }
 
@@ -1306,7 +1332,10 @@ function CancelEmployeeRequestDialog({
       const result = await action(initialState, formData);
       setState(result);
 
-      if (result.success) setOpen(false);
+      if (result.success) {
+        setOpen(false);
+        toast.success(result.message || "Request canceled.");
+      }
     });
   }
 

@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { toast } from "sonner";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +41,8 @@ export function DeleteJobDialog({
     if (!state.success) return;
 
     onOpenChange(false);
-  }, [onOpenChange, state.success]);
+    toast.success(state.message || "Job deleted.");
+  }, [onOpenChange, state]);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>

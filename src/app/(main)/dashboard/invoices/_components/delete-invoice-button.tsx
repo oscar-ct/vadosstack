@@ -5,6 +5,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -44,13 +45,14 @@ export function DeleteInvoiceButton({
     if (!state.success) return;
 
     setOpen(false);
+    toast.success(state.message || "Invoice deleted.");
     if (redirectTo) {
       router.replace(redirectTo);
       return;
     }
 
     router.refresh();
-  }, [redirectTo, router, state.success]);
+  }, [redirectTo, router, state]);
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>

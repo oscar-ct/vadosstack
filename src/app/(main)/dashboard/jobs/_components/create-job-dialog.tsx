@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -51,7 +52,8 @@ export function CreateJobDialog({
     formRef.current?.reset();
     captureInitialSnapshot();
     closeWithoutPrompt();
-  }, [captureInitialSnapshot, closeWithoutPrompt, state.success]);
+    toast.success(state.message || "Job created.");
+  }, [captureInitialSnapshot, closeWithoutPrompt, state]);
 
   return (
     <Dialog open={open} onOpenChange={requestOpenChange}>

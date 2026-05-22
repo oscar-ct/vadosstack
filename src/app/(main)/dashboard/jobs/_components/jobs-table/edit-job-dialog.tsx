@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -54,7 +55,8 @@ export function EditJobDialog({
     if (!state.success) return;
 
     closeWithoutPrompt();
-  }, [closeWithoutPrompt, state.success]);
+    toast.success(state.message || "Job updated.");
+  }, [closeWithoutPrompt, state]);
 
   return (
     <Dialog open={open} onOpenChange={requestOpenChange}>

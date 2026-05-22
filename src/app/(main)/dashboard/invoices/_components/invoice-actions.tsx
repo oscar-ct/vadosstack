@@ -5,6 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 
 import { Mail, Printer } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +62,10 @@ export function InvoiceActions({
   React.useEffect(() => {
     if (!state.message) {
       return;
+    }
+
+    if (state.success) {
+      toast.success(state.message);
     }
 
     setShowStateMessage(true);

@@ -5,6 +5,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { BriefcaseBusiness, NotebookText, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -63,7 +64,8 @@ export function CreateEstimateRecordDialog({
     formRef.current?.reset();
     captureInitialSnapshot();
     closeWithoutPrompt();
-  }, [captureInitialSnapshot, closeWithoutPrompt, state.success]);
+    toast.success(state.message || "Estimate created.");
+  }, [captureInitialSnapshot, closeWithoutPrompt, state]);
 
   return (
     <Dialog open={open} onOpenChange={requestOpenChange}>
@@ -126,7 +128,8 @@ export function EditEstimateRecordDialog({
   React.useEffect(() => {
     if (!state.success) return;
     router.refresh();
-  }, [router, state.success]);
+    toast.success(state.message || "Estimate updated.");
+  }, [router, state]);
 
   React.useEffect(() => {
     if (!state.success) return;
@@ -198,7 +201,8 @@ export function DeleteEstimateRecordDialog({
     if (!state.success) return;
     router.refresh();
     onOpenChange(false);
-  }, [onOpenChange, router, state.success]);
+    toast.success(state.message || "Estimate deleted.");
+  }, [onOpenChange, router, state]);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -247,7 +251,8 @@ export function ConvertEstimateButton({
   React.useEffect(() => {
     if (!state.success) return;
     router.refresh();
-  }, [router, state.success]);
+    toast.success(state.message || "Estimate converted to job.");
+  }, [router, state]);
 
   if (estimate.convertedJobId) {
     return (
@@ -292,7 +297,8 @@ export function UpdateEstimateStatusButton({
   React.useEffect(() => {
     if (!state.success) return;
     router.refresh();
-  }, [router, state.success]);
+    toast.success(state.message || `Estimate marked ${status}.`);
+  }, [router, state, status]);
 
   return (
     <form action={formAction} className="grid gap-2">
@@ -317,7 +323,14 @@ export function PrintableEstimateButton({
   estimate: EstimateRecordRow;
   size?: React.ComponentProps<typeof Button>["size"];
 }) {
+  const router = useRouter();
   const [state, formAction, isPending] = React.useActionState(action, initialState);
+
+  React.useEffect(() => {
+    if (!state.success) return;
+    router.refresh();
+    toast.success(state.message || "Estimate PDF created.");
+  }, [router, state]);
 
   if (estimate.printableEstimateId) {
     return (

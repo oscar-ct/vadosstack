@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -136,7 +137,8 @@ export function EditCustomerDialog({
     if (!state.success) return;
 
     onOpenChange(false);
-  }, [onOpenChange, state.success]);
+    toast.success(state.message || "Customer updated.");
+  }, [onOpenChange, state]);
 
   React.useEffect(() => {
     if (!state.success) {

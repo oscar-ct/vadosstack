@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 
 import { format, parseISO } from "date-fns";
 import { CircleAlert, CircleDollarSign, FileText, NotebookText, Pencil, ReceiptText, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -257,20 +258,23 @@ export function JobDetailsDialog({
 
     setIsInvoiceReviewOpen(false);
     router.refresh();
-  }, [invoiceState.success, router]);
+    toast.success(invoiceState.message || "Invoice created.");
+  }, [invoiceState, router]);
 
   React.useEffect(() => {
     if (!paymentState.success) return;
 
     paymentFormRef.current?.reset();
     router.refresh();
-  }, [paymentState.success, router]);
+    toast.success(paymentState.message || "Payment recorded.");
+  }, [paymentState, router]);
 
   React.useEffect(() => {
     if (!deletePaymentState.success) return;
 
     router.refresh();
-  }, [deletePaymentState.success, router]);
+    toast.success(deletePaymentState.message || "Payment deleted.");
+  }, [deletePaymentState, router]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
