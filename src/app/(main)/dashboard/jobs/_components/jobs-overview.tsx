@@ -49,7 +49,7 @@ export function JobsOverview({
         </CardDescription>
         <CardAction className="flex items-center gap-2">
           <CreateJobDialog action={createJobAction} customers={customers} services={services} />
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" className={"hidden w-7 px-0 sm:w-auto sm:px-2.5 md:flex"}>
             <Download />
             Export
           </Button>

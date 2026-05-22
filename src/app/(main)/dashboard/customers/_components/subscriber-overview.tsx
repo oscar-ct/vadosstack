@@ -33,7 +33,7 @@ export function SubscriberOverview({
         <CardDescription>Recent customer records with plan, billing, status, and signup activity.</CardDescription>
         <CardAction className="flex items-center gap-2">
           <CreateCustomerDialog action={createCustomerAction} />
-          <Button variant="outline" size="sm" className="w-7 px-0 sm:w-auto sm:px-2.5">
+          <Button variant="outline" size="sm" className="hidden w-7 px-0 sm:w-auto sm:px-2.5 md:flex">
             <Download />
             <span className="hidden sm:inline">Export</span>
           </Button>

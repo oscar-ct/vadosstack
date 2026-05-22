@@ -56,7 +56,7 @@ export default async function Page() {
         </CardTitle>
         <CardDescription>A simple index of invoices. Select an invoice number to view it.</CardDescription>
         <CardAction>
-          <Button variant="outline" size="sm" className="w-7 px-0 sm:w-auto sm:px-2.5">
+          <Button variant="outline" size="sm" className="hidden w-7 px-0 sm:w-auto sm:px-2.5 sm:flex">
             <Download />
             <span className="hidden sm:inline">Export</span>
           </Button>

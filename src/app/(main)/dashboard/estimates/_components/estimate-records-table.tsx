@@ -201,13 +201,6 @@ function estimateStatusClassName(status: string) {
   if (status === "Waiting on Customer") return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900";
   return "bg-muted-foreground/10 text-muted-foreground";
 }
-function estimateStatusBorderColor(status: string) {
-  if (status === "Won") return "border-emerald-200";
-  if (status === "Lost") return "border-rose-200 pl-3";
-  if (status === "Ready to Send") return "border-amber-200";
-  if (status === "Waiting on Customer") return "border-sky-200";
-  return "border-foreground/10";
-}
 
 function getEstimateWorkflow(status: string) {
   if (status === "Draft") {
@@ -914,7 +907,7 @@ export function EstimateRecordsTable({
             <Card key={estimate.id} size="sm" className={"gap-0 py-0"}>
               <CardContent className="grid gap-4 p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className={cn(estimateStatusBorderColor(estimate.status), "min-w-0", "border-l-2", "pl-3")}>
+                  <div className={"min-w-0"}>
                     <div className="truncate text-wrap font-medium text-sm">{estimate.description}</div>
                     <div className="text-muted-foreground text-xs">{estimate.customerName ?? "No customer"}</div>
                   </div>
@@ -937,8 +930,7 @@ export function EstimateRecordsTable({
                     <span className="text-right">{getEstimateWorkflow(estimate.status).action}</span>
                   </div>
                 </div>
-
-                <div className={"flex items-center justify-between gap-2 border-t pt-4"}>
+                <div>
                   {estimate.printableEstimateId ? (
                     <Button asChild variant="outline" size="sm" className="border-sky-200 bg-sky-50 text-sky-700">
                       <Link
