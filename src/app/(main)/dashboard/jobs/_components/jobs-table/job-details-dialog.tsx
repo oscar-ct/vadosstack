@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -259,10 +259,10 @@ export function JobDetailsDialog({
                     <DialogTitle className="truncate text-wrap font-semibold tracking-tight">
                       {job.description}
                     </DialogTitle>
-                    {/*<DialogDescription className="truncate">*/}
-                    {/*  {job.customerName}*/}
-                    {/*  {formatDate(job.dateBegin) ? ` · ${formatDate(job.dateBegin)}` : ""}*/}
-                    {/*</DialogDescription>*/}
+                    <DialogDescription className="truncate">
+                      {job.customerName}
+                      {/*{formatDate(job.dateBegin) ? ` · ${formatDate(job.dateBegin)}` : ""}*/}
+                    </DialogDescription>
                   </div>
                   <Badge
                     variant="outline"
@@ -330,11 +330,11 @@ export function JobDetailsDialog({
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
                 <section className="grid gap-4 rounded-lg border p-4">
                   <div className="grid gap-1">
-                    {/*<div className="flex flex-wrap items-center gap-2">*/}
-                    {/*  <Badge variant="secondary" className="w-fit">*/}
-                    {/*    {job.category}*/}
-                    {/*  </Badge>*/}
-                    {/*</div>*/}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="w-fit">
+                        {job.category}
+                      </Badge>
+                    </div>
                     <p className="text-muted-foreground text-sm">{job.scope || "No description on file."}</p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -542,13 +542,13 @@ export function JobDetailsDialog({
                       <p className="text-muted-foreground text-sm">No labor line items.</p>
                     )}
                   </div>
-                  {laborItems.length && (
+                  {laborItems.length ? (
                     <div className="flex justify-end pt-2">
                       <span className="whitespace-nowrap text-right font-medium tabular-nums">
                         Labor total: {formatMoney(getLaborSubtotal(job))}
                       </span>
                     </div>
-                  )}
+                  ) : null}
 
                   <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 p-3 dark:border-amber-900/60 dark:bg-amber-950/20">
                     <div className="mb-2 flex items-center justify-between gap-3">
@@ -590,13 +590,13 @@ export function JobDetailsDialog({
                       <p className="text-muted-foreground text-sm">No material line items.</p>
                     )}
                   </div>
-                  {materials.length && (
+                  {materials.length ? (
                     <div className="flex justify-end pt-2">
                       <span className="whitespace-nowrap text-right font-medium tabular-nums">
                         Materials total: {formatMoney(getMaterialsSubtotal(job))}
                       </span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </section>
             </div>

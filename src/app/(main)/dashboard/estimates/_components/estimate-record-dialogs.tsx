@@ -232,10 +232,14 @@ export function DeleteEstimateRecordDialog({
 
 export function ConvertEstimateButton({
   action,
+  className = "w-full",
   estimate,
+  size = "lg",
 }: {
   action: (state: EstimateRecordMutationState, formData: FormData) => Promise<EstimateRecordMutationState>;
+  className?: string;
   estimate: EstimateRecordRow;
+  size?: React.ComponentProps<typeof Button>["size"];
 }) {
   const router = useRouter();
   const [state, formAction, isPending] = React.useActionState(action, initialState);
@@ -247,7 +251,7 @@ export function ConvertEstimateButton({
 
   if (estimate.convertedJobId) {
     return (
-      <Button asChild size="lg" className="w-full" variant="outline">
+      <Button asChild size={size} className={className} variant="outline">
         <a href={`/dashboard/jobs?job=${estimate.convertedJobId}`}>View converted job</a>
       </Button>
     );
@@ -256,7 +260,7 @@ export function ConvertEstimateButton({
   return (
     <form action={formAction} className="grid gap-2">
       <input type="hidden" name="id" value={estimate.id} />
-      <Button type="submit" size="lg" className="w-full" disabled={isPending}>
+      <Button type="submit" size={size} className={className} disabled={isPending}>
         <BriefcaseBusiness />
         {isPending ? "Converting..." : "Convert to Job"}
       </Button>
@@ -267,16 +271,20 @@ export function ConvertEstimateButton({
 
 export function PrintableEstimateButton({
   action,
+  className = "w-full",
   estimate,
+  size = "lg",
 }: {
   action: (state: EstimateRecordMutationState, formData: FormData) => Promise<EstimateRecordMutationState>;
+  className?: string;
   estimate: EstimateRecordRow;
+  size?: React.ComponentProps<typeof Button>["size"];
 }) {
   const [state, formAction, isPending] = React.useActionState(action, initialState);
 
   if (estimate.printableEstimateId) {
     return (
-      <Button asChild size="lg" className="w-full" variant="outline">
+      <Button asChild size={size} className={className} variant="outline">
         <a href={`/dashboard/estimates/${estimate.printableEstimateId}?from=estimates`}>
           <NotebookText />
           View PDF
@@ -288,7 +296,7 @@ export function PrintableEstimateButton({
   return (
     <form action={formAction} className="grid gap-2">
       <input type="hidden" name="id" value={estimate.id} />
-      <Button type="submit" size="lg" className="w-full" variant="outline" disabled={isPending}>
+      <Button type="submit" size={size} className={className} variant="outline" disabled={isPending}>
         <NotebookText />
         {isPending ? "Creating..." : "Create PDF"}
       </Button>

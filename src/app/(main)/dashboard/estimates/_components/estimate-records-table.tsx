@@ -24,16 +24,18 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  CircleDollarSign,
+  FileText,
   NotebookText,
   Pencil,
   Search,
   SlidersHorizontal,
-  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Drawer,
   DrawerClose,
@@ -55,6 +57,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 import type { JobCustomer } from "../../jobs/_components/jobs-table/schema";
 import type { ServiceTemplateRow } from "../../services/types";
@@ -85,6 +88,269 @@ const sortOptions = [
 
 function formatMoney(value?: string) {
   return value ? `$${Number(value).toFixed(2)}` : "$0.00";
+}
+
+function formatOptionalMoney(value?: string) {
+  return value === undefined ? undefined : formatMoney(value);
+}
+
+// function formatDate(value?: string) {
+//   return value ? format(parseISO(value), "MMM d, yyyy") : undefined;
+// }
+
+// function formatDateStartToEnd(value?: string, value2?: string) {
+//   const startDate = value ? format(parseISO(value), "MMM d, yyyy") : undefined;
+//   const endDate = value2 ? format(parseISO(value2), "MMM d, yyyy") : undefined;
+//
+//   if (!startDate) {
+//     return "Unscheduled";
+//   }
+//
+//   if (!endDate) {
+//     return `${startDate} - Not scheduled`;
+//   }
+//
+//   return `${startDate} - ${endDate}`;
+// }
+
+function DetailItem({ label, value, className }: { label: string; value?: string; className?: string }) {
+  return (
+    <div className={cn(className, "grid", "gap-1")}>
+      <span className="text-muted-foreground text-xs">{label}</span>
+      <span className="font-medium text-sm">{value ?? "Not on file"}</span>
+    </div>
+  );
+}
+
+function withLineItemKeys<T extends { description: string; price: string }>(items: T[]) {
+  const seen = new Map<string, number>();
+
+  return items.map((item) => {
+    const baseKey = `${item.description}-${item.price}`;
+    const occurrence = (seen.get(baseKey) ?? 0) + 1;
+    seen.set(baseKey, occurrence);
+
+    return {
+      ...item,
+      key: `${baseKey}-${occurrence}`,
+    };
+  });
+}
+
+function getLaborSubtotal(estimate: EstimateRecordRow) {
+  return estimate.laborItems.length
+    ? estimate.laborItems.reduce((total, item) => total + Number(item.price || 0), 0).toFixed(2)
+    : (estimate.laborCost ?? "0.00");
+}
+
+function getMaterialsSubtotal(estimate: EstimateRecordRow) {
+  return estimate.materials.reduce((total, material) => total + Number(material.price || 0), 0).toFixed(2);
+}
+
+function getMaterialTaxAmount(estimate: EstimateRecordRow) {
+  const subtotal = Number(getMaterialsSubtotal(estimate));
+  const laborCost = Number(getLaborSubtotal(estimate));
+  const taxRate = Number(estimate.materialTaxRate ?? 0);
+
+  return (((laborCost + subtotal) * taxRate) / 100).toFixed(2);
+}
+
+function estimateStatusClassName(status: string) {
+  if (status === "Won") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900";
+  if (status === "Lost") return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900";
+  if (status === "Estimate Provided") return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900";
+  return "bg-muted-foreground/10 text-muted-foreground";
+}
+
+function EstimateDetailsDialog({
+  convertEstimateToJobAction,
+  createPrintableEstimateAction,
+  estimate,
+  onEditEstimate,
+  onOpenChange,
+}: {
+  convertEstimateToJobAction: (
+    state: EstimateRecordMutationState,
+    formData: FormData,
+  ) => Promise<EstimateRecordMutationState>;
+  createPrintableEstimateAction: (
+    state: EstimateRecordMutationState,
+    formData: FormData,
+  ) => Promise<EstimateRecordMutationState>;
+  estimate: EstimateRecordRow | null;
+  onEditEstimate: (estimate: EstimateRecordRow) => void;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const laborItems = React.useMemo(() => withLineItemKeys(estimate?.laborItems ?? []), [estimate?.laborItems]);
+  const materials = React.useMemo(() => withLineItemKeys(estimate?.materials ?? []), [estimate?.materials]);
+
+  return (
+    <Dialog open={!!estimate} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-5xl">
+        {estimate ? (
+          <>
+            <DialogHeader className="border-b pt-2 pr-10 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="flex size-10 items-center justify-center rounded-md border bg-muted">
+                  <FileText className="size-5 text-muted-foreground" />
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <DialogTitle className="truncate text-wrap font-semibold tracking-tight">
+                      {estimate.description}
+                    </DialogTitle>
+                    <p className="truncate text-muted-foreground text-sm">{estimate.customerName ?? "No customer"}</p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={`h-8 w-fit shrink-0 px-2 ${estimateStatusClassName(estimate.status)}`}
+                  >
+                    {estimate.status}
+                  </Badge>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onEditEstimate(estimate);
+                  }}
+                >
+                  <Pencil />
+                  Edit estimate
+                </Button>
+                <PrintableEstimateButton
+                  action={createPrintableEstimateAction}
+                  className=""
+                  estimate={estimate}
+                  size="sm"
+                />
+                <ConvertEstimateButton action={convertEstimateToJobAction} className="" estimate={estimate} size="sm" />
+              </div>
+            </DialogHeader>
+
+            <div className="grid gap-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+                <section className="grid gap-4 rounded-lg border p-4">
+                  <div className="grid gap-1">
+                    <Badge variant="secondary" className="w-fit">
+                      {estimate.category}
+                    </Badge>
+                    <p className="text-muted-foreground text-sm">{estimate.scope || "No description on file."}</p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <DetailItem label="Customer" value={estimate.customerName} />
+                    <DetailItem label="Service location" value={estimate.serviceLocation} />
+                    <DetailItem
+                      className={"sm:col-span-2"}
+                      label="Notes"
+                      value={estimate.notes || "No notes on file"}
+                    />
+                  </div>
+                </section>
+
+                <section className="grid gap-3 rounded-lg border bg-muted/20 p-4">
+                  <div className="flex items-center gap-2 font-medium text-sm">
+                    <CircleDollarSign className="size-4 text-muted-foreground" />
+                    Estimate summary
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <DetailItem label="Estimate value" value={formatOptionalMoney(estimate.estimatedTotal)} />
+                    <DetailItem label="Created" value={format(parseISO(estimate.createdAt), "MMM d, yyyy")} />
+                    <DetailItem label="Labor" value={formatMoney(getLaborSubtotal(estimate))} />
+                    <DetailItem label="Materials" value={formatMoney(getMaterialsSubtotal(estimate))} />
+                    <DetailItem
+                      label={`Tax${estimate.materialTaxRate ? ` (${estimate.materialTaxRate}%)` : ""}`}
+                      value={formatMoney(getMaterialTaxAmount(estimate))}
+                    />
+                    <DetailItem label="Status" value={estimate.status} />
+                  </div>
+                </section>
+              </div>
+
+              <section className="grid gap-3">
+                <div className="flex items-center gap-2 font-medium text-sm">
+                  <CircleDollarSign className="size-4 text-muted-foreground" />
+                  Labor and materials
+                </div>
+                <div className="grid gap-3">
+                  <div className="rounded-lg border border-sky-200/80 bg-sky-50/50 p-3 dark:border-sky-900/60 dark:bg-sky-950/20">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div className="font-medium text-sm">Labor</div>
+                      <span className="text-muted-foreground text-xs">{laborItems.length} item(s)</span>
+                    </div>
+                    {laborItems.length ? (
+                      <div className="divide-y divide-sky-200/70 dark:divide-sky-900/60">
+                        {laborItems.map((item) => (
+                          <div
+                            key={item.key}
+                            className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-2 text-sm first:pt-0 last:pb-0"
+                          >
+                            <span className="min-w-0 whitespace-normal break-words">{item.description}</span>
+                            <span className="whitespace-nowrap text-right tabular-nums">{formatMoney(item.price)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">No labor line items.</p>
+                    )}
+                  </div>
+                  {laborItems.length ? (
+                    <div className="flex justify-end pt-2">
+                      <span className="whitespace-nowrap text-right font-medium tabular-nums">
+                        Labor total: {formatMoney(getLaborSubtotal(estimate))}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 p-3 dark:border-amber-900/60 dark:bg-amber-950/20">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div className="font-medium text-sm">Materials</div>
+                      <span className="text-muted-foreground text-xs">{materials.length} item(s)</span>
+                    </div>
+                    {materials.length ? (
+                      <div className="divide-y divide-amber-200/70 dark:divide-amber-900/60">
+                        {materials.map((material) => (
+                          <div
+                            key={material.key}
+                            className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-2 text-sm first:pt-0 last:pb-0"
+                          >
+                            <span className="min-w-0 whitespace-normal break-words">
+                              {material.description}
+                              <span className="mt-0.5 block text-muted-foreground text-xs">
+                                {material.quantity && material.unitPrice
+                                  ? `Qty ${material.quantity} × ${formatMoney(material.unitPrice)}`
+                                  : "Line item"}
+                              </span>
+                            </span>
+                            <span className="whitespace-nowrap text-right tabular-nums">
+                              {formatMoney(material.price)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">No material line items.</p>
+                    )}
+                  </div>
+                  {materials.length ? (
+                    <div className="flex justify-end pt-2">
+                      <span className="whitespace-nowrap text-right font-medium tabular-nums">
+                        Materials total: {formatMoney(getMaterialsSubtotal(estimate))}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+            </div>
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export function EstimateRecordsTable({
@@ -543,86 +809,15 @@ export function EstimateRecordsTable({
           </div>
         </div>
       </div>
-      {selectedEstimate ? (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/10 p-4 backdrop-blur-xs"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="estimate-details-title"
-          tabIndex={-1}
-          onClick={() => setSelectedEstimate(null)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              setSelectedEstimate(null);
-            }
-          }}
-        >
-          <Card
-            className="max-h-[calc(100svh-2rem)] w-full max-w-xl overflow-y-auto"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <CardContent className="grid gap-4 p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="grid min-w-0 gap-1">
-                  <h2 id="estimate-details-title" className="text-wrap font-semibold text-lg">
-                    {selectedEstimate.description}
-                  </h2>
-                  <p className="text-muted-foreground text-sm">{selectedEstimate.customerName ?? "No customer"}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Edit estimate"
-                    onClick={() => {
-                      openEstimateEditor(selectedEstimate);
-                    }}
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Close estimate details"
-                    onClick={() => setSelectedEstimate(null)}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="grid gap-2 rounded-lg bg-muted/20 p-3 text-sm sm:grid-cols-2">
-                <div className="flex items-center justify-between gap-3 sm:block">
-                  <div className="text-muted-foreground text-xs">Date</div>
-                  <div className="font-medium">{format(parseISO(selectedEstimate.createdAt), "MMM d, yyyy")}</div>
-                </div>
-                <div className="flex items-center justify-between gap-3 sm:block">
-                  <div className="text-muted-foreground text-xs">Value</div>
-                  <div className="font-medium">{formatMoney(selectedEstimate.estimatedTotal)}</div>
-                </div>
-                <div className="flex items-center justify-between gap-3 sm:block">
-                  <div className="text-muted-foreground text-xs">Status</div>
-                  <div className="font-medium">{selectedEstimate.status}</div>
-                </div>
-                <div className="flex items-center justify-between gap-3 sm:block">
-                  <div className="text-muted-foreground text-xs">Category</div>
-                  <div className="font-medium">{selectedEstimate.category}</div>
-                </div>
-              </div>
-              {selectedEstimate.scope ? (
-                <p className="max-h-40 overflow-y-auto whitespace-pre-line rounded-md border bg-background/70 p-3 text-sm">
-                  {selectedEstimate.scope}
-                </p>
-              ) : null}
-              <div className="grid gap-2 sm:grid-cols-2">
-                <PrintableEstimateButton action={createPrintableEstimateAction} estimate={selectedEstimate} />
-                <ConvertEstimateButton action={convertEstimateToJobAction} estimate={selectedEstimate} />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
+      <EstimateDetailsDialog
+        convertEstimateToJobAction={convertEstimateToJobAction}
+        createPrintableEstimateAction={createPrintableEstimateAction}
+        estimate={selectedEstimate}
+        onEditEstimate={openEstimateEditor}
+        onOpenChange={(open) => {
+          if (!open) setSelectedEstimate(null);
+        }}
+      />
     </>
   );
 }
