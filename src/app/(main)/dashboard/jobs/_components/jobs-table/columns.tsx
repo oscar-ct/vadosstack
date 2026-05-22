@@ -44,9 +44,9 @@ export function getJobOverdueDate(job: Pick<JobRow, "dateEnd" | "status">) {
   return isBefore(endDate, new Date()) ? format(parseISO(job.dateEnd), "MMM d, yyyy") : undefined;
 }
 
-function formatMoney(value?: string) {
-  return value ? `$${parseFloat(value).toFixed(2)}` : "Not set";
-}
+// function formatMoney(value?: string) {
+//   return value ? `$${parseFloat(value).toFixed(2)}` : "Not set";
+// }
 
 function toMoneyNumber(value?: string) {
   const parsed = Number(value ?? 0);
@@ -57,27 +57,36 @@ export function getAmountDueDisplay(job: JobRow) {
   const balance = toMoneyNumber(job.outstandingBalance);
   const finalCost = toMoneyNumber(job.finalCost);
 
+  if (!job.invoiceId) {
+    return {
+      amountClassName: "text-muted-foreground",
+      label: "No balance",
+    };
+  }
+
   if (finalCost <= 0) {
     return {
       amountClassName: "text-muted-foreground",
-      amountLabel: "$0.00",
       label: "Not Priced",
     };
   }
 
-  if (balance <= 0) {
+  if (finalCost > 0 && balance <= 0) {
     return {
       amountClassName: "text-emerald-700 dark:text-emerald-400",
-      amountLabel: formatMoney(job.amountPaid),
-      label: "No Balance",
+      label: "Paid in full",
     };
   }
-
   return {
     amountClassName: "text-rose-700 dark:text-rose-400",
-    amountLabel: formatMoney(job.amountPaid),
-    label: `Outstanding: ${formatMoney(job.outstandingBalance)}`,
+    label: "Balance due",
   };
+
+  // return {
+  //   amountClassName: "text-rose-700 dark:text-rose-400",
+  //   amountLabel: `${formatMoney(job.outstandingBalance)} due`,
+  //   label: `Outstanding: ${formatMoney(job.outstandingBalance)}`,
+  // };
 }
 
 export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void }): ColumnDef<JobRow>[] {
@@ -150,13 +159,30 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
       ),
     },
     {
-      accessorKey: "description",
+      accessorKey: "finalCost",
       header: "Job Description",
       cell: ({ row }) => (
-        <div className="grid min-w-0 gap-0.5">
-          <span className="truncate font-medium text-sm leading-none">{row.original.description}</span>
-          <span className="truncate font-medium text-muted-foreground text-xs leading-none">
-            {row.original.customerName ?? "No customer"}
+        <div className="grid min-w-0 gap-1.5">
+          <span className="truncate font-medium text-sm">{row.original.description}</span>
+          <div className={"flex gap-1.5 text-xs leading-none"}>
+            <span className={"text-muted-foreground"}>Cost:</span>
+            <span className={"text-green-700 font-medium"}>
+              {row.original.finalCost ? `$${parseFloat(row.original.finalCost).toFixed(2)}` : "0.00"}
+            </span>
+          </div>
+        </div>
+      ),
+      sortingFn: (rowA, rowB) => toMoneyNumber(rowA.original.finalCost) - toMoneyNumber(rowB.original.finalCost),
+      enableHiding: false,
+    },
+    {
+      accessorKey: "customerName",
+      header: "Customer",
+      cell: ({ row }) => (
+        <div className="grid min-w-0 gap-1.5">
+          <span className="truncate text-sm leading-none">{row.original.customerName ?? "No customer"}</span>
+          <span className="truncate  text-muted-foreground text-xs leading-none">
+            {row.original.serviceLocation ?? "No address on file"}
           </span>
         </div>
       ),
@@ -193,27 +219,29 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
     //   filterFn: "equalsString",
     //   cell: ({ row }) => <span className="text-sm">{row.original.category}</span>,
     // },
-    {
-      accessorKey: "finalCost",
-      header: "Cost",
-      cell: ({ row }) => {
-        return (
-          <span className={`text-sm`}>
-            {row.original.finalCost ? `$${parseFloat(row.original.finalCost).toFixed(2)}` : "0.00"}
-          </span>
-        );
-      },
-      sortingFn: (rowA, rowB) => toMoneyNumber(rowA.original.finalCost) - toMoneyNumber(rowB.original.finalCost),
-    },
+    // {
+    //   accessorKey: "finalCost",
+    //   header: "Cost",
+    //   cell: ({ row }) => {
+    //     return (
+    //       <span className={`text-sm`}>
+    //         {row.original.finalCost ? `$${parseFloat(row.original.finalCost).toFixed(2)}` : "0.00"}
+    //       </span>
+    //     );
+    //   },
+    //   sortingFn: (rowA, rowB) => toMoneyNumber(rowA.original.finalCost) - toMoneyNumber(rowB.original.finalCost),
+    // },
     {
       accessorKey: "outstandingBalance",
-      header: "Paid",
+      header: "Billing",
       cell: ({ row }) => {
         const amountDue = getAmountDueDisplay(row.original);
         return (
           <div className="grid gap-0.5">
-            <span className={`text-sm`}>{amountDue.amountLabel}</span>
-            <span className={`w-fit px-1.5 text-[11px] ${amountDue.amountClassName}`}>{amountDue.label}</span>
+            <span className={`text-[12px] font-medium ${amountDue.amountClassName}`}>{amountDue.label}</span>
+            {/*<span className="w-fit px-1.5 text-[11px] text-muted-foreground">*/}
+            {/*  {row.original.invoiceId ? "Invoiced" : "Not invoiced"}*/}
+            {/*</span>*/}
           </div>
         );
       },

@@ -58,6 +58,7 @@ async function getJobs(ownerId: string): Promise<JobRow[]> {
       materialTaxRate: formatMoney(job.materialTaxRate),
       materials: parseMaterials(job.materials),
       paymentStatus: job.paymentStatus,
+      depositPaid: formatMoney(job.depositPaid),
       amountPaid: formatMoney(job.amountPaid),
       outstandingBalance: formatMoney(
         calculateOutstandingBalance(status, job.finalCost?.toString(), job.amountPaid?.toString()),
@@ -72,6 +73,7 @@ async function getJobs(ownerId: string): Promise<JobRow[]> {
         id: payment.id,
         paidOn: payment.paidOn.toISOString(),
         amount: payment.amount.toString(),
+        paymentType: payment.paymentType,
         method: payment.method,
         referenceNumber: payment.referenceNumber ?? undefined,
         description: payment.description,

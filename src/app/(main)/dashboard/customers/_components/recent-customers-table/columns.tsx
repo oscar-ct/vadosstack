@@ -28,7 +28,7 @@ export function getCustomerBillingDisplay(customer: RecentCustomerRow) {
   if (!hasBalance) {
     return {
       amountLabel: "$0.00 due",
-      detail: customer.jobCount ? "All active jobs are paid" : "No billable jobs yet",
+      detail: "All invoices are paid",
       actionClassName: "",
       tone: "settled" as const,
       label: "No balance",
@@ -42,8 +42,8 @@ export function getCustomerBillingDisplay(customer: RecentCustomerRow) {
       "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-950/60",
     tone: "due" as const,
     label: "Outstanding balance",
-    detail: `${unpaidJobCount} unpaid job${unpaidJobCount === 1 ? "" : "s"}`,
-    actionLabel: `Review ${unpaidJobCount} unpaid job${unpaidJobCount === 1 ? "" : "s"}`,
+    detail: `${unpaidJobCount} unpaid invoice${unpaidJobCount === 1 ? "" : "s"}`,
+    actionLabel: `Review ${unpaidJobCount} unpaid invoice${unpaidJobCount === 1 ? "" : "s"}`,
   };
 }
 
@@ -74,9 +74,9 @@ export function CustomerDueJobsPopover({ customer }: { customer: RecentCustomerR
       <PopoverContent align="start" className="w-80 p-0">
         <PopoverHeader>
           <div className="border-b p-3">
-            <PopoverTitle>Unpaid jobs</PopoverTitle>
+            <PopoverTitle>Unpaid invoices</PopoverTitle>
             <PopoverDescription>
-              {billingDisplay.amountLabel} across {unpaidJobs.length} job{unpaidJobs.length === 1 ? "" : "s"}.
+              {billingDisplay.amountLabel} across {unpaidJobs.length} invoice{unpaidJobs.length === 1 ? "" : "s"}.
             </PopoverDescription>
           </div>
         </PopoverHeader>
@@ -85,7 +85,11 @@ export function CustomerDueJobsPopover({ customer }: { customer: RecentCustomerR
             <Link
               key={job.id}
               prefetch={false}
-              href={`/dashboard/jobs?job=${job.linkedJobId ?? job.id}`}
+              href={
+                job.linkedInvoiceId
+                  ? `/dashboard/invoices?invoice=${job.linkedInvoiceId}`
+                  : `/dashboard/jobs?job=${job.linkedJobId ?? job.id}`
+              }
               className="grid gap-1 border-b p-3 transition-colors last:border-b-0 hover:bg-muted/50"
             >
               <div className="flex items-start justify-between gap-3">

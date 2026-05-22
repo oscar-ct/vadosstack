@@ -201,6 +201,12 @@ export default async function Page({
           </Link>
         </Button>
         <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link prefetch={false} href={`/dashboard/invoices?invoice=${invoice.id}`}>
+              <ReceiptText />
+              Manage invoice
+            </Link>
+          </Button>
           <InvoiceActions
             action={emailInvoiceAction}
             balanceDue={formatMoney(invoice.balanceDue)}
@@ -450,6 +456,10 @@ export default async function Page({
             <div className="flex items-center justify-between gap-6">
               <span className="text-muted-foreground">Final cost</span>
               <span className="font-medium">{formatMoney(invoice.finalCost)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-6">
+              <span className="text-muted-foreground">Deposits paid</span>
+              <span className="font-medium">{formatMoney(invoice.depositPaid)}</span>
             </div>
             <div className="flex items-center justify-between gap-6">
               <span className="text-muted-foreground">Amount paid</span>

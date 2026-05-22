@@ -510,12 +510,9 @@ export function JobsTable({
                         <span>{row.original.finalCost ? `$${row.original.finalCost}` : "Not set"}</span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground text-xs">Paid</span>
-                        <span>{row.original.amountPaid ? `$${row.original.amountPaid}` : "Not set"}</span>
+                        <span className="text-muted-foreground text-xs">Billing</span>
+                        <span className={amountDue.amountClassName}>{amountDue.amountLabel}</span>
                       </div>
-                      {Number(row.original.outstandingBalance ?? 0) > 0 && (
-                        <span className={`text-right text-sm ${amountDue.amountClassName}`}>{amountDue.label}</span>
-                      )}
                     </div>
                     <div>
                       {row.original.invoiceId ? (

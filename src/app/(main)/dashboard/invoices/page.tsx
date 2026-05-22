@@ -1,3 +1,4 @@
+import { addDays } from "date-fns";
 import { Download, ReceiptText } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
@@ -7,9 +8,16 @@ import { getCurrentUser } from "@/lib/auth";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { prisma } from "@/lib/prisma";
 
+import { createJobPaymentAction, deleteJobPaymentAction } from "../jobs/actions";
 import { InvoicesTable, type InvoiceTableItem } from "./_components/invoices-table";
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    invoice?: string;
+  }>;
+}) {
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
@@ -21,14 +29,26 @@ export default async function Page() {
     );
   }
 
-  const invoices = await prisma.invoice.findMany({
-    where: {
-      ownerId: currentUser.id,
-    },
-    orderBy: {
-      issuedAt: "desc",
-    },
-  });
+  const [invoices, resolvedSearchParams] = await Promise.all([
+    prisma.invoice.findMany({
+      where: {
+        ownerId: currentUser.id,
+      },
+      include: {
+        job: {
+          include: {
+            payments: {
+              orderBy: [{ paidOn: "desc" }, { createdAt: "desc" }],
+            },
+          },
+        },
+      },
+      orderBy: {
+        issuedAt: "desc",
+      },
+    }),
+    searchParams,
+  ]);
 
   const invoiceNumbers = new Map(
     [...invoices]
@@ -37,12 +57,37 @@ export default async function Page() {
   );
 
   const invoiceItems: InvoiceTableItem[] = invoices.map((invoice) => ({
+    id: invoice.id,
+    jobId: invoice.jobId,
     customerName: invoice.customerName ?? undefined,
     invoiceNumber: invoiceNumbers.get(invoice.id) ?? formatDocumentNumber("INV", 1),
     href: `/dashboard/invoices/${invoice.id}?from=invoices`,
     issuedAt: invoice.issuedAt.toISOString(),
+    dueAt: addDays(invoice.issuedAt, currentUser.invoiceDueDays).toISOString(),
     jobTitle: invoice.jobTitle,
+    jobDescription: invoice.jobDescription ?? undefined,
+    jobNumber: invoice.jobId.slice(-6).toUpperCase(),
+    jobHref: `/dashboard/jobs?job=${invoice.jobId}`,
+    jobServiceLocation: invoice.serviceLocation,
+    paymentStatus: invoice.paymentStatus,
+    laborCost: invoice.laborCost.toString(),
+    materialsSubtotal: invoice.materialsSubtotal.toString(),
+    materialTaxAmount: invoice.materialTaxAmount.toString(),
+    depositPaid: invoice.depositPaid.toString(),
+    amountPaid: invoice.amountPaid.toString(),
+    balanceDue: invoice.balanceDue.toString(),
     total: invoice.finalCost.toString(),
+    payments: invoice.job.payments.map((payment) => ({
+      id: payment.id,
+      paidOn: payment.paidOn.toISOString(),
+      amount: payment.amount.toString(),
+      paymentType: payment.paymentType,
+      method: payment.method,
+      referenceNumber: payment.referenceNumber ?? undefined,
+      description: payment.description,
+      notes: payment.notes ?? undefined,
+      createdAt: payment.createdAt.toISOString(),
+    })),
   }));
 
   return (
@@ -56,14 +101,19 @@ export default async function Page() {
         </CardTitle>
         <CardDescription>A simple index of invoices. Select an invoice number to view it.</CardDescription>
         <CardAction>
-          <Button variant="outline" size="sm" className="hidden w-7 px-0 sm:w-auto sm:px-2.5 sm:flex">
+          <Button variant="outline" size="sm" className="hidden w-7 px-0 sm:flex sm:w-auto sm:px-2.5">
             <Download />
             <span className="hidden sm:inline">Export</span>
           </Button>
         </CardAction>
       </CardHeader>
       <CardContent>
-        <InvoicesTable invoices={invoiceItems} />
+        <InvoicesTable
+          createJobPaymentAction={createJobPaymentAction}
+          deleteJobPaymentAction={deleteJobPaymentAction}
+          initialManagedInvoiceId={resolvedSearchParams?.invoice}
+          invoices={invoiceItems}
+        />
       </CardContent>
     </Card>
   );

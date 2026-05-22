@@ -330,6 +330,20 @@ async function getJobPaidTotal(jobId: string) {
   return Number(paymentTotals._sum.amount ?? 0).toFixed(2);
 }
 
+async function getJobDepositTotal(jobId: string) {
+  const paymentTotals = await prisma.jobPayment.aggregate({
+    where: {
+      jobId,
+      paymentType: "deposit",
+    },
+    _sum: {
+      amount: true,
+    },
+  });
+
+  return Number(paymentTotals._sum.amount ?? 0).toFixed(2);
+}
+
 async function syncJobPaymentSummary(jobId: string, ownerId: string) {
   const job = await prisma.job.findUnique({
     where: {
@@ -356,6 +370,7 @@ async function syncJobPaymentSummary(jobId: string, ownerId: string) {
   }
 
   const amountPaid = await getJobPaidTotal(job.id);
+  const depositPaid = await getJobDepositTotal(job.id);
   const paymentStatus = deriveJobPaymentStatus(job.status, job.finalCost?.toString(), amountPaid);
 
   await prisma.job.update({
@@ -367,6 +382,7 @@ async function syncJobPaymentSummary(jobId: string, ownerId: string) {
     },
     data: {
       amountPaid,
+      depositPaid,
       paymentStatus,
     },
   });
@@ -382,6 +398,7 @@ async function syncJobPaymentSummary(jobId: string, ownerId: string) {
       },
       data: {
         amountPaid,
+        depositPaid,
         balanceDue: Math.max(0, finalCost - Number(amountPaid)).toFixed(2),
         paymentStatus,
       },
@@ -471,6 +488,7 @@ export async function createJobAction(_previousState: JobMutationState, formData
         materialTaxRate: job.materialTaxRate ?? "0",
         materials: JSON.stringify(materials),
         paymentStatus: deriveJobPaymentStatus(normalizedStatus, calculatedFinalCost, "0"),
+        depositPaid: "0.00",
         amountPaid: "0.00",
         finalCost: calculatedFinalCost,
         status: normalizedStatus,
@@ -629,6 +647,7 @@ export async function updateJobAction(_previousState: JobMutationState, formData
 
 const jobPaymentSchema = z.object({
   jobId: z.string().trim().min(1, "Job is required."),
+  paymentType: z.enum(["deposit", "invoice_payment"]).default("deposit"),
   paidOn: z
     .string()
     .trim()
@@ -665,6 +684,7 @@ export async function createJobPaymentAction(
 
   const parsed = jobPaymentSchema.safeParse({
     jobId: formData.get("jobId"),
+    paymentType: formData.get("paymentType") || "deposit",
     paidOn: formData.get("paidOn"),
     amount: formData.get("amount"),
     method: formData.get("method"),
@@ -706,6 +726,7 @@ export async function createJobPaymentAction(
         jobId: parsed.data.jobId,
         paidOn: parsed.data.paidOn,
         amount: Number(parsed.data.amount).toFixed(2),
+        paymentType: parsed.data.paymentType,
         method: parsed.data.method,
         referenceNumber: parsed.data.referenceNumber || null,
         description: parsed.data.description,
@@ -727,7 +748,7 @@ export async function createJobPaymentAction(
 
   return {
     success: true,
-    message: "Payment recorded.",
+    message: parsed.data.paymentType === "deposit" ? "Deposit recorded." : "Payment recorded.",
   };
 }
 

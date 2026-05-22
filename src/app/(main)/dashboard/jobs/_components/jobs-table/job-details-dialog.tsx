@@ -237,9 +237,14 @@ export function JobDetailsDialog({
   const invoiceReviewFormId = React.useId();
   const laborItems = React.useMemo(() => withLineItemKeys(job?.laborItems ?? []), [job?.laborItems]);
   const materials = React.useMemo(() => withLineItemKeys(job?.materials ?? []), [job?.materials]);
+  const deposits = React.useMemo(
+    () => (job?.payments ?? []).filter((payment) => payment.paymentType === "deposit"),
+    [job?.payments],
+  );
   const invoiceEligibility = React.useMemo(() => (job ? getInvoiceEligibility(job) : null), [job]);
   const invoiceReviewNotes = React.useMemo(() => (job ? getInvoiceReviewNotes(job) : []), [job]);
   const [isInvoiceReviewOpen, setIsInvoiceReviewOpen] = React.useState(false);
+  const [isDepositOpen, setIsDepositOpen] = React.useState(false);
   const [invoiceState, createInvoiceFormAction, isCreatingInvoice] = React.useActionState(
     createInvoiceAction,
     initialInvoiceState,
@@ -265,8 +270,9 @@ export function JobDetailsDialog({
     if (!paymentState.success) return;
 
     paymentFormRef.current?.reset();
+    setIsDepositOpen(false);
     router.refresh();
-    toast.success(paymentState.message || "Payment recorded.");
+    toast.success(paymentState.message || "Deposit recorded.");
   }, [paymentState, router]);
 
   React.useEffect(() => {
@@ -281,6 +287,78 @@ export function JobDetailsDialog({
       <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-5xl">
         {job ? (
           <>
+            <Dialog open={isDepositOpen} onOpenChange={setIsDepositOpen}>
+              <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Record deposit</DialogTitle>
+                  <DialogDescription>
+                    Add a deposit collected before or during the job. Deposits reduce the future invoice balance.
+                  </DialogDescription>
+                </DialogHeader>
+                <form ref={paymentFormRef} action={createPaymentFormAction} className="grid gap-4">
+                  <input type="hidden" name="jobId" value={job.id} />
+                  <input type="hidden" name="paymentType" value="deposit" />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor={`job-deposit-date-${job.id}`}>Date</Label>
+                      <Input
+                        id={`job-deposit-date-${job.id}`}
+                        name="paidOn"
+                        type="date"
+                        defaultValue={toDateInputValue(new Date())}
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor={`job-deposit-amount-${job.id}`}>Amount</Label>
+                      <Input
+                        id={`job-deposit-amount-${job.id}`}
+                        name="amount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor={`job-deposit-method-${job.id}`}>Method</Label>
+                      <Input
+                        id={`job-deposit-method-${job.id}`}
+                        name="method"
+                        placeholder="Zelle, check, card"
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor={`job-deposit-reference-${job.id}`}>Check / Ref #</Label>
+                      <Input id={`job-deposit-reference-${job.id}`} name="referenceNumber" placeholder="Optional" />
+                    </div>
+                    <div className="grid gap-2 sm:col-span-2">
+                      <Label htmlFor={`job-deposit-description-${job.id}`}>Description</Label>
+                      <Input
+                        id={`job-deposit-description-${job.id}`}
+                        name="description"
+                        placeholder="Deposit"
+                        defaultValue="Deposit"
+                        required
+                      />
+                    </div>
+                  </div>
+                  {paymentState.message && !paymentState.success ? (
+                    <p className="text-destructive text-sm">{paymentState.message}</p>
+                  ) : null}
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setIsDepositOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" size="sm" disabled={isCreatingPayment}>
+                      {isCreatingPayment ? "Recording..." : "Record deposit"}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
             <DialogHeader className="border-b pt-2 pr-10 pb-4">
               <div className="flex items-center gap-3">
                 <span className="flex size-10 items-center justify-center rounded-md border bg-muted">
@@ -318,11 +396,23 @@ export function JobDetailsDialog({
                   <Pencil />
                   Edit job
                 </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setIsDepositOpen(true)}>
+                  <CircleDollarSign />
+                  Create deposit
+                </Button>
                 {job.estimateId ? (
                   <Button asChild variant="outline" size="sm">
                     <Link prefetch={false} href={`/dashboard/estimates/${job.estimateId}?from=jobs`}>
                       <NotebookText />
                       View estimate
+                    </Link>
+                  </Button>
+                ) : null}
+                {job.invoiceId ? (
+                  <Button asChild variant="outline" size="sm">
+                    <Link prefetch={false} href={`/dashboard/invoices?invoice=${job.invoiceId}`}>
+                      <ReceiptText />
+                      Manage invoice
                     </Link>
                   </Button>
                 ) : null}
@@ -343,7 +433,7 @@ export function JobDetailsDialog({
                         title={invoiceEligibility?.message}
                       >
                         <ReceiptText />
-                        Review invoice
+                        Invoice now
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
@@ -401,16 +491,16 @@ export function JobDetailsDialog({
                               value={formatMoney(getMaterialTaxAmount(job))}
                             />
                             <DetailItem label="Job total" value={formatMoney(job.finalCost)} />
-                            <DetailItem label="Payments recorded" value={formatMoney(job.amountPaid)} />
+                            <DetailItem label="Deposits paid" value={formatMoney(job.depositPaid)} />
                             <DetailItem label="Invoice balance due" value={formatMoney(job.outstandingBalance)} />
                           </div>
                         </div>
 
                         <div className="grid gap-2">
                           <div className="font-medium text-sm">Payments applied</div>
-                          {job.payments.length ? (
+                          {deposits.length ? (
                             <div className="overflow-hidden rounded-lg border">
-                              {job.payments.map((payment) => (
+                              {deposits.map((payment) => (
                                 <div
                                   key={payment.id}
                                   className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b p-3 text-sm last:border-b-0"
@@ -483,18 +573,19 @@ export function JobDetailsDialog({
                 <section className="grid gap-3 rounded-lg border bg-muted/20 p-4">
                   <div className="flex items-center gap-2 font-medium text-sm">
                     <CircleDollarSign className="size-4 text-muted-foreground" />
-                    Payment summary
+                    Cost breakdown
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <DetailItem label="Final price" value={formatMoney(job.finalCost)} />
-                    <DetailItem label="Balance due" value={formatMoney(job.outstandingBalance)} />
-                    <DetailItem label="Amount paid" value={formatMoney(job.amountPaid)} />
+                    {/*<DetailItem label="Balance due" value={formatMoney(job.outstandingBalance)} />*/}
+                    {/*<DetailItem label="Total paid" value={formatMoney(job.amountPaid)} />*/}
                     <DetailItem label="Labor" value={formatMoney(getLaborSubtotal(job))} />
                     <DetailItem label="Materials" value={formatMoney(getMaterialsSubtotal(job))} />
                     <DetailItem
                       label={`Tax${job.materialTaxRate ? ` (${job.materialTaxRate}%)` : ""}`}
                       value={formatMoney(getMaterialTaxAmount(job))}
                     />
+                    <DetailItem label="Final price" value={formatMoney(job.finalCost)} />
+                    <DetailItem label="Deposits paid" value={formatMoney(job.depositPaid)} />
                   </div>
                 </section>
               </div>
@@ -502,73 +593,12 @@ export function JobDetailsDialog({
               <section className="grid gap-3">
                 <div className="flex items-center gap-2 font-medium text-sm">
                   <CircleDollarSign className="size-4 text-muted-foreground" />
-                  Transaction history
+                  Deposits history
                 </div>
-                <form
-                  ref={paymentFormRef}
-                  action={createPaymentFormAction}
-                  className="grid gap-3 rounded-lg border p-4"
-                >
-                  <input type="hidden" name="jobId" value={job.id} />
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[140px_120px_150px_130px_minmax(180px,1fr)]">
-                    <div className="grid gap-2">
-                      <Label htmlFor={`job-payment-date-${job.id}`}>Date</Label>
-                      <Input
-                        id={`job-payment-date-${job.id}`}
-                        name="paidOn"
-                        type="date"
-                        defaultValue={toDateInputValue(new Date())}
-                        required
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor={`job-payment-amount-${job.id}`}>Amount</Label>
-                      <Input
-                        id={`job-payment-amount-${job.id}`}
-                        name="amount"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                        required
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor={`job-payment-method-${job.id}`}>Method</Label>
-                      <Input
-                        id={`job-payment-method-${job.id}`}
-                        name="method"
-                        placeholder="Zelle, check, card"
-                        required
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor={`job-payment-reference-${job.id}`}>Check / Ref #</Label>
-                      <Input id={`job-payment-reference-${job.id}`} name="referenceNumber" placeholder="Optional" />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor={`job-payment-description-${job.id}`}>Description</Label>
-                      <Input
-                        id={`job-payment-description-${job.id}`}
-                        name="description"
-                        placeholder="Deposit, materials, labor"
-                        required
-                      />
-                    </div>
-                  </div>
-                  {paymentState.message && !paymentState.success ? (
-                    <p className="text-destructive text-sm">{paymentState.message}</p>
-                  ) : null}
-                  <div className="flex justify-end">
-                    <Button type="submit" size="sm" disabled={isCreatingPayment}>
-                      {isCreatingPayment ? "Recording..." : "Add payment"}
-                    </Button>
-                  </div>
-                </form>
-                {job.payments.length ? (
+                {deposits.length ? (
                   <div className="grid gap-2 sm:block">
                     <div className="grid gap-2 sm:hidden">
-                      {job.payments.map((payment) => (
+                      {deposits.map((payment) => (
                         <div key={payment.id} className="rounded-lg border bg-muted/10 p-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
@@ -581,7 +611,7 @@ export function JobDetailsDialog({
                               {formatMoney(payment.amount)}
                             </div>
                           </div>
-                          <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-xs">
+                          <div className="mt-3 grid grid-cols-3 gap-3 border-t pt-3 text-xs">
                             <div className="grid gap-1">
                               <span className="text-muted-foreground">Method</span>
                               <span className="font-medium">{payment.method}</span>
@@ -590,8 +620,54 @@ export function JobDetailsDialog({
                               <span className="text-muted-foreground">Ref #</span>
                               <span className="font-medium">{payment.referenceNumber ?? "-"}</span>
                             </div>
+                            <div className="mt-2 flex justify-end">
+                              <DeletePaymentDialog
+                                deletePaymentFormAction={deletePaymentFormAction}
+                                isDeletingPayment={isDeletingPayment}
+                                payment={payment}
+                              />
+                            </div>
                           </div>
-                          <div className="mt-2 flex justify-end">
+                          {/*<div className="mt-2 flex justify-end">*/}
+                          {/*  <DeletePaymentDialog*/}
+                          {/*    deletePaymentFormAction={deletePaymentFormAction}*/}
+                          {/*    isDeletingPayment={isDeletingPayment}*/}
+                          {/*    payment={payment}*/}
+                          {/*  />*/}
+                          {/*</div>*/}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="hidden overflow-hidden rounded-lg border sm:block">
+                      <div className="grid grid-cols-[120px_minmax(0,1fr)_120px_110px_auto] gap-3 border-b bg-muted/80 px-3 py-2 font-medium text-xs">
+                        <span>Date</span>
+                        <span>Description</span>
+                        <span>Ref #</span>
+                        <span className="text-right">Amount</span>
+                        <span className="sr-only">Actions</span>
+                      </div>
+                      {deposits.map((payment) => (
+                        <div
+                          key={payment.id}
+                          className="grid grid-cols-[120px_minmax(0,1fr)_120px_110px_auto] items-start gap-3 border-b px-3 py-3 text-sm last:border-b-0"
+                        >
+                          <span className="text-sm">{formatShortDate(payment.paidOn)}</span>
+                          <div className="min-w-0">
+                            <p className="whitespace-normal break-words leading-snug">{payment.description}</p>
+                            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
+                              <span className="min-w-0 truncate">{payment.method}</span>
+                            </div>
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="whitespace-normal break-words leading-snug">
+                              {payment.referenceNumber ? payment.referenceNumber : "-"}
+                            </p>
+                          </div>
+
+                          <span className="text-right font-medium tabular-nums">{formatMoney(payment.amount)}</span>
+                          <div className="flex justify-end">
                             <DeletePaymentDialog
                               deletePaymentFormAction={deletePaymentFormAction}
                               isDeletingPayment={isDeletingPayment}
@@ -601,38 +677,10 @@ export function JobDetailsDialog({
                         </div>
                       ))}
                     </div>
-
-                    <div className="hidden overflow-hidden rounded-lg border sm:block">
-                      <div className="grid grid-cols-[120px_minmax(0,1fr)_120px_120px_110px_auto] gap-3 border-b bg-muted/80 px-3 py-2 font-medium text-xs">
-                        <span>Date</span>
-                        <span>Description</span>
-                        <span>Method</span>
-                        <span>Ref #</span>
-                        <span className="text-right">Amount</span>
-                        <span className="sr-only">Actions</span>
-                      </div>
-                      {job.payments.map((payment) => (
-                        <div
-                          key={payment.id}
-                          className="grid grid-cols-[120px_minmax(0,1fr)_120px_120px_110px_auto] items-center gap-3 border-b px-3 py-3 text-sm last:border-b-0"
-                        >
-                          <span>{formatShortDate(payment.paidOn)}</span>
-                          <span>{payment.description}</span>
-                          <span className="text-muted-foreground">{payment.method}</span>
-                          <span className="text-muted-foreground">{payment.referenceNumber ?? "-"}</span>
-                          <span className="text-right font-medium tabular-nums">{formatMoney(payment.amount)}</span>
-                          <DeletePaymentDialog
-                            deletePaymentFormAction={deletePaymentFormAction}
-                            isDeletingPayment={isDeletingPayment}
-                            payment={payment}
-                          />
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 ) : (
                   <p className="rounded-lg border bg-muted/20 p-4 text-muted-foreground text-sm">
-                    No payments recorded yet.
+                    No deposits recorded yet.
                   </p>
                 )}
                 {deletePaymentState.message && !deletePaymentState.success ? (

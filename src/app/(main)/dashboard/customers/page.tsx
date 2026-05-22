@@ -1,6 +1,8 @@
+import { addDays } from "date-fns";
+
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getCurrentUser } from "@/lib/auth";
-import { calculateOutstandingBalance, deriveCustomerBillingStatus } from "@/lib/customer-billing";
+import { calculateOutstandingBalance } from "@/lib/customer-billing";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
@@ -16,7 +18,7 @@ function getJobActivityDate(job: { dateBegin: Date | null; createdAt: Date }) {
   return job.dateBegin ?? job.createdAt;
 }
 
-async function getCustomers(ownerId: string): Promise<RecentCustomerRow[]> {
+async function getCustomers(ownerId: string, invoiceDueDays: number): Promise<RecentCustomerRow[]> {
   const customers = await prisma.customer.findMany({
     where: {
       ownerId,
@@ -57,32 +59,41 @@ async function getCustomers(ownerId: string): Promise<RecentCustomerRow[]> {
         };
       })
       .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
-    const unpaidJobs = jobHistory
-      .filter((job) => Number(job.outstandingAmount?.replace("$", "") ?? 0) > 0)
-      .map((job) => ({
-        id: job.id,
-        title: job.title,
-        status: job.status,
-        date: job.date,
-        balance: job.outstandingAmount ?? "$0.00",
-        paymentStatus: job.paymentStatus,
-        linkedJobId: job.linkedJobId,
+    const invoiceHistory = customer.jobs
+      .map((job) => job.invoice)
+      .filter((invoice) => invoice !== null)
+      .sort((left, right) => right.issuedAt.getTime() - left.issuedAt.getTime())
+      .map((invoice) => ({
+        id: invoice.id,
+        status: invoice.paymentStatus,
+        issuedAt: invoice.issuedAt.toISOString(),
+        dueAt: addDays(invoice.issuedAt, invoiceDueDays).toISOString(),
+        total: formatMoney(invoice.finalCost) ?? "$0",
+        balance: formatMoney(invoice.balanceDue) ?? "$0",
+        balanceValue: Number(invoice.balanceDue),
+      }));
+    const unpaidInvoices = invoiceHistory
+      .filter((invoice) => invoice.balanceValue > 0)
+      .map((invoice) => ({
+        id: invoice.id,
+        title: `Invoice ${invoice.id.slice(-6).toUpperCase()}`,
+        status: invoice.status,
+        date: invoice.issuedAt,
+        balance: invoice.balance,
+        paymentStatus: invoice.status,
+        linkedInvoiceId: invoice.id,
       }));
     const latestJobDate = jobHistory[0]?.date;
-    const outstandingAmount = unpaidJobs.reduce((total, job) => total + Number(job.balance.replace("$", "")), 0);
+    const outstandingAmount = unpaidInvoices.reduce(
+      (total, invoice) => total + Number(invoice.balance.replace("$", "")),
+      0,
+    );
 
     return {
       id: customer.id,
       name: customer.name,
       email: customer.email ?? "",
-      billing: deriveCustomerBillingStatus(
-        customer.jobs.map((job) => ({
-          status: job.status,
-          paymentStatus: job.paymentStatus,
-          finalCost: job.finalCost?.toString(),
-          amountPaid: job.amountPaid?.toString(),
-        })),
-      ),
+      billing: unpaidInvoices.length ? "Outstanding Balance" : "No Balance",
       joined: customer.joinedAt.toISOString(),
       lastScheduledJobDate: latestJobDate,
       jobCount: customer.jobs.length,
@@ -101,17 +112,8 @@ async function getCustomers(ownerId: string): Promise<RecentCustomerRow[]> {
         value: formatPhoneNumber(phoneNumber.value),
       })),
       jobHistory,
-      unpaidJobs,
-      invoiceHistory: customer.jobs
-        .map((job) => job.invoice)
-        .filter((invoice) => invoice !== null)
-        .sort((left, right) => right.issuedAt.getTime() - left.issuedAt.getTime())
-        .map((invoice) => ({
-          id: invoice.id,
-          status: invoice.paymentStatus,
-          issuedAt: invoice.issuedAt.toISOString(),
-          total: formatMoney(invoice.finalCost) ?? "$0",
-        })),
+      unpaidJobs: unpaidInvoices,
+      invoiceHistory,
       notes: customer.notes ?? undefined,
     };
   });
@@ -129,7 +131,7 @@ export default async function Page() {
     );
   }
 
-  const customers = await getCustomers(currentUser.id);
+  const customers = await getCustomers(currentUser.id, currentUser.invoiceDueDays);
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">

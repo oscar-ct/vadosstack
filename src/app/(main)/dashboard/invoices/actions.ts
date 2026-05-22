@@ -477,6 +477,7 @@ export async function createInvoiceAction(
     const materialTaxRate = Number(job.materialTaxRate ?? 0);
     const materialTaxAmount = (laborCost + materialsSubtotal) * (materialTaxRate / 100);
     const balanceDue = calculateOutstandingBalance(job.status, job.finalCost?.toString(), job.amountPaid?.toString());
+    const depositPaid = job.depositPaid?.toString() ?? "0";
 
     const invoice = await prisma.invoice.create({
       data: {
@@ -497,6 +498,7 @@ export async function createInvoiceAction(
         materialsSubtotal: materialsSubtotal.toFixed(2),
         materialTaxAmount: materialTaxAmount.toFixed(2),
         finalCost: toMoney(job.finalCost),
+        depositPaid,
         amountPaid: toMoney(job.amountPaid),
         balanceDue: balanceDue.toFixed(2),
         paymentStatus: job.paymentStatus,

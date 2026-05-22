@@ -249,6 +249,9 @@ export function CustomerDetailsDialog({
                             </span>
                           </div>
                           <span className="font-medium text-sm">{invoice.total}</span>
+                          {invoice.balance ? (
+                            <span className="text-muted-foreground text-xs">Balance {invoice.balance}</span>
+                          ) : null}
                         </div>
                       ))}
                     </div>

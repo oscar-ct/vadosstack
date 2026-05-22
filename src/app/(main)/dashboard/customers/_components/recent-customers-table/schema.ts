@@ -54,6 +54,7 @@ export const recentCustomersSchema = z.object({
         balance: z.string(),
         paymentStatus: z.string().optional(),
         linkedJobId: z.string().optional(),
+        linkedInvoiceId: z.string().optional(),
       }),
     )
     .optional(),
@@ -65,6 +66,7 @@ export const recentCustomersSchema = z.object({
         issuedAt: z.string(),
         dueAt: z.string().optional(),
         total: z.string(),
+        balance: z.string().optional(),
       }),
     )
     .optional(),

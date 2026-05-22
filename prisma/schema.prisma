@@ -43,6 +43,7 @@ model Job {
   materialTaxRate Decimal?     @default(0)
   materials       String       @default("[]")
   paymentStatus   String       @default("Pending Payment")
+  depositPaid     Decimal?     @default(0)
   amountPaid      Decimal?     @default(0)
   finalCost       Decimal?
   scope           String?
@@ -73,6 +74,7 @@ model JobPayment {
   jobId           String
   paidOn          DateTime @default(now())
   amount          Decimal
+  paymentType     String   @default("deposit")
   method          String
   referenceNumber String?
   description     String
@@ -173,6 +175,7 @@ model Invoice {
   materialsSubtotal Decimal   @default(0)
   materialTaxAmount Decimal   @default(0)
   finalCost         Decimal   @default(0)
+  depositPaid       Decimal   @default(0)
   amountPaid        Decimal   @default(0)
   balanceDue        Decimal   @default(0)
   paymentStatus     String
