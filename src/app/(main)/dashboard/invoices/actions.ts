@@ -420,6 +420,8 @@ export async function createInvoiceAction(
     };
   }
 
+  let invoiceId: string;
+
   try {
     const job = await prisma.job.findUnique({
       where: {
@@ -476,7 +478,7 @@ export async function createInvoiceAction(
     const materialTaxAmount = (laborCost + materialsSubtotal) * (materialTaxRate / 100);
     const balanceDue = calculateOutstandingBalance(job.status, job.finalCost?.toString(), job.amountPaid?.toString());
 
-    await prisma.invoice.create({
+    const invoice = await prisma.invoice.create({
       data: {
         ownerId: currentUser.id,
         jobId: job.id,
@@ -501,6 +503,7 @@ export async function createInvoiceAction(
         jobStatus: job.status,
       },
     });
+    invoiceId = invoice.id;
   } catch (error) {
     return {
       success: false,
@@ -510,11 +513,7 @@ export async function createInvoiceAction(
 
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard/invoices");
-
-  return {
-    success: true,
-    message: "Invoice created.",
-  };
+  redirect(`/dashboard/invoices/${invoiceId}?from=jobs`);
 }
 
 export async function emailInvoiceAction(

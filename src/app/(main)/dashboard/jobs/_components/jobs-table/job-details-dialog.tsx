@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { format, parseISO } from "date-fns";
-import { CircleDollarSign, FileText, Mail, NotebookText, Pencil, ReceiptText, Trash2 } from "lucide-react";
+import { CircleAlert, CircleDollarSign, FileText, NotebookText, Pencil, ReceiptText, Trash2 } from "lucide-react";
 
 import {
   AlertDialog,
@@ -102,6 +102,30 @@ function getInvoiceEligibility(job: JobRow) {
     canCreate: true,
     message: undefined,
   };
+}
+
+function getInvoiceReviewNotes(job: JobRow) {
+  const notes: string[] = [];
+  const balanceDue = toMoneyNumber(job.outstandingBalance);
+  const amountPaid = toMoneyNumber(job.amountPaid);
+
+  if (!job.dateBegin) {
+    notes.push("This job has not been scheduled yet. Confirm you still want to invoice it.");
+  }
+
+  if (["On Hold", "Cancelled"].includes(job.status)) {
+    notes.push(`This job is ${job.status.toLowerCase()}. Invoice only for billable work, materials, or agreed fees.`);
+  }
+
+  if (amountPaid > 0) {
+    notes.push("Recorded payments will be shown on the invoice and deducted from the balance due.");
+  }
+
+  if (balanceDue <= 0) {
+    notes.push("The current balance due is $0.00. This invoice will read as paid unless totals or payments change.");
+  }
+
+  return notes;
 }
 
 function getMaterialsSubtotal(job: JobRow) {
@@ -209,9 +233,12 @@ export function JobDetailsDialog({
 }) {
   const router = useRouter();
   const paymentFormRef = React.useRef<HTMLFormElement>(null);
+  const invoiceReviewFormId = React.useId();
   const laborItems = React.useMemo(() => withLineItemKeys(job?.laborItems ?? []), [job?.laborItems]);
   const materials = React.useMemo(() => withLineItemKeys(job?.materials ?? []), [job?.materials]);
   const invoiceEligibility = React.useMemo(() => (job ? getInvoiceEligibility(job) : null), [job]);
+  const invoiceReviewNotes = React.useMemo(() => (job ? getInvoiceReviewNotes(job) : []), [job]);
+  const [isInvoiceReviewOpen, setIsInvoiceReviewOpen] = React.useState(false);
   const [invoiceState, createInvoiceFormAction, isCreatingInvoice] = React.useActionState(
     createInvoiceAction,
     initialInvoiceState,
@@ -228,6 +255,7 @@ export function JobDetailsDialog({
   React.useEffect(() => {
     if (!invoiceState.success) return;
 
+    setIsInvoiceReviewOpen(false);
     router.refresh();
   }, [invoiceState.success, router]);
 
@@ -302,18 +330,121 @@ export function JobDetailsDialog({
                     </Link>
                   </Button>
                 ) : (
-                  <form action={createInvoiceFormAction}>
-                    <input type="hidden" name="jobId" value={job.id} />
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={isCreatingInvoice || !invoiceEligibility?.canCreate}
-                      title={invoiceEligibility?.message}
-                    >
-                      <ReceiptText />
-                      {isCreatingInvoice ? "Creating..." : "Create invoice"}
-                    </Button>
-                  </form>
+                  <AlertDialog open={isInvoiceReviewOpen} onOpenChange={setIsInvoiceReviewOpen}>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!invoiceEligibility?.canCreate}
+                        title={invoiceEligibility?.message}
+                      >
+                        <ReceiptText />
+                        Review invoice
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Review invoice before creating</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Confirm the job total, payments, and remaining balance before creating this invoice.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+
+                      <form id={invoiceReviewFormId} action={createInvoiceFormAction}>
+                        <input type="hidden" name="jobId" value={job.id} />
+                      </form>
+
+                      <div className="grid gap-4">
+                        {invoiceReviewNotes.length ? (
+                          <div className="grid gap-2 rounded-lg border border-amber-200/80 bg-amber-50/70 p-3 text-amber-900 text-sm dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+                            <div className="flex items-center gap-2 font-medium">
+                              <CircleAlert className="size-4" />
+                              Review notes
+                            </div>
+                            <ul className="grid gap-1 pl-5">
+                              {invoiceReviewNotes.map((note) => (
+                                <li key={note} className="list-disc">
+                                  {note}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        <div className="grid gap-3 rounded-lg border p-4">
+                          <div className="grid gap-1">
+                            <div className="font-medium text-sm">{job.description}</div>
+                            <div className="text-muted-foreground text-sm">{job.customerName ?? "No customer"}</div>
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <DetailItem label="Job status" value={job.status} />
+                            <DetailItem label="Job dates" value={formatDateStartToEnd(job.dateBegin, job.dateEnd)} />
+                            <DetailItem label="Service location" value={job.serviceLocation} />
+                            <DetailItem label="Payment status" value={job.paymentStatus} />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 rounded-lg border bg-muted/20 p-4">
+                          <div className="flex items-center gap-2 font-medium text-sm">
+                            <CircleDollarSign className="size-4 text-muted-foreground" />
+                            Billing summary
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <DetailItem label="Labor" value={formatMoney(getLaborSubtotal(job))} />
+                            <DetailItem label="Materials" value={formatMoney(getMaterialsSubtotal(job))} />
+                            <DetailItem
+                              label={`Tax${job.materialTaxRate ? ` (${job.materialTaxRate}%)` : ""}`}
+                              value={formatMoney(getMaterialTaxAmount(job))}
+                            />
+                            <DetailItem label="Job total" value={formatMoney(job.finalCost)} />
+                            <DetailItem label="Payments recorded" value={formatMoney(job.amountPaid)} />
+                            <DetailItem label="Invoice balance due" value={formatMoney(job.outstandingBalance)} />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <div className="font-medium text-sm">Payments applied</div>
+                          {job.payments.length ? (
+                            <div className="overflow-hidden rounded-lg border">
+                              {job.payments.map((payment) => (
+                                <div
+                                  key={payment.id}
+                                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b p-3 text-sm last:border-b-0"
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block font-medium">{payment.description}</span>
+                                    <span className="block text-muted-foreground text-xs">
+                                      {formatShortDate(payment.paidOn)} · {payment.method}
+                                      {payment.referenceNumber ? ` · ${payment.referenceNumber}` : ""}
+                                    </span>
+                                  </span>
+                                  <span className="whitespace-nowrap text-right font-medium tabular-nums">
+                                    {formatMoney(payment.amount)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="rounded-lg border bg-muted/20 p-3 text-muted-foreground text-sm">
+                              No payments recorded yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isCreatingInvoice}>Cancel</AlertDialogCancel>
+                        <Button
+                          type="submit"
+                          form={invoiceReviewFormId}
+                          disabled={isCreatingInvoice || !invoiceEligibility?.canCreate}
+                        >
+                          <ReceiptText />
+                          {isCreatingInvoice ? "Creating..." : "Create invoice"}
+                        </Button>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 )}
               </div>
               {invoiceState.message ? (
