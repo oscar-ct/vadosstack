@@ -431,12 +431,53 @@ export async function emailEstimateAction(
       text,
       to: estimate.customerEmail,
     });
+
+    const statusUpdates = [];
+
+    if (estimate.jobStatus === "Draft") {
+      statusUpdates.push(
+        prisma.estimate.update({
+          where: {
+            id_ownerId: {
+              id: estimate.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            jobStatus: "Estimate Provided",
+          },
+        }),
+      );
+    }
+
+    if (estimate.estimateRecord?.status === "Draft") {
+      statusUpdates.push(
+        prisma.estimateRecord.update({
+          where: {
+            id_ownerId: {
+              id: estimate.estimateRecord.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            status: "Estimate Provided",
+          },
+        }),
+      );
+    }
+
+    if (statusUpdates.length) {
+      await prisma.$transaction(statusUpdates);
+    }
   } catch (error) {
     return {
       success: false,
       message: error instanceof Error ? error.message : "Estimate email could not be sent. Please try again.",
     };
   }
+
+  revalidatePath("/dashboard/estimates");
+  revalidatePath(`/dashboard/estimates/${estimate.id}`);
 
   return {
     success: true,

@@ -71,6 +71,7 @@ import type { EstimateRecordRow } from "./schema";
 const pageSize = 10;
 const statusOptions = [
   { value: "all", label: "All statuses" },
+  { value: "Draft", label: "Draft" },
   { value: "Estimate Provided", label: "Estimate provided" },
   { value: "Won", label: "Won" },
   { value: "Lost", label: "Lost" },

@@ -22,7 +22,7 @@ import { ServicePicker } from "../../services/_components/service-picker";
 import type { ServiceTemplateRow } from "../../services/types";
 import type { EstimateRecordRow } from "./schema";
 
-const statuses = ["Estimate Provided", "Won", "Lost"] as const;
+const statuses = ["Draft", "Estimate Provided", "Won", "Lost"] as const;
 const categories = ["Repair", "Installation", "Other"] as const;
 const newCustomerValue = "new-customer";
 const customLocationValue = "custom-location";
@@ -494,7 +494,7 @@ export function EstimateRecordFormFields({
 
         <div className="grid gap-2">
           <Label htmlFor={`estimate-status-${estimate?.id ?? "new"}`}>Status</Label>
-          <Select name="status" defaultValue={estimate?.status ?? "Estimate Provided"} required>
+          <Select name="status" defaultValue={estimate?.status ?? "Draft"} required>
             <SelectTrigger id={`estimate-status-${estimate?.id ?? "new"}`} className={`w-full ${mobileFieldClassName}`}>
               <SelectValue placeholder="Select status" />
             </SelectTrigger>

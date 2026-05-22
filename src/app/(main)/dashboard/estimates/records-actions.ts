@@ -17,7 +17,7 @@ export type EstimateRecordMutationState = {
   message: string;
 };
 
-const estimateRecordStatuses = ["Estimate Provided", "Won", "Lost"] as const;
+const estimateRecordStatuses = ["Draft", "Estimate Provided", "Won", "Lost"] as const;
 
 const emptyToUndefined = (value: FormDataEntryValue | null) => {
   const text = String(value ?? "").trim();

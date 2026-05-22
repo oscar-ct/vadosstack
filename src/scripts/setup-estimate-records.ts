@@ -21,7 +21,7 @@ async function main() {
       "estimatedTotal" DECIMAL(65,30) DEFAULT 0,
       "scope" TEXT,
       "category" TEXT NOT NULL,
-      "status" TEXT NOT NULL DEFAULT 'Estimate Provided',
+      "status" TEXT NOT NULL DEFAULT 'Draft',
       "notes" TEXT,
       "convertedJobId" TEXT,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

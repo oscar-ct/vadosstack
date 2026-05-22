@@ -137,7 +137,7 @@ model EstimateRecord {
   estimatedTotal    Decimal?  @default(0)
   scope             String?
   category          String
-  status            String    @default("Estimate Provided")
+  status            String    @default("Draft")
   notes             String?
   convertedJobId    String?
   createdAt         DateTime  @default(now())
