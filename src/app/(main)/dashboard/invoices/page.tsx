@@ -68,7 +68,7 @@ export default async function Page({
     jobDescription: invoice.jobDescription ?? undefined,
     jobNumber: invoice.jobId.slice(-6).toUpperCase(),
     jobHref: `/dashboard/jobs?job=${invoice.jobId}`,
-    jobServiceLocation: invoice.serviceLocation,
+    jobServiceLocation: invoice.serviceLocation ?? undefined,
     paymentStatus: invoice.paymentStatus,
     laborCost: invoice.laborCost.toString(),
     materialsSubtotal: invoice.materialsSubtotal.toString(),
