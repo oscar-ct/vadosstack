@@ -714,32 +714,37 @@ export function InvoicesTable({
                     >
                       {invoice.invoiceNumber}
                     </Link>
-                    <div className="truncate text-muted-foreground text-xs">
+                    <div className="truncate text-muted-foreground text-sm">
                       {formatCustomerName(invoice.customerName)}
                     </div>
                   </div>
                   <div className="font-semibold text-sm tabular-nums">{formatMoney(invoice.total)}</div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="grid gap-1">
-                    <span className="text-muted-foreground text-xs">Issued</span>
-                    <span>{formatDate(invoice.issuedAt)}</span>
+                  <div className={"flex flex-col gap-3"}>
+                    <div className="grid gap-1">
+                      <span className="text-muted-foreground text-xs">Issued</span>
+                      <span>{formatDate(invoice.issuedAt)}</span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-muted-foreground text-xs">Paid</span>
+                      <span>{formatMoney(invoice.amountPaid)}</span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-muted-foreground text-xs">Due</span>
+                      <span>{formatDate(invoice.dueAt)}</span>
+                    </div>
                   </div>
-                  <div className="grid gap-1">
-                    <span className="text-muted-foreground text-xs">Job</span>
-                    <span className="line-clamp-2">{invoice.jobTitle}</span>
-                  </div>
-                  <div className="grid gap-1">
-                    <span className="text-muted-foreground text-xs">Paid</span>
-                    <span>{formatMoney(invoice.amountPaid)}</span>
-                  </div>
-                  <div className="grid gap-1">
-                    <span className="text-muted-foreground text-xs">Balance</span>
-                    <span>{formatMoney(invoice.balanceDue)}</span>
-                  </div>
-                  <div className="grid gap-1">
-                    <span className="text-muted-foreground text-xs">Due</span>
-                    <span>{formatDate(invoice.dueAt)}</span>
+                  <div className={"flex flex-col gap-3"}>
+                    <div className="grid gap-1">
+                      <span className="text-muted-foreground text-xs">Job</span>
+                      <span className="line-clamp-2">{invoice.jobTitle}</span>
+                      <span className="truncate text-muted-foreground text-xs">{invoice.jobServiceLocation}</span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-muted-foreground text-xs">Balance</span>
+                      <span>{formatMoney(invoice.balanceDue)}</span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-2">

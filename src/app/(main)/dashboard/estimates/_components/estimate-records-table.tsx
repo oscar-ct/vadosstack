@@ -909,12 +909,17 @@ export function EstimateRecordsTable({
                 <div className="flex items-start justify-between gap-3">
                   <div className={"min-w-0"}>
                     <div className="truncate text-wrap font-medium text-sm">{estimate.description}</div>
-                    <div className="text-muted-foreground text-xs">{estimate.customerName ?? "No customer"}</div>
+                    <div className="text-muted-foreground text-sm">{estimate.customerName ?? "No customer"}</div>
                   </div>
                   <span className="font-medium text-sm">{formatMoney(estimate.estimatedTotal)}</span>
                 </div>
-
                 <div className="grid gap-1 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="shrink-0 text-muted-foreground text-xs">Service Location</span>
+                    <span className={"line-clamp-2 w-48 min-w-0 text-right sm:w-64"}>
+                      {estimate.serviceLocation ? estimate.serviceLocation : "Not address on file"}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground text-xs">Date</span>
                     <span>{new Date(estimate.createdAt).toLocaleDateString()}</span>

@@ -389,7 +389,7 @@ export function RecentCustomersTable({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate font-medium text-sm">{row.original.name}</div>
-                        <div className="truncate text-muted-foreground text-xs">{row.original.email}</div>
+                        <div className="truncate text-muted-foreground text-sm">{row.original.email}</div>
                       </div>
                       <span
                         className={

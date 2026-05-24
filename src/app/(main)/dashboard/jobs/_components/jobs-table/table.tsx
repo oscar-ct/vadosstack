@@ -470,7 +470,7 @@ export function JobsTable({
                           {/*<span className="text-muted-foreground text-xs tabular-nums">#{rowNumber}</span>*/}
                           <div className="truncate text-wrap font-medium text-sm">{row.original.description}</div>
                         </div>
-                        <div className="text-muted-foreground text-xs">
+                        <div className="text-muted-foreground text-sm">
                           {row.original.customerName ?? "No customer"}
                         </div>
                       </div>
@@ -485,6 +485,12 @@ export function JobsTable({
                       </div>
                     ) : null}
                     <div className="grid gap-1 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="shrink-0 text-muted-foreground text-xs">Service Location</span>
+                        <span className={"line-clamp-2 w-48 min-w-0 text-right sm:w-64"}>
+                          {row.original.serviceLocation ? row.original.serviceLocation : "Not address on file"}
+                        </span>
+                      </div>
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-muted-foreground text-xs">Start Date</span>
                         <span>
@@ -510,7 +516,7 @@ export function JobsTable({
                         <span>{row.original.finalCost ? `$${row.original.finalCost}` : "Not set"}</span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground text-xs">Billing</span>
+                        <span className="text-muted-foreground text-xs">Billing Status</span>
                         <span className={amountDue.amountClassName}>{amountDue.label}</span>
                       </div>
                     </div>
