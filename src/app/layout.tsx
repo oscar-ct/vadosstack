@@ -11,6 +11,8 @@ import { PreferencesStoreProvider } from "@/stores/preferences/preferences-provi
 
 import "./globals.css";
 
+import { ThemeBootScript } from "@/scripts/theme-boot";
+
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vadosstack.com";
 
 export const metadata: Metadata = {
@@ -54,7 +56,10 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       data-font={font}
       suppressHydrationWarning
     >
-      <head />
+      <head>
+        {/* Applies theme and layout preferences on load to avoid flicker and unnecessary server rerenders. */}
+        <ThemeBootScript />
+      </head>
       <body className={`${fontVars} min-h-screen antialiased`}>
         <TooltipProvider>
           <PreferencesStoreProvider
