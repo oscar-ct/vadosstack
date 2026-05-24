@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import Image from "next/image";
 import Link from "next/link";
 
 import { useShallow } from "zustand/react/shallow";
@@ -78,14 +79,14 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
               <Link prefetch={false} href="/dashboard/overview" onClick={handleNavigate}>
-                {/*<Image*/}
-                {/*  src={logoSrc}*/}
-                {/*  alt=""*/}
-                {/*  width={16}*/}
-                {/*  height={16}*/}
-                {/*  unoptimized*/}
-                {/*  className="size-4 rounded-sm object-contain"*/}
-                {/*/>*/}
+                <Image
+                  src={logoSrc}
+                  alt=""
+                  width={16}
+                  height={16}
+                  unoptimized
+                  className="size-4 rounded-sm object-contain"
+                />
                 <span className="font-semibold text-base">{companyName}</span>
               </Link>
             </SidebarMenuButton>
