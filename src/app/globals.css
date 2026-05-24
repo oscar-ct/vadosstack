@@ -87,22 +87,22 @@ These serve as the fallback; there is no separate default.css file. */
   --sidebar-ring: oklch(0.708 0 0);
 
   /* fonts */
-  --font-inter: Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-noto-sans: "Noto Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-nunito-sans: "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-figtree: Figtree, ui-sans-serif, system-ui, sans-serif;
-  --font-roboto: Roboto, ui-sans-serif, system-ui, sans-serif;
-  --font-raleway: Raleway, ui-sans-serif, system-ui, sans-serif;
-  --font-dm-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-public-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-outfit: Outfit, ui-sans-serif, system-ui, sans-serif;
-  --font-jetbrains-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --font-noto-serif: "Noto Serif", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-roboto-slab: "Roboto Slab", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-merriweather: Merriweather, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-lora: Lora, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-playfair-display: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-sans: var(--font-geist-sans);
+  /*--font-inter: Inter, ui-sans-serif, system-ui, sans-serif;*/
+  /*--font-noto-sans: "Noto Sans", ui-sans-serif, system-ui, sans-serif;*/
+  /*--font-nunito-sans: "Nunito Sans", ui-sans-serif, system-ui, sans-serif;*/
+  /*--font-figtree: Figtree, ui-sans-serif, system-ui, sans-serif;*/
+  /*--font-roboto: Roboto, ui-sans-serif, system-ui, sans-serif;*/
+  /*--font-raleway: Raleway, ui-sans-serif, system-ui, sans-serif;*/
+  /*--font-dm-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;*/
+  /*--font-public-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;*/
+  /*--font-outfit: Outfit, ui-sans-serif, system-ui, sans-serif;*/
+  /*--font-jetbrains-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;*/
+  /*--font-noto-serif: "Noto Serif", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;*/
+  /*--font-roboto-slab: "Roboto Slab", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;*/
+  /*--font-merriweather: Merriweather, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;*/
+  /*--font-lora: Lora, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;*/
+  /*--font-playfair-display: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;*/
+  --font-sans: var(--font-geist);
   --font-mono: var(--font-geist-mono);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -222,7 +222,7 @@ These serve as the fallback; there is no separate default.css file. */
     --font-sans: var(--font-roboto);
   }
   html[data-font="geist"] body {
-    --font-sans: var(--font-geist-sans);
+    --font-sans: var(--font-geist);
   }
   html[data-font="raleway"] body {
     --font-sans: var(--font-raleway);
