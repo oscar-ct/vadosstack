@@ -146,10 +146,12 @@ function getDefaultJobStatus(job?: JobRow): (typeof jobStatuses)[number] {
 export function JobFormFields({
   customers,
   job,
+  resetKey = 0,
   services,
 }: {
   customers: JobCustomer[];
   job?: JobRow;
+  resetKey?: number;
   services: ServiceTemplateRow[];
 }) {
   const [customerPickerOpen, setCustomerPickerOpen] = React.useState(false);
@@ -186,8 +188,15 @@ export function JobFormFields({
   );
   const serviceLocation =
     selectedLocation === customLocationValue ? formatCustomLocation(customLocationFields) : selectedLocation;
+  const initializedFromKeyRef = React.useRef(`${resetKey}:${job?.id ?? "new"}`);
 
   React.useEffect(() => {
+    const initializedFromKey = `${resetKey}:${job?.id ?? "new"}`;
+    if (initializedFromKeyRef.current === initializedFromKey) {
+      return;
+    }
+    initializedFromKeyRef.current = initializedFromKey;
+
     const nextSelectedCustomerId = job?.customerId ?? selectCustomerValue;
     const nextCustomer = customers.find((customer) => customer.id === nextSelectedCustomerId);
     const nextAddressOptions = nextCustomer?.addresses ?? [];
@@ -216,7 +225,7 @@ export function JobFormFields({
     setNewCustomerPhone("");
     setSelectedLocation(nextHasSavedInitialLocation && nextInitialLocation ? nextInitialLocation : customLocationValue);
     setCustomLocationFields(createCustomLocationFields(nextHasSavedInitialLocation ? "" : nextInitialLocation));
-  }, [customers, job]);
+  }, [customers, job, resetKey]);
 
   React.useEffect(() => {
     const hasJobDates = Boolean(jobDateRange?.from ?? jobDateRange?.to);

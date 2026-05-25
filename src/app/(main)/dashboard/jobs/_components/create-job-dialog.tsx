@@ -38,6 +38,7 @@ export function CreateJobDialog({
 }) {
   const formRef = React.useRef<HTMLFormElement>(null);
   const [open, setOpen] = React.useState(false);
+  const [formResetKey, setFormResetKey] = React.useState(0);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const { captureInitialSnapshot, closeWithoutPrompt, discardDialogOpen, requestOpenChange, setDiscardDialogOpen } =
     useUnsavedChangesGuard({
@@ -50,6 +51,7 @@ export function CreateJobDialog({
     if (!state.success) return;
 
     formRef.current?.reset();
+    setFormResetKey((key) => key + 1);
     captureInitialSnapshot();
     closeWithoutPrompt();
     toast.success(state.message || "Job created.");
@@ -70,7 +72,7 @@ export function CreateJobDialog({
         </DialogHeader>
 
         <form ref={formRef} action={formAction} className="grid gap-4">
-          <JobFormFields customers={customers} services={services} />
+          <JobFormFields customers={customers} resetKey={formResetKey} services={services} />
 
           {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
 

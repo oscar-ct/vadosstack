@@ -283,10 +283,12 @@ function MaterialItemsEditor({
 export function EstimateRecordFormFields({
   customers,
   estimate,
+  resetKey = 0,
   services,
 }: {
   customers: JobCustomer[];
   estimate?: EstimateRecordRow;
+  resetKey?: number;
   services: ServiceTemplateRow[];
 }) {
   const [customerPickerOpen, setCustomerPickerOpen] = React.useState(false);
@@ -322,8 +324,15 @@ export function EstimateRecordFormFields({
   );
   const serviceLocation =
     selectedLocation === customLocationValue ? formatCustomLocation(customLocationFields) : selectedLocation;
+  const initializedFromKeyRef = React.useRef(`${resetKey}:${estimate?.id ?? "new"}`);
 
   React.useEffect(() => {
+    const initializedFromKey = `${resetKey}:${estimate?.id ?? "new"}`;
+    if (initializedFromKeyRef.current === initializedFromKey) {
+      return;
+    }
+    initializedFromKeyRef.current = initializedFromKey;
+
     const nextSelectedCustomerId = estimate?.customerId ?? selectCustomerValue;
     const nextCustomer = customers.find((customer) => customer.id === nextSelectedCustomerId);
     const nextAddressOptions = nextCustomer?.addresses ?? [];
@@ -351,7 +360,7 @@ export function EstimateRecordFormFields({
     setTaxRate(Number(estimate?.materialTaxRate ?? "8.25"));
     setSelectedLocation(nextHasSavedInitialLocation && nextInitialLocation ? nextInitialLocation : customLocationValue);
     setCustomLocationFields(createCustomLocationFields(nextHasSavedInitialLocation ? "" : nextInitialLocation));
-  }, [customers, estimate]);
+  }, [customers, estimate, resetKey]);
 
   React.useEffect(() => {
     if (isCreatingNewCustomer || !addressOptions.length) {

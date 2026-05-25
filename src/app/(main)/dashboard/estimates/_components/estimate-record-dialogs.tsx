@@ -51,6 +51,7 @@ export function CreateEstimateRecordDialog({
 }) {
   const formRef = React.useRef<HTMLFormElement>(null);
   const [open, setOpen] = React.useState(false);
+  const [formResetKey, setFormResetKey] = React.useState(0);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const { captureInitialSnapshot, closeWithoutPrompt, discardDialogOpen, requestOpenChange, setDiscardDialogOpen } =
     useUnsavedChangesGuard({
@@ -62,6 +63,7 @@ export function CreateEstimateRecordDialog({
   React.useEffect(() => {
     if (!state.success) return;
     formRef.current?.reset();
+    setFormResetKey((key) => key + 1);
     captureInitialSnapshot();
     closeWithoutPrompt();
     toast.success(state.message || "Estimate created.");
@@ -81,7 +83,7 @@ export function CreateEstimateRecordDialog({
           <DialogDescription>Capture the requested work, build pricing, and save it as a draft.</DialogDescription>
         </DialogHeader>
         <form ref={formRef} action={formAction} className="grid gap-4">
-          <EstimateRecordFormFields customers={customers} services={services} />
+          <EstimateRecordFormFields customers={customers} resetKey={formResetKey} services={services} />
           {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
