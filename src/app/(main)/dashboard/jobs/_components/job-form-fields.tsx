@@ -135,6 +135,13 @@ function formatCurrency(value: number) {
   return value.toFixed(2);
 }
 
+function formatMoneyInputValue(value: string) {
+  if (!value.trim()) return "";
+
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount.toFixed(2) : value;
+}
+
 function getDefaultJobStatus(job?: JobRow): (typeof jobStatuses)[number] {
   if (job?.status && jobStatuses.includes(job.status as (typeof jobStatuses)[number])) {
     return job.status as (typeof jobStatuses)[number];
@@ -754,6 +761,13 @@ export function JobFormFields({
                       ),
                     )
                   }
+                  onBlur={() =>
+                    setLaborItems((current) =>
+                      current.map((labor, itemIndex) =>
+                        itemIndex === index ? { ...labor, price: formatMoneyInputValue(labor.price) } : labor,
+                      ),
+                    )
+                  }
                   type="number"
                   min="0"
                   step="0.01"
@@ -859,6 +873,13 @@ export function JobFormFields({
                         setMaterials((current) =>
                           current.map((item, itemIndex) =>
                             itemIndex === index ? { ...item, price: event.target.value } : item,
+                          ),
+                        )
+                      }
+                      onBlur={() =>
+                        setMaterials((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, price: formatMoneyInputValue(item.price) } : item,
                           ),
                         )
                       }
@@ -971,6 +992,21 @@ export function JobFormFields({
                             }
 
                             const nextItem = { ...item, unitPrice: event.target.value };
+                            const nextPrice =
+                              nextItem.quantity && nextItem.unitPrice ? calculateMaterialTotal(nextItem) : item.price;
+
+                            return { ...nextItem, price: nextPrice };
+                          }),
+                        )
+                      }
+                      onBlur={() =>
+                        setMaterials((current) =>
+                          current.map((item, itemIndex) => {
+                            if (itemIndex !== index) {
+                              return item;
+                            }
+
+                            const nextItem = { ...item, unitPrice: formatMoneyInputValue(item.unitPrice) };
                             const nextPrice =
                               nextItem.quantity && nextItem.unitPrice ? calculateMaterialTotal(nextItem) : item.price;
 

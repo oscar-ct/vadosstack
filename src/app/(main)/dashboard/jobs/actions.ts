@@ -38,6 +38,14 @@ const optionalMoney = z
   .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid cost.")
   .transform((value) => (value ? value : undefined));
 
+function normalizeMoney(value: string | undefined, fallback = "0.00") {
+  const text = value?.trim() ?? "";
+  if (!text) return fallback;
+
+  const amount = Number(text);
+  return Number.isFinite(amount) ? amount.toFixed(2) : fallback;
+}
+
 const materialsSchema = z.array(
   z.object({
     type: z.enum(["purchase", "return"]).optional(),
@@ -228,26 +236,38 @@ function normalizeMaterials(
       vendor: material.vendor ?? "",
       purchaseDate: material.purchaseDate ?? "",
       quantity: material.quantity ?? "",
-      unitPrice: material.unitPrice ?? "",
-      price: material.price ?? "",
+      unitPrice: normalizeMoney(material.unitPrice, ""),
+      price: normalizeMoney(material.price),
     }))
     .filter(
       (material) =>
         material.description.trim() ||
+        material.type === "return" ||
         material.vendor.trim() ||
+        material.purchaseDate.trim() ||
         material.quantity.trim() ||
         material.unitPrice.trim() ||
         (material.price.trim() && Number(material.price) !== 0),
     )
-    .filter((material) => material.description.trim() && material.price.trim());
+    .filter(
+      (material) =>
+        material.description.trim() ||
+        material.type === "return" ||
+        material.vendor.trim() ||
+        material.purchaseDate.trim() ||
+        material.quantity.trim() ||
+        material.unitPrice.trim() ||
+        Number(material.price) !== 0,
+    );
 }
 
 function normalizeLaborItems(laborItems: Array<{ description?: string; price?: string }>) {
   return laborItems
-    .filter((item) => item.description?.trim() || item.price?.trim())
-    .filter((item): item is { description: string; price: string } =>
-      Boolean(item.description?.trim() && item.price?.trim()),
-    );
+    .map((item) => ({
+      description: item.description?.trim() ?? "",
+      price: normalizeMoney(item.price),
+    }))
+    .filter((item) => item.description || Number(item.price) !== 0);
 }
 
 function calculateFinalCost(job: {

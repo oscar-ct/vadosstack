@@ -38,6 +38,14 @@ const optionalMoney = z
   .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid amount.")
   .transform((value) => (value ? value : undefined));
 
+function normalizeMoney(value: string | undefined, fallback = "0.00") {
+  const text = value?.trim() ?? "";
+  if (!text) return fallback;
+
+  const amount = Number(text);
+  return Number.isFinite(amount) ? amount.toFixed(2) : fallback;
+}
+
 const lineItemsSchema = z.array(
   z.object({
     description: z.string().trim().optional(),
@@ -129,10 +137,11 @@ function getEstimatePayload(formData: FormData) {
 
 function normalizeItems(items: Array<{ description?: string; price?: string }>) {
   return items
-    .filter((item) => item.description?.trim() || item.price?.trim())
-    .filter((item): item is { description: string; price: string } =>
-      Boolean(item.description?.trim() && item.price?.trim()),
-    );
+    .map((item) => ({
+      description: item.description?.trim() ?? "",
+      price: normalizeMoney(item.price),
+    }))
+    .filter((item) => item.description || Number(item.price) !== 0);
 }
 
 function normalizeMaterials<T extends { description?: string; quantity?: string; unitPrice?: string; price?: string }>(
@@ -143,8 +152,8 @@ function normalizeMaterials<T extends { description?: string; quantity?: string;
       ...item,
       description: item.description ?? "",
       quantity: item.quantity ?? "",
-      unitPrice: item.unitPrice ?? "",
-      price: item.price ?? "",
+      unitPrice: normalizeMoney(item.unitPrice, ""),
+      price: normalizeMoney(item.price),
     }))
     .filter(
       (item) =>
@@ -153,7 +162,9 @@ function normalizeMaterials<T extends { description?: string; quantity?: string;
         item.unitPrice.trim() ||
         (item.price.trim() && Number(item.price) !== 0),
     )
-    .filter((item) => item.description.trim() && item.unitPrice.trim());
+    .filter(
+      (item) => item.description.trim() || item.quantity.trim() || item.unitPrice.trim() || Number(item.price) !== 0,
+    );
 }
 
 function calculateTotal(input: {

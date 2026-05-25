@@ -94,6 +94,13 @@ function formatCurrency(value: number) {
   return value.toFixed(2);
 }
 
+function formatMoneyInputValue(value: string) {
+  if (!value.trim()) return "";
+
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount.toFixed(2) : value;
+}
+
 function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (items: LineItem[]) => void }) {
   return (
     <div
@@ -145,6 +152,13 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                   onChange(
                     items.map((current, itemIndex) =>
                       itemIndex === index ? { ...current, price: event.target.value } : current,
+                    ),
+                  )
+                }
+                onBlur={() =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index ? { ...current, price: formatMoneyInputValue(current.price) } : current,
                     ),
                   )
                 }
@@ -245,6 +259,15 @@ function MaterialItemsEditor({
                     onChange(
                       items.map((current, itemIndex) =>
                         itemIndex === index ? { ...current, unitPrice: event.target.value } : current,
+                      ),
+                    )
+                  }
+                  onBlur={() =>
+                    onChange(
+                      items.map((current, itemIndex) =>
+                        itemIndex === index
+                          ? { ...current, unitPrice: formatMoneyInputValue(current.unitPrice) }
+                          : current,
                       ),
                     )
                   }
