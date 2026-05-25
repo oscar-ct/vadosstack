@@ -89,7 +89,7 @@ export function UsStateSelect({
 }: UsStateSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
-  const [internalValue, setInternalValue] = React.useState(String(defaultValue ?? "TX"));
+  const [internalValue, setInternalValue] = React.useState(String(defaultValue ?? ""));
   const selectedValue = String(value ?? internalValue);
   const selectedLabel = getStateLabel(selectedValue);
   const filteredStates = query.trim()

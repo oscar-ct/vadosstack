@@ -73,7 +73,7 @@ function createCustomLocationFields(value?: string): CustomLocationFields {
     street: value ?? "",
     apt: "",
     city: "",
-    state: "TX",
+    state: "",
     zip: "",
   };
 }
