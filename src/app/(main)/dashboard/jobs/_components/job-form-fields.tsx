@@ -20,12 +20,7 @@ import { cn } from "@/lib/utils";
 import { ServicePicker } from "../../services/_components/service-picker";
 import type { ServiceTemplateRow } from "../../services/types";
 import type { JobCustomer, JobRow } from "./jobs-table/schema";
-import {
-  calculateMaterialTotal,
-  calculateSignedMaterialTotal,
-  type JobMaterial,
-  stringifyMaterials,
-} from "./materials";
+import { calculateSignedMaterialTotal, type JobMaterial, stringifyMaterials } from "./materials";
 import { type PricingLineItem, stringifyPricingItems } from "./pricing-items";
 
 const jobStatuses = ["Unscheduled", "Scheduled", "Completed", "On Hold", "Cancelled"] as const;
@@ -35,6 +30,7 @@ const customLocationValue = "custom-location";
 const selectCustomerValue = "";
 const mobileFieldClassName = "bg-background/70 text-base sm:text-sm";
 const commonMaterialVendors = ["Home Depot", "Lowes", "Floor & Decor", "Shop", "Customer Supplied"];
+const lineItemUnits = ["sq ft", "linear ft", "each", "hour"] as const;
 
 type JobMaterialEntry = JobMaterial & {
   id: string;
@@ -60,6 +56,7 @@ function createMaterialEntry(material?: Partial<JobMaterial>): JobMaterialEntry 
     vendor: material?.vendor ?? "",
     purchaseDate: material?.purchaseDate ?? "",
     quantity: material?.quantity ?? "",
+    unit: material?.unit ?? "",
     unitPrice: material?.unitPrice ?? material?.price ?? "",
     price: material?.price ?? "",
   };
@@ -73,6 +70,9 @@ function createLaborItemEntry(item?: Partial<PricingLineItem>): LaborItemEntry {
   return {
     id: crypto.randomUUID(),
     description: item?.description ?? "",
+    quantity: item?.quantity ?? "",
+    unit: item?.unit ?? "",
+    unitPrice: item?.unitPrice ?? "",
     price: item?.price ?? "",
   };
 }
@@ -140,6 +140,26 @@ function formatMoneyInputValue(value: string) {
 
   const amount = Number(value);
   return Number.isFinite(amount) ? amount.toFixed(2) : value;
+}
+
+function calculateLineTotal(item: { quantity?: string; unitPrice?: string; price?: string }) {
+  const quantity = Number(item.quantity ?? 0);
+  const unitPrice = Number(item.unitPrice ?? 0);
+  const fallbackPrice = Number(item.price ?? 0);
+  const total = quantity > 0 && unitPrice > 0 ? quantity * unitPrice : fallbackPrice;
+
+  return Number.isFinite(total) ? total.toFixed(2) : "0.00";
+}
+
+function updateCalculatedLineTotal<T extends { quantity?: string; unitPrice?: string; price: string }>(item: T): T {
+  if (!item.quantity || !item.unitPrice) {
+    return item;
+  }
+
+  return {
+    ...item,
+    price: calculateLineTotal(item),
+  };
 }
 
 function getDefaultJobStatus(job?: JobRow): (typeof jobStatuses)[number] {
@@ -338,18 +358,27 @@ export function JobFormFields({
       <input
         type="hidden"
         name="laborItems"
-        value={stringifyPricingItems(laborItems.map(({ description, price }) => ({ description, price })))}
+        value={stringifyPricingItems(
+          laborItems.map(({ description, quantity, unit, unitPrice, price }) => ({
+            description,
+            quantity,
+            unit,
+            unitPrice,
+            price,
+          })),
+        )}
       />
       <input
         type="hidden"
         name="materials"
         value={stringifyMaterials(
-          materials.map(({ description, type, vendor, purchaseDate, quantity, unitPrice, price }) => ({
+          materials.map(({ description, type, vendor, purchaseDate, quantity, unit, unitPrice, price }) => ({
             description,
             type,
             vendor,
             purchaseDate,
             quantity,
+            unit,
             unitPrice,
             price,
           })),
@@ -729,9 +758,9 @@ export function JobFormFields({
           {laborItems.map((item, index) => (
             <div
               key={item.id}
-              className="grid grid-cols-[minmax(0,1fr)_3rem] gap-3 p-4 odd:py-0 even:bg-sky-100/80 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
+              className="grid grid-cols-2 gap-3 px-4 py-3 odd:py-0 even:bg-sky-100/80 md:grid-cols-[112px_112px_112px_minmax(0,1fr)_auto]"
             >
-              <div className="col-span-2 grid gap-2 sm:col-span-1">
+              <div className="col-span-2 grid gap-2 md:order-1 md:col-span-4">
                 <Label>Description</Label>
                 <Input
                   id={`job-labor-description-${job?.id ?? "new"}-${index}`}
@@ -748,8 +777,94 @@ export function JobFormFields({
                   className={mobileFieldClassName}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label>Price</Label>
+              <div className="grid min-w-0 gap-2 md:order-3">
+                <Label>Qty</Label>
+                <Input
+                  id={`job-labor-quantity-${job?.id ?? "new"}-${index}`}
+                  aria-label={`Labor ${index + 1} quantity`}
+                  value={item.quantity ?? ""}
+                  onChange={(event) =>
+                    setLaborItems((current) =>
+                      current.map((labor, itemIndex) =>
+                        itemIndex === index
+                          ? updateCalculatedLineTotal({ ...labor, quantity: event.target.value })
+                          : labor,
+                      ),
+                    )
+                  }
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={mobileFieldClassName}
+                />
+              </div>
+              <div className="grid min-w-0 gap-2 md:order-4">
+                <Label>Rate</Label>
+                <Input
+                  id={`job-labor-unit-price-${job?.id ?? "new"}-${index}`}
+                  aria-label={`Labor ${index + 1} unit price`}
+                  value={item.unitPrice ?? ""}
+                  onChange={(event) =>
+                    setLaborItems((current) =>
+                      current.map((labor, itemIndex) =>
+                        itemIndex === index
+                          ? updateCalculatedLineTotal({ ...labor, unitPrice: event.target.value })
+                          : labor,
+                      ),
+                    )
+                  }
+                  onBlur={() =>
+                    setLaborItems((current) =>
+                      current.map((labor, itemIndex) =>
+                        itemIndex === index
+                          ? updateCalculatedLineTotal({
+                              ...labor,
+                              unitPrice: formatMoneyInputValue(labor.unitPrice ?? ""),
+                            })
+                          : labor,
+                      ),
+                    )
+                  }
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  className={mobileFieldClassName}
+                />
+              </div>
+              <div className="grid min-w-0 gap-2 md:order-5">
+                <Label>Unit</Label>
+                <Select
+                  value={item.unit || "none"}
+                  onValueChange={(value) =>
+                    setLaborItems((current) =>
+                      current.map((labor, itemIndex) =>
+                        itemIndex === index ? { ...labor, unit: value === "none" ? "" : value } : labor,
+                      ),
+                    )
+                  }
+                >
+                  <SelectTrigger
+                    id={`job-labor-unit-${job?.id ?? "new"}-${index}`}
+                    aria-label={`Labor ${index + 1} unit`}
+                    className={`w-full ${mobileFieldClassName}`}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="none">No unit</SelectItem>
+                      {lineItemUnits.map((unit) => (
+                        <SelectItem key={unit} value={unit}>
+                          {unit}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid min-w-0 gap-2 md:order-2">
+                <Label>Total</Label>
                 <Input
                   id={`job-labor-price-${job?.id ?? "new"}-${index}`}
                   aria-label={`Labor ${index + 1} price`}
@@ -775,21 +890,23 @@ export function JobFormFields({
                   className={mobileFieldClassName}
                 />
               </div>
-              <div className="flex items-end justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  disabled={laborItems.length === 1}
-                  onClick={() =>
-                    setLaborItems((current) =>
-                      current.length === 1 ? current : current.filter((labor) => labor.id !== item.id),
-                    )
-                  }
-                  aria-label={`Remove labor ${index + 1}`}
-                >
-                  <Trash2 className="size-4 cursor-pointer text-red-500" />
-                </Button>
+              <div className="col-span-2 min-w-0 gap-2 md:order-6 md:grid">
+                <div className={"flex items-end justify-end"}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    disabled={laborItems.length === 1}
+                    onClick={() =>
+                      setLaborItems((current) =>
+                        current.length === 1 ? current : current.filter((labor) => labor.id !== item.id),
+                      )
+                    }
+                    aria-label={`Remove labor ${index + 1}`}
+                  >
+                    <Trash2 className="size-4 cursor-pointer text-red-500" />
+                  </Button>
+                </div>
               </div>
             </div>
           ))}
@@ -818,15 +935,20 @@ export function JobFormFields({
           {materials.map((material, index) => {
             return (
               <div key={material.id} className="grid gap-3 p-4 odd:py-0 even:bg-amber-100/80">
-                <div className="grid grid-cols-[7rem_minmax(0,1fr)_2.25rem] gap-3 sm:grid-cols-[120px_minmax(0,1fr)_120px_auto] sm:items-end">
-                  <div className="order-3 grid gap-2 sm:order-none">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-[120px_minmax(0,1fr)_120px] md:items-end">
+                  <div className="order-2 grid min-w-0 gap-2 md:order-none">
                     <Label>Type</Label>
                     <Select
                       value={material.type ?? "purchase"}
                       onValueChange={(value) =>
                         setMaterials((current) =>
                           current.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, type: value === "return" ? "return" : "purchase" } : item,
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  type: value === "return" ? "return" : "purchase",
+                                }
+                              : item,
                           ),
                         )
                       }
@@ -846,7 +968,7 @@ export function JobFormFields({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="order-1 col-span-3 grid gap-2 sm:order-none sm:col-span-1">
+                  <div className="order-1 col-span-2 grid min-w-0 gap-2 md:order-none md:col-span-1">
                     <Label>Description</Label>
                     <Input
                       id={`job-material-description-${job?.id ?? "new"}-${index}`}
@@ -863,7 +985,7 @@ export function JobFormFields({
                       className={mobileFieldClassName}
                     />
                   </div>
-                  <div className="order-2 grid gap-2 sm:order-none sm:col-span-1">
+                  <div className="order-3 grid min-w-0 gap-2 md:order-none">
                     <Label>Line total</Label>
                     <Input
                       id={`job-material-amount-${job?.id ?? "new"}-${index}`}
@@ -890,26 +1012,9 @@ export function JobFormFields({
                       className={mobileFieldClassName}
                     />
                   </div>
-                  <div className="order-4 flex items-end justify-end sm:order-none">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      disabled={materials.length === 1}
-                      onClick={() =>
-                        setMaterials((current) =>
-                          current.length === 1 ? current : current.filter((item) => item.id !== material.id),
-                        )
-                      }
-                      aria-label={`Remove material ${index + 1}`}
-                    >
-                      <Trash2 className="size-4 cursor-pointer text-red-500" />
-                    </Button>
-                  </div>
                 </div>
-
-                <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_150px_90px_120px]">
-                  <div className="order-4 grid gap-2 sm:order-none sm:col-span-1">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-[minmax(0,1fr)_150px_90px_120px_120px]">
+                  <div className="grid min-w-0 gap-2">
                     <Label>Vendor</Label>
                     <Input
                       id={`job-material-vendor-${job?.id ?? "new"}-${index}`}
@@ -933,7 +1038,7 @@ export function JobFormFields({
                       className={mobileFieldClassName}
                     />
                   </div>
-                  <div className="order-3 grid gap-2 sm:order-none sm:col-span-1">
+                  <div className="grid min-w-0 gap-2">
                     <Label>{material.type === "return" ? "Return date" : "Purchase date"}</Label>
                     <Input
                       id={`job-material-date-${job?.id ?? "new"}-${index}`}
@@ -950,7 +1055,7 @@ export function JobFormFields({
                       className={mobileFieldClassName}
                     />
                   </div>
-                  <div className="order-1 grid gap-2 sm:order-none">
+                  <div className="grid min-w-0 gap-2">
                     <Label>Qty</Label>
                     <Input
                       id={`job-material-quantity-${job?.id ?? "new"}-${index}`}
@@ -963,23 +1068,19 @@ export function JobFormFields({
                               return item;
                             }
 
-                            const nextItem = { ...item, quantity: event.target.value };
-                            const nextPrice =
-                              nextItem.quantity && nextItem.unitPrice ? calculateMaterialTotal(nextItem) : item.price;
-
-                            return { ...nextItem, price: nextPrice };
+                            return updateCalculatedLineTotal({ ...item, quantity: event.target.value });
                           }),
                         )
                       }
                       type="number"
                       min="0"
-                      step="1"
+                      step="0.01"
                       placeholder=""
                       className={mobileFieldClassName}
                     />
                   </div>
-                  <div className="order-2 grid gap-2 sm:order-none">
-                    <Label>Unit price</Label>
+                  <div className="grid min-w-0 gap-2">
+                    <Label>Rate</Label>
                     <Input
                       id={`job-material-unit-price-${job?.id ?? "new"}-${index}`}
                       aria-label={`Material ${index + 1} unit price`}
@@ -991,11 +1092,7 @@ export function JobFormFields({
                               return item;
                             }
 
-                            const nextItem = { ...item, unitPrice: event.target.value };
-                            const nextPrice =
-                              nextItem.quantity && nextItem.unitPrice ? calculateMaterialTotal(nextItem) : item.price;
-
-                            return { ...nextItem, price: nextPrice };
+                            return updateCalculatedLineTotal({ ...item, unitPrice: event.target.value });
                           }),
                         )
                       }
@@ -1007,10 +1104,7 @@ export function JobFormFields({
                             }
 
                             const nextItem = { ...item, unitPrice: formatMoneyInputValue(item.unitPrice) };
-                            const nextPrice =
-                              nextItem.quantity && nextItem.unitPrice ? calculateMaterialTotal(nextItem) : item.price;
-
-                            return { ...nextItem, price: nextPrice };
+                            return updateCalculatedLineTotal(nextItem);
                           }),
                         )
                       }
@@ -1020,6 +1114,55 @@ export function JobFormFields({
                       placeholder=""
                       className={mobileFieldClassName}
                     />
+                  </div>
+                  <div className="grid min-w-0 gap-2">
+                    <Label>Unit</Label>
+                    <Select
+                      value={material.unit || "none"}
+                      onValueChange={(value) =>
+                        setMaterials((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, unit: value === "none" ? "" : value } : item,
+                          ),
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        id={`job-material-unit-${job?.id ?? "new"}-${index}`}
+                        aria-label={`Material ${index + 1} unit`}
+                        className={`w-full ${mobileFieldClassName}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="none">No unit</SelectItem>
+                          {lineItemUnits.map((unit) => (
+                            <SelectItem key={unit} value={unit}>
+                              {unit}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className={"md:col-span-5"}>
+                    <div className={"flex h-full items-end justify-end"}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={materials.length === 1}
+                        onClick={() =>
+                          setMaterials((current) =>
+                            current.length === 1 ? current : current.filter((item) => item.id !== material.id),
+                          )
+                        }
+                        aria-label={`Remove material ${index + 1}`}
+                      >
+                        <Trash2 className="size-4 cursor-pointer text-red-500" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

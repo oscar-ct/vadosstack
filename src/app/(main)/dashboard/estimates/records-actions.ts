@@ -49,6 +49,20 @@ function normalizeMoney(value: string | undefined, fallback = "0.00") {
 const lineItemsSchema = z.array(
   z.object({
     description: z.string().trim().optional(),
+    quantity: z
+      .string()
+      .trim()
+      .optional()
+      .refine(
+        (value) => !value || (!Number.isNaN(Number(value)) && Number(value) > 0),
+        "Enter a valid line item quantity.",
+      ),
+    unit: z.string().trim().optional(),
+    unitPrice: z
+      .string()
+      .trim()
+      .optional()
+      .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid line item unit price."),
     price: z
       .string()
       .trim()
@@ -73,6 +87,7 @@ const materialsSchema = z.array(
       .trim()
       .optional()
       .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid material unit price."),
+    unit: z.string().trim().optional(),
     price: z
       .string()
       .trim()
@@ -135,23 +150,29 @@ function getEstimatePayload(formData: FormData) {
   };
 }
 
-function normalizeItems(items: Array<{ description?: string; price?: string }>) {
+function normalizeItems(
+  items: Array<{ description?: string; quantity?: string; unit?: string; unitPrice?: string; price?: string }>,
+) {
   return items
     .map((item) => ({
       description: item.description?.trim() ?? "",
+      quantity: item.quantity?.trim() ?? "",
+      unit: item.unit?.trim() ?? "",
+      unitPrice: normalizeMoney(item.unitPrice, ""),
       price: normalizeMoney(item.price),
     }))
-    .filter((item) => item.description || Number(item.price) !== 0);
+    .filter((item) => item.description || item.quantity || item.unit || item.unitPrice || Number(item.price) !== 0);
 }
 
-function normalizeMaterials<T extends { description?: string; quantity?: string; unitPrice?: string; price?: string }>(
-  items: T[],
-) {
+function normalizeMaterials<
+  T extends { description?: string; quantity?: string; unit?: string; unitPrice?: string; price?: string },
+>(items: T[]) {
   return items
     .map((item) => ({
       ...item,
       description: item.description ?? "",
       quantity: item.quantity ?? "",
+      unit: item.unit ?? "",
       unitPrice: normalizeMoney(item.unitPrice, ""),
       price: normalizeMoney(item.price),
     }))
@@ -159,11 +180,17 @@ function normalizeMaterials<T extends { description?: string; quantity?: string;
       (item) =>
         item.description.trim() ||
         item.quantity.trim() ||
+        item.unit.trim() ||
         item.unitPrice.trim() ||
         (item.price.trim() && Number(item.price) !== 0),
     )
     .filter(
-      (item) => item.description.trim() || item.quantity.trim() || item.unitPrice.trim() || Number(item.price) !== 0,
+      (item) =>
+        item.description.trim() ||
+        item.quantity.trim() ||
+        item.unit.trim() ||
+        item.unitPrice.trim() ||
+        Number(item.price) !== 0,
     );
 }
 

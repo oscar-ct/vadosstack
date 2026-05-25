@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,6 +15,7 @@ import { formatDocumentNumber } from "@/lib/document-number";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
+import { parsePricingItems } from "../../jobs/_components/pricing-items";
 import { DeleteInvoiceButton } from "../_components/delete-invoice-button";
 import { InvoiceActions } from "../_components/invoice-actions";
 import { deleteInvoiceAction, emailInvoiceAction } from "../actions";
@@ -23,6 +26,7 @@ type InvoiceMaterial = {
   vendor: string;
   purchaseDate: string;
   quantity: string;
+  unit: string;
   unitPrice: string;
   price: string;
 };
@@ -41,7 +45,8 @@ function parseMaterials(value: string): InvoiceMaterial[] {
       vendor: String(material?.vendor ?? ""),
       purchaseDate: String(material?.purchaseDate ?? ""),
       quantity: String(material?.quantity ?? ""),
-      unitPrice: String(material?.unitPrice ?? material?.price ?? "0"),
+      unit: String(material?.unit ?? ""),
+      unitPrice: String(material?.unitPrice ?? ""),
       price: String(material?.price ?? "0"),
     }));
   } catch {
@@ -51,6 +56,40 @@ function parseMaterials(value: string): InvoiceMaterial[] {
 
 function formatMoney(value: { toString: () => string }) {
   return `$${Number(value.toString()).toFixed(2)}`;
+}
+
+function formatOptionalMoney(value?: string) {
+  return value ? `$${Number(value).toFixed(2)}` : "-";
+}
+
+function formatNegativeOptionalMoney(value?: string) {
+  return value ? `-${formatOptionalMoney(value)}` : "-";
+}
+
+function formatDash(value?: string) {
+  return value?.trim() ? value : "-";
+}
+
+function formatLineMeta(item: { quantity?: string; unit?: string; unitPrice?: string }) {
+  return [
+    item.quantity?.trim() ? `Qty ${item.quantity}` : null,
+    item.unit?.trim() ? `Unit ${item.unit}` : null,
+    item.unitPrice?.trim() ? `Rate ${formatOptionalMoney(item.unitPrice)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function formatMaterialMeta(material: InvoiceMaterial) {
+  const materialDate = formatMaterialDate(material.purchaseDate);
+
+  return [
+    materialDate ? `Date ${materialDate}` : null,
+    material.vendor.trim() ? `Vendor ${material.vendor}` : null,
+    formatLineMeta(material),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function formatMaybeDate(value: Date | null) {
@@ -144,6 +183,15 @@ export default async function Page({
       },
     },
   });
+  const laborItems = parsePricingItems(invoice.job.laborItems);
+  const laborKeyCounts = new Map<string, number>();
+  const keyedLaborItems = laborItems.map((item) => ({
+    ...item,
+    rowKey: createUniqueRowKey(
+      `labor-${item.description}-${item.quantity ?? ""}-${item.unit ?? ""}-${item.unitPrice ?? ""}-${item.price}`,
+      laborKeyCounts,
+    ),
+  }));
   const materials = parseMaterials(invoice.materials);
   const purchaseMaterials = materials.filter((material) => material.type !== "return");
   const returnMaterials = materials.filter((material) => material.type === "return");
@@ -151,7 +199,7 @@ export default async function Page({
   const keyedPurchaseMaterials = purchaseMaterials.map((material) => ({
     ...material,
     rowKey: createUniqueRowKey(
-      `purchase-${material.description}-${material.purchaseDate}-${material.vendor}-${material.quantity}-${material.unitPrice}-${material.price}`,
+      `purchase-${material.description}-${material.purchaseDate}-${material.vendor}-${material.quantity}-${material.unit}-${material.unitPrice}-${material.price}`,
       purchaseKeyCounts,
     ),
   }));
@@ -164,10 +212,12 @@ export default async function Page({
     ),
   }));
   const purchaseGridColumns = purchaseMaterials.some((material) => material.vendor || material.purchaseDate)
-    ? "1fr 5.5rem 5.5rem 4rem 5rem 5rem"
-    : "1fr 4rem 5rem 5rem";
+    ? "1fr 5.5rem 5.5rem 3.75rem 4.25rem 4.75rem 5rem"
+    : "1fr 3.75rem 4.25rem 4.75rem 5rem";
   const showPurchaseMeta = purchaseGridColumns.includes("5.5rem 5.5rem");
-  const showPurchaseQtyRate = purchaseMaterials.some((material) => material.quantity || material.unitPrice);
+  const showPurchaseQtyRate = purchaseMaterials.some(
+    (material) => material.quantity || material.unit || material.unitPrice,
+  );
   const visiblePurchaseGridColumns = showPurchaseQtyRate
     ? purchaseGridColumns
     : showPurchaseMeta
@@ -323,14 +373,46 @@ export default async function Page({
         <section className="grid gap-2">
           <div className="font-medium text-xs">Labor</div>
           <div className="overflow-hidden rounded-md border print:border-neutral-300">
-            <div className="grid grid-cols-[1fr_auto] border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100">
+            <div className="hidden grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs md:grid print:grid print:border-neutral-300 print:bg-neutral-100">
               <span>Description</span>
-              <span>Amount</span>
+              <span className="text-right">Qty</span>
+              <span className="text-right">Unit</span>
+              <span className="text-right">Rate</span>
+              <span className="text-right">Amount</span>
             </div>
-            <div className="grid grid-cols-[1fr_auto] px-2 py-1.5 text-xs">
-              <span>Labor</span>
-              <span>{formatMoney(invoice.laborCost)}</span>
-            </div>
+            {keyedLaborItems.length ? (
+              keyedLaborItems.map((item) => (
+                <div
+                  key={item.rowKey}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-2 py-1.5 text-xs last:border-b-0 md:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] md:gap-2 print:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] print:gap-2 print:border-neutral-200"
+                >
+                  <span className="min-w-0 break-words">
+                    {formatDash(item.description)}
+                    {formatLineMeta(item) ? (
+                      <span className="mt-0.5 block text-muted-foreground md:hidden print:hidden">
+                        {formatLineMeta(item)}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="hidden text-right tabular-nums md:block print:block">
+                    {formatDash(item.quantity)}
+                  </span>
+                  <span className="hidden text-right md:block print:block">{formatDash(item.unit)}</span>
+                  <span className="hidden text-right tabular-nums md:block print:block">
+                    {formatOptionalMoney(item.unitPrice)}
+                  </span>
+                  <span className="text-right tabular-nums">{formatOptionalMoney(item.price)}</span>
+                </div>
+              ))
+            ) : (
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-2 py-1.5 text-xs md:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] md:gap-2 print:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] print:gap-2">
+                <span>Labor</span>
+                <span className="hidden text-right md:block print:block">-</span>
+                <span className="hidden text-right md:block print:block">-</span>
+                <span className="hidden text-right md:block print:block">-</span>
+                <span className="text-right">{formatMoney(invoice.laborCost)}</span>
+              </div>
+            )}
           </div>
         </section>
 
@@ -338,7 +420,7 @@ export default async function Page({
           <div className="font-medium text-xs">Materials</div>
           <div className="overflow-hidden rounded-md border print:border-neutral-300">
             <div
-              className="grid gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100"
+              className="hidden gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs md:grid print:grid print:border-neutral-300 print:bg-neutral-100"
               style={{ gridTemplateColumns: visiblePurchaseGridColumns }}
             >
               <span>Description</span>
@@ -351,6 +433,7 @@ export default async function Page({
               {showPurchaseQtyRate ? (
                 <>
                   <span className="text-right">Qty</span>
+                  <span className="text-right">Unit</span>
                   <span className="text-right">Rate</span>
                 </>
               ) : null}
@@ -358,28 +441,39 @@ export default async function Page({
             </div>
             {keyedPurchaseMaterials.length ? (
               keyedPurchaseMaterials.map((material) => (
-                <div
-                  key={material.rowKey}
-                  className="grid gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 print:border-neutral-200"
-                  style={{ gridTemplateColumns: visiblePurchaseGridColumns }}
-                >
-                  <span>{material.description}</span>
-                  {showPurchaseMeta ? (
-                    <>
-                      <span className="text-muted-foreground">{formatMaterialDate(material.purchaseDate) || "-"}</span>
-                      <span className="text-muted-foreground">{material.vendor || "-"}</span>
-                    </>
-                  ) : null}
-                  {showPurchaseQtyRate ? (
-                    <>
-                      <span className="text-right tabular-nums">{material.quantity || "-"}</span>
-                      <span className="text-right tabular-nums">
-                        {material.unitPrice ? `$${Number(material.unitPrice || 0).toFixed(2)}` : "-"}
-                      </span>
-                    </>
-                  ) : null}
-                  <span className="text-right tabular-nums">{`$${Number(material.price || 0).toFixed(2)}`}</span>
-                </div>
+                <Fragment key={material.rowKey}>
+                  <div
+                    className="hidden gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 md:grid print:grid print:border-neutral-200"
+                    style={{ gridTemplateColumns: visiblePurchaseGridColumns }}
+                  >
+                    <span className="min-w-0 break-words">{formatDash(material.description)}</span>
+                    {showPurchaseMeta ? (
+                      <>
+                        <span className="text-muted-foreground">
+                          {formatMaterialDate(material.purchaseDate) || "-"}
+                        </span>
+                        <span className="text-muted-foreground">{material.vendor || "-"}</span>
+                      </>
+                    ) : null}
+                    {showPurchaseQtyRate ? (
+                      <>
+                        <span className="text-right tabular-nums">{formatDash(material.quantity)}</span>
+                        <span className="text-right">{formatDash(material.unit)}</span>
+                        <span className="text-right tabular-nums">{formatOptionalMoney(material.unitPrice)}</span>
+                      </>
+                    ) : null}
+                    <span className="text-right tabular-nums">{formatOptionalMoney(material.price)}</span>
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-2 py-1.5 text-xs last:border-b-0 md:hidden print:hidden">
+                    <span className="min-w-0 break-words">
+                      {formatDash(material.description)}
+                      {formatMaterialMeta(material) ? (
+                        <span className="mt-0.5 block text-muted-foreground">{formatMaterialMeta(material)}</span>
+                      ) : null}
+                    </span>
+                    <span className="text-right tabular-nums">{formatOptionalMoney(material.price)}</span>
+                  </div>
+                </Fragment>
               ))
             ) : (
               <div className="px-2 py-1.5 text-muted-foreground text-xs">No material line items.</div>
@@ -387,22 +481,36 @@ export default async function Page({
           </div>
           {returnMaterials.length ? (
             <div className="overflow-hidden rounded-md border print:border-neutral-300">
-              <div className="grid grid-cols-[5.5rem_5.5rem_1fr_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100">
+              <div className="hidden grid-cols-[5.5rem_5.5rem_1fr_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs md:grid print:grid print:border-neutral-300 print:bg-neutral-100">
                 <span>Date</span>
                 <span>Vendor</span>
                 <span>Returns</span>
+                <span className="text-right">Qty</span>
+                <span className="text-right">Unit</span>
+                <span className="text-right">Rate</span>
                 <span className="text-right">Amount</span>
               </div>
               {keyedReturnMaterials.map((material) => (
-                <div
-                  key={material.rowKey}
-                  className="grid grid-cols-[5.5rem_5.5rem_1fr_5rem] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 print:border-neutral-200"
-                >
-                  <span className="text-muted-foreground">{formatMaterialDate(material.purchaseDate) || "-"}</span>
-                  <span className="text-muted-foreground">{material.vendor || "-"}</span>
-                  <span>{material.description}</span>
-                  <span className="text-right tabular-nums">-${Number(material.price || 0).toFixed(2)}</span>
-                </div>
+                <Fragment key={material.rowKey}>
+                  <div className="hidden grid-cols-[5.5rem_5.5rem_1fr_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 md:grid print:grid print:border-neutral-200">
+                    <span className="text-muted-foreground">{formatMaterialDate(material.purchaseDate) || "-"}</span>
+                    <span className="text-muted-foreground">{material.vendor || "-"}</span>
+                    <span className="min-w-0 break-words">{formatDash(material.description)}</span>
+                    <span className="text-right tabular-nums">{formatDash(material.quantity)}</span>
+                    <span className="text-right">{formatDash(material.unit)}</span>
+                    <span className="text-right tabular-nums">{formatOptionalMoney(material.unitPrice)}</span>
+                    <span className="text-right tabular-nums">{formatNegativeOptionalMoney(material.price)}</span>
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-2 py-1.5 text-xs last:border-b-0 md:hidden print:hidden">
+                    <span className="min-w-0 break-words">
+                      {formatDash(material.description)}
+                      {formatMaterialMeta(material) ? (
+                        <span className="mt-0.5 block text-muted-foreground">{formatMaterialMeta(material)}</span>
+                      ) : null}
+                    </span>
+                    <span className="text-right tabular-nums">{formatNegativeOptionalMoney(material.price)}</span>
+                  </div>
+                </Fragment>
               ))}
             </div>
           ) : null}

@@ -14,6 +14,9 @@ export const estimateRecordRowSchema = z.object({
   laborItems: z.array(
     z.object({
       description: z.string(),
+      quantity: z.string().optional(),
+      unit: z.string().optional(),
+      unitPrice: z.string().optional(),
       price: z.string(),
     }),
   ),
@@ -22,6 +25,7 @@ export const estimateRecordRowSchema = z.object({
     z.object({
       description: z.string(),
       quantity: z.string(),
+      unit: z.string().optional(),
       unitPrice: z.string(),
       price: z.string(),
     }),

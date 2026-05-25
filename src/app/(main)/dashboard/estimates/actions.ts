@@ -32,6 +32,7 @@ type EmailEstimateState = {
 type EstimateLineItem = {
   description: string;
   quantity?: string;
+  unit?: string;
   type?: "labor" | "material";
   unitPrice?: string;
   price: string;
@@ -49,6 +50,7 @@ function parseEstimateMaterials(value: string): EstimateLineItem[] {
       .map((material) => ({
         description: String(material?.description ?? "").trim(),
         quantity: material?.quantity === undefined ? undefined : String(material.quantity).trim(),
+        unit: material?.unit === undefined ? undefined : String(material.unit).trim(),
         unitPrice: material?.unitPrice === undefined ? undefined : String(material.unitPrice).trim(),
         price: String(material?.price ?? "0").trim(),
         type: material?.type === "labor" ? ("labor" as const) : ("material" as const),
@@ -70,6 +72,24 @@ function escapeHtml(value: string) {
 
 function formatMoney(value: { toString: () => string } | string | number) {
   return `$${Number(value.toString()).toFixed(2)}`;
+}
+
+function formatDash(value?: string) {
+  return value?.trim() ? value : "-";
+}
+
+function formatOptionalMoney(value?: string) {
+  return value ? formatMoney(value) : "-";
+}
+
+function formatLineMeta(item: { quantity?: string; unit?: string; unitPrice?: string }) {
+  return [
+    item.quantity?.trim() ? `Qty: ${item.quantity}` : null,
+    item.unit?.trim() ? `Unit: ${item.unit}` : null,
+    item.unitPrice?.trim() ? `Rate: ${formatOptionalMoney(item.unitPrice)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
 }
 
 function formatMaybeDate(value: Date | null) {
@@ -168,11 +188,19 @@ function createEstimateEmailContent({
     estimate.jobDescription ? `Description:\n${estimate.jobDescription}` : null,
     "",
     laborItems.length
-      ? `Labor:\n${laborItems.map((item) => `- ${item.description}: ${formatMoney(item.price || 0)}`).join("\n")}`
+      ? `Labor:\n${laborItems
+          .map(
+            (item) =>
+              `- ${formatDash(item.description)} | Qty: ${formatDash(item.quantity)} | Unit: ${formatDash(item.unit)} | Rate: ${formatOptionalMoney(item.unitPrice)} | Amount: ${formatMoney(item.price || 0)}`,
+          )
+          .join("\n")}`
       : "Labor: No labor line items.",
     materialItems.length
       ? `Materials:\n${materialItems
-          .map((item) => `- ${item.description}: ${formatMoney(item.price || 0)}`)
+          .map(
+            (item) =>
+              `- ${formatDash(item.description)} | Qty: ${formatDash(item.quantity)} | Unit: ${formatDash(item.unit)} | Rate: ${formatOptionalMoney(item.unitPrice)} | Amount: ${formatMoney(item.price || 0)}`,
+          )
           .join("\n")}`
       : "Materials: No material line items.",
     "",
@@ -196,7 +224,14 @@ function createEstimateEmailContent({
     ? laborItems
         .map(
           (item) => `<tr>
-            <td style="padding:9px;border-top:1px solid #eee7dd;">${escapeHtml(item.description)}</td>
+            <td style="padding:9px;border-top:1px solid #eee7dd;">
+              <div>${escapeHtml(formatDash(item.description))}</div>
+              ${
+                formatLineMeta(item)
+                  ? `<div style="margin-top:3px;color:#594431;font-size:11px;line-height:1.4;">${escapeHtml(formatLineMeta(item))}</div>`
+                  : ""
+              }
+            </td>
             <td style="padding:9px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatMoney(item.price || 0)}</td>
           </tr>`,
         )
@@ -206,14 +241,19 @@ function createEstimateEmailContent({
     ? materialItems
         .map(
           (item) => `<tr>
-            <td style="padding:9px;border-top:1px solid #eee7dd;">${escapeHtml(item.description)}</td>
-            <td style="padding:9px;border-top:1px solid #eee7dd;text-align:right;color:#594431;">${escapeHtml(item.quantity || "-")}</td>
-            <td style="padding:9px;border-top:1px solid #eee7dd;text-align:right;color:#594431;">${item.unitPrice ? formatMoney(item.unitPrice) : "-"}</td>
+            <td style="padding:9px;border-top:1px solid #eee7dd;">
+              <div>${escapeHtml(formatDash(item.description))}</div>
+              ${
+                formatLineMeta(item)
+                  ? `<div style="margin-top:3px;color:#594431;font-size:11px;line-height:1.4;">${escapeHtml(formatLineMeta(item))}</div>`
+                  : ""
+              }
+            </td>
             <td style="padding:9px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatMoney(item.price || 0)}</td>
           </tr>`,
         )
         .join("")
-    : `<tr><td colspan="4" style="padding:10px;border-top:1px solid #eee7dd;color:#594431;">No material line items.</td></tr>`;
+    : `<tr><td colspan="2" style="padding:10px;border-top:1px solid #eee7dd;color:#594431;">No material line items.</td></tr>`;
   const html = `<!doctype html>
 <html>
   <body style="margin:0;background:#f4f1eb;color:#171412;font-family:Arial,Helvetica,sans-serif;">
@@ -288,8 +328,6 @@ function createEstimateEmailContent({
         <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e5ded3;border-radius:8px;overflow:hidden;margin-bottom:10px;font-size:12px;">
           <tr style="background:#faf8f3;">
             <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Description</th>
-            <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Qty</th>
-            <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Rate</th>
             <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Amount</th>
           </tr>
           ${materialRows}
@@ -407,6 +445,7 @@ export async function emailEstimateAction(
       ? parseJobMaterials(estimate.estimateRecord.materials).map((item) => ({
           description: item.description,
           quantity: item.quantity,
+          unit: item.unit,
           unitPrice: item.unitPrice,
           price: item.price,
         }))

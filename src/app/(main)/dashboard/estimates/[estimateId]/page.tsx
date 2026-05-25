@@ -23,6 +23,7 @@ type EstimateMaterial = {
   description: string;
   type?: "labor" | "material";
   quantity?: string;
+  unit?: string;
   unitPrice?: string;
   price: string;
 };
@@ -39,6 +40,7 @@ function parseMaterials(value: string): EstimateMaterial[] {
       description: String(material?.description ?? ""),
       type: material?.type === "labor" ? "labor" : "material",
       quantity: material?.quantity === undefined ? undefined : String(material.quantity),
+      unit: material?.unit === undefined ? undefined : String(material.unit),
       unitPrice: material?.unitPrice === undefined ? undefined : String(material.unitPrice),
       price: String(material?.price ?? "0"),
     }));
@@ -49,6 +51,24 @@ function parseMaterials(value: string): EstimateMaterial[] {
 
 function formatMoney(value: { toString: () => string }) {
   return `$${Number(value.toString()).toFixed(2)}`;
+}
+
+function formatOptionalMoney(value?: string) {
+  return value ? `$${Number(value).toFixed(2)}` : "-";
+}
+
+function formatDash(value?: string) {
+  return value?.trim() ? value : "-";
+}
+
+function formatLineMeta(item: { quantity?: string; unit?: string; unitPrice?: string }) {
+  return [
+    item.quantity?.trim() ? `Qty ${item.quantity}` : null,
+    item.unit?.trim() ? `Unit ${item.unit}` : null,
+    item.unitPrice?.trim() ? `Rate ${formatOptionalMoney(item.unitPrice)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function formatMaybeDate(value: Date | null) {
@@ -158,7 +178,7 @@ export default async function Page({
   const keyedMaterialItems = materialItems.map((material) => ({
     ...material,
     rowKey: createUniqueRowKey(
-      `material-${material.description}-${material.quantity ?? ""}-${material.unitPrice ?? ""}-${material.price}`,
+      `material-${material.description}-${material.quantity ?? ""}-${material.unit ?? ""}-${material.unitPrice ?? ""}-${material.price}`,
       materialKeyCounts,
     ),
   }));
@@ -304,24 +324,44 @@ export default async function Page({
         <section className="grid gap-2">
           <div className="font-medium text-xs">Labor</div>
           <div className="overflow-hidden rounded-md border print:border-neutral-300">
-            <div className="grid grid-cols-[1fr_auto] border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100">
+            <div className="hidden grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs md:grid print:grid print:border-neutral-300 print:bg-neutral-100">
               <span>Description</span>
-              <span>Amount</span>
+              <span className="text-right">Qty</span>
+              <span className="text-right">Unit</span>
+              <span className="text-right">Rate</span>
+              <span className="text-right">Amount</span>
             </div>
             {keyedLaborItems.length ? (
               keyedLaborItems.map((item) => (
                 <div
                   key={item.rowKey}
-                  className="grid grid-cols-[1fr_auto] border-b px-2 py-1.5 text-xs last:border-b-0 print:border-neutral-200"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-2 py-1.5 text-xs last:border-b-0 md:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] md:gap-2 print:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] print:gap-2 print:border-neutral-200"
                 >
-                  <span>{item.description}</span>
-                  <span>{`$${Number(item.price || 0).toFixed(2)}`}</span>
+                  <span className="min-w-0 break-words">
+                    {formatDash(item.description)}
+                    {formatLineMeta(item) ? (
+                      <span className="mt-0.5 block text-muted-foreground md:hidden print:hidden">
+                        {formatLineMeta(item)}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="hidden text-right tabular-nums md:block print:block">
+                    {formatDash(item.quantity)}
+                  </span>
+                  <span className="hidden text-right md:block print:block">{formatDash(item.unit)}</span>
+                  <span className="hidden text-right tabular-nums md:block print:block">
+                    {formatOptionalMoney(item.unitPrice)}
+                  </span>
+                  <span className="text-right tabular-nums">{formatOptionalMoney(item.price)}</span>
                 </div>
               ))
             ) : (
-              <div className="grid grid-cols-[1fr_auto] px-2 py-1.5 text-xs">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-2 py-1.5 text-xs md:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] md:gap-2 print:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] print:gap-2">
                 <span>Labor</span>
-                <span>{formatMoney(estimate.laborCost)}</span>
+                <span className="hidden text-right md:block print:block">-</span>
+                <span className="hidden text-right md:block print:block">-</span>
+                <span className="hidden text-right md:block print:block">-</span>
+                <span className="text-right">{formatMoney(estimate.laborCost)}</span>
               </div>
             )}
           </div>
@@ -330,9 +370,10 @@ export default async function Page({
         <section className="grid gap-2">
           <div className="font-medium text-xs">Materials</div>
           <div className="overflow-hidden rounded-md border print:border-neutral-300">
-            <div className="grid grid-cols-[1fr_4rem_5rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100">
+            <div className="hidden grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs md:grid print:grid print:border-neutral-300 print:bg-neutral-100">
               <span>Description</span>
               <span className="text-right">Qty</span>
+              <span className="text-right">Unit</span>
               <span className="text-right">Rate</span>
               <span className="text-right">Amount</span>
             </div>
@@ -340,14 +381,24 @@ export default async function Page({
               keyedMaterialItems.map((material) => (
                 <div
                   key={material.rowKey}
-                  className="grid grid-cols-[1fr_4rem_5rem_5rem] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 print:border-neutral-200"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-2 py-1.5 text-xs last:border-b-0 md:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] md:gap-2 print:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] print:gap-2 print:border-neutral-200"
                 >
-                  <span>{material.description}</span>
-                  <span className="text-right tabular-nums">{material.quantity || "-"}</span>
-                  <span className="text-right tabular-nums">
-                    {material.unitPrice ? `$${Number(material.unitPrice || 0).toFixed(2)}` : "-"}
+                  <span className="min-w-0 break-words">
+                    {formatDash(material.description)}
+                    {formatLineMeta(material) ? (
+                      <span className="mt-0.5 block text-muted-foreground md:hidden print:hidden">
+                        {formatLineMeta(material)}
+                      </span>
+                    ) : null}
                   </span>
-                  <span className="text-right tabular-nums">{`$${Number(material.price || 0).toFixed(2)}`}</span>
+                  <span className="hidden text-right tabular-nums md:block print:block">
+                    {formatDash(material.quantity)}
+                  </span>
+                  <span className="hidden text-right md:block print:block">{formatDash(material.unit)}</span>
+                  <span className="hidden text-right tabular-nums md:block print:block">
+                    {formatOptionalMoney(material.unitPrice)}
+                  </span>
+                  <span className="text-right tabular-nums">{formatOptionalMoney(material.price)}</span>
                 </div>
               ))
             ) : (

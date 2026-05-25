@@ -60,6 +60,7 @@ const materialsSchema = z.array(
         (value) => !value || (!Number.isNaN(Number(value)) && Number(value) > 0),
         "Enter a valid material quantity.",
       ),
+    unit: z.string().trim().optional(),
     unitPrice: z
       .string()
       .trim()
@@ -76,6 +77,20 @@ const materialsSchema = z.array(
 const laborItemsSchema = z.array(
   z.object({
     description: z.string().trim().optional(),
+    quantity: z
+      .string()
+      .trim()
+      .optional()
+      .refine(
+        (value) => !value || (!Number.isNaN(Number(value)) && Number(value) > 0),
+        "Enter a valid labor quantity.",
+      ),
+    unit: z.string().trim().optional(),
+    unitPrice: z
+      .string()
+      .trim()
+      .optional()
+      .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid labor unit price."),
     price: z
       .string()
       .trim()
@@ -225,6 +240,7 @@ function normalizeMaterials(
     vendor?: string;
     purchaseDate?: string;
     quantity?: string;
+    unit?: string;
     unitPrice?: string;
     price?: string;
   }>,
@@ -236,6 +252,7 @@ function normalizeMaterials(
       vendor: material.vendor ?? "",
       purchaseDate: material.purchaseDate ?? "",
       quantity: material.quantity ?? "",
+      unit: material.unit ?? "",
       unitPrice: normalizeMoney(material.unitPrice, ""),
       price: normalizeMoney(material.price),
     }))
@@ -246,6 +263,7 @@ function normalizeMaterials(
         material.vendor.trim() ||
         material.purchaseDate.trim() ||
         material.quantity.trim() ||
+        material.unit.trim() ||
         material.unitPrice.trim() ||
         (material.price.trim() && Number(material.price) !== 0),
     )
@@ -256,18 +274,24 @@ function normalizeMaterials(
         material.vendor.trim() ||
         material.purchaseDate.trim() ||
         material.quantity.trim() ||
+        material.unit.trim() ||
         material.unitPrice.trim() ||
         Number(material.price) !== 0,
     );
 }
 
-function normalizeLaborItems(laborItems: Array<{ description?: string; price?: string }>) {
+function normalizeLaborItems(
+  laborItems: Array<{ description?: string; quantity?: string; unit?: string; unitPrice?: string; price?: string }>,
+) {
   return laborItems
     .map((item) => ({
       description: item.description?.trim() ?? "",
+      quantity: item.quantity?.trim() ?? "",
+      unit: item.unit?.trim() ?? "",
+      unitPrice: normalizeMoney(item.unitPrice, ""),
       price: normalizeMoney(item.price),
     }))
-    .filter((item) => item.description || Number(item.price) !== 0);
+    .filter((item) => item.description || item.quantity || item.unit || item.unitPrice || Number(item.price) !== 0);
 }
 
 function calculateFinalCost(job: {

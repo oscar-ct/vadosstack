@@ -13,6 +13,7 @@ import { decryptGoogleToken, refreshGoogleAccessToken, sendGmailMessage } from "
 import { prisma } from "@/lib/prisma";
 
 import { calculateSignedMaterialTotal } from "../jobs/_components/materials";
+import { type PricingLineItem, parsePricingItems } from "../jobs/_components/pricing-items";
 import type { InvoiceMutationState } from "./types";
 
 const invoiceJobSchema = z.object({
@@ -39,6 +40,7 @@ type InvoiceMaterial = {
   vendor: string;
   purchaseDate: string;
   quantity: string;
+  unit: string;
   unitPrice: string;
   price: string;
 };
@@ -58,7 +60,8 @@ function parseInvoiceMaterials(value: string): InvoiceMaterial[] {
         vendor: String(material?.vendor ?? "").trim(),
         purchaseDate: String(material?.purchaseDate ?? "").trim(),
         quantity: String(material?.quantity ?? "").trim(),
-        unitPrice: String(material?.unitPrice ?? material?.price ?? "").trim(),
+        unit: String(material?.unit ?? "").trim(),
+        unitPrice: String(material?.unitPrice ?? "").trim(),
         price: String(material?.price ?? "").trim(),
       }))
       .filter((material) => material.description && material.price);
@@ -82,6 +85,40 @@ function toMoney(value: { toString: () => string } | null | undefined) {
 
 function formatMoney(value: { toString: () => string } | string | number) {
   return `$${Number(value.toString()).toFixed(2)}`;
+}
+
+function formatDash(value?: string) {
+  return value?.trim() ? value : "-";
+}
+
+function formatOptionalMoney(value?: string) {
+  return value ? formatMoney(value) : "-";
+}
+
+function formatNegativeOptionalMoney(value?: string) {
+  return value ? `-${formatMoney(value)}` : "-";
+}
+
+function formatLineMeta(item: { quantity?: string; unit?: string; unitPrice?: string }) {
+  return [
+    item.quantity?.trim() ? `Qty: ${item.quantity}` : null,
+    item.unit?.trim() ? `Unit: ${item.unit}` : null,
+    item.unitPrice?.trim() ? `Rate: ${formatOptionalMoney(item.unitPrice)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function formatMaterialMeta(material: InvoiceMaterial) {
+  const materialDate = formatMaterialDate(material.purchaseDate);
+
+  return [
+    materialDate ? `Date: ${materialDate}` : null,
+    material.vendor.trim() ? `Vendor: ${material.vendor}` : null,
+    formatLineMeta(material),
+  ]
+    .filter(Boolean)
+    .join(" | ");
 }
 
 function formatMaybeDate(value: Date | null) {
@@ -129,6 +166,7 @@ function createInvoiceEmailContent({
   dueDate,
   invoice,
   invoiceNumber,
+  laborItems,
   materials,
   payments,
 }: {
@@ -156,6 +194,7 @@ function createInvoiceEmailContent({
     serviceLocation: string | null;
   };
   invoiceNumber: string;
+  laborItems: PricingLineItem[];
   materials: InvoiceMaterial[];
   payments: Array<{
     amount: { toString: () => string };
@@ -187,15 +226,28 @@ function createInvoiceEmailContent({
     `Service location: ${invoice.serviceLocation ?? "Not on file"}`,
     invoice.jobDescription ? `Description:\n${invoice.jobDescription}` : null,
     "",
-    `Labor: ${formatMoney(invoice.laborCost)}`,
+    laborItems.length
+      ? `Labor:\n${laborItems
+          .map(
+            (item) =>
+              `- ${formatDash(item.description)} | Qty: ${formatDash(item.quantity)} | Unit: ${formatDash(item.unit)} | Rate: ${formatOptionalMoney(item.unitPrice)} | Amount: ${formatMoney(item.price || 0)}`,
+          )
+          .join("\n")}`
+      : `Labor: ${formatMoney(invoice.laborCost)}`,
     purchaseMaterials.length
       ? `Materials:\n${purchaseMaterials
-          .map((material) => `- ${material.description}: ${formatMoney(material.price || 0)}`)
+          .map(
+            (material) =>
+              `- ${formatDash(material.description)} | Date: ${formatDash(formatMaterialDate(material.purchaseDate))} | Vendor: ${formatDash(material.vendor)} | Qty: ${formatDash(material.quantity)} | Unit: ${formatDash(material.unit)} | Rate: ${formatOptionalMoney(material.unitPrice)} | Amount: ${formatMoney(material.price || 0)}`,
+          )
           .join("\n")}`
       : "Materials: No material line items.",
     returnMaterials.length
       ? `Returns:\n${returnMaterials
-          .map((material) => `- ${material.description}: -${formatMoney(material.price || 0)}`)
+          .map(
+            (material) =>
+              `- ${formatDash(material.description)} | Date: ${formatDash(formatMaterialDate(material.purchaseDate))} | Vendor: ${formatDash(material.vendor)} | Qty: ${formatDash(material.quantity)} | Unit: ${formatDash(material.unit)} | Rate: ${formatOptionalMoney(material.unitPrice)} | Amount: -${formatMoney(material.price || 0)}`,
+          )
           .join("\n")}`
       : null,
     `Net materials: ${formatMoney(invoice.materialsSubtotal)}`,
@@ -221,27 +273,55 @@ function createInvoiceEmailContent({
     .filter(Boolean)
     .join("\n");
 
+  const laborRows = laborItems.length
+    ? laborItems
+        .map(
+          (item) => `<tr>
+            <td style="padding:9px;border-top:1px solid #eee7dd;">
+              <div>${escapeHtml(formatDash(item.description))}</div>
+              ${
+                formatLineMeta(item)
+                  ? `<div style="margin-top:3px;color:#594431;font-size:11px;line-height:1.4;">${escapeHtml(formatLineMeta(item))}</div>`
+                  : ""
+              }
+            </td>
+            <td style="padding:9px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatMoney(item.price || 0)}</td>
+          </tr>`,
+        )
+        .join("")
+    : `<tr>
+        <td style="padding:9px;border-top:1px solid #eee7dd;">Labor</td>
+        <td style="padding:9px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatMoney(invoice.laborCost)}</td>
+      </tr>`;
   const purchaseRows = purchaseMaterials.length
     ? purchaseMaterials
         .map(
           (material) => `<tr>
-            <td style="padding:8px;border-top:1px solid #eee7dd;">${escapeHtml(material.description)}</td>
-            <td style="padding:8px;border-top:1px solid #eee7dd;color:#594431;">${escapeHtml(formatMaterialDate(material.purchaseDate) || "-")}</td>
-            <td style="padding:8px;border-top:1px solid #eee7dd;color:#594431;">${escapeHtml(material.vendor || "-")}</td>
-            <td style="padding:8px;border-top:1px solid #eee7dd;text-align:right;">${escapeHtml(material.quantity || "-")}</td>
-            <td style="padding:8px;border-top:1px solid #eee7dd;text-align:right;">${material.unitPrice ? formatMoney(material.unitPrice) : "-"}</td>
+            <td style="padding:8px;border-top:1px solid #eee7dd;">
+              <div>${escapeHtml(formatDash(material.description))}</div>
+              ${
+                formatMaterialMeta(material)
+                  ? `<div style="margin-top:3px;color:#594431;font-size:11px;line-height:1.4;">${escapeHtml(formatMaterialMeta(material))}</div>`
+                  : ""
+              }
+            </td>
             <td style="padding:8px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatMoney(material.price || 0)}</td>
           </tr>`,
         )
         .join("")
-    : `<tr><td colspan="6" style="padding:10px;border-top:1px solid #eee7dd;color:#594431;">No material line items.</td></tr>`;
+    : `<tr><td colspan="2" style="padding:10px;border-top:1px solid #eee7dd;color:#594431;">No material line items.</td></tr>`;
   const returnRows = returnMaterials
     .map(
       (material) => `<tr>
-        <td style="padding:8px;border-top:1px solid #eee7dd;color:#594431;">${escapeHtml(formatMaterialDate(material.purchaseDate) || "-")}</td>
-        <td style="padding:8px;border-top:1px solid #eee7dd;color:#594431;">${escapeHtml(material.vendor || "-")}</td>
-        <td style="padding:8px;border-top:1px solid #eee7dd;">${escapeHtml(material.description)}</td>
-        <td style="padding:8px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">-${formatMoney(material.price || 0)}</td>
+        <td style="padding:8px;border-top:1px solid #eee7dd;">
+          <div>${escapeHtml(formatDash(material.description))}</div>
+          ${
+            formatMaterialMeta(material)
+              ? `<div style="margin-top:3px;color:#594431;font-size:11px;line-height:1.4;">${escapeHtml(formatMaterialMeta(material))}</div>`
+              : ""
+          }
+        </td>
+        <td style="padding:8px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatNegativeOptionalMoney(material.price)}</td>
       </tr>`,
     )
     .join("");
@@ -327,20 +407,13 @@ function createInvoiceEmailContent({
             <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Description</th>
             <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Amount</th>
           </tr>
-          <tr>
-            <td style="padding:9px;">Labor</td>
-            <td style="padding:9px;text-align:right;font-weight:700;">${formatMoney(invoice.laborCost)}</td>
-          </tr>
+          ${laborRows}
         </table>
 
         <div style="font-size:12px;font-weight:700;margin:0 0 8px;">Materials</div>
         <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e5ded3;border-radius:8px;overflow:hidden;margin-bottom:10px;font-size:12px;">
           <tr style="background:#faf8f3;">
             <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Description</th>
-            <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Date</th>
-            <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Vendor</th>
-            <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Qty</th>
-            <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Rate</th>
             <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Amount</th>
           </tr>
           ${purchaseRows}
@@ -350,8 +423,6 @@ function createInvoiceEmailContent({
           returnRows
             ? `<table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e5ded3;border-radius:8px;overflow:hidden;margin-bottom:10px;font-size:12px;">
                 <tr style="background:#faf8f3;">
-                  <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Date</th>
-                  <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Vendor</th>
                   <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Returns</th>
                   <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Amount</th>
                 </tr>
@@ -599,6 +670,7 @@ export async function emailInvoiceAction(
     });
     const invoiceNumber = formatDocumentNumber("INV", invoiceSequence);
     const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);
+    const laborItems = parsePricingItems(invoice.job.laborItems);
     const materials = parseInvoiceMaterials(invoice.materials);
     const { html, subject, text } = createInvoiceEmailContent({
       companyName: currentUser.companyName,
@@ -607,6 +679,7 @@ export async function emailInvoiceAction(
       dueDate,
       invoice,
       invoiceNumber,
+      laborItems,
       materials,
       payments: invoice.job.payments,
     });

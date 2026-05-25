@@ -4,15 +4,21 @@ export type JobMaterial = {
   vendor?: string;
   purchaseDate?: string;
   quantity: string;
+  unit?: string;
   unitPrice: string;
   price: string;
 };
 
 export function calculateMaterialTotal(material: Pick<JobMaterial, "quantity" | "unitPrice" | "price">) {
+  const explicitPrice = material.price.trim();
+  if (explicitPrice) {
+    const price = Number(explicitPrice);
+    return Number.isFinite(price) ? price.toFixed(2) : "0.00";
+  }
+
   const quantity = Number(material.quantity || 0);
   const unitPrice = Number(material.unitPrice || 0);
-  const fallbackPrice = Number(material.price || 0);
-  const total = quantity > 0 && unitPrice > 0 ? quantity * unitPrice : fallbackPrice;
+  const total = quantity > 0 && unitPrice > 0 ? quantity * unitPrice : 0;
 
   return Number.isFinite(total) ? total.toFixed(2) : "0.00";
 }
@@ -55,6 +61,7 @@ export function parseMaterials(value: string | null | undefined): JobMaterial[] 
                 ? ""
                 : String(item?.price ?? "")
               : String(item.unitPrice);
+        const unit = typeof item?.unit === "string" ? item.unit : "";
         const price =
           typeof item?.price === "string"
             ? item.price
@@ -68,11 +75,12 @@ export function parseMaterials(value: string | null | undefined): JobMaterial[] 
           vendor,
           purchaseDate,
           quantity,
+          unit,
           unitPrice,
           price,
         };
       })
-      .filter((item) => item.description || item.vendor || item.unitPrice || item.price);
+      .filter((item) => item.description || item.vendor || item.quantity || item.unit || item.unitPrice || item.price);
   } catch {
     return [];
   }
@@ -87,9 +95,18 @@ export function stringifyMaterials(materials: JobMaterial[]) {
         vendor: material.vendor?.trim() ?? "",
         purchaseDate: material.purchaseDate?.trim() ?? "",
         quantity: material.quantity.trim(),
+        unit: material.unit?.trim() ?? "",
         unitPrice: material.unitPrice.trim(),
-        price: calculateMaterialTotal(material),
+        price: material.price.trim() || calculateMaterialTotal(material),
       }))
-      .filter((material) => material.description || material.vendor || material.unitPrice || material.price),
+      .filter(
+        (material) =>
+          material.description ||
+          material.vendor ||
+          material.quantity ||
+          material.unit ||
+          material.unitPrice ||
+          Number(material.price) !== 0,
+      ),
   );
 }

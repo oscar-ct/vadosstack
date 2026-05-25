@@ -42,6 +42,9 @@ export const jobRowSchema = z.object({
   laborItems: z.array(
     z.object({
       description: z.string(),
+      quantity: z.string().optional(),
+      unit: z.string().optional(),
+      unitPrice: z.string().optional(),
       price: z.string(),
     }),
   ),
@@ -53,6 +56,7 @@ export const jobRowSchema = z.object({
       vendor: z.string().optional(),
       purchaseDate: z.string().optional(),
       quantity: z.string(),
+      unit: z.string().optional(),
       unitPrice: z.string(),
       price: z.string(),
     }),

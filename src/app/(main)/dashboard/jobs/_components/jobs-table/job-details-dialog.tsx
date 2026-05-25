@@ -79,6 +79,21 @@ function formatMoney(value?: string) {
   return Number.isFinite(amount) ? `$${amount.toFixed(2)}` : `$${value}`;
 }
 
+function formatLineItemMeta(item: { quantity?: string; unit?: string; unitPrice?: string }) {
+  const parts: string[] = [];
+
+  if (item.quantity) {
+    parts.push(["Qty", item.quantity, item.unit].filter(Boolean).join(" "));
+  }
+
+  if (item.unitPrice) {
+    const rate = formatMoney(item.unitPrice);
+    parts.push(item.unit ? `Rate ${rate}/${item.unit}` : `Rate ${rate}`);
+  }
+
+  return parts.join(" · ");
+}
+
 function toMoneyNumber(value?: string) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -716,7 +731,14 @@ export function JobDetailsDialog({
                             key={item.key}
                             className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-2 text-sm first:pt-0 last:pb-0"
                           >
-                            <span className="min-w-0 whitespace-normal break-words">{item.description}</span>
+                            <span className="min-w-0 whitespace-normal break-words">
+                              {item.description || "Labor item"}
+                              {formatLineItemMeta(item) ? (
+                                <span className="mt-0.5 block text-muted-foreground text-xs">
+                                  {formatLineItemMeta(item)}
+                                </span>
+                              ) : null}
+                            </span>
                             <span className="whitespace-nowrap text-right tabular-nums">{formatMoney(item.price)}</span>
                           </div>
                         ))}
@@ -746,7 +768,7 @@ export function JobDetailsDialog({
                             className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-2 text-sm first:pt-0 last:pb-0"
                           >
                             <span className="min-w-0 whitespace-normal break-words">
-                              {material.description}
+                              {material.description || "Material item"}
                               <span className="mt-0.5 block text-muted-foreground text-xs">
                                 {[
                                   material.type === "return" ? "Return" : undefined,
@@ -754,9 +776,7 @@ export function JobDetailsDialog({
                                     ? format(parseISO(material.purchaseDate), "MMM d, yyyy")
                                     : undefined,
                                   material.vendor,
-                                  material.quantity && material.unitPrice
-                                    ? `Qty ${material.quantity} × ${formatMoney(material.unitPrice)}`
-                                    : undefined,
+                                  formatLineItemMeta(material),
                                 ]
                                   .filter(Boolean)
                                   .join(" · ")}

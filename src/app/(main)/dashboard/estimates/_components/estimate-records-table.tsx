@@ -129,6 +129,20 @@ function formatMoney(value?: string) {
   return value ? `$${Number(value).toFixed(2)}` : "$0.00";
 }
 
+function formatLineItemMeta(item: { quantity?: string; unit?: string; unitPrice?: string }) {
+  const parts: string[] = [];
+
+  if (item.quantity) {
+    parts.push(["Qty", item.quantity, item.unit].filter(Boolean).join(" "));
+  }
+
+  if (item.unitPrice) {
+    parts.push(item.unit ? `Rate ${formatMoney(item.unitPrice)}/${item.unit}` : `Rate ${formatMoney(item.unitPrice)}`);
+  }
+
+  return parts.join(" · ");
+}
+
 function formatOptionalMoney(value?: string) {
   return value === undefined ? undefined : formatMoney(value);
 }
@@ -458,7 +472,14 @@ function EstimateDetailsDialog({
                             key={item.key}
                             className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-2 text-sm first:pt-0 last:pb-0"
                           >
-                            <span className="min-w-0 whitespace-normal break-words">{item.description}</span>
+                            <span className="min-w-0 whitespace-normal break-words">
+                              {item.description || "Labor item"}
+                              {formatLineItemMeta(item) ? (
+                                <span className="mt-0.5 block text-muted-foreground text-xs">
+                                  {formatLineItemMeta(item)}
+                                </span>
+                              ) : null}
+                            </span>
                             <span className="whitespace-nowrap text-right tabular-nums">{formatMoney(item.price)}</span>
                           </div>
                         ))}
@@ -488,12 +509,12 @@ function EstimateDetailsDialog({
                             className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-2 text-sm first:pt-0 last:pb-0"
                           >
                             <span className="min-w-0 whitespace-normal break-words">
-                              {material.description}
-                              <span className="mt-0.5 block text-muted-foreground text-xs">
-                                {material.quantity && material.unitPrice
-                                  ? `Qty ${material.quantity} × ${formatMoney(material.unitPrice)}`
-                                  : "Line item"}
-                              </span>
+                              {material.description || "Material item"}
+                              {formatLineItemMeta(material) ? (
+                                <span className="mt-0.5 block text-muted-foreground text-xs">
+                                  {formatLineItemMeta(material)}
+                                </span>
+                              ) : null}
                             </span>
                             <span className="whitespace-nowrap text-right tabular-nums">
                               {formatMoney(material.price)}
