@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { z } from "zod";
 
@@ -360,11 +361,16 @@ export async function createEstimateRecordAction(
     return { success: false, message: parsed.error.issues[0]?.message ?? "Check the estimate details and try again." };
   }
 
+  let printableEstimateId = "";
+
   try {
     const { newCustomerEmail, newCustomerName, newCustomerPhone, ...estimate } = parsed.data;
     const laborItems = normalizeItems(estimate.laborItems);
     const materials = normalizeMaterials(estimate.materials);
     const totals = calculateTotal({ ...estimate, laborItems, materials });
+    const materialsSubtotal = calculateSubtotal(materials);
+    const materialTaxRate = estimate.materialTaxRate ?? "8.25";
+    const materialTaxAmount = (Number(totals.laborCost) + materialsSubtotal) * (Number(materialTaxRate) / 100);
     let customerId = estimate.customerId;
 
     if (!customerId && newCustomerName) {
@@ -387,28 +393,65 @@ export async function createEstimateRecordAction(
 
     await assertCustomer(currentUser.id, customerId);
 
-    await prisma.estimateRecord.create({
+    const createdEstimate = await prisma.estimateRecord.create({
       data: {
         ...estimate,
         ownerId: currentUser.id,
         customerId,
+        dateBegin: estimate.dateBegin ?? null,
+        dateEnd: estimate.dateEnd ?? null,
         serviceLocation: estimate.serviceLocation || null,
         laborCost: totals.laborCost,
         laborItems: JSON.stringify(laborItems),
-        materialTaxRate: estimate.materialTaxRate ?? "8.25",
+        materialTaxRate,
         materials: JSON.stringify(materials),
         estimatedTotal: totals.total,
+        status: estimate.status === "Draft" ? "Ready to Send" : estimate.status,
         scope: estimate.scope || null,
         notes: estimate.notes || null,
       },
+      include: {
+        customer: {
+          include: {
+            phoneNumbers: true,
+          },
+        },
+      },
     });
+    const printableItems = [
+      ...laborItems.map((item) => ({ ...item, type: "labor" })),
+      ...materials.map((item) => ({ ...item, type: "material" })),
+    ];
+    const printableEstimate = await prisma.estimate.create({
+      data: {
+        ownerId: currentUser.id,
+        estimateRecordId: createdEstimate.id,
+        customerId: createdEstimate.customerId,
+        customerName: createdEstimate.customer?.name,
+        customerEmail: createdEstimate.customer?.email,
+        customerPhone: createdEstimate.customer?.phoneNumbers[0]?.value,
+        jobTitle: createdEstimate.description,
+        jobDescription: createdEstimate.scope,
+        serviceLocation: createdEstimate.serviceLocation,
+        dateBegin: createdEstimate.dateBegin,
+        dateEnd: createdEstimate.dateEnd,
+        laborCost: totals.laborCost,
+        materialTaxRate,
+        materials: JSON.stringify(printableItems),
+        materialsSubtotal: materialsSubtotal.toFixed(2),
+        materialTaxAmount: materialTaxAmount.toFixed(2),
+        estimatedTotal: totals.total,
+        jobStatus: createdEstimate.status,
+      },
+    });
+    printableEstimateId = printableEstimate.id;
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Estimate could not be created." };
   }
 
   revalidatePath("/dashboard/estimates");
   revalidatePath("/dashboard/customers");
-  return { success: true, message: "Estimate created." };
+  redirect(`/dashboard/estimates/${printableEstimateId}?from=estimates`);
 }
 
 export async function updateEstimateRecordAction(
@@ -468,6 +511,8 @@ export async function updateEstimateRecordAction(
       data: {
         ...estimate,
         customerId,
+        dateBegin: estimate.dateBegin ?? null,
+        dateEnd: estimate.dateEnd ?? null,
         serviceLocation: estimate.serviceLocation || null,
         laborCost: totals.laborCost,
         laborItems: JSON.stringify(laborItems),
@@ -688,6 +733,8 @@ export async function createPrintableEstimateAction(
     return { success: false, message: "Estimate is required." };
   }
 
+  let printableEstimateId = "";
+
   try {
     const estimate = await prisma.estimateRecord.findUnique({
       where: {
@@ -711,54 +758,55 @@ export async function createPrintableEstimateAction(
     }
 
     if (estimate.printableEstimate) {
-      return { success: false, message: "This estimate already has a printable version." };
-    }
+      printableEstimateId = estimate.printableEstimate.id;
+    } else {
+      const laborItems = normalizeItems(parsePricingItems(estimate.laborItems));
+      const materials = normalizeMaterials(parseMaterials(estimate.materials));
+      const printableItems = [
+        ...laborItems.map((item) => ({ ...item, type: "labor" })),
+        ...materials.map((item) => ({ ...item, type: "material" })),
+      ];
+      const materialsSubtotal = calculateSubtotal(materials);
+      const materialTaxAmount =
+        ((Number(estimate.laborCost ?? 0) + materialsSubtotal) * Number(estimate.materialTaxRate ?? 0)) / 100;
 
-    const laborItems = normalizeItems(parsePricingItems(estimate.laborItems));
-    const materials = normalizeMaterials(parseMaterials(estimate.materials));
-    const printableItems = [
-      ...laborItems.map((item) => ({ ...item, type: "labor" })),
-      ...materials.map((item) => ({ ...item, type: "material" })),
-    ];
-    const materialsSubtotal = calculateSubtotal(materials);
-    const materialTaxAmount =
-      ((Number(estimate.laborCost ?? 0) + materialsSubtotal) * Number(estimate.materialTaxRate ?? 0)) / 100;
-
-    await prisma.estimate.create({
-      data: {
-        ownerId: currentUser.id,
-        estimateRecordId: estimate.id,
-        customerId: estimate.customerId,
-        customerName: estimate.customer?.name,
-        customerEmail: estimate.customer?.email,
-        customerPhone: estimate.customer?.phoneNumbers[0]?.value,
-        jobTitle: estimate.description,
-        jobDescription: estimate.scope,
-        serviceLocation: estimate.serviceLocation,
-        dateBegin: estimate.dateBegin,
-        dateEnd: estimate.dateEnd,
-        laborCost: estimate.laborCost ?? "0",
-        materialTaxRate: estimate.materialTaxRate ?? "0",
-        materials: JSON.stringify(printableItems),
-        materialsSubtotal: materialsSubtotal.toFixed(2),
-        materialTaxAmount: materialTaxAmount.toFixed(2),
-        estimatedTotal: estimate.estimatedTotal ?? "0",
-        jobStatus: estimate.status === "Draft" ? "Ready to Send" : estimate.status,
-      },
-    });
-
-    if (estimate.status === "Draft") {
-      await prisma.estimateRecord.update({
-        where: {
-          id_ownerId: {
-            id: estimate.id,
-            ownerId: currentUser.id,
-          },
-        },
+      const printableEstimate = await prisma.estimate.create({
         data: {
-          status: "Ready to Send",
+          ownerId: currentUser.id,
+          estimateRecordId: estimate.id,
+          customerId: estimate.customerId,
+          customerName: estimate.customer?.name,
+          customerEmail: estimate.customer?.email,
+          customerPhone: estimate.customer?.phoneNumbers[0]?.value,
+          jobTitle: estimate.description,
+          jobDescription: estimate.scope,
+          serviceLocation: estimate.serviceLocation,
+          dateBegin: estimate.dateBegin,
+          dateEnd: estimate.dateEnd,
+          laborCost: estimate.laborCost ?? "0",
+          materialTaxRate: estimate.materialTaxRate ?? "0",
+          materials: JSON.stringify(printableItems),
+          materialsSubtotal: materialsSubtotal.toFixed(2),
+          materialTaxAmount: materialTaxAmount.toFixed(2),
+          estimatedTotal: estimate.estimatedTotal ?? "0",
+          jobStatus: estimate.status === "Draft" ? "Ready to Send" : estimate.status,
         },
       });
+      printableEstimateId = printableEstimate.id;
+
+      if (estimate.status === "Draft") {
+        await prisma.estimateRecord.update({
+          where: {
+            id_ownerId: {
+              id: estimate.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            status: "Ready to Send",
+          },
+        });
+      }
     }
   } catch (error) {
     return {
@@ -768,5 +816,5 @@ export async function createPrintableEstimateAction(
   }
 
   revalidatePath("/dashboard/estimates");
-  return { success: true, message: "Printable estimate created." };
+  redirect(`/dashboard/estimates/${printableEstimateId}?from=estimates`);
 }
