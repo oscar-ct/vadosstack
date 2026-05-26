@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { format, subDays } from "date-fns";
+import { X } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,11 @@ export function DateRangePicker(props: DateRangePickerProps) {
     onChange?.(nextValue);
   };
 
+  const clearDateRange = () => {
+    handleDateChange(undefined);
+    setOpen(false);
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -71,6 +77,14 @@ export function DateRangePicker(props: DateRangePickerProps) {
           onSelect={handleDateChange}
           numberOfMonths={numberOfMonths}
         />
+        {dateRange?.from || dateRange?.to ? (
+          <div className="border-t p-2">
+            <Button type="button" variant="ghost" size="sm" className="w-full justify-start" onClick={clearDateRange}>
+              <X className="size-4" />
+              Clear dates
+            </Button>
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   );
