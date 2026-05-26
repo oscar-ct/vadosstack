@@ -72,7 +72,7 @@ export function ServicePicker({
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" className="w-full justify-start sm:w-auto">
+        <Button type="button" variant="outline" className="w-full justify-start bg-purple-600 text-white sm:w-auto">
           <PackageCheck />
           Add service
         </Button>
