@@ -2,9 +2,13 @@
 
 import * as React from "react";
 
-import { Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
+import { format, isSameDay, startOfMonth } from "date-fns";
+import { enGB } from "date-fns/locale";
+import { CalendarDays, Check, ChevronsUpDown, Plus, Trash2, X } from "lucide-react";
 
+import { SquareFootageCalculator } from "@/components/square-footage-calculator";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,6 +94,21 @@ function formatCustomLocation(fields: CustomLocationFields) {
     .join(", ");
 }
 
+function parseEstimateDate(value?: string) {
+  if (!value) return undefined;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+
+  return date;
+}
+
+function toDateValue(date?: Date) {
+  if (!date) return "";
+
+  return date.toISOString();
+}
+
 function toNumber(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -126,6 +145,85 @@ function updateCalculatedLineTotal<T extends { quantity?: string; unitPrice?: st
   };
 }
 
+function ScheduledDatePicker({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value?: Date;
+  onChange: (date: Date | undefined) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [currentMonth, setCurrentMonth] = React.useState(() => startOfMonth(value ?? new Date()));
+
+  React.useEffect(() => {
+    if (value) {
+      setCurrentMonth(startOfMonth(value));
+    }
+  }, [value]);
+
+  function handleSelect(date: Date | undefined) {
+    if (!date) {
+      onChange(undefined);
+      return;
+    }
+
+    if (value && isSameDay(value, date)) {
+      onChange(undefined);
+      return;
+    }
+
+    onChange(date);
+    setOpen(false);
+  }
+
+  function clearDate() {
+    onChange(undefined);
+    setOpen(false);
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          id={id}
+          type="button"
+          variant="outline"
+          className={`w-full justify-start gap-2 text-left font-normal ${mobileFieldClassName}`}
+        >
+          <CalendarDays className="size-4 text-muted-foreground" />
+          <span className="truncate text-muted-foreground">
+            {value ? format(value, "MMM d, yyyy") : "Select date (optional)"}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto overflow-hidden p-0">
+        <div className="p-3">
+          <Calendar
+            mode="single"
+            selected={value}
+            onSelect={handleSelect}
+            month={currentMonth}
+            onMonthChange={setCurrentMonth}
+            fixedWeeks
+            locale={enGB}
+            className="w-full p-0"
+          />
+        </div>
+        {value ? (
+          <div className="border-t p-2">
+            <Button type="button" variant="ghost" size="sm" className="w-full justify-start" onClick={clearDate}>
+              <X className="size-4" />
+              Clear date
+            </Button>
+          </div>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (items: LineItem[]) => void }) {
   return (
     <div
@@ -138,10 +236,13 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
           <Label>Labor</Label>
           <p className="text-muted-foreground text-xs">Add optional labor line items for this estimate.</p>
         </div>
-        <Button type="button" variant="outline" onClick={() => onChange([createLineItem(), ...items])}>
-          <Plus />
-          Add labor
-        </Button>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <SquareFootageCalculator inputClassName={mobileFieldClassName} />
+          <Button type="button" variant="outline" onClick={() => onChange([createLineItem(), ...items])}>
+            <Plus />
+            Add labor
+          </Button>
+        </div>
       </div>
       <div className="grid gap-3">
         {items.map((item, index) => (
@@ -308,10 +409,13 @@ function MaterialItemsEditor({
           <Label>Materials</Label>
           <p className="text-muted-foreground text-xs">Add optional material quantities and unit prices.</p>
         </div>
-        <Button type="button" variant="outline" onClick={() => onChange([createMaterialLineItem(), ...items])}>
-          <Plus />
-          Add material
-        </Button>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <SquareFootageCalculator inputClassName={mobileFieldClassName} />
+          <Button type="button" variant="outline" onClick={() => onChange([createMaterialLineItem(), ...items])}>
+            <Plus />
+            Add material
+          </Button>
+        </div>
       </div>
       <div className="grid gap-3">
         {items.map((item, index) => {
@@ -481,6 +585,9 @@ export function EstimateRecordFormFields({
   const [title, setTitle] = React.useState(estimate?.description ?? "");
   const [description, setDescription] = React.useState(estimate?.scope ?? "");
   const [category, setCategory] = React.useState(estimate?.category ?? "Other");
+  const [scheduledDate, setScheduledDate] = React.useState<Date | undefined>(() =>
+    parseEstimateDate(estimate?.dateBegin),
+  );
   const [notes, setNotes] = React.useState(estimate?.notes ?? "");
   const [newCustomerName, setNewCustomerName] = React.useState("");
   const [newCustomerEmail, setNewCustomerEmail] = React.useState("");
@@ -539,6 +646,7 @@ export function EstimateRecordFormFields({
     setTitle(estimate?.description ?? "");
     setDescription(estimate?.scope ?? "");
     setCategory(estimate?.category ?? "Other");
+    setScheduledDate(parseEstimateDate(estimate?.dateBegin));
     setNotes(estimate?.notes ?? "");
     setNewCustomerName("");
     setNewCustomerEmail("");
@@ -592,7 +700,7 @@ export function EstimateRecordFormFields({
     <div className="grid gap-4">
       <input type="hidden" name="customerId" value={isCreatingNewCustomer ? "" : selectedCustomerId} />
       <input type="hidden" name="serviceLocation" value={serviceLocation} />
-      <input type="hidden" name="dateBegin" value="" />
+      <input type="hidden" name="dateBegin" value={toDateValue(scheduledDate)} />
       <input type="hidden" name="dateEnd" value="" />
       <input type="hidden" name="laborItems" value={stringifyPricingItems(laborItems)} />
       <input type="hidden" name="materials" value={stringifyMaterials(materials)} />
@@ -705,27 +813,37 @@ export function EstimateRecordFormFields({
           </Select>
         </div>
 
-        <div className="grid gap-2">
-          <Label htmlFor={`estimate-category-${estimate?.id ?? "new"}`}>Category</Label>
-          <Select name="category" value={category} onValueChange={setCategory} required>
-            <SelectTrigger
-              id={`estimate-category-${estimate?.id ?? "new"}`}
-              className={`w-full ${mobileFieldClassName}`}
-            >
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+        <div className="grid gap-4 sm:col-span-2 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor={`estimate-category-${estimate?.id ?? "new"}`}>Category</Label>
+            <Select name="category" value={category} onValueChange={setCategory} required>
+              <SelectTrigger
+                id={`estimate-category-${estimate?.id ?? "new"}`}
+                className={`w-full ${mobileFieldClassName}`}
+              >
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={`estimate-scheduled-date-${estimate?.id ?? "new"}`}>Scheduled date</Label>
+            <ScheduledDatePicker
+              id={`estimate-scheduled-date-${estimate?.id ?? "new"}`}
+              value={scheduledDate}
+              onChange={setScheduledDate}
+            />
+          </div>
         </div>
-        <div className="grid gap-2">
+        <div className="grid gap-2 sm:col-span-2">
           <Label htmlFor={`estimate-notes-${estimate?.id ?? "new"}`}>Notes</Label>
           <Textarea
             id={`estimate-notes-${estimate?.id ?? "new"}`}

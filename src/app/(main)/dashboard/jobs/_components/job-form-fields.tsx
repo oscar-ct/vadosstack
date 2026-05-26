@@ -6,6 +6,7 @@ import { Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
 import { DateRangePicker } from "@/components/date-range-picker";
+import { SquareFootageCalculator } from "@/components/square-footage-calculator";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
@@ -744,14 +745,17 @@ export function JobFormFields({
             <Label>Labor</Label>
             <p className="text-muted-foreground text-xs">Add each labor line item with a description and price.</p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setLaborItems((current) => [createLaborItemEntry(), ...current])}
-          >
-            <Plus />
-            Add labor
-          </Button>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <SquareFootageCalculator inputClassName={mobileFieldClassName} />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setLaborItems((current) => [createLaborItemEntry(), ...current])}
+            >
+              <Plus />
+              Add labor
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-4">
@@ -921,14 +925,19 @@ export function JobFormFields({
               Add purchases and returns. Vendor, date, quantity, and unit price are optional.
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setMaterials((current) => [createMaterialEntry({ vendor: lastMaterialVendor }), ...current])}
-          >
-            <Plus />
-            Add material
-          </Button>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <SquareFootageCalculator inputClassName={mobileFieldClassName} />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setMaterials((current) => [createMaterialEntry({ vendor: lastMaterialVendor }), ...current])
+              }
+            >
+              <Plus />
+              Add material
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-4">
