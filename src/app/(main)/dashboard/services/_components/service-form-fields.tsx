@@ -10,12 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-import { calculateMaterialTotal, type JobMaterial, stringifyMaterials } from "../../jobs/_components/materials";
+import { type JobMaterial, stringifyMaterials } from "../../jobs/_components/materials";
 import { type PricingLineItem, stringifyPricingItems } from "../../jobs/_components/pricing-items";
 import type { ServiceTemplateRow } from "../types";
 
 const categories = ["Repair", "Installation", "Other"] as const;
 const mobileFieldClassName = "text-base md:text-sm bg-background/80";
+const lineItemUnits = ["sq ft", "linear ft", "each", "hour"] as const;
 
 type LineItem = PricingLineItem & {
   id: string;
@@ -29,6 +30,9 @@ function createLineItem(item?: Partial<PricingLineItem>): LineItem {
   return {
     id: crypto.randomUUID(),
     description: item?.description ?? "",
+    quantity: item?.quantity ?? "",
+    unit: item?.unit ?? "",
+    unitPrice: item?.unitPrice ?? "",
     price: item?.price ?? "",
   };
 }
@@ -38,13 +42,37 @@ function createMaterialLineItem(item?: Partial<JobMaterial>): MaterialLineItem {
     id: crypto.randomUUID(),
     description: item?.description ?? "",
     quantity: item?.quantity ?? "1",
+    unit: item?.unit ?? "",
     unitPrice: item?.unitPrice ?? item?.price ?? "",
     price: item?.price ?? "",
   };
 }
 
-function formatMoney(value: string) {
-  return `$${Number(value || 0).toFixed(2)}`;
+function formatMoneyInputValue(value: string) {
+  if (!value.trim()) return "";
+
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount.toFixed(2) : value;
+}
+
+function calculateLineTotal(item: { quantity?: string; unitPrice?: string; price?: string }) {
+  const quantity = Number(item.quantity ?? 0);
+  const unitPrice = Number(item.unitPrice ?? 0);
+  const fallbackPrice = Number(item.price ?? 0);
+  const total = quantity > 0 && unitPrice > 0 ? quantity * unitPrice : fallbackPrice;
+
+  return Number.isFinite(total) ? total.toFixed(2) : "0.00";
+}
+
+function updateCalculatedLineTotal<T extends { quantity?: string; unitPrice?: string; price: string }>(item: T): T {
+  if (!item.quantity || !item.unitPrice) {
+    return item;
+  }
+
+  return {
+    ...item,
+    price: calculateLineTotal(item),
+  };
 }
 
 function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (items: LineItem[]) => void }) {
@@ -68,12 +96,12 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
         {items.map((item, index) => (
           <div
             key={item.id}
-            className="grid grid-cols-[minmax(0,1fr)_3rem] gap-3 p-3 odd:py-0 even:bg-sky-100/80 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
+            className="grid grid-cols-2 gap-3 px-4 py-3 odd:py-0 even:bg-sky-100/80 md:grid-cols-[112px_112px_112px_minmax(0,1fr)_auto]"
           >
-            <div className="col-span-2 grid gap-2 sm:col-span-1">
+            <div className="col-span-2 grid gap-2 md:order-1 md:col-span-4">
               {index === 0 ? <Label>Description</Label> : null}
               <Input
-                aria-label={`Labor} ${index + 1} description`}
+                aria-label={`Labor ${index + 1} description`}
                 value={item.description}
                 onChange={(event) =>
                   onChange(
@@ -86,8 +114,88 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="grid gap-2">
-              {index === 0 ? <Label>Price</Label> : null}
+            <div className="grid min-w-0 gap-2 md:order-3">
+              {index === 0 ? <Label>Qty</Label> : null}
+              <Input
+                aria-label={`Labor ${index + 1} quantity`}
+                value={item.quantity ?? ""}
+                type="number"
+                min="0"
+                step="0.01"
+                onChange={(event) =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index
+                        ? updateCalculatedLineTotal({ ...current, quantity: event.target.value })
+                        : current,
+                    ),
+                  )
+                }
+                className={mobileFieldClassName}
+              />
+            </div>
+            <div className="grid min-w-0 gap-2 md:order-4">
+              {index === 0 ? <Label>Rate</Label> : null}
+              <Input
+                aria-label={`Labor ${index + 1} unit price`}
+                value={item.unitPrice ?? ""}
+                type="number"
+                min="0"
+                step="0.01"
+                onChange={(event) =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index
+                        ? updateCalculatedLineTotal({ ...current, unitPrice: event.target.value })
+                        : current,
+                    ),
+                  )
+                }
+                onBlur={() =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index
+                        ? updateCalculatedLineTotal({
+                            ...current,
+                            unitPrice: formatMoneyInputValue(current.unitPrice ?? ""),
+                          })
+                        : current,
+                    ),
+                  )
+                }
+                placeholder="0.00"
+                className={mobileFieldClassName}
+              />
+            </div>
+            <div className="grid min-w-0 gap-2 md:order-5">
+              {index === 0 ? <Label>Unit</Label> : null}
+              <Select
+                value={item.unit || "none"}
+                onValueChange={(value) =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index ? { ...current, unit: value === "none" ? "" : value } : current,
+                    ),
+                  )
+                }
+              >
+                <SelectTrigger aria-label={`Labor ${index + 1} unit`} className={`w-full ${mobileFieldClassName}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="none">No unit</SelectItem>
+                    {lineItemUnits.map((unit) => (
+                      <SelectItem key={unit} value={unit}>
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid min-w-0 gap-2 md:order-2">
+              {index === 0 ? <Label>Total</Label> : null}
               <Input
                 aria-label={`Labor ${index + 1} price`}
                 value={item.price}
@@ -101,21 +209,32 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                     ),
                   )
                 }
+                onBlur={() =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index ? { ...current, price: formatMoneyInputValue(current.price) } : current,
+                    ),
+                  )
+                }
                 placeholder="0.00"
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="flex items-end justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                disabled={items.length === 1}
-                onClick={() => onChange(items.length === 1 ? items : items.filter((current) => current.id !== item.id))}
-                aria-label={`Remove labor ${index + 1}`}
-              >
-                <Trash2 className="size-4 text-red-500" />
-              </Button>
+            <div className="col-span-2 min-w-0 gap-2 md:order-6 md:grid">
+              <div className="flex items-end justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={items.length === 1}
+                  onClick={() =>
+                    onChange(items.length === 1 ? items : items.filter((current) => current.id !== item.id))
+                  }
+                  aria-label={`Remove labor ${index + 1}`}
+                >
+                  <Trash2 className="size-4 text-red-500" />
+                </Button>
+              </div>
             </div>
           </div>
         ))}
@@ -144,74 +263,135 @@ function MaterialItemsEditor({
         </Button>
       </div>
       <div className="grid gap-3">
-        {items.map((item, index) => {
-          const total = calculateMaterialTotal(item);
-
-          return (
-            <div
-              key={item.id}
-              className="grid grid-cols-[minmax(3rem,0.6fr)_minmax(5rem,1fr)_minmax(3rem,0.6fr)_auto] items-end gap-3 p-3 odd:py-0 even:bg-amber-100/80 lg:grid-cols-[minmax(0,1fr)_60px_100px_75px_auto]"
-            >
-              <div className="col-span-4 grid gap-2 lg:col-span-1 lg:pb-0">
-                {index === 0 ? <Label>Description</Label> : null}
-                <Input
-                  aria-label={`Material ${index + 1} description`}
-                  value={item.description}
-                  onChange={(event) =>
-                    onChange(
-                      items.map((current, itemIndex) =>
-                        itemIndex === index ? { ...current, description: event.target.value } : current,
-                      ),
-                    )
-                  }
-                  placeholder="Material description"
-                  className={mobileFieldClassName}
-                />
-              </div>
-              <div className="grid gap-2">
-                {index === 0 ? <Label>Qty</Label> : null}
-                <Input
-                  aria-label={`Material ${index + 1} quantity`}
-                  value={item.quantity}
-                  type="number"
-                  min="1"
-                  step="1"
-                  onChange={(event) =>
-                    onChange(
-                      items.map((current, itemIndex) =>
-                        itemIndex === index ? { ...current, quantity: event.target.value } : current,
-                      ),
-                    )
-                  }
-                  className={mobileFieldClassName}
-                />
-              </div>
-              <div className="grid gap-2">
-                {index === 0 ? <Label>Unit price</Label> : null}
-                <Input
-                  aria-label={`Material ${index + 1} unit price`}
-                  value={item.unitPrice}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  onChange={(event) =>
-                    onChange(
-                      items.map((current, itemIndex) =>
-                        itemIndex === index ? { ...current, unitPrice: event.target.value } : current,
-                      ),
-                    )
-                  }
-                  placeholder="0.00"
-                  className={mobileFieldClassName}
-                />
-              </div>
-              <div className="grid h-full rounded-md lg:bg-transparent lg:p-0">
-                {index === 0 ? <Label className={"flex items-start"}>Total</Label> : null}
-                <span className="flex items-center truncate font-medium text-xs tabular-nums sm:text-sm">
-                  {formatMoney(total)}
-                </span>
-              </div>
-              <div className={index === 0 ? "flex items-end justify-end" : "flex justify-end"}>
+        {items.map((item, index) => (
+          <div
+            key={item.id}
+            className="grid grid-cols-2 gap-3 px-4 py-3 odd:py-0 even:bg-amber-100/80 md:grid-cols-[112px_112px_112px_minmax(0,1fr)_auto]"
+          >
+            <div className="col-span-2 grid gap-2 md:order-1 md:col-span-4">
+              {index === 0 ? <Label>Description</Label> : null}
+              <Input
+                aria-label={`Material ${index + 1} description`}
+                value={item.description}
+                onChange={(event) =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index ? { ...current, description: event.target.value } : current,
+                    ),
+                  )
+                }
+                placeholder="Material description"
+                className={mobileFieldClassName}
+              />
+            </div>
+            <div className="grid min-w-0 gap-2 md:order-3">
+              {index === 0 ? <Label>Qty</Label> : null}
+              <Input
+                aria-label={`Material ${index + 1} quantity`}
+                value={item.quantity}
+                type="number"
+                min="0"
+                step="0.01"
+                onChange={(event) =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index
+                        ? updateCalculatedLineTotal({ ...current, quantity: event.target.value })
+                        : current,
+                    ),
+                  )
+                }
+                className={mobileFieldClassName}
+              />
+            </div>
+            <div className="grid min-w-0 gap-2 md:order-4">
+              {index === 0 ? <Label>Rate</Label> : null}
+              <Input
+                aria-label={`Material ${index + 1} unit price`}
+                value={item.unitPrice}
+                type="number"
+                min="1"
+                step="0.01"
+                onChange={(event) =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index
+                        ? updateCalculatedLineTotal({ ...current, unitPrice: event.target.value })
+                        : current,
+                    ),
+                  )
+                }
+                onBlur={() =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index
+                        ? updateCalculatedLineTotal({
+                            ...current,
+                            unitPrice: formatMoneyInputValue(current.unitPrice),
+                          })
+                        : current,
+                    ),
+                  )
+                }
+                placeholder="0.00"
+                className={mobileFieldClassName}
+              />
+            </div>
+            <div className="grid min-w-0 gap-2 md:order-5">
+              {index === 0 ? <Label>Unit</Label> : null}
+              <Select
+                value={item.unit || "none"}
+                onValueChange={(value) =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index ? { ...current, unit: value === "none" ? "" : value } : current,
+                    ),
+                  )
+                }
+              >
+                <SelectTrigger aria-label={`Material ${index + 1} unit`} className={`w-full ${mobileFieldClassName}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="none">No unit</SelectItem>
+                    {lineItemUnits.map((unit) => (
+                      <SelectItem key={unit} value={unit}>
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid min-w-0 gap-2 md:order-2">
+              {index === 0 ? <Label>Total</Label> : null}
+              <Input
+                aria-label={`Material ${index + 1} total`}
+                value={item.price}
+                type="number"
+                min="0"
+                step="0.01"
+                onChange={(event) =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index ? { ...current, price: event.target.value } : current,
+                    ),
+                  )
+                }
+                onBlur={() =>
+                  onChange(
+                    items.map((current, itemIndex) =>
+                      itemIndex === index ? { ...current, price: formatMoneyInputValue(current.price) } : current,
+                    ),
+                  )
+                }
+                placeholder="0.00"
+                className={mobileFieldClassName}
+              />
+            </div>
+            <div className="col-span-2 min-w-0 gap-2 md:order-6 md:grid">
+              <div className="flex items-end justify-end">
                 <Button
                   type="button"
                   variant="outline"
@@ -226,8 +406,8 @@ function MaterialItemsEditor({
                 </Button>
               </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -264,18 +444,8 @@ export function ServiceFormFields({ service }: { service?: ServiceTemplateRow })
 
   return (
     <div className="grid gap-4">
-      <input
-        type="hidden"
-        name="laborItems"
-        value={stringifyPricingItems(laborItems.map(({ description, price }) => ({ description, price })))}
-      />
-      <input
-        type="hidden"
-        name="materials"
-        value={stringifyMaterials(
-          materials.map(({ description, quantity, unitPrice, price }) => ({ description, quantity, unitPrice, price })),
-        )}
-      />
+      <input type="hidden" name="laborItems" value={stringifyPricingItems(laborItems)} />
+      <input type="hidden" name="materials" value={stringifyMaterials(materials)} />
       <input type="hidden" name="materialTaxRate" value="0" />
 
       <div className="grid gap-4 sm:grid-cols-2">

@@ -24,16 +24,55 @@ const optionalMoney = z
   .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid tax rate.")
   .transform((value) => (value ? value : "0"));
 
+function normalizeMoney(value: string | undefined, fallback = "0.00") {
+  const text = value?.trim() ?? "";
+  if (!text) return fallback;
+
+  const amount = Number(text);
+  return Number.isFinite(amount) ? amount.toFixed(2) : fallback;
+}
+
 const lineItemSchema = z.object({
-  description: z.string().trim(),
-  price: z.string().trim(),
+  description: z.string().trim().optional(),
+  quantity: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) > 0), "Enter a valid labor quantity."),
+  unit: z.string().trim().optional(),
+  unitPrice: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid labor unit price."),
+  price: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid labor price."),
 });
 
 const materialItemSchema = z.object({
-  description: z.string().trim(),
-  quantity: z.string().trim(),
-  unitPrice: z.string().trim(),
-  price: z.string().trim(),
+  description: z.string().trim().optional(),
+  quantity: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (value) => !value || (!Number.isNaN(Number(value)) && Number(value) > 0),
+      "Enter a valid material quantity.",
+    ),
+  unit: z.string().trim().optional(),
+  unitPrice: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid material unit price."),
+  price: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid material total."),
 });
 
 const serviceTemplateSchema = z.object({
@@ -67,45 +106,39 @@ function getServicePayload(formData: FormData) {
   };
 }
 
-function normalizeItems(items: Array<{ description: string; price: string }>, label: string) {
+function normalizeItems(
+  items: Array<{ description?: string; quantity?: string; unit?: string; unitPrice?: string; price?: string }>,
+) {
   return items
     .map((item) => ({
-      description: item.description.trim(),
-      price: item.price.trim(),
+      description: item.description?.trim() ?? "",
+      quantity: item.quantity?.trim() ?? "",
+      unit: item.unit?.trim() ?? "",
+      unitPrice: normalizeMoney(item.unitPrice, ""),
+      price: normalizeMoney(item.price),
     }))
-    .filter((item) => item.description || item.price)
-    .map((item) => {
-      if (!item.description || !item.price || Number.isNaN(Number(item.price))) {
-        throw new Error(`Enter a description and valid price for each ${label} line item.`);
-      }
-
-      return item;
-    });
+    .filter((item) => item.description || item.quantity || item.unit || item.unitPrice || Number(item.price) !== 0);
 }
 
-function normalizeMaterials(items: Array<{ description: string; quantity: string; unitPrice: string; price: string }>) {
+function normalizeMaterials(
+  items: Array<{ description?: string; quantity?: string; unit?: string; unitPrice?: string; price?: string }>,
+) {
   return items
     .map((item) => ({
-      description: item.description.trim(),
-      quantity: item.quantity.trim() || "1",
-      unitPrice: item.unitPrice.trim(),
-      price: item.price.trim(),
+      description: item.description?.trim() ?? "",
+      quantity: item.quantity?.trim() ?? "",
+      unit: item.unit?.trim() ?? "",
+      unitPrice: normalizeMoney(item.unitPrice, ""),
+      price: normalizeMoney(item.price),
     }))
-    .filter((item) => item.description || item.unitPrice || item.price)
-    .map((item) => {
-      if (
-        !item.description ||
-        !item.unitPrice ||
-        Number.isNaN(Number(item.unitPrice)) ||
-        !item.quantity ||
-        Number.isNaN(Number(item.quantity)) ||
-        Number(item.quantity) <= 0
-      ) {
-        throw new Error("Enter a description, quantity, and valid unit price for each material line item.");
-      }
-
-      return item;
-    });
+    .filter(
+      (item) =>
+        item.description ||
+        item.quantity ||
+        item.unit ||
+        item.unitPrice ||
+        (item.price.trim() && Number(item.price) !== 0),
+    );
 }
 
 export async function createServiceTemplateAction(
@@ -125,7 +158,7 @@ export async function createServiceTemplateAction(
   }
 
   try {
-    const laborItems = normalizeItems(parsed.data.laborItems, "labor");
+    const laborItems = normalizeItems(parsed.data.laborItems);
     const materials = normalizeMaterials(parsed.data.materials);
 
     await prisma.serviceTemplate.create({
@@ -172,7 +205,7 @@ export async function updateServiceTemplateAction(
   const { id, ...service } = parsed.data;
 
   try {
-    const laborItems = normalizeItems(service.laborItems, "labor");
+    const laborItems = normalizeItems(service.laborItems);
     const materials = normalizeMaterials(service.materials);
 
     await prisma.serviceTemplate.update({
