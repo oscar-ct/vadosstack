@@ -147,9 +147,9 @@ function formatOptionalMoney(value?: string) {
   return value === undefined ? undefined : formatMoney(value);
 }
 
-// function formatDate(value?: string) {
-//   return value ? format(parseISO(value), "MMM d, yyyy") : undefined;
-// }
+function formatDate(value?: string) {
+  return value ? format(parseISO(value), "MMM d, yyyy") : undefined;
+}
 
 // function formatDateStartToEnd(value?: string, value2?: string) {
 //   const startDate = value ? format(parseISO(value), "MMM d, yyyy") : undefined;
@@ -427,10 +427,10 @@ function EstimateDetailsDialog({
                   <div className="grid gap-3 sm:grid-cols-2">
                     <DetailItem label="Customer" value={estimate.customerName} />
                     <DetailItem label="Service location" value={estimate.serviceLocation} />
+                    <DetailItem label="Notes" value={estimate.notes || "No notes on file"} />
                     <DetailItem
-                      className={"sm:col-span-2"}
-                      label="Notes"
-                      value={estimate.notes || "No notes on file"}
+                      label="Scheduled date"
+                      value={estimate.dateBegin ? formatDate(estimate.dateBegin) : "Unscheduled"}
                     />
                   </div>
                 </section>
