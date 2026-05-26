@@ -525,6 +525,8 @@ export async function createJobAction(_previousState: JobMutationState, formData
         ...job,
         ownerId: currentUser.id,
         customerId: customerId || null,
+        dateBegin: job.dateBegin ?? null,
+        dateEnd: job.dateEnd ?? null,
         serviceLocation: job.serviceLocation || null,
         estimatedCost: "0",
         laborCost,
@@ -653,6 +655,8 @@ export async function updateJobAction(_previousState: JobMutationState, formData
       data: {
         ...job,
         customerId: customerId || null,
+        dateBegin: job.dateBegin ?? null,
+        dateEnd: job.dateEnd ?? null,
         serviceLocation: job.serviceLocation || null,
         estimatedCost: "0",
         laborCost,
