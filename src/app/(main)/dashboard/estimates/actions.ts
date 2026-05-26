@@ -109,7 +109,7 @@ function formatPlainList(items: Array<string | null | false | undefined>) {
 }
 
 function renderDetailCard(title: string, rows: Array<string | null | false | undefined>) {
-  return `<td style="width:50%;padding:0 6px 12px 0;vertical-align:top;">
+  return `<td class="detail-card-cell" style="width:50%;padding:0 6px 12px 0;vertical-align:top;">
     <div style="font-size:12px;font-weight:700;color:#171412;margin-bottom:8px;">${escapeHtml(title)}</div>
     <div style="min-height:56px;border:1px solid #e5ded3;background:#faf8f3;border-radius:8px;padding:10px;font-size:12px;line-height:1.55;color:#3d352f;">
       ${rows
@@ -256,8 +256,21 @@ function createEstimateEmailContent({
     : `<tr><td colspan="2" style="padding:10px;border-top:1px solid #eee7dd;color:#594431;">No material line items.</td></tr>`;
   const html = `<!doctype html>
 <html>
+  <head>
+    <style>
+      @media only screen and (max-width: 600px) {
+        .email-shell { padding: 16px 10px !important; }
+        .email-card { padding: 16px !important; }
+        .estimate-total-panel { width: 160px !important; }
+        .estimate-total-amount { font-size: 21px !important; line-height: 1.1 !important; }
+        .detail-card-cell { display: block !important; width: 100% !important; padding: 0 0 10px 0 !important; }
+        .detail-card-row { display: block !important; width: 100% !important; }
+        .estimate-summary-table { width: 100% !important; margin-left: 0 !important; box-sizing: border-box !important; }
+      }
+    </style>
+  </head>
   <body style="margin:0;background:#f4f1eb;color:#171412;font-family:Arial,Helvetica,sans-serif;">
-    <div style="max-width:780px;margin:0 auto;padding:24px 16px;">
+    <div class="email-shell" style="max-width:780px;margin:0 auto;padding:24px 16px;">
       <div style="background:#ffffff;border:1px solid #e4ddd2;border-radius:10px;padding:20px 22px;margin-bottom:16px;box-shadow:0 8px 24px rgba(23,20,18,0.05);">
         <p style="margin:0 0 10px;font-size:15px;color:#171412;">Hello ${escapeHtml(customerName)},</p>
         <p style="margin:0;color:#3d352f;font-size:14px;line-height:1.65;">
@@ -269,7 +282,7 @@ function createEstimateEmailContent({
           If you have any questions about the estimate, scope, timing, or pricing, reply to this email and we will be happy to help.
         </p>
       </div>
-      <div style="background:#ffffff;border:1px solid #e4ddd2;border-radius:10px;padding:22px;box-shadow:0 8px 24px rgba(23,20,18,0.06);">
+      <div class="email-card" style="background:#ffffff;border:1px solid #e4ddd2;border-radius:10px;padding:22px;box-shadow:0 8px 24px rgba(23,20,18,0.06);">
         <table style="width:100%;border-collapse:collapse;border-bottom:1px solid #e5ded3;padding-bottom:12px;margin-bottom:18px;">
           <tr>
             <td style="vertical-align:top;padding-bottom:16px;">
@@ -281,10 +294,10 @@ function createEstimateEmailContent({
               <div style="font-size:12px;color:#594431;margin-top:3px;">Issued ${format(estimate.issuedAt, "MMM d, yyyy")}</div>
               <div style="font-size:12px;color:#594431;margin-top:3px;">Valid through ${format(validThrough, "MMM d, yyyy")}</div>
             </td>
-            <td style="width:210px;vertical-align:top;text-align:right;padding-bottom:16px;">
+            <td class="estimate-total-panel" style="width:210px;vertical-align:top;text-align:right;padding-bottom:16px;">
               <div style="border:1px solid #e5ded3;background:#faf8f3;border-radius:8px;padding:14px;">
                 <div style="font-size:12px;color:#594431;">Estimated total</div>
-                <div style="font-size:27px;font-weight:800;color:#0369a1;margin-top:4px;">${formatMoney(estimate.estimatedTotal)}</div>
+                <div class="estimate-total-amount" style="font-size:27px;font-weight:800;color:#0369a1;margin-top:4px;">${formatMoney(estimate.estimatedTotal)}</div>
                 <div style="font-size:12px;color:#594431;margin-top:4px;">valid through ${format(validThrough, "MMM d, yyyy")}</div>
               </div>
             </td>
@@ -292,7 +305,7 @@ function createEstimateEmailContent({
         </table>
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
-          <tr>
+          <tr class="detail-card-row">
             ${renderDetailCard("Prepared For", [
               estimate.customerName ?? "No customer on file",
               estimate.customerEmail ?? "No email on file",
@@ -300,7 +313,7 @@ function createEstimateEmailContent({
             ])}
             ${renderDetailCard("Job", [estimate.jobTitle])}
           </tr>
-          <tr>
+          <tr class="detail-card-row">
             ${renderDetailCard("Schedule", [formatEstimateSchedule(estimate.dateBegin, estimate.dateEnd)])}
             ${renderDetailCard("Service Location", [estimate.serviceLocation ?? "Not on file"])}
           </tr>
@@ -333,7 +346,7 @@ function createEstimateEmailContent({
           ${materialRows}
         </table>
 
-        <table style="width:300px;margin-left:auto;border:1px solid #e5ded3;background:#faf8f3;border-radius:8px;padding:10px 14px;font-size:12px;margin-top:18px;">
+        <table class="estimate-summary-table" style="width:300px;margin-left:auto;border:1px solid #e5ded3;background:#faf8f3;border-radius:8px;padding:10px 14px;font-size:12px;margin-top:18px;">
           ${renderAmountRow("Materials subtotal", formatMoney(estimate.materialsSubtotal))}
           ${renderAmountRow(`Tax (${estimate.materialTaxRate.toString()}%)`, formatMoney(estimate.materialTaxAmount))}
           <tr><td colspan="2" style="border-top:1px solid #e5ded3;height:8px;"></td></tr>
