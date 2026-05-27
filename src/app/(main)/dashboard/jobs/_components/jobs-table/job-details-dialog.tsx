@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatDateOnly, toDateInputValue } from "@/lib/date-only";
 
 import type { InvoiceMutationState } from "../../../invoices/types";
 import type { JobMutationState } from "../../actions";
@@ -64,11 +65,7 @@ function formatDateStartToEnd(value?: string, value2?: string) {
 }
 
 function formatShortDate(value?: string) {
-  return value ? format(parseISO(value), "MMM d, yyyy") : undefined;
-}
-
-function toDateInputValue(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return formatDateOnly(value);
 }
 
 function formatMoney(value?: string) {

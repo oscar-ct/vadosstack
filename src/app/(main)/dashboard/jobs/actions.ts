@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
 import { deriveCustomerBillingStatus, deriveJobPaymentStatus } from "@/lib/customer-billing";
+import { parseDateInput } from "@/lib/date-only";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
@@ -700,7 +701,7 @@ const jobPaymentSchema = z.object({
     .string()
     .trim()
     .min(1, "Payment date is required.")
-    .transform((value) => new Date(value))
+    .transform((value) => parseDateInput(value))
     .refine((value) => !Number.isNaN(value.getTime()), "Enter a valid payment date."),
   amount: z
     .string()

@@ -11,6 +11,7 @@ import { AuthRequiredState } from "@/components/auth-required-state";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
+import { formatDateOnly } from "@/lib/date-only";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -547,7 +548,7 @@ export default async function Page({
                   key={payment.id}
                   className="grid grid-cols-[5.5rem_1fr_5rem_5.5rem] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 print:border-neutral-200"
                 >
-                  <span>{format(payment.paidOn, "MMM d, yyyy")}</span>
+                  <span>{formatDateOnly(payment.paidOn)}</span>
                   <span>{payment.description}</span>
                   <span className="text-muted-foreground">{payment.method}</span>
                   <span className="text-right font-medium tabular-nums">{formatMoney(payment.amount)}</span>

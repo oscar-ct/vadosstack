@@ -18,7 +18,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { differenceInCalendarDays, format, parseISO } from "date-fns";
+import { differenceInCalendarDays, parseISO } from "date-fns";
 import {
   ArrowUpDown,
   ChevronLeft,
@@ -56,6 +56,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatDateOnly, toDateInputValue } from "@/lib/date-only";
 
 import type { JobMutationState } from "../../jobs/actions";
 import { getInvoicesColumns } from "./invoices-table/columns";
@@ -75,7 +76,7 @@ function formatMoney(value: string) {
 }
 
 function formatDate(value: string) {
-  return format(parseISO(value), "MMM d, yyyy");
+  return formatDateOnly(value) ?? "Not scheduled";
 }
 
 function formatCustomerName(name?: string) {
@@ -366,7 +367,7 @@ function InvoiceDetailsDialog({
                   id={`invoice-payment-date-${invoice.id}`}
                   name="paidOn"
                   type="date"
-                  defaultValue={new Date().toISOString().slice(0, 10)}
+                  defaultValue={toDateInputValue()}
                   required
                 />
               </div>
