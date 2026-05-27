@@ -7,17 +7,27 @@ const fallbackLogo = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64
   <path d="M24 20a4 4 0 1 1 4-4v8h8v-8a4 4 0 1 1 4 4h-8v8h8a4 4 0 1 1-4 4v-8h-8v8a4 4 0 1 1-4-4h8v-8h-8Z" fill="none" stroke="#f8fafc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
-function imageResponse(body: BodyInit, contentType: string) {
+const logoCacheControl = "private, max-age=300, stale-while-revalidate=86400";
+const fallbackCacheControl = "no-store";
+
+function imageResponse(body: BodyInit, contentType: string, cacheControl = logoCacheControl) {
   return new Response(body, {
     headers: {
-      "Cache-Control": "no-store",
+      "Cache-Control": cacheControl,
       "Content-Type": contentType,
     },
   });
 }
 
+function redirectResponse(url: string) {
+  const response = Response.redirect(url, 302);
+  response.headers.set("Cache-Control", logoCacheControl);
+
+  return response;
+}
+
 function fallbackResponse() {
-  return imageResponse(fallbackLogo, "image/svg+xml");
+  return imageResponse(fallbackLogo, "image/svg+xml", fallbackCacheControl);
 }
 
 export async function GET() {
@@ -43,7 +53,7 @@ export async function GET() {
       const publicUrl = getR2PublicUrl(user.companyLogoKey);
 
       if (publicUrl) {
-        return Response.redirect(publicUrl);
+        return redirectResponse(publicUrl);
       }
 
       const object = await getR2Object(user.companyLogoKey);

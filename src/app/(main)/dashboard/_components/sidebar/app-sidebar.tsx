@@ -32,6 +32,7 @@ export function AppSidebar({
     name: string;
     companyName: string;
     companyEmail: string | null;
+    companyLogoSrc: string;
     companyPhone: string | null;
     estimateValidDays: number;
     email: string;
@@ -63,7 +64,9 @@ export function AppSidebar({
   const { isMobile, setOpenMobile } = useSidebar();
   const { startNavigation } = useDashboardNavigationLoader();
   const [logoVersion, setLogoVersion] = React.useState(0);
-  const logoSrc = logoVersion ? `/dashboard/company-logo?v=${logoVersion}` : "/dashboard/company-logo";
+  const logoSrc = logoVersion
+    ? `/dashboard/company-logo?v=${logoVersion}`
+    : (currentUser?.companyLogoSrc ?? "/dashboard/company-logo?fallback=1");
   const refreshCompanyLogo = React.useCallback(() => {
     setLogoVersion(Date.now());
   }, []);

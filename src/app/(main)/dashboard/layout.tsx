@@ -6,6 +6,7 @@ import { AccountSwitcher } from "@/app/(main)/dashboard/_components/sidebar/acco
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { getCurrentUser } from "@/lib/auth";
+import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
@@ -26,6 +27,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
     getCurrentUser(),
   ]);
+  const companyLogoSrc = currentUser ? await getCompanyLogoSrc(currentUser.id) : "/dashboard/company-logo?fallback=1";
 
   return (
     <SidebarProvider
@@ -51,6 +53,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
                   companyPhone: currentUser.companyPhone,
                   estimateValidDays: currentUser.estimateValidDays,
                   email: currentUser.email,
+                  companyLogoSrc,
                   invoiceDueDays: currentUser.invoiceDueDays,
                   admin: currentUser.admin,
                 }

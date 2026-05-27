@@ -11,6 +11,7 @@ import { AuthRequiredState } from "@/components/auth-required-state";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
+import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { formatDateOnly } from "@/lib/date-only";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { formatPhoneNumber } from "@/lib/phone";
@@ -176,6 +177,8 @@ export default async function Page({
     notFound();
   }
 
+  const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
+
   const invoiceSequence = await prisma.invoice.count({
     where: {
       ownerId: currentUser.id,
@@ -280,7 +283,7 @@ export default async function Page({
             <div className="mb-2 flex items-start gap-3">
               <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 print:size-10 print:border-neutral-300 print:bg-neutral-50">
                 <Image
-                  src="/dashboard/company-logo"
+                  src={companyLogoSrc}
                   alt=""
                   width={48}
                   height={48}

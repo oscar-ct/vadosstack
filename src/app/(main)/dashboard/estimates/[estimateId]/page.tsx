@@ -9,6 +9,7 @@ import { AuthRequiredState } from "@/components/auth-required-state";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
+import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -185,6 +186,7 @@ export default async function Page({
   const paymentAmount = Number(estimate.estimatedTotal.toString()) / 2;
   const estimateNumber = formatDocumentNumber("EST", estimateSequence);
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
+  const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
   const validThrough = addDays(estimate.issuedAt, currentUser.estimateValidDays);
   const googleMailAccount = await prisma.googleMailAccount.findUnique({
     where: {
@@ -231,7 +233,7 @@ export default async function Page({
             <div className="mb-2 flex items-start gap-3">
               <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 print:size-10 print:border-neutral-300 print:bg-neutral-50">
                 <Image
-                  src="/dashboard/company-logo"
+                  src={companyLogoSrc}
                   alt=""
                   width={48}
                   height={48}
