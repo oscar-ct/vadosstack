@@ -5,6 +5,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import {
+  createAccountConfirmationToken,
+  createAccountConfirmationUrl,
+  hashAccountConfirmationToken,
+} from "@/lib/account-confirmation";
+import {
   clearCurrentSession,
   createUserSession,
   getCurrentUser,
@@ -18,7 +23,10 @@ import { resend } from "@/lib/resend";
 
 const PASSWORD_RESET_SUCCESS_MESSAGE =
   "If a password account exists for that email, we sent a reset link with instructions.";
+const ACCOUNT_CONFIRMATION_SUCCESS_MESSAGE =
+  "Check your email to confirm your account. The link will expire in 30 minutes.";
 const PASSWORD_RESET_EXPIRES_IN_MS = 10 * 60 * 1000;
+const ACCOUNT_CONFIRMATION_EXPIRES_IN_MS = 30 * 60 * 1000;
 
 export type AuthFormState = {
   success: boolean;
@@ -106,9 +114,10 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
     };
   }
 
+  const email = parsed.data.email.toLowerCase();
   const existingUser = await prisma.user.findUnique({
     where: {
-      email: parsed.data.email,
+      email,
     },
   });
 
@@ -119,19 +128,79 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
     };
   }
 
-  const createdUser = await prisma.user.create({
-    data: {
-      authProviders: ["email"],
-      name: parsed.data.name?.trim() || getDisplayName(parsed.data),
+  const apiKey = process.env.RESEND_API_KEY;
+  const templateId = process.env.RESEND_CONFIRM_ACCOUNT_TEMPLATE_ID;
+
+  if (!apiKey || !templateId) {
+    console.error("Account confirmation email is not configured.");
+    return {
+      success: false,
+      message: "Account confirmation email is not configured. Please try again later.",
+    };
+  }
+
+  const token = createAccountConfirmationToken();
+  const tokenHash = hashAccountConfirmationToken(token);
+  const confirmUrl = createAccountConfirmationUrl(token);
+  const expiresAt = new Date(Date.now() + ACCOUNT_CONFIRMATION_EXPIRES_IN_MS);
+  const name = parsed.data.name?.trim() || getDisplayName({ email });
+
+  await prisma.pendingAccountConfirmation.upsert({
+    where: {
+      email,
+    },
+    create: {
       companyName: parsed.data.companyName,
-      companyEmail: parsed.data.email,
-      email: parsed.data.email,
+      email,
+      expiresAt,
+      name,
       passwordHash: hashPassword(parsed.data.password),
+      tokenHash,
+    },
+    update: {
+      companyName: parsed.data.companyName,
+      expiresAt,
+      name,
+      passwordHash: hashPassword(parsed.data.password),
+      tokenHash,
     },
   });
 
-  await createUserSession(createdUser.id, true);
-  redirect("/dashboard/overview");
+  const result = await resend.emails.send({
+    from: "VadosStack Support <support@vadosstack.com>",
+    tags: [
+      {
+        name: "category",
+        value: "account-confirmation",
+      },
+    ],
+    template: {
+      id: templateId,
+      variables: {
+        CONFIRM_URL: confirmUrl,
+      },
+    },
+    to: email,
+  });
+
+  if (result.error) {
+    console.error("Account confirmation email failed:", result.error.message);
+    await prisma.pendingAccountConfirmation.deleteMany({
+      where: {
+        tokenHash,
+      },
+    });
+
+    return {
+      success: false,
+      message: "We could not send the confirmation email. Please try again.",
+    };
+  }
+
+  return {
+    success: true,
+    message: ACCOUNT_CONFIRMATION_SUCCESS_MESSAGE,
+  };
 }
 
 export async function requestPasswordResetAction(
