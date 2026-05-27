@@ -100,15 +100,6 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   });
 
   if (!session || session.expiresAt <= new Date()) {
-    if (session) {
-      await prisma.session.delete({
-        where: {
-          id: session.id,
-        },
-      });
-    }
-
-    cookieStore.delete(SESSION_COOKIE_NAME);
     return null;
   }
 
