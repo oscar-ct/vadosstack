@@ -4,6 +4,8 @@ import * as React from "react";
 
 import Link from "next/link";
 
+import { MailCheck } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 
 import type { AuthFormState } from "../actions";
@@ -20,6 +22,9 @@ export function RegisterCard({ action }: RegisterCardProps) {
     return (
       <div className="w-full max-w-md py-24 lg:py-32">
         <div className="grid gap-6 text-center">
+          <div className="mx-auto flex size-16 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
+            <MailCheck className="size-8" />
+          </div>
           <div className="space-y-2">
             <h1 className="font-semibold text-2xl tracking-tight">Check your email</h1>
             <p className="text-muted-foreground text-sm">
