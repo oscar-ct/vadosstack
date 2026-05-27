@@ -40,7 +40,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Drawer,
   DrawerClose,
@@ -303,7 +303,7 @@ function EstimateDetailsDialog({
                     <DialogTitle className="truncate text-wrap font-semibold tracking-tight">
                       {estimate.description}
                     </DialogTitle>
-                    <p className="truncate text-muted-foreground text-sm">{estimate.customerName ?? "No customer"}</p>
+                    <DialogDescription className="truncate">{estimate.customerName ?? "No customer"}</DialogDescription>
                   </div>
                   {/*<Badge*/}
                   {/*  variant="outline"*/}
