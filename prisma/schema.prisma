@@ -114,6 +114,7 @@ model User {
   invoices           Invoice[]
   estimates          Estimate[]
   estimateRecords    EstimateRecord[]
+  emailRecords       EmailRecord[]
   serviceTemplates   ServiceTemplate[]
   employees          Employee[]
   timeEntries        TimeEntry[]
@@ -279,6 +280,32 @@ model GoogleMailAccount {
   @@index([email])
   @@index([googleSubject])
   @@map("google_mail_accounts")
+}
+
+model EmailRecord {
+  id             String   @id @default(cuid())
+  ownerId        String
+  documentType   String
+  documentId     String?
+  documentNumber String?
+  recipientName  String?
+  recipientEmail String?
+  senderEmail    String?
+  subject        String?
+  documentTotal  Decimal?
+  status         String
+  errorMessage   String?
+  sentAt         DateTime @default(now())
+  createdAt      DateTime @default(now())
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([documentType])
+  @@index([documentId])
+  @@index([status])
+  @@index([sentAt])
+  @@map("email_records")
 }
 
 model Employee {

@@ -3,6 +3,7 @@ import {
   ChartNoAxesCombined,
   ListTodo,
   type LucideIcon,
+  MailCheck,
   NotebookText,
   PackageCheck,
   ReceiptText,
@@ -84,6 +85,11 @@ export const sidebarItems: NavGroup[] = [
         title: "Invoices",
         url: "/dashboard/invoices",
         icon: ReceiptText,
+      },
+      {
+        title: "Email History",
+        url: "/dashboard/email-history",
+        icon: MailCheck,
       },
       {
         title: "Employee Portal",

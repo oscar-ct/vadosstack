@@ -8,7 +8,9 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
 import { calculateOutstandingBalance } from "@/lib/customer-billing";
+import { formatDateOnly } from "@/lib/date-only";
 import { formatDocumentNumber } from "@/lib/document-number";
+import { logEmailRecord } from "@/lib/email-records";
 import { decryptGoogleToken, refreshGoogleAccessToken, sendGmailMessage } from "@/lib/google-mail";
 import { prisma } from "@/lib/prisma";
 
@@ -256,7 +258,7 @@ function createInvoiceEmailContent({
       ? `Transaction History:\n${payments
           .map(
             (payment) =>
-              `- ${format(payment.paidOn, "MMM d, yyyy")} ${payment.description} (${payment.method}): ${formatMoney(payment.amount)}`,
+              `- ${formatDateOnly(payment.paidOn)} ${payment.description} (${payment.method}): ${formatMoney(payment.amount)}`,
           )
           .join("\n")}`
       : "Transaction History: No payments recorded yet.",
@@ -329,7 +331,7 @@ function createInvoiceEmailContent({
     ? payments
         .map(
           (payment) => `<tr>
-            <td style="padding:8px;border-top:1px solid #eee7dd;">${format(payment.paidOn, "MMM d, yyyy")}</td>
+            <td style="padding:8px;border-top:1px solid #eee7dd;">${formatDateOnly(payment.paidOn)}</td>
             <td style="padding:8px;border-top:1px solid #eee7dd;">${escapeHtml(payment.description)}</td>
             <td style="padding:8px;border-top:1px solid #eee7dd;color:#594431;">${escapeHtml(payment.method)}</td>
             <td style="padding:8px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatMoney(payment.amount)}</td>
@@ -658,7 +660,33 @@ export async function emailInvoiceAction(
     };
   }
 
+  const invoiceSequence = await prisma.invoice.count({
+    where: {
+      ownerId: currentUser.id,
+      issuedAt: {
+        lte: invoice.issuedAt,
+      },
+    },
+  });
+  const invoiceNumber = formatDocumentNumber("INV", invoiceSequence);
+  const emailRecordBase = {
+    ownerId: currentUser.id,
+    documentType: "invoice" as const,
+    documentId: invoice.id,
+    documentNumber: invoiceNumber,
+    documentTotal: invoice.balanceDue,
+    recipientName: invoice.customerName,
+    recipientEmail: invoice.customerEmail,
+    senderEmail: googleMailAccount?.email,
+  };
+
   if (!invoice.customerEmail) {
+    await logEmailRecord({
+      ...emailRecordBase,
+      status: "error",
+      errorMessage: "Add an email address to this customer before sending the invoice.",
+    });
+
     return {
       success: false,
       message: "Add an email address to this customer before sending the invoice.",
@@ -666,26 +694,25 @@ export async function emailInvoiceAction(
   }
 
   if (!googleMailAccount) {
+    await logEmailRecord({
+      ...emailRecordBase,
+      status: "error",
+      errorMessage: "Connect Gmail before emailing invoices.",
+    });
+
     return {
       success: false,
       message: "Connect Gmail before emailing invoices.",
     };
   }
 
+  let subject: string | undefined;
+
   try {
-    const invoiceSequence = await prisma.invoice.count({
-      where: {
-        ownerId: currentUser.id,
-        issuedAt: {
-          lte: invoice.issuedAt,
-        },
-      },
-    });
-    const invoiceNumber = formatDocumentNumber("INV", invoiceSequence);
     const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);
     const laborItems = parsePricingItems(invoice.job.laborItems);
     const materials = parseInvoiceMaterials(invoice.materials);
-    const { html, subject, text } = createInvoiceEmailContent({
+    const emailContent = createInvoiceEmailContent({
       companyName: currentUser.companyName,
       companyEmail: currentUser.companyEmail ?? currentUser.email,
       companyPhone: currentUser.companyPhone,
@@ -696,22 +723,42 @@ export async function emailInvoiceAction(
       materials,
       payments: invoice.job.payments,
     });
+    subject = emailContent.subject;
     const refreshToken = decryptGoogleToken(googleMailAccount.refreshTokenCipher);
     const accessToken = await refreshGoogleAccessToken(refreshToken);
 
     await sendGmailMessage(accessToken, {
       from: googleMailAccount.email,
-      html,
-      subject,
-      text,
+      html: emailContent.html,
+      subject: emailContent.subject,
+      text: emailContent.text,
       to: invoice.customerEmail,
     });
+
+    await logEmailRecord({
+      ...emailRecordBase,
+      senderEmail: googleMailAccount.email,
+      subject,
+      status: "success",
+    });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Invoice email could not be sent. Please try again.";
+
+    await logEmailRecord({
+      ...emailRecordBase,
+      senderEmail: googleMailAccount.email,
+      subject,
+      status: "error",
+      errorMessage: message,
+    });
+
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Invoice email could not be sent. Please try again.",
+      message,
     };
   }
+
+  revalidatePath("/dashboard/email-history");
 
   return {
     success: true,

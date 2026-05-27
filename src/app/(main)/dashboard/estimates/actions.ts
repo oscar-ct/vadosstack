@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
 import { formatDocumentNumber } from "@/lib/document-number";
+import { logEmailRecord } from "@/lib/email-records";
 import { decryptGoogleToken, refreshGoogleAccessToken, sendGmailMessage } from "@/lib/google-mail";
 import { prisma } from "@/lib/prisma";
 
@@ -425,7 +426,33 @@ export async function emailEstimateAction(
     };
   }
 
+  const estimateSequence = await prisma.estimate.count({
+    where: {
+      ownerId: currentUser.id,
+      issuedAt: {
+        lte: estimate.issuedAt,
+      },
+    },
+  });
+  const estimateNumber = formatDocumentNumber("EST", estimateSequence);
+  const emailRecordBase = {
+    ownerId: currentUser.id,
+    documentType: "estimate" as const,
+    documentId: estimate.id,
+    documentNumber: estimateNumber,
+    documentTotal: estimate.estimatedTotal,
+    recipientName: estimate.customerName,
+    recipientEmail: estimate.customerEmail,
+    senderEmail: googleMailAccount?.email,
+  };
+
   if (!estimate.customerEmail) {
+    await logEmailRecord({
+      ...emailRecordBase,
+      status: "error",
+      errorMessage: "Add an email address to this customer before sending the estimate.",
+    });
+
     return {
       success: false,
       message: "Add an email address to this customer before sending the estimate.",
@@ -433,22 +460,21 @@ export async function emailEstimateAction(
   }
 
   if (!googleMailAccount) {
+    await logEmailRecord({
+      ...emailRecordBase,
+      status: "error",
+      errorMessage: "Connect Gmail before emailing estimates.",
+    });
+
     return {
       success: false,
       message: "Connect Gmail before emailing estimates.",
     };
   }
 
+  let subject: string | undefined;
+
   try {
-    const estimateSequence = await prisma.estimate.count({
-      where: {
-        ownerId: currentUser.id,
-        issuedAt: {
-          lte: estimate.issuedAt,
-        },
-      },
-    });
-    const estimateNumber = formatDocumentNumber("EST", estimateSequence);
     const validThrough = addDays(estimate.issuedAt, currentUser.estimateValidDays);
     const snapshotMaterials = parseEstimateMaterials(estimate.materials);
     const laborItems = estimate.estimateRecord
@@ -463,7 +489,7 @@ export async function emailEstimateAction(
           price: item.price,
         }))
       : snapshotMaterials.filter((item) => item.type !== "labor");
-    const { html, subject, text } = createEstimateEmailContent({
+    const emailContent = createEstimateEmailContent({
       companyName: currentUser.companyName,
       companyEmail: currentUser.companyEmail ?? currentUser.email,
       companyPhone: currentUser.companyPhone,
@@ -473,15 +499,23 @@ export async function emailEstimateAction(
       materialItems,
       validThrough,
     });
+    subject = emailContent.subject;
     const refreshToken = decryptGoogleToken(googleMailAccount.refreshTokenCipher);
     const accessToken = await refreshGoogleAccessToken(refreshToken);
 
     await sendGmailMessage(accessToken, {
       from: googleMailAccount.email,
-      html,
-      subject,
-      text,
+      html: emailContent.html,
+      subject: emailContent.subject,
+      text: emailContent.text,
       to: estimate.customerEmail,
+    });
+
+    await logEmailRecord({
+      ...emailRecordBase,
+      senderEmail: googleMailAccount.email,
+      subject,
+      status: "success",
     });
 
     const statusUpdates = [];
@@ -530,14 +564,25 @@ export async function emailEstimateAction(
       await prisma.$transaction(statusUpdates);
     }
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Estimate email could not be sent. Please try again.";
+
+    await logEmailRecord({
+      ...emailRecordBase,
+      senderEmail: googleMailAccount.email,
+      subject,
+      status: "error",
+      errorMessage: message,
+    });
+
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Estimate email could not be sent. Please try again.",
+      message,
     };
   }
 
   revalidatePath("/dashboard/estimates");
   revalidatePath(`/dashboard/estimates/${estimate.id}`);
+  revalidatePath("/dashboard/email-history");
 
   return {
     success: true,
