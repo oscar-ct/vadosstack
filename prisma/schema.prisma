@@ -94,35 +94,36 @@ model JobPayment {
 }
 
 model User {
-  id                 String             @id @default(cuid())
-  name               String?
-  companyName        String
-  companyEmail       String?
-  companyPhone       String?
-  companyLogoDataUrl String?
-  companyLogoKey     String?
-  companyLogoType    String?
-  estimateValidDays  Int                @default(15)
-  invoiceDueDays     Int                @default(15)
-  authProviders      String[]           @default(["email"])
-  email              String             @unique
-  passwordHash       String
-  admin              Boolean            @default(false)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  customers          Customer[]
-  jobs               Job[]
-  jobPayments        JobPayment[]
-  invoices           Invoice[]
-  estimates          Estimate[]
-  estimateRecords    EstimateRecord[]
-  emailRecords       EmailRecord[]
-  serviceTemplates   ServiceTemplate[]
-  employees          Employee[]
-  timeEntries        TimeEntry[]
-  timeEntryRequests  TimeEntryRequest[]
-  sessions           Session[]
-  googleMailAccount  GoogleMailAccount?
+  id                  String               @id @default(cuid())
+  name                String?
+  companyName         String
+  companyEmail        String?
+  companyPhone        String?
+  companyLogoDataUrl  String?
+  companyLogoKey      String?
+  companyLogoType     String?
+  estimateValidDays   Int                  @default(15)
+  invoiceDueDays      Int                  @default(15)
+  authProviders       String[]             @default(["email"])
+  email               String               @unique
+  passwordHash        String
+  admin               Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  customers           Customer[]
+  jobs                Job[]
+  jobPayments         JobPayment[]
+  invoices            Invoice[]
+  estimates           Estimate[]
+  estimateRecords     EstimateRecord[]
+  emailRecords        EmailRecord[]
+  serviceTemplates    ServiceTemplate[]
+  employees           Employee[]
+  timeEntries         TimeEntry[]
+  timeEntryRequests   TimeEntryRequest[]
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+  googleMailAccount   GoogleMailAccount?
 
   @@map("users")
 }
@@ -266,6 +267,20 @@ model Session {
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model GoogleMailAccount {

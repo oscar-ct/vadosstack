@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import Link from "next/link";
+
 import { Eye, EyeOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,7 +46,12 @@ export function LoginForm({
           />
         </Field>
         <Field className="gap-1.5">
-          <FieldLabel htmlFor="login-password">Password</FieldLabel>
+          <div className="flex items-center justify-between gap-3">
+            <FieldLabel htmlFor="login-password">Password</FieldLabel>
+            <Link prefetch={false} href="/forgot-password" className="text-muted-foreground text-xs hover:text-primary">
+              Forgot password?
+            </Link>
+          </div>
           <div className="relative">
             <Input
               id="login-password"

@@ -1,10 +1,10 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Command } from "lucide-react";
-
 import { getCurrentUser } from "@/lib/auth";
 
+import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 import { RegisterForm } from "../_components/register-form";
 import { registerAction } from "../actions";
 
@@ -39,8 +39,8 @@ export default async function RegisterV1() {
 
       <div className="hidden bg-primary lg:block lg:w-1/3">
         <div className="flex h-full flex-col items-center justify-center p-12 text-center">
-          <div className="space-y-6">
-            <Command className="mx-auto size-12 text-primary-foreground" />
+          <div className="space-y-4">
+            <Image src={vadosstackLogoSmall} alt="VadosStack" className="mx-auto h-16 w-auto" priority />
             <div className="space-y-2">
               <h1 className="font-light text-5xl text-primary-foreground">Welcome!</h1>
               <p className="text-primary-foreground/80 text-xl">You&apos;re in the right place.</p>

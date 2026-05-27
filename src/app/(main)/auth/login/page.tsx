@@ -1,11 +1,11 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
-import { Command } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
 
+import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 import { LoginForm } from "../_components/login-form";
 import { GoogleButton } from "../_components/social-auth/google-button";
 import { loginAction } from "../actions";
@@ -18,9 +18,14 @@ const googleErrorMessages: Record<string, string> = {
   unverified: "Google has not verified that email address.",
 };
 
+const resetMessages: Record<string, string> = {
+  success: "Your password has been reset. You can now sign in with your new password.",
+};
+
 type LoginPageProps = {
   searchParams?: Promise<{
     google_error?: string | string[];
+    reset?: string | string[];
   }>;
 };
 
@@ -34,13 +39,15 @@ export default async function LoginV1({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const googleError = Array.isArray(params?.google_error) ? params.google_error[0] : params?.google_error;
   const googleErrorMessage = googleError ? googleErrorMessages[googleError] : null;
+  const resetStatus = Array.isArray(params?.reset) ? params.reset[0] : params?.reset;
+  const resetMessage = resetStatus ? resetMessages[resetStatus] : null;
 
   return (
     <div className="flex h-dvh">
       <div className="hidden bg-primary lg:block lg:w-1/3">
         <div className="flex h-full flex-col items-center justify-center p-12 text-center">
-          <div className="space-y-6">
-            <Command className="mx-auto size-12 text-primary-foreground" />
+          <div className="space-y-4">
+            <Image src={vadosstackLogoSmall} alt="VadosStack" className="mx-auto h-16 w-auto" priority />
             <div className="space-y-2">
               <h1 className="font-light text-5xl text-primary-foreground">Hello again</h1>
               <p className="text-primary-foreground/80 text-xl">Login to continue</p>
@@ -61,6 +68,11 @@ export default async function LoginV1({ searchParams }: LoginPageProps) {
             <form action="/api/auth/google" method="get">
               <GoogleButton className="w-full" type="submit" />
             </form>
+            {resetMessage ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-emerald-700 text-sm">
+                {resetMessage}
+              </p>
+            ) : null}
             {googleErrorMessage ? <p className="text-center text-destructive text-sm">{googleErrorMessage}</p> : null}
             <div className="flex items-center gap-3 text-muted-foreground text-xs">
               <Separator className="flex-1" />
