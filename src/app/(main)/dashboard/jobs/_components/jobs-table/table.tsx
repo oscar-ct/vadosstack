@@ -25,6 +25,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Eye,
+  Pencil,
   ReceiptText,
   Search,
   SlidersHorizontal,
@@ -541,9 +543,11 @@ export function JobsTable({
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => setSelectedJob(row.original)}>
+                        <Eye className="size-4" />
                         View
                       </Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => setJobToEdit(row.original)}>
+                        <Pencil className="size-4" />
                         Edit
                       </Button>
                     </div>

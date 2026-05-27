@@ -23,6 +23,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   CreditCard,
+  Eye,
+  Pencil,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
@@ -435,9 +437,11 @@ export function RecentCustomersTable({
                         size="sm"
                         onClick={() => setSelectedCustomer(row.original)}
                       >
+                        <Eye className="size-4" />
                         View
                       </Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => setCustomerToEdit(row.original)}>
+                        <Pencil className="size-4" />
                         Edit
                       </Button>
                     </div>

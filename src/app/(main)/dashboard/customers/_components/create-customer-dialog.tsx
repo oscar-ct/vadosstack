@@ -36,7 +36,7 @@ function AddressFields({ idPrefix, index }: { idPrefix: string; index: number })
   const label = index === 0 ? "Primary address" : index === 1 ? "Secondary address" : `Additional address ${index + 1}`;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-3 rounded-lg border border-emerald-200/80 bg-emerald-50/60 p-4 sm:grid-cols-2 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+    <div className="grid grid-cols-2 gap-3 rounded-lg border border-emerald-200/80 bg-emerald-50/60 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
       <div className="col-span-2 grid gap-1 sm:col-span-2">
         <Label>{label}</Label>
         <p className="text-emerald-900/70 text-xs dark:text-emerald-200/70">
@@ -56,7 +56,7 @@ function AddressFields({ idPrefix, index }: { idPrefix: string; index: number })
         <Label htmlFor={`${idPrefix}-apt-${index}`}>Apt, suite, unit</Label>
         <Input id={`${idPrefix}-apt-${index}`} name="addressLine2" placeholder="Unit B" className={customInputStyles} />
       </div>
-      <div className="grid gap-2">
+      <div className="grid min-w-0 gap-2">
         <Label htmlFor={`${idPrefix}-city-${index}`}>City</Label>
         <Input
           id={`${idPrefix}-city-${index}`}
@@ -65,7 +65,7 @@ function AddressFields({ idPrefix, index }: { idPrefix: string; index: number })
           className={customInputStyles}
         />
       </div>
-      <div className="grid gap-2 sm:col-span-1">
+      <div className="grid min-w-0 gap-2">
         <Label htmlFor={`${idPrefix}-state-${index}`}>State</Label>
         <UsStateSelect id={`${idPrefix}-state-${index}`} name="addressState" className={customInputStyles} />
       </div>

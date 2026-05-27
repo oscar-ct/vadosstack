@@ -27,6 +27,7 @@ import {
   ChevronsRight,
   CircleDollarSign,
   Clock3,
+  Eye,
   FileText,
   NotebookText,
   Pencil,
@@ -942,10 +943,6 @@ export function EstimateRecordsTable({
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground text-xs">Date</span>
-                    <span>{new Date(estimate.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground text-xs">Status</span>
                     <Badge variant="outline" className={estimateStatusClassName(estimate.status)}>
                       {estimate.status}
@@ -954,6 +951,16 @@ export function EstimateRecordsTable({
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground text-xs">Next step</span>
                     <span className="text-right">{getEstimateWorkflow(estimate.status).action}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground text-xs">Scheduled date</span>
+                    <span>
+                      {estimate.dateBegin ? new Date(estimate.dateBegin).toLocaleDateString() : "Unscheduled"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground text-xs">Created date</span>
+                    <span>{new Date(estimate.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
                 <div>
@@ -980,9 +987,11 @@ export function EstimateRecordsTable({
 
                 <div className="grid grid-cols-2 gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={() => setSelectedEstimate(estimate)}>
+                    <Eye className="size-4" />
                     View
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => openEstimateEditor(estimate)}>
+                    <Pencil className="size-4" />
                     Edit
                   </Button>
                 </div>

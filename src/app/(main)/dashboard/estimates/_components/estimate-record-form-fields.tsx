@@ -941,7 +941,7 @@ export function EstimateRecordFormFields({
           </Select>
         ) : null}
         {!addressOptions.length || selectedLocation === customLocationValue ? (
-          <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 grid gap-2 sm:col-span-2">
               <Label htmlFor={`estimate-location-street-${estimate?.id ?? "new"}`}>Street address</Label>
               <Input
@@ -972,7 +972,7 @@ export function EstimateRecordFormFields({
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor={`estimate-location-city-${estimate?.id ?? "new"}`}>City</Label>
               <Input
                 id={`estimate-location-city-${estimate?.id ?? "new"}`}
@@ -987,7 +987,7 @@ export function EstimateRecordFormFields({
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="grid gap-2 sm:col-span-1">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor={`estimate-location-state-${estimate?.id ?? "new"}`}>State</Label>
               <UsStateSelect
                 id={`estimate-location-state-${estimate?.id ?? "new"}`}

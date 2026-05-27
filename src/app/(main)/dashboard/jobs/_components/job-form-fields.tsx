@@ -653,7 +653,7 @@ export function JobFormFields({
           </Select>
         ) : null}
         {!addressOptions.length || selectedLocation === customLocationValue ? (
-          <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-3 rounded-lg border border-emerald-200/80 bg-background/70 p-4 sm:grid-cols-2 dark:border-emerald-900/60">
+          <div className="grid grid-cols-2 gap-3 rounded-lg border border-emerald-200/80 bg-background/70 p-4 dark:border-emerald-900/60">
             <div className="col-span-2 grid gap-2 sm:col-span-2">
               <Label htmlFor={`job-location-street-${job?.id ?? "new"}`}>Street address</Label>
               <Input
@@ -684,7 +684,7 @@ export function JobFormFields({
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor={`job-location-city-${job?.id ?? "new"}`}>City</Label>
               <Input
                 id={`job-location-city-${job?.id ?? "new"}`}
@@ -699,7 +699,7 @@ export function JobFormFields({
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="grid gap-2 sm:col-span-1">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor={`job-location-state-${job?.id ?? "new"}`}>State</Label>
               <UsStateSelect
                 id={`job-location-state-${job?.id ?? "new"}`}
