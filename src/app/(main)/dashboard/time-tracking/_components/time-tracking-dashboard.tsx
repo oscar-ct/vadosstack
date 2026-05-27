@@ -58,6 +58,9 @@ export type TimeEntryRow = {
   employeeNumber: string;
   endTime?: string;
   hours: number;
+  jobCustomerName?: string;
+  jobId?: string;
+  jobTitle?: string;
   lunchMinutes: number;
   notes?: string;
   startTime?: string;
@@ -73,6 +76,9 @@ export type TimeEntryRequestRow = {
   employeeNumber: string;
   endTime?: string;
   hours?: number;
+  jobCustomerName?: string;
+  jobId?: string;
+  jobTitle?: string;
   lunchMinutes: number;
   notes?: string;
   requestedAt: string;
@@ -86,6 +92,9 @@ type TimeEntryReviewSnapshot = {
   deductLunch: boolean;
   endTime?: string;
   hours?: number;
+  jobCustomerName?: string;
+  jobId?: string;
+  jobTitle?: string;
   lunchMinutes: number;
   notes?: string;
   startTime?: string;
@@ -96,6 +105,12 @@ type DayGroup = {
   date: string;
   entries: TimeEntryRow[];
   totalHours: number;
+};
+
+export type JobOption = {
+  customerName?: string;
+  id: string;
+  title: string;
 };
 
 const initialState: TimeTrackingMutationState = {
@@ -178,6 +193,12 @@ function formatReviewLunch(snapshot: TimeEntryReviewSnapshot) {
 
 function formatReviewNotes(value?: string) {
   return value?.trim() ? value : "No notes";
+}
+
+function formatJobLabel(job?: Pick<JobOption, "customerName" | "title"> | null) {
+  if (!job?.title) return "No job";
+
+  return [job.title, job.customerName].filter(Boolean).join(" - ");
 }
 
 function getTimeEntryChanges(request: TimeEntryRequestRow) {
@@ -656,16 +677,44 @@ function EmployeeSelectField({ employees }: { employees: EmployeeSummary[] }) {
   );
 }
 
+function JobSelectField({ defaultJobId, jobs }: { defaultJobId?: string; jobs: JobOption[] }) {
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor={defaultJobId ? `time-entry-job-${defaultJobId}` : "time-entry-job"}>Job</Label>
+      <Select name="jobId" defaultValue={defaultJobId ?? "none"}>
+        <SelectTrigger id={defaultJobId ? `time-entry-job-${defaultJobId}` : "time-entry-job"} className="w-full">
+          <SelectValue placeholder="No job" />
+        </SelectTrigger>
+        <SelectContent
+          position="popper"
+          className="max-h-[min(18rem,var(--radix-select-content-available-height))] w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-2rem)]"
+        >
+          <SelectGroup>
+            <SelectItem value="none">No job</SelectItem>
+            {jobs.map((job) => (
+              <SelectItem key={job.id} value={job.id} className="whitespace-normal pr-8">
+                <span className="block max-w-full truncate">{formatJobLabel(job)}</span>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function AddHoursDialog({
   action,
   date,
   employees,
+  jobs,
   requiresApproval = false,
   trigger,
 }: {
   action: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   date: string;
   employees: EmployeeSummary[];
+  jobs: JobOption[];
   requiresApproval?: boolean;
   trigger: React.ReactNode;
 }) {
@@ -706,6 +755,7 @@ function AddHoursDialog({
         <form onSubmit={handleSubmit} className="grid gap-4">
           <input type="hidden" name="workedOn" value={date} />
           <EmployeeSelectField employees={employees} />
+          <JobSelectField jobs={jobs} />
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="time-entry-start">Start time</Label>
@@ -763,11 +813,13 @@ function EditHoursDialog({
   action,
   deleteAction,
   entry,
+  jobs,
   requiresApproval = false,
 }: {
   action: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   deleteAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   entry: TimeEntryRow;
+  jobs: JobOption[];
   requiresApproval?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -816,6 +868,7 @@ function EditHoursDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <input type="hidden" name="entryId" value={entry.id} />
+          <JobSelectField defaultJobId={entry.jobId} jobs={jobs} />
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor={`time-entry-start-${entry.id}`}>Start time</Label>
@@ -1175,6 +1228,9 @@ function TimeReviewSnapshot({
         <span>{formatReviewTimeRange(snapshot)}</span>
         <span>{formatReviewLunch(snapshot)}</span>
         <span>{snapshot.hours === undefined ? "Hours not set" : formatHours(snapshot.hours)}</span>
+        {snapshot.jobTitle ? (
+          <span>{formatJobLabel({ customerName: snapshot.jobCustomerName, title: snapshot.jobTitle })}</span>
+        ) : null}
         {snapshot.notes ? <span className="text-foreground">{snapshot.notes}</span> : null}
       </div>
     </div>
@@ -1248,6 +1304,7 @@ function EditEmployeeRequestDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <input type="hidden" name="requestId" value={request.id} />
+          <input type="hidden" name="jobId" value={request.jobId ?? "none"} />
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor={`request-start-${request.id}`}>Start time</Label>
@@ -1452,6 +1509,11 @@ function EmployeeRequestRow({
           <div className="text-muted-foreground text-xs">
             {formatReviewLunch(request)} · {request.hours === undefined ? "Hours not set" : formatHours(request.hours)}
           </div>
+          {request.jobTitle ? (
+            <div className="text-muted-foreground text-xs">
+              {formatJobLabel({ customerName: request.jobCustomerName, title: request.jobTitle })}
+            </div>
+          ) : null}
           {request.reviewedAt ? (
             <div className="text-[11px] text-muted-foreground">
               Reviewed {format(parseISO(request.reviewedAt), "MMM d, h:mm a")}
@@ -1485,6 +1547,7 @@ export function TimeTrackingDashboard({
   employeeLogoutAction,
   employeeTimeRequests = [],
   employees,
+  jobs,
   headerDescription,
   monthLabel,
   nextWeekHref,
@@ -1517,6 +1580,7 @@ export function TimeTrackingDashboard({
   employeeLogoutAction?: () => Promise<void>;
   employeeTimeRequests?: TimeEntryRequestRow[];
   employees: EmployeeSummary[];
+  jobs: JobOption[];
   headerDescription?: string;
   monthLabel: string;
   nextWeekHref: string;
@@ -1660,6 +1724,7 @@ export function TimeTrackingDashboard({
                         action={createTimeEntryAction}
                         date={group.date}
                         employees={employees}
+                        jobs={jobs}
                         requiresApproval={requiresManagerApproval}
                         trigger={
                           <Button size="sm" variant="outline" disabled={!employees.length}>
@@ -1700,6 +1765,11 @@ export function TimeTrackingDashboard({
                                       {entry.deductLunch ? `, lunch ${entry.lunchMinutes}m` : ""}
                                     </div>
                                   ) : null}
+                                  {entry.jobTitle ? (
+                                    <div className="text-muted-foreground text-xs">
+                                      {formatJobLabel({ customerName: entry.jobCustomerName, title: entry.jobTitle })}
+                                    </div>
+                                  ) : null}
                                   {entry.notes ? (
                                     <div className="text-muted-foreground text-xs">{entry.notes}</div>
                                   ) : null}
@@ -1713,6 +1783,7 @@ export function TimeTrackingDashboard({
                                   action={updateTimeEntryAction}
                                   deleteAction={deleteTimeEntryAction}
                                   entry={entry}
+                                  jobs={jobs}
                                   requiresApproval={requiresManagerApproval}
                                 />
                               </div>

@@ -36,6 +36,7 @@ const checkboxBoolean = z.preprocess((value) => value === "true" || value === tr
 
 const createTimeEntrySchema = z.object({
   employeeId: initialRequiredString,
+  jobId: z.string().trim().optional(),
   workedOn: z.string().trim().min(1, "Work date is required."),
   startTime: z
     .string()
@@ -55,6 +56,7 @@ const createTimeEntrySchema = z.object({
 
 const updateTimeEntrySchema = z.object({
   entryId: initialRequiredString,
+  jobId: z.string().trim().optional(),
   startTime: z
     .string()
     .trim()
@@ -85,7 +87,7 @@ function parseWorkDate(value: string) {
 
 function emptyToNull(value?: string) {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
+  return trimmed && trimmed !== "none" ? trimmed : null;
 }
 
 function formString(value: FormDataEntryValue | null) {
@@ -139,6 +141,30 @@ async function generateEmployeeNumber(ownerId: string) {
   }
 
   throw new Error("Could not generate a unique employee number. Try again.");
+}
+
+async function validateOptionalJob(ownerId: string, jobId?: string | null) {
+  const normalizedJobId = emptyToNull(jobId ?? undefined);
+
+  if (!normalizedJobId) return null;
+
+  const job = await prisma.job.findUnique({
+    where: {
+      id_ownerId: {
+        id: normalizedJobId,
+        ownerId,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!job) {
+    throw new Error("Select a job from your account.");
+  }
+
+  return job.id;
 }
 
 export async function createEmployeeAction(
@@ -319,6 +345,7 @@ export async function createTimeEntryAction(
 
   const parsed = createTimeEntrySchema.safeParse({
     employeeId: formData.get("employeeId"),
+    jobId: formString(formData.get("jobId")),
     workedOn: formData.get("workedOn"),
     startTime: formData.get("startTime"),
     endTime: formData.get("endTime"),
@@ -354,13 +381,15 @@ export async function createTimeEntryAction(
   }
 
   let totals: ReturnType<typeof calculateHours>;
+  let jobId: string | null;
 
   try {
     totals = calculateHours(parsed.data);
+    jobId = await validateOptionalJob(currentUser.id, parsed.data.jobId);
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Check the start and end times.",
+      message: error instanceof Error ? error.message : "Check the time entry details.",
     };
   }
 
@@ -368,6 +397,7 @@ export async function createTimeEntryAction(
     data: {
       ownerId: currentUser.id,
       employeeId: parsed.data.employeeId,
+      jobId,
       workedOn: parseWorkDate(parsed.data.workedOn),
       startTime: parsed.data.startTime,
       endTime: parsed.data.endTime,
@@ -401,6 +431,7 @@ export async function updateTimeEntryAction(
 
   const parsed = updateTimeEntrySchema.safeParse({
     entryId: formData.get("entryId"),
+    jobId: formString(formData.get("jobId")),
     startTime: formData.get("startTime"),
     endTime: formData.get("endTime"),
     deductLunch: formData.get("deductLunch"),
@@ -416,13 +447,15 @@ export async function updateTimeEntryAction(
   }
 
   let totals: ReturnType<typeof calculateHours>;
+  let jobId: string | null;
 
   try {
     totals = calculateHours(parsed.data);
+    jobId = await validateOptionalJob(currentUser.id, parsed.data.jobId);
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Check the start and end times.",
+      message: error instanceof Error ? error.message : "Check the time entry details.",
     };
   }
 
@@ -435,6 +468,7 @@ export async function updateTimeEntryAction(
     },
     data: {
       startTime: parsed.data.startTime,
+      jobId,
       endTime: parsed.data.endTime,
       deductLunch: parsed.data.deductLunch !== false,
       lunchMinutes: totals.lunchMinutes,
@@ -541,6 +575,7 @@ export async function approveTimeEntryRequestAction(
       data: {
         ownerId: request.ownerId,
         employeeId: request.employeeId,
+        jobId: request.jobId,
         workedOn: request.workedOn,
         startTime: request.startTime,
         endTime: request.endTime,

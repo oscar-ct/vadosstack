@@ -51,6 +51,13 @@ export function mapTimeEntry(entry: {
   notes: string | null;
   startTime: string | null;
   workedOn: Date;
+  job?: {
+    customer?: {
+      name: string;
+    } | null;
+    description: string;
+    id: string;
+  } | null;
 }): TimeEntryRow {
   const hasTimeRange = Boolean(entry.startTime && entry.endTime);
 
@@ -62,6 +69,9 @@ export function mapTimeEntry(entry: {
     employeeNumber: entry.employee.employeeNumber,
     endTime: entry.endTime ?? undefined,
     hours: toHours(entry.hours),
+    jobCustomerName: entry.job?.customer?.name ?? undefined,
+    jobId: entry.job?.id,
+    jobTitle: entry.job?.description,
     lunchMinutes: hasTimeRange ? entry.lunchMinutes : 0,
     notes: entry.notes ?? undefined,
     startTime: entry.startTime ?? undefined,

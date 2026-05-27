@@ -39,7 +39,7 @@ export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
   const { monthEnd, monthLabel, monthStart, nextWeek, periodLabel, previousWeek, weekEnd, weekStart } =
     getTimeTrackingRange(params?.week);
-  const [employees, entries, pendingRequests] = await Promise.all([
+  const [employees, entries, pendingRequests, jobs] = await Promise.all([
     prisma.employee.findMany({
       where: {
         ownerId: currentUser.id,
@@ -72,6 +72,11 @@ export default async function Page({ searchParams }: PageProps) {
       },
       include: {
         employee: true,
+        job: {
+          include: {
+            customer: true,
+          },
+        },
       },
       orderBy: {
         workedOn: "asc",
@@ -84,10 +89,24 @@ export default async function Page({ searchParams }: PageProps) {
       },
       include: {
         employee: true,
+        job: {
+          include: {
+            customer: true,
+          },
+        },
       },
       orderBy: {
         requestedAt: "desc",
       },
+    }),
+    prisma.job.findMany({
+      where: {
+        ownerId: currentUser.id,
+      },
+      include: {
+        customer: true,
+      },
+      orderBy: [{ dateBegin: "desc" }, { createdAt: "desc" }],
     }),
   ]);
 
@@ -101,6 +120,13 @@ export default async function Page({ searchParams }: PageProps) {
             in: currentEntryIds,
           },
           ownerId: currentUser.id,
+        },
+        include: {
+          job: {
+            include: {
+              customer: true,
+            },
+          },
         },
       })
     : [];
@@ -129,6 +155,9 @@ export default async function Page({ searchParams }: PageProps) {
             deductLunch: currentEntry.deductLunch,
             endTime: currentEntry.endTime ?? undefined,
             hours: toHours(currentEntry.hours),
+            jobCustomerName: currentEntry.job?.customer?.name ?? undefined,
+            jobId: currentEntry.job?.id,
+            jobTitle: currentEntry.job?.description,
             lunchMinutes: currentEntry.lunchMinutes,
             notes: currentEntry.notes ?? undefined,
             startTime: currentEntry.startTime ?? undefined,
@@ -140,6 +169,9 @@ export default async function Page({ searchParams }: PageProps) {
       employeeNumber: request.employee.employeeNumber,
       endTime: request.endTime ?? undefined,
       hours: request.hours ? toHours(request.hours) : undefined,
+      jobCustomerName: request.job?.customer?.name ?? undefined,
+      jobId: request.job?.id ?? undefined,
+      jobTitle: request.job?.description ?? undefined,
       lunchMinutes: request.lunchMinutes,
       notes: request.notes ?? undefined,
       requestedAt: request.requestedAt.toISOString(),
@@ -159,6 +191,11 @@ export default async function Page({ searchParams }: PageProps) {
       deleteEmployeeAction={deleteEmployeeAction}
       deleteTimeEntryAction={deleteTimeEntryAction}
       employees={employeeSummaries}
+      jobs={jobs.map((job) => ({
+        customerName: job.customer?.name ?? undefined,
+        id: job.id,
+        title: job.description,
+      }))}
       monthLabel={monthLabel}
       nextWeekHref={`/dashboard/time-tracking?week=${nextWeek}`}
       pendingRequests={pendingRequestRows}

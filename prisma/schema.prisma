@@ -30,34 +30,36 @@ model Customer {
 }
 
 model Job {
-  id              String       @id @default(cuid())
-  ownerId         String
-  customerId      String?
-  description     String
-  serviceLocation String?
-  dateBegin       DateTime?
-  dateEnd         DateTime?
-  estimatedCost   Decimal?
-  laborCost       Decimal?     @default(0)
-  laborItems      String       @default("[]")
-  materialTaxRate Decimal?     @default(0)
-  materials       String       @default("[]")
-  paymentStatus   String       @default("Pending Payment")
-  depositPaid     Decimal?     @default(0)
-  amountPaid      Decimal?     @default(0)
-  finalCost       Decimal?
-  scope           String?
-  category        String
-  status          String       @default("Scheduled")
-  pictures        String[]     @default([])
-  notes           String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  owner           User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  customer        Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  invoice         Invoice?
-  estimate        Estimate?
-  payments        JobPayment[]
+  id                String             @id @default(cuid())
+  ownerId           String
+  customerId        String?
+  description       String
+  serviceLocation   String?
+  dateBegin         DateTime?
+  dateEnd           DateTime?
+  estimatedCost     Decimal?
+  laborCost         Decimal?           @default(0)
+  laborItems        String             @default("[]")
+  materialTaxRate   Decimal?           @default(0)
+  materials         String             @default("[]")
+  paymentStatus     String             @default("Pending Payment")
+  depositPaid       Decimal?           @default(0)
+  amountPaid        Decimal?           @default(0)
+  finalCost         Decimal?
+  scope             String?
+  category          String
+  status            String             @default("Scheduled")
+  pictures          String[]           @default([])
+  notes             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  owner             User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customer          Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  invoice           Invoice?
+  estimate          Estimate?
+  payments          JobPayment[]
+  timeEntries       TimeEntry[]
+  timeEntryRequests TimeEntryRequest[]
 
   @@unique([id, ownerId])
   @@index([ownerId])
@@ -102,7 +104,7 @@ model User {
   companyLogoType    String?
   estimateValidDays  Int                @default(15)
   invoiceDueDays     Int                @default(15)
-  authProviders       String[]           @default(["email"])
+  authProviders      String[]           @default(["email"])
   email              String             @unique
   passwordHash       String
   admin              Boolean            @default(false)
@@ -333,6 +335,7 @@ model TimeEntry {
   id           String   @id @default(cuid())
   ownerId      String
   employeeId   String
+  jobId        String?
   workedOn     DateTime
   startTime    String?
   endTime      String?
@@ -344,10 +347,12 @@ model TimeEntry {
   updatedAt    DateTime @updatedAt
   owner        User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  job          Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   @@unique([id, ownerId])
   @@index([ownerId])
   @@index([employeeId])
+  @@index([jobId])
   @@index([workedOn])
   @@map("time_entries")
 }
@@ -357,6 +362,7 @@ model TimeEntryRequest {
   ownerId      String
   employeeId   String
   timeEntryId  String?
+  jobId        String?
   action       String
   status       String    @default("Pending")
   workedOn     DateTime?
@@ -373,9 +379,11 @@ model TimeEntryRequest {
 
   owner    User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  job      Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   @@index([ownerId])
   @@index([employeeId])
+  @@index([jobId])
   @@index([status])
   @@index([requestedAt])
   @@map("time_entry_requests")

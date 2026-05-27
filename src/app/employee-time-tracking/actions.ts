@@ -29,6 +29,7 @@ const loginSchema = z.object({
 const checkboxBoolean = z.preprocess((value) => value === "true" || value === true, z.boolean());
 
 const timeEntrySchema = z.object({
+  jobId: z.string().trim().optional(),
   workedOn: z.string().trim().min(1, "Work date is required."),
   startTime: z
     .string()
@@ -88,7 +89,7 @@ function parseWorkDate(value: string) {
 
 function emptyToNull(value?: string) {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
+  return trimmed && trimmed !== "none" ? trimmed : null;
 }
 
 function formString(value: FormDataEntryValue | null) {
@@ -118,6 +119,30 @@ function calculateHours(input: { deductLunch?: boolean; endTime: string; lunchMi
     hours: (workedMinutes / 60).toFixed(2),
     lunchMinutes,
   };
+}
+
+async function validateOptionalJob(ownerId: string, jobId?: string | null) {
+  const normalizedJobId = emptyToNull(jobId ?? undefined);
+
+  if (!normalizedJobId) return null;
+
+  const job = await prisma.job.findUnique({
+    where: {
+      id_ownerId: {
+        id: normalizedJobId,
+        ownerId,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!job) {
+    throw new Error("Select a job from your account.");
+  }
+
+  return job.id;
 }
 
 export async function getEmployeePortalSession() {
@@ -215,6 +240,7 @@ export async function employeeCreateTimeEntryAction(
   }
 
   const parsed = timeEntrySchema.safeParse({
+    jobId: formString(formData.get("jobId")),
     workedOn: formData.get("workedOn"),
     startTime: formData.get("startTime"),
     endTime: formData.get("endTime"),
@@ -231,13 +257,15 @@ export async function employeeCreateTimeEntryAction(
   }
 
   let totals: ReturnType<typeof calculateHours>;
+  let jobId: string | null;
 
   try {
     totals = calculateHours(parsed.data);
+    jobId = await validateOptionalJob(employee.ownerId, parsed.data.jobId);
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Check the start and end times.",
+      message: error instanceof Error ? error.message : "Check the time entry details.",
     };
   }
 
@@ -245,6 +273,7 @@ export async function employeeCreateTimeEntryAction(
     data: {
       ownerId: employee.ownerId,
       employeeId: employee.id,
+      jobId,
       action: "Create",
       workedOn: parseWorkDate(parsed.data.workedOn),
       startTime: parsed.data.startTime,
@@ -281,6 +310,7 @@ export async function employeeUpdateTimeEntryAction(
 
   const parsed = updateTimeEntrySchema.safeParse({
     entryId: formData.get("entryId"),
+    jobId: formString(formData.get("jobId")),
     startTime: formData.get("startTime"),
     endTime: formData.get("endTime"),
     deductLunch: formData.get("deductLunch"),
@@ -296,13 +326,15 @@ export async function employeeUpdateTimeEntryAction(
   }
 
   let totals: ReturnType<typeof calculateHours>;
+  let jobId: string | null;
 
   try {
     totals = calculateHours(parsed.data);
+    jobId = await validateOptionalJob(employee.ownerId, parsed.data.jobId);
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Check the start and end times.",
+      message: error instanceof Error ? error.message : "Check the time entry details.",
     };
   }
 
@@ -327,6 +359,7 @@ export async function employeeUpdateTimeEntryAction(
       ownerId: employee.ownerId,
       employeeId: employee.id,
       timeEntryId: parsed.data.entryId,
+      jobId,
       action: "Update",
       workedOn: entry.workedOn,
       startTime: parsed.data.startTime,
@@ -393,6 +426,7 @@ export async function employeeDeleteTimeEntryAction(
       ownerId: employee.ownerId,
       employeeId: employee.id,
       timeEntryId: parsed.data.entryId,
+      jobId: entry.jobId,
       action: "Delete",
       workedOn: entry.workedOn,
       startTime: entry.startTime,
@@ -430,6 +464,7 @@ export async function employeeUpdateTimeEntryRequestAction(
   const parsed = updateTimeEntryRequestSchema.safeParse({
     requestId: formData.get("requestId"),
     entryId: formData.get("entryId") ?? "pending-request",
+    jobId: formString(formData.get("jobId")),
     startTime: formData.get("startTime"),
     endTime: formData.get("endTime"),
     deductLunch: formData.get("deductLunch"),
@@ -461,13 +496,15 @@ export async function employeeUpdateTimeEntryRequestAction(
   }
 
   let totals: ReturnType<typeof calculateHours>;
+  let jobId: string | null;
 
   try {
     totals = calculateHours(parsed.data);
+    jobId = await validateOptionalJob(employee.ownerId, parsed.data.jobId);
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Check the start and end times.",
+      message: error instanceof Error ? error.message : "Check the time request details.",
     };
   }
 
@@ -477,6 +514,7 @@ export async function employeeUpdateTimeEntryRequestAction(
     },
     data: {
       startTime: parsed.data.startTime,
+      jobId,
       endTime: parsed.data.endTime,
       deductLunch: parsed.data.deductLunch !== false,
       lunchMinutes: totals.lunchMinutes,
