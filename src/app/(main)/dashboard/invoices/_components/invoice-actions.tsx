@@ -3,7 +3,6 @@
 import * as React from "react";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import { Mail, Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -58,11 +57,23 @@ export function InvoiceActions({
   } | null;
   returnTo: string;
 }) {
-  const router = useRouter();
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [open, setOpen] = React.useState(false);
   const [showStateMessage, setShowStateMessage] = React.useState(false);
   const stateSubmittedAt = state.submittedAt;
+
+  React.useEffect(() => {
+    if (!notice?.message) {
+      return;
+    }
+
+    if (notice.type === "success") {
+      toast.success(notice.message);
+      return;
+    }
+
+    toast.error(notice.message);
+  }, [notice?.message, notice?.type]);
 
   React.useEffect(() => {
     if (!state.message || !stateSubmittedAt) {
@@ -71,12 +82,13 @@ export function InvoiceActions({
 
     if (state.success) {
       toast.success(state.message);
+    } else {
+      toast.error(state.message);
     }
 
     setShowStateMessage(true);
 
     if (state.reconnectRequired) {
-      router.refresh();
       return;
     }
 
@@ -89,7 +101,7 @@ export function InvoiceActions({
     }, 3500);
 
     return () => window.clearTimeout(timeout);
-  }, [router, state.message, state.reconnectRequired, state.success, stateSubmittedAt]);
+  }, [state.message, state.reconnectRequired, state.success, stateSubmittedAt]);
 
   return (
     <div className="grid gap-2 print:hidden">
@@ -190,18 +202,6 @@ export function InvoiceActions({
           </Button>
         )}
       </div>
-      {gmailConnected && !customerEmail ? (
-        <p className="max-w-sm text-muted-foreground text-xs">Add a customer email before sending this invoice.</p>
-      ) : null}
-      {notice ? (
-        <p
-          className={
-            notice.type === "success" ? "max-w-sm text-emerald-600 text-xs" : "max-w-sm text-destructive text-xs"
-          }
-        >
-          {notice.message}
-        </p>
-      ) : null}
     </div>
   );
 }
