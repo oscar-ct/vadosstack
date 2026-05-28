@@ -183,7 +183,7 @@ export function EstimateActions({
                 </DialogClose>
                 <form action={formAction}>
                   <input type="hidden" name="estimateId" value={estimateId} />
-                  <Button type="submit" disabled={isPending || state.reconnectRequired}>
+                  <Button type="submit" disabled={isPending || state.success || state.reconnectRequired}>
                     <Mail />
                     {isPending ? "Sending..." : "Send estimate"}
                   </Button>

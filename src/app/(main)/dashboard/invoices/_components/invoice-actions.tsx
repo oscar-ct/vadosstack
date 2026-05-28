@@ -183,7 +183,7 @@ export function InvoiceActions({
                 </DialogClose>
                 <form action={formAction}>
                   <input type="hidden" name="invoiceId" value={invoiceId} />
-                  <Button type="submit" disabled={isPending || state.reconnectRequired}>
+                  <Button type="submit" disabled={isPending || state.success || state.reconnectRequired}>
                     <Mail />
                     {isPending ? "Sending..." : "Send invoice"}
                   </Button>
