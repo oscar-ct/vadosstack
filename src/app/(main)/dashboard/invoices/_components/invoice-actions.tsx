@@ -6,8 +6,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Mail, Printer } from "lucide-react";
+import { siGmail } from "simple-icons";
 import { toast } from "sonner";
 
+import { SimpleIcon } from "@/components/simple-icon";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,6 +65,8 @@ export function InvoiceActions({
   const [open, setOpen] = React.useState(false);
   const [showStateMessage, setShowStateMessage] = React.useState(false);
   const stateSubmittedAt = state.submittedAt;
+  const canSendEmail = gmailConnected && (!state.reconnectRequired || open);
+  const gmailConnectLabel = state.reconnectRequired ? "Reconnect Gmail" : "Connect Gmail";
 
   React.useEffect(() => {
     if (!notice?.message) {
@@ -85,12 +89,6 @@ export function InvoiceActions({
   React.useEffect(() => {
     if (!state.message || !stateSubmittedAt) {
       return;
-    }
-
-    if (state.success) {
-      toast.success(state.message);
-    } else {
-      toast.error(state.message);
     }
 
     setShowStateMessage(true);
@@ -117,94 +115,87 @@ export function InvoiceActions({
           <Printer />
           Print / Save PDF
         </Button>
-        {gmailConnected ? (
-          <>
-            <Dialog
-              open={open}
-              onOpenChange={(nextOpen) => {
-                setOpen(nextOpen);
+        {canSendEmail ? (
+          <Dialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+              setOpen(nextOpen);
 
-                if (nextOpen) {
-                  setShowStateMessage(false);
-                }
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button type="button" variant="outline" size="sm" disabled={!customerEmail}>
-                  <Mail />
-                  Email invoice
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Send invoice?</DialogTitle>
-                  <DialogDescription>
-                    Review the details before emailing this invoice from your connected Gmail account.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Invoice</span>
-                    <span className="font-medium">{invoiceNumber}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Recipient</span>
-                    <span className="max-w-56 truncate font-medium">{customerEmail}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Customer</span>
-                    <span className="max-w-56 truncate font-medium">{customerName ?? "No customer name"}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Balance due</span>
-                    <span className="font-semibold text-rose-700 dark:text-rose-400">{balanceDue}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Due date</span>
-                    <span className="font-medium">{dueDate}</span>
-                  </div>
-                </div>
-
-                {showStateMessage && state.message ? (
-                  <p
-                    className={
-                      state.success
-                        ? "rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700 text-sm dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
-                        : "rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm"
-                    }
-                  >
-                    {state.message}
-                  </p>
-                ) : null}
-
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline" disabled={isPending}>
-                      Cancel
-                    </Button>
-                  </DialogClose>
-                  <form action={formAction}>
-                    <input type="hidden" name="invoiceId" value={invoiceId} />
-                    <Button type="submit" disabled={isPending}>
-                      <Mail />
-                      {isPending ? "Sending..." : "Send invoice"}
-                    </Button>
-                  </form>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            {state.reconnectRequired ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/api/auth/google/mail?returnTo=${encodeURIComponent(returnTo)}`}>Reconnect Gmail</Link>
+              if (nextOpen) {
+                setShowStateMessage(false);
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button type="button" variant="outline" size="sm" disabled={!customerEmail}>
+                <Mail />
+                Email invoice
               </Button>
-            ) : null}
-          </>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Send invoice?</DialogTitle>
+                <DialogDescription>
+                  Review the details before emailing this invoice from your connected Gmail account.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Invoice</span>
+                  <span className="font-medium">{invoiceNumber}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Recipient</span>
+                  <span className="max-w-56 truncate font-medium">{customerEmail}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Customer</span>
+                  <span className="max-w-56 truncate font-medium">{customerName ?? "No customer name"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Balance due</span>
+                  <span className="font-semibold text-rose-700 dark:text-rose-400">{balanceDue}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Due date</span>
+                  <span className="font-medium">{dueDate}</span>
+                </div>
+              </div>
+
+              {showStateMessage && state.message ? (
+                <p
+                  className={
+                    state.success
+                      ? "rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700 text-sm dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+                      : "rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm"
+                  }
+                >
+                  {state.message}
+                </p>
+              ) : null}
+
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline" disabled={isPending}>
+                    Cancel
+                  </Button>
+                </DialogClose>
+                <form action={formAction}>
+                  <input type="hidden" name="invoiceId" value={invoiceId} />
+                  <Button type="submit" disabled={isPending || state.reconnectRequired}>
+                    <Mail />
+                    {isPending ? "Sending..." : "Send invoice"}
+                  </Button>
+                </form>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         ) : (
           <Button asChild variant="outline" size="sm">
             <Link href={`/api/auth/google/mail?returnTo=${encodeURIComponent(returnTo)}`}>
-              <Mail />
-              Connect Gmail
+              <SimpleIcon icon={siGmail} className="size-3.5 fill-current" />
+              {gmailConnectLabel}
             </Link>
           </Button>
         )}

@@ -745,6 +745,7 @@ export async function emailInvoiceAction(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invoice email could not be sent. Please try again.";
     const reconnectRequired = message === GMAIL_REFRESH_ERROR_MESSAGE;
+    const responseMessage = reconnectRequired ? `${message} Please reconnect to continue.` : message;
 
     if (reconnectRequired) {
       await prisma.googleMailAccount.deleteMany({
@@ -762,7 +763,7 @@ export async function emailInvoiceAction(
       errorMessage: message,
     });
 
-    return createEmailInvoiceState(false, message, reconnectRequired);
+    return createEmailInvoiceState(false, responseMessage, reconnectRequired);
   }
 
   revalidatePath("/dashboard/email-history");

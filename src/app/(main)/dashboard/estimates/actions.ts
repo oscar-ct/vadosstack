@@ -567,6 +567,7 @@ export async function emailEstimateAction(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Estimate email could not be sent. Please try again.";
     const reconnectRequired = message === GMAIL_REFRESH_ERROR_MESSAGE;
+    const responseMessage = reconnectRequired ? `${message} Please reconnect to continue.` : message;
 
     if (reconnectRequired) {
       await prisma.googleMailAccount.deleteMany({
@@ -584,7 +585,7 @@ export async function emailEstimateAction(
       errorMessage: message,
     });
 
-    return createEmailEstimateState(false, message, reconnectRequired);
+    return createEmailEstimateState(false, responseMessage, reconnectRequired);
   }
 
   revalidatePath("/dashboard/estimates");
