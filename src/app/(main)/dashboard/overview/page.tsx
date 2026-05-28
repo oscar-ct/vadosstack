@@ -411,6 +411,12 @@ export default async function Page() {
   ]);
   const displayName = getDisplayName(currentUser).split(" ")[0];
   const outstandingTotal = outstandingJobs.reduce((total, job) => total + job.balanceDue, 0);
+  const hasOperationalActivity =
+    upcomingJobs.length > 0 ||
+    outstandingJobs.length > 0 ||
+    pendingTimeReviews.pendingCount > 0 ||
+    jobAttention.unscheduledCount > 0 ||
+    jobAttention.onHoldCount > 0;
   const readinessScore = Math.max(
     48,
     100 -
@@ -418,7 +424,7 @@ export default async function Page() {
       outstandingJobs.length * 5 -
       jobAttention.unscheduledCount * 8 -
       jobAttention.onHoldCount * 6 -
-      Math.max(0, 3 - upcomingJobs.length) * 3,
+      (hasOperationalActivity ? Math.max(0, 3 - upcomingJobs.length) * 3 : 0),
   );
   const nextJob = upcomingJobs[0];
   const largestBalance = outstandingJobs[0];

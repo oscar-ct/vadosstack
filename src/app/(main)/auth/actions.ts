@@ -167,7 +167,7 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
   });
 
   const result = await resend.emails.send({
-    from: "VadosStack Support <support@vadosstack.com>",
+    from: "VadosStack <support@vadosstack.com>",
     tags: [
       {
         name: "category",
@@ -267,7 +267,7 @@ export async function requestPasswordResetAction(
   });
 
   const result = await resend.emails.send({
-    from: "VadosStack Support <support@vadosstack.com>",
+    from: "VadosStack <support@vadosstack.com>",
     tags: [
       {
         name: "category",
