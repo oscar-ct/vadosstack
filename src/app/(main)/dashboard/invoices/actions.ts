@@ -11,7 +11,12 @@ import { calculateOutstandingBalance } from "@/lib/customer-billing";
 import { formatDateOnly } from "@/lib/date-only";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { logEmailRecord } from "@/lib/email-records";
-import { decryptGoogleToken, refreshGoogleAccessToken, sendGmailMessage } from "@/lib/google-mail";
+import {
+  decryptGoogleToken,
+  GMAIL_REFRESH_ERROR_MESSAGE,
+  refreshGoogleAccessToken,
+  sendGmailMessage,
+} from "@/lib/google-mail";
 import { prisma } from "@/lib/prisma";
 
 import { calculateSignedMaterialTotal } from "../jobs/_components/materials";
@@ -34,7 +39,18 @@ const emailInvoiceSchema = z.object({
 type EmailInvoiceState = {
   success: boolean;
   message: string;
+  reconnectRequired?: boolean;
+  submittedAt?: number;
 };
+
+function createEmailInvoiceState(success: boolean, message: string, reconnectRequired = false): EmailInvoiceState {
+  return {
+    success,
+    message,
+    reconnectRequired,
+    submittedAt: Date.now(),
+  };
+}
 
 type InvoiceMaterial = {
   description: string;
@@ -611,10 +627,7 @@ export async function emailInvoiceAction(
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
-    return {
-      success: false,
-      message: "You must be signed in to email an invoice.",
-    };
+    return createEmailInvoiceState(false, "You must be signed in to email an invoice.");
   }
 
   const parsed = emailInvoiceSchema.safeParse({
@@ -622,10 +635,7 @@ export async function emailInvoiceAction(
   });
 
   if (!parsed.success) {
-    return {
-      success: false,
-      message: parsed.error.issues[0]?.message ?? "Select an invoice and try again.",
-    };
+    return createEmailInvoiceState(false, parsed.error.issues[0]?.message ?? "Select an invoice and try again.");
   }
 
   const [invoice, googleMailAccount] = await Promise.all([
@@ -654,10 +664,7 @@ export async function emailInvoiceAction(
   ]);
 
   if (!invoice) {
-    return {
-      success: false,
-      message: "Invoice could not be found.",
-    };
+    return createEmailInvoiceState(false, "Invoice could not be found.");
   }
 
   const invoiceSequence = await prisma.invoice.count({
@@ -687,10 +694,7 @@ export async function emailInvoiceAction(
       errorMessage: "Add an email address to this customer before sending the invoice.",
     });
 
-    return {
-      success: false,
-      message: "Add an email address to this customer before sending the invoice.",
-    };
+    return createEmailInvoiceState(false, "Add an email address to this customer before sending the invoice.");
   }
 
   if (!googleMailAccount) {
@@ -700,10 +704,7 @@ export async function emailInvoiceAction(
       errorMessage: "Connect Gmail before emailing invoices.",
     });
 
-    return {
-      success: false,
-      message: "Connect Gmail before emailing invoices.",
-    };
+    return createEmailInvoiceState(false, "Connect Gmail before emailing invoices.", true);
   }
 
   let subject: string | undefined;
@@ -743,6 +744,15 @@ export async function emailInvoiceAction(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invoice email could not be sent. Please try again.";
+    const reconnectRequired = message === GMAIL_REFRESH_ERROR_MESSAGE;
+
+    if (reconnectRequired) {
+      await prisma.googleMailAccount.deleteMany({
+        where: {
+          userId: currentUser.id,
+        },
+      });
+    }
 
     await logEmailRecord({
       ...emailRecordBase,
@@ -752,18 +762,12 @@ export async function emailInvoiceAction(
       errorMessage: message,
     });
 
-    return {
-      success: false,
-      message,
-    };
+    return createEmailInvoiceState(false, message, reconnectRequired);
   }
 
   revalidatePath("/dashboard/email-history");
 
-  return {
-    success: true,
-    message: `Invoice sent to ${invoice.customerEmail}.`,
-  };
+  return createEmailInvoiceState(true, `Invoice sent to ${invoice.customerEmail}.`);
 }
 
 export async function deleteInvoiceAction(

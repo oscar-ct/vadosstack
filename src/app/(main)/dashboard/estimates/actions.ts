@@ -9,7 +9,12 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { logEmailRecord } from "@/lib/email-records";
-import { decryptGoogleToken, refreshGoogleAccessToken, sendGmailMessage } from "@/lib/google-mail";
+import {
+  decryptGoogleToken,
+  GMAIL_REFRESH_ERROR_MESSAGE,
+  refreshGoogleAccessToken,
+  sendGmailMessage,
+} from "@/lib/google-mail";
 import { prisma } from "@/lib/prisma";
 
 import { parseMaterials as parseJobMaterials } from "../jobs/_components/materials";
@@ -28,7 +33,18 @@ const emailEstimateSchema = z.object({
 type EmailEstimateState = {
   success: boolean;
   message: string;
+  reconnectRequired?: boolean;
+  submittedAt?: number;
 };
+
+function createEmailEstimateState(success: boolean, message: string, reconnectRequired = false): EmailEstimateState {
+  return {
+    success,
+    message,
+    reconnectRequired,
+    submittedAt: Date.now(),
+  };
+}
 
 type EstimateLineItem = {
   description: string;
@@ -383,10 +399,7 @@ export async function emailEstimateAction(
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
-    return {
-      success: false,
-      message: "You must be signed in to email an estimate.",
-    };
+    return createEmailEstimateState(false, "You must be signed in to email an estimate.");
   }
 
   const parsed = emailEstimateSchema.safeParse({
@@ -394,10 +407,7 @@ export async function emailEstimateAction(
   });
 
   if (!parsed.success) {
-    return {
-      success: false,
-      message: parsed.error.issues[0]?.message ?? "Select an estimate and try again.",
-    };
+    return createEmailEstimateState(false, parsed.error.issues[0]?.message ?? "Select an estimate and try again.");
   }
 
   const [estimate, googleMailAccount] = await Promise.all([
@@ -420,10 +430,7 @@ export async function emailEstimateAction(
   ]);
 
   if (!estimate) {
-    return {
-      success: false,
-      message: "Estimate could not be found.",
-    };
+    return createEmailEstimateState(false, "Estimate could not be found.");
   }
 
   const estimateSequence = await prisma.estimate.count({
@@ -453,10 +460,7 @@ export async function emailEstimateAction(
       errorMessage: "Add an email address to this customer before sending the estimate.",
     });
 
-    return {
-      success: false,
-      message: "Add an email address to this customer before sending the estimate.",
-    };
+    return createEmailEstimateState(false, "Add an email address to this customer before sending the estimate.");
   }
 
   if (!googleMailAccount) {
@@ -466,10 +470,7 @@ export async function emailEstimateAction(
       errorMessage: "Connect Gmail before emailing estimates.",
     });
 
-    return {
-      success: false,
-      message: "Connect Gmail before emailing estimates.",
-    };
+    return createEmailEstimateState(false, "Connect Gmail before emailing estimates.", true);
   }
 
   let subject: string | undefined;
@@ -565,6 +566,15 @@ export async function emailEstimateAction(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Estimate email could not be sent. Please try again.";
+    const reconnectRequired = message === GMAIL_REFRESH_ERROR_MESSAGE;
+
+    if (reconnectRequired) {
+      await prisma.googleMailAccount.deleteMany({
+        where: {
+          userId: currentUser.id,
+        },
+      });
+    }
 
     await logEmailRecord({
       ...emailRecordBase,
@@ -574,20 +584,14 @@ export async function emailEstimateAction(
       errorMessage: message,
     });
 
-    return {
-      success: false,
-      message,
-    };
+    return createEmailEstimateState(false, message, reconnectRequired);
   }
 
   revalidatePath("/dashboard/estimates");
   revalidatePath(`/dashboard/estimates/${estimate.id}`);
   revalidatePath("/dashboard/email-history");
 
-  return {
-    success: true,
-    message: `Estimate sent to ${estimate.customerEmail}.`,
-  };
+  return createEmailEstimateState(true, `Estimate sent to ${estimate.customerEmail}.`);
 }
 
 export async function deleteEstimateAction(

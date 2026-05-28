@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Mail, Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +23,8 @@ import {
 type EmailEstimateState = {
   success: boolean;
   message: string;
+  reconnectRequired?: boolean;
+  submittedAt?: number;
 };
 
 const initialState: EmailEstimateState = {
@@ -55,12 +58,14 @@ export function EstimateActions({
   returnTo: string;
   validThrough: string;
 }) {
+  const router = useRouter();
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [open, setOpen] = React.useState(false);
   const [showStateMessage, setShowStateMessage] = React.useState(false);
+  const stateSubmittedAt = state.submittedAt;
 
   React.useEffect(() => {
-    if (!state.message) {
+    if (!state.message || !stateSubmittedAt) {
       return;
     }
 
@@ -69,6 +74,12 @@ export function EstimateActions({
     }
 
     setShowStateMessage(true);
+
+    if (state.reconnectRequired) {
+      router.refresh();
+      return;
+    }
+
     const timeout = window.setTimeout(() => {
       setShowStateMessage(false);
 
@@ -78,7 +89,7 @@ export function EstimateActions({
     }, 3500);
 
     return () => window.clearTimeout(timeout);
-  }, [state.message, state.success]);
+  }, [router, state.message, state.reconnectRequired, state.success, stateSubmittedAt]);
 
   return (
     <div className="grid gap-2 print:hidden">
@@ -164,7 +175,7 @@ export function EstimateActions({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            {showStateMessage && state.message && !state.success ? (
+            {state.reconnectRequired ? (
               <Button asChild variant="ghost" size="sm">
                 <Link href={`/api/auth/google/mail?returnTo=${encodeURIComponent(returnTo)}`}>Reconnect Gmail</Link>
               </Button>

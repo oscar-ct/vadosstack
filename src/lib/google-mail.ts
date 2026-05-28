@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+export const GMAIL_REFRESH_ERROR_MESSAGE = "Gmail connection could not be refreshed.";
 export const GOOGLE_MAIL_OAUTH_STATE_COOKIE_NAME = "studio-google-mail-oauth-state";
 export const GOOGLE_MAIL_RETURN_TO_COOKIE_NAME = "studio-google-mail-return-to";
 export const GOOGLE_MAIL_OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
@@ -79,7 +80,7 @@ export async function refreshGoogleAccessToken(refreshToken: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Gmail connection could not be refreshed.");
+    throw new Error(GMAIL_REFRESH_ERROR_MESSAGE);
   }
 
   const tokenResponse = (await response.json()) as { access_token?: string };
