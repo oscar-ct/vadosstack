@@ -1,7 +1,6 @@
-import { Download, NotebookText } from "lucide-react";
+import { NotebookText } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
-import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -153,10 +152,7 @@ export default async function Page() {
           </CardDescription>
           <CardAction className="flex items-center gap-2">
             <CreateEstimateRecordDialog action={createEstimateRecordAction} customers={customers} services={services} />
-            <Button variant="outline" size="sm" className="hidden w-7 px-0 sm:w-auto sm:px-2.5 md:flex">
-              <Download />
-              <span className="hidden sm:inline">Export</span>
-            </Button>
+            <div id="estimates-export-action" />
           </CardAction>
         </CardHeader>
         <CardContent className="pt-0">
@@ -166,6 +162,7 @@ export default async function Page() {
             customers={customers}
             data={estimates}
             deleteEstimateRecordAction={deleteEstimateRecordAction}
+            exportSlotId="estimates-export-action"
             services={services}
             updateEstimateStatusAction={updateEstimateStatusAction}
             updateEstimateRecordAction={updateEstimateRecordAction}

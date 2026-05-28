@@ -38,6 +38,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -125,6 +126,26 @@ const sortOptions = [
   { value: "value-asc", label: "Value low-high" },
   { value: "value-desc", label: "Value high-low" },
 ] as const;
+
+function formatExportDate(value?: string) {
+  return value ? new Date(value).toLocaleDateString() : "";
+}
+
+const estimateExportColumns: CsvColumn<EstimateRecordRow>[] = [
+  { header: "Estimate title", value: (estimate) => estimate.description },
+  { header: "Customer", value: (estimate) => estimate.customerName },
+  { header: "Status", value: (estimate) => estimate.status },
+  { header: "Category", value: (estimate) => estimate.category },
+  { header: "Service location", value: (estimate) => estimate.serviceLocation },
+  { header: "Scheduled date", value: (estimate) => formatExportDate(estimate.dateBegin) },
+  { header: "Labor cost", value: (estimate) => estimate.laborCost },
+  { header: "Material tax rate", value: (estimate) => estimate.materialTaxRate },
+  { header: "Estimated total", value: (estimate) => estimate.estimatedTotal },
+  { header: "Printable estimate", value: (estimate) => (estimate.printableEstimateId ? "Yes" : "No") },
+  { header: "Converted to job", value: (estimate) => (estimate.convertedJobId ? "Yes" : "No") },
+  { header: "Created date", value: (estimate) => formatExportDate(estimate.createdAt) },
+  { header: "Notes", value: (estimate) => estimate.notes },
+];
 
 function formatMoney(value?: string) {
   return value ? `$${Number(value).toFixed(2)}` : "$0.00";
@@ -550,6 +571,7 @@ export function EstimateRecordsTable({
   customers,
   data,
   deleteEstimateRecordAction,
+  exportSlotId,
   services,
   updateEstimateStatusAction,
   updateEstimateRecordAction,
@@ -568,6 +590,7 @@ export function EstimateRecordsTable({
     state: EstimateRecordMutationState,
     formData: FormData,
   ) => Promise<EstimateRecordMutationState>;
+  exportSlotId?: string;
   services: ServiceTemplateRow[];
   updateEstimateStatusAction: (
     state: EstimateRecordMutationState,
@@ -624,6 +647,18 @@ export function EstimateRecordsTable({
     getSortedRowModel: getSortedRowModel(),
   });
   const searchQuery = (table.getColumn("search")?.getFilterValue() as string) ?? "";
+  const selectedExportRows = table.getFilteredSelectedRowModel().rows.map((row) => row.original);
+  const currentExportRows = table.getPrePaginationRowModel().rows.map((row) => row.original);
+  const exportMenu = (
+    <CsvExportMenu
+      allRows={data}
+      columns={estimateExportColumns}
+      currentRows={currentExportRows}
+      filenamePrefix="estimates"
+      selectedRows={selectedExportRows}
+      triggerClassName={exportSlotId ? "hidden w-7 px-0 sm:w-auto sm:px-2.5 md:flex" : undefined}
+    />
+  );
   const statusFilter = (table.getColumn("status")?.getFilterValue() as string) ?? "all";
   const paginatedData = table.getRowModel().rows.map((row) => row.original);
   const pipelineCounts = React.useMemo(
@@ -776,6 +811,7 @@ export function EstimateRecordsTable({
                 }}
               />
             </div>
+            {exportSlotId ? null : exportMenu}
             <div className="md:hidden">
               <Drawer>
                 <DrawerTrigger asChild>
@@ -1082,6 +1118,7 @@ export function EstimateRecordsTable({
           </div>
         </div>
       </div>
+      {exportSlotId ? <CsvExportSlot id={exportSlotId}>{exportMenu}</CsvExportSlot> : null}
       <EstimateDetailsDialog
         convertEstimateToJobAction={convertEstimateToJobAction}
         createPrintableEstimateAction={createPrintableEstimateAction}

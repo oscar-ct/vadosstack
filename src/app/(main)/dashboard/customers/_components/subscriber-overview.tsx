@@ -1,8 +1,7 @@
 "use client";
 
-import { Download, Users } from "lucide-react";
+import { Users } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 import type { CreateCustomerState, CustomerMutationState } from "../actions";
@@ -33,10 +32,7 @@ export function SubscriberOverview({
         <CardDescription>Recent customer records with plan, billing, status, and signup activity.</CardDescription>
         <CardAction className="flex items-center gap-2">
           <CreateCustomerDialog action={createCustomerAction} />
-          <Button variant="outline" size="sm" className="hidden w-7 px-0 sm:w-auto sm:px-2.5 md:flex">
-            <Download />
-            <span className="hidden sm:inline">Export</span>
-          </Button>
+          <div id="customers-export-action" />
         </CardAction>
       </CardHeader>
 
@@ -44,6 +40,7 @@ export function SubscriberOverview({
         <RecentCustomersTable
           data={data}
           deleteCustomerAction={deleteCustomerAction}
+          exportSlotId="customers-export-action"
           updateCustomerAction={updateCustomerAction}
         />
       </CardContent>

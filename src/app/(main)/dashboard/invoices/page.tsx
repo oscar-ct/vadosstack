@@ -1,8 +1,7 @@
 import { addDays } from "date-fns";
-import { Download, ReceiptText } from "lucide-react";
+import { ReceiptText } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
-import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
 import { formatDocumentNumber } from "@/lib/document-number";
@@ -100,17 +99,15 @@ export default async function Page({
           </div>
         </CardTitle>
         <CardDescription>A simple index of invoices. Select an invoice number to view it.</CardDescription>
-        <CardAction>
-          <Button variant="outline" size="sm" className="hidden w-7 px-0 sm:flex sm:w-auto sm:px-2.5">
-            <Download />
-            <span className="hidden sm:inline">Export</span>
-          </Button>
+        <CardAction className="flex items-center gap-2">
+          <div id="invoices-export-action" />
         </CardAction>
       </CardHeader>
       <CardContent>
         <InvoicesTable
           createJobPaymentAction={createJobPaymentAction}
           deleteJobPaymentAction={deleteJobPaymentAction}
+          exportSlotId="invoices-export-action"
           initialManagedInvoiceId={resolvedSearchParams?.invoice}
           invoices={invoiceItems}
         />

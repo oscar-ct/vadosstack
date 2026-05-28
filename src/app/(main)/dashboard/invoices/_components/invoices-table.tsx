@@ -21,16 +21,22 @@ import {
 import { differenceInCalendarDays, parseISO } from "date-fns";
 import {
   ArrowUpDown,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   CircleDollarSign,
   Search,
+  SlidersHorizontal,
   Trash2,
+  X,
 } from "lucide-react";
+import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
 
+import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
+import { DateRangePicker } from "@/components/date-range-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +51,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,6 +87,22 @@ const sortOptions = [
   { value: "total-desc", label: "Total high-low" },
 ] as const;
 
+const statusOptions = [
+  { value: "all", label: "All statuses" },
+  { value: "Unpaid", label: "Unpaid" },
+  { value: "Partial", label: "Partial" },
+  { value: "Paid", label: "Paid" },
+  { value: "Overpaid", label: "Overpaid" },
+] as const;
+
+const dueOptions = [
+  { value: "all", label: "All due dates" },
+  { value: "overdue", label: "Overdue" },
+  { value: "due-today", label: "Due today" },
+  { value: "upcoming", label: "Upcoming" },
+  { value: "paid", label: "Paid" },
+] as const;
+
 function formatMoney(value: string) {
   return `$${Number(value).toFixed(2)}`;
 }
@@ -78,6 +110,25 @@ function formatMoney(value: string) {
 function formatDate(value: string) {
   return formatDateOnly(value) ?? "Not scheduled";
 }
+
+const invoiceExportColumns: CsvColumn<InvoiceTableItem>[] = [
+  { header: "Invoice number", value: (invoice) => invoice.invoiceNumber },
+  { header: "Customer", value: (invoice) => invoice.customerName },
+  { header: "Job title", value: (invoice) => invoice.jobTitle },
+  { header: "Job number", value: (invoice) => invoice.jobNumber },
+  { header: "Issued date", value: (invoice) => formatDate(invoice.issuedAt) },
+  { header: "Due date", value: (invoice) => formatDate(invoice.dueAt) },
+  { header: "Status", value: (invoice) => getInvoiceStatus(invoice) },
+  { header: "Payment status", value: (invoice) => invoice.paymentStatus },
+  { header: "Labor cost", value: (invoice) => invoice.laborCost },
+  { header: "Materials subtotal", value: (invoice) => invoice.materialsSubtotal },
+  { header: "Material tax", value: (invoice) => invoice.materialTaxAmount },
+  { header: "Total", value: (invoice) => invoice.total },
+  { header: "Deposit paid", value: (invoice) => invoice.depositPaid },
+  { header: "Amount paid", value: (invoice) => invoice.amountPaid },
+  { header: "Balance due", value: (invoice) => invoice.balanceDue },
+  { header: "Service location", value: (invoice) => invoice.jobServiceLocation },
+];
 
 function formatCustomerName(name?: string) {
   return name ?? "No customer";
@@ -519,11 +570,13 @@ function InvoiceDetailsDialog({
 export function InvoicesTable({
   createJobPaymentAction,
   deleteJobPaymentAction,
+  exportSlotId,
   initialManagedInvoiceId,
   invoices,
 }: {
   createJobPaymentAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
   deleteJobPaymentAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
+  exportSlotId?: string;
   initialManagedInvoiceId?: string;
   invoices: InvoiceTableItem[];
 }) {
@@ -538,7 +591,9 @@ export function InvoicesTable({
     pageSize: 10,
   });
   const [columnVisibility] = React.useState<VisibilityState>({
+    dueBucket: false,
     search: false,
+    status: false,
   });
   const columns = React.useMemo(() => getInvoicesColumns({ onManageInvoice: setInvoiceToManage }), []);
   React.useEffect(() => {
@@ -568,7 +623,7 @@ export function InvoicesTable({
       pagination,
       columnVisibility,
     },
-    getRowId: (row) => row.invoiceNumber,
+    getRowId: (row) => row.id,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onColumnFiltersChange: setColumnFilters,
@@ -581,6 +636,22 @@ export function InvoicesTable({
   });
 
   const searchQuery = (table.getColumn("search")?.getFilterValue() as string) ?? "";
+  const selectedExportRows = table.getFilteredSelectedRowModel().rows.map((row) => row.original);
+  const currentExportRows = table.getPrePaginationRowModel().rows.map((row) => row.original);
+  const exportMenu = (
+    <CsvExportMenu
+      allRows={invoices}
+      columns={invoiceExportColumns}
+      currentRows={currentExportRows}
+      filenamePrefix="invoices"
+      selectedRows={selectedExportRows}
+      triggerClassName={exportSlotId ? "hidden w-7 px-0 sm:w-auto sm:px-2.5 md:flex" : undefined}
+    />
+  );
+  const statusFilter = (table.getColumn("status")?.getFilterValue() as string) ?? "all";
+  const dueFilter = (table.getColumn("dueBucket")?.getFilterValue() as string) ?? "all";
+  const issuedDateFilter = table.getColumn("issuedAt")?.getFilterValue() as DateRange | undefined;
+  const hasIssuedDateFilter = Boolean(issuedDateFilter?.from || issuedDateFilter?.to);
   const filteredRows = table.getFilteredRowModel().rows;
   const currentRows = table.getRowModel().rows;
   const dueSummary = React.useMemo(() => {
@@ -615,6 +686,21 @@ export function InvoicesTable({
             : [{ id: "issuedAt", desc: true }];
 
     table.setSorting(nextSorting);
+    table.setPageIndex(0);
+  }
+
+  function updateStatusFilter(value: string) {
+    table.getColumn("status")?.setFilterValue(value === "all" ? undefined : value);
+    table.setPageIndex(0);
+  }
+
+  function updateDueFilter(value: string) {
+    table.getColumn("dueBucket")?.setFilterValue(value === "all" ? undefined : value);
+    table.setPageIndex(0);
+  }
+
+  function updateIssuedDateFilter(value: DateRange | undefined) {
+    table.getColumn("issuedAt")?.setFilterValue(value?.from || value?.to ? value : undefined);
     table.setPageIndex(0);
   }
 
@@ -679,9 +765,159 @@ export function InvoicesTable({
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {exportSlotId ? null : exportMenu}
+            <div className="md:hidden">
+              <Drawer>
+                <DrawerTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <SlidersHorizontal />
+                    Filters
+                  </Button>
+                </DrawerTrigger>
+                <DrawerContent>
+                  <DrawerHeader>
+                    <DrawerTitle>Invoice filters</DrawerTitle>
+                    <DrawerDescription>Filter and sort the invoices list on mobile.</DrawerDescription>
+                  </DrawerHeader>
+                  <div className="grid gap-4 px-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="invoices-mobile-status">Status</Label>
+                      <Select value={statusFilter} onValueChange={updateStatusFilter}>
+                        <SelectTrigger id="invoices-mobile-status" className="w-full">
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {statusOptions.map((status) => (
+                              <SelectItem key={status.value} value={status.value}>
+                                {status.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="invoices-mobile-due">Due</Label>
+                      <Select value={dueFilter} onValueChange={updateDueFilter}>
+                        <SelectTrigger id="invoices-mobile-due" className="w-full">
+                          <SelectValue placeholder="Due" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {dueOptions.map((due) => (
+                              <SelectItem key={due.value} value={due.value}>
+                                {due.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="invoices-mobile-issued-date">Issued date</Label>
+                      <div className="grid gap-2">
+                        <DateRangePicker
+                          id="invoices-mobile-issued-date"
+                          value={issuedDateFilter}
+                          onChange={updateIssuedDateFilter}
+                          placeholder="Filter by issued date"
+                          align="start"
+                          numberOfMonths={1}
+                          className="w-full justify-start text-left"
+                        />
+                        {hasIssuedDateFilter ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateIssuedDateFilter(undefined)}
+                          >
+                            <X />
+                            Clear issued date
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="invoices-mobile-sort">Sort</Label>
+                      <Select value={sortValue} onValueChange={updateSort}>
+                        <SelectTrigger id="invoices-mobile-sort" className="w-full">
+                          <SelectValue placeholder="Sort" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {sortOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DrawerFooter>
+                    <DrawerClose asChild>
+                      <Button>Done</Button>
+                    </DrawerClose>
+                  </DrawerFooter>
+                </DrawerContent>
+              </Drawer>
+            </div>
+            <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <CircleDollarSign />
+                    Status
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuRadioGroup value={statusFilter} onValueChange={updateStatusFilter}>
+                    {statusOptions.map((status) => (
+                      <DropdownMenuRadioItem key={status.value} value={status.value}>
+                        {status.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <CalendarDays />
+                    Due
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuRadioGroup value={dueFilter} onValueChange={updateDueFilter}>
+                    {dueOptions.map((due) => (
+                      <DropdownMenuRadioItem key={due.value} value={due.value}>
+                        {due.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DateRangePicker
+                id="invoices-issued-date-filter"
+                value={issuedDateFilter}
+                onChange={updateIssuedDateFilter}
+                placeholder="Issued date"
+                align="start"
+                size="sm"
+              />
+              {hasIssuedDateFilter ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => updateIssuedDateFilter(undefined)}>
+                  <X />
+                  Clear issued date
+                </Button>
+              ) : null}
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="hidden md:flex">
                   <ArrowUpDown />
                   Sort
                 </Button>
@@ -699,6 +935,7 @@ export function InvoicesTable({
           </div>
         </div>
       </div>
+      {exportSlotId ? <CsvExportSlot id={exportSlotId}>{exportMenu}</CsvExportSlot> : null}
       <div className="grid gap-3 sm:hidden">
         {currentRows.length ? (
           currentRows.map((row) => {

@@ -1,8 +1,7 @@
 "use client";
 
-import { BriefcaseBusiness, Download } from "lucide-react";
+import { BriefcaseBusiness } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 import type { InvoiceMutationState } from "../../invoices/types";
@@ -49,10 +48,7 @@ export function JobsOverview({
         </CardDescription>
         <CardAction className="flex items-center gap-2">
           <CreateJobDialog action={createJobAction} customers={customers} services={services} />
-          <Button variant="outline" size="sm" className={"hidden w-7 px-0 sm:w-auto sm:px-2.5 md:flex"}>
-            <Download />
-            Export
-          </Button>
+          <div id="jobs-export-action" />
         </CardAction>
       </CardHeader>
 
@@ -65,6 +61,7 @@ export function JobsOverview({
           deleteJobAction={deleteJobAction}
           deleteJobPaymentAction={deleteJobPaymentAction}
           initialSelectedJobId={initialSelectedJobId}
+          exportSlotId="jobs-export-action"
           services={services}
           updateJobAction={updateJobAction}
         />

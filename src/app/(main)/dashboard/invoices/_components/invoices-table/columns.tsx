@@ -4,7 +4,8 @@
 import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { differenceInCalendarDays, format, parseISO } from "date-fns";
+import { differenceInCalendarDays, endOfDay, format, parseISO, startOfDay } from "date-fns";
+import type { DateRange } from "react-day-picker";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,16 @@ function getDueState(invoice: InvoiceTableItem) {
   };
 }
 
+function getDueFilterBucket(invoice: InvoiceTableItem) {
+  if (Number(invoice.balanceDue) <= 0) return "paid";
+
+  const daysUntilDue = differenceInCalendarDays(parseISO(invoice.dueAt), new Date());
+
+  if (daysUntilDue < 0) return "overdue";
+  if (daysUntilDue === 0) return "due-today";
+  return "upcoming";
+}
+
 export function getInvoicesColumns({
   onManageInvoice,
 }: {
@@ -102,6 +113,17 @@ export function getInvoicesColumns({
       cell: ({ row }) => (
         <span className="whitespace-nowrap">{format(parseISO(row.original.issuedAt), "MMM d, yyyy")}</span>
       ),
+      filterFn: (row, _columnId, filterValue: DateRange | undefined) => {
+        if (!filterValue?.from && !filterValue?.to) return true;
+
+        const issuedDate = parseISO(row.original.issuedAt);
+        const from = filterValue.from ? startOfDay(filterValue.from) : undefined;
+        const to = filterValue.to ? endOfDay(filterValue.to) : undefined;
+
+        if (from && issuedDate < from) return false;
+        if (to && issuedDate > to) return false;
+        return true;
+      },
     },
     {
       accessorKey: "dueAt",
@@ -190,6 +212,18 @@ export function getInvoicesColumns({
           </Button>
         </div>
       ),
+      enableHiding: true,
+    },
+    {
+      id: "status",
+      accessorFn: (row) => getInvoiceStatus(row),
+      filterFn: "equalsString",
+      enableHiding: true,
+    },
+    {
+      id: "dueBucket",
+      accessorFn: (row) => getDueFilterBucket(row),
+      filterFn: "equalsString",
       enableHiding: true,
     },
     {

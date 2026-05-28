@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
+import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,6 +99,28 @@ function shouldIgnoreRowClick(target: EventTarget | null) {
     : false;
 }
 
+function formatExportDate(value?: string) {
+  return value ? new Date(value).toLocaleDateString() : "";
+}
+
+const jobExportColumns: CsvColumn<JobRow>[] = [
+  { header: "Job title", value: (job) => job.description },
+  { header: "Customer", value: (job) => job.customerName },
+  { header: "Status", value: (job) => job.status },
+  { header: "Category", value: (job) => job.category },
+  { header: "Service location", value: (job) => job.serviceLocation },
+  { header: "Start date", value: (job) => formatExportDate(job.dateBegin) },
+  { header: "End date", value: (job) => formatExportDate(job.dateEnd) },
+  { header: "Final cost", value: (job) => job.finalCost },
+  { header: "Deposit paid", value: (job) => job.depositPaid },
+  { header: "Amount paid", value: (job) => job.amountPaid },
+  { header: "Balance due", value: (job) => job.outstandingBalance },
+  { header: "Payment status", value: (job) => job.paymentStatus },
+  { header: "Invoice created", value: (job) => (job.invoiceId ? "Yes" : "No") },
+  { header: "Created date", value: (job) => formatExportDate(job.createdAt) },
+  { header: "Notes", value: (job) => job.notes },
+];
+
 export function JobsTable({
   customers,
   createJobPaymentAction,
@@ -105,6 +128,7 @@ export function JobsTable({
   data,
   deleteJobAction,
   deleteJobPaymentAction,
+  exportSlotId,
   initialSelectedJobId,
   services,
   updateJobAction,
@@ -115,6 +139,7 @@ export function JobsTable({
   data: JobRow[];
   deleteJobAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
   deleteJobPaymentAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
+  exportSlotId?: string;
   initialSelectedJobId?: string;
   services: ServiceTemplateRow[];
   updateJobAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
@@ -166,6 +191,18 @@ export function JobsTable({
   });
 
   const searchQuery = (table.getColumn("search")?.getFilterValue() as string) ?? "";
+  const selectedExportRows = table.getFilteredSelectedRowModel().rows.map((row) => row.original);
+  const currentExportRows = table.getPrePaginationRowModel().rows.map((row) => row.original);
+  const exportMenu = (
+    <CsvExportMenu
+      allRows={data}
+      columns={jobExportColumns}
+      currentRows={currentExportRows}
+      filenamePrefix="jobs"
+      selectedRows={selectedExportRows}
+      triggerClassName={exportSlotId ? "hidden w-7 px-0 sm:w-auto sm:px-2.5 md:flex" : undefined}
+    />
+  );
   const statusFilter = (table.getColumn("status")?.getFilterValue() as string) ?? "all";
   const startDateFilter = table.getColumn("dateBegin")?.getFilterValue() as DateRange | undefined;
   const hasStartDateFilter = Boolean(startDateFilter?.from || startDateFilter?.to);
@@ -286,6 +323,7 @@ export function JobsTable({
                 }}
               />
             </div>
+            {exportSlotId ? null : exportMenu}
             <div className="md:hidden">
               <Drawer>
                 <DrawerTrigger asChild>
@@ -691,6 +729,7 @@ export function JobsTable({
           </div>
         </div>
       </div>
+      {exportSlotId ? <CsvExportSlot id={exportSlotId}>{exportMenu}</CsvExportSlot> : null}
     </>
   );
 }

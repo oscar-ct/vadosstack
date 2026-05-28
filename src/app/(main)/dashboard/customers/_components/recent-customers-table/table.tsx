@@ -29,6 +29,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
+import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -83,13 +84,41 @@ function shouldIgnoreRowClick(target: EventTarget | null) {
     : false;
 }
 
+function formatExportDate(value?: string) {
+  return value ? new Date(value).toLocaleDateString() : "";
+}
+
+function formatCustomerAddress(customer: RecentCustomerRow) {
+  const address = customer.addresses?.[0] ?? customer.address;
+
+  if (!address) return "";
+
+  const cityLine = [address.city, address.state, address.postalCode].filter(Boolean).join(", ");
+  return [address.line1, address.line2, cityLine, address.country].filter(Boolean).join(", ");
+}
+
+const customerExportColumns: CsvColumn<RecentCustomerRow>[] = [
+  { header: "Customer name", value: (customer) => customer.name },
+  { header: "Email", value: (customer) => customer.email },
+  { header: "Phone", value: (customer) => customer.phoneNumbers?.map((phone) => phone.value).join("; ") },
+  { header: "Billing status", value: (customer) => customer.billing },
+  { header: "Outstanding balance", value: (customer) => customer.outstandingAmount },
+  { header: "Job count", value: (customer) => customer.jobCount },
+  { header: "Last scheduled job", value: (customer) => formatExportDate(customer.lastScheduledJobDate) },
+  { header: "Joined date", value: (customer) => formatExportDate(customer.joined) },
+  { header: "Address", value: formatCustomerAddress },
+  { header: "Notes", value: (customer) => customer.notes },
+];
+
 export function RecentCustomersTable({
   data,
   deleteCustomerAction,
+  exportSlotId,
   updateCustomerAction,
 }: {
   data: RecentCustomerRow[];
   deleteCustomerAction: (state: CustomerMutationState, formData: FormData) => Promise<CustomerMutationState>;
+  exportSlotId?: string;
   updateCustomerAction: (state: CustomerMutationState, formData: FormData) => Promise<CustomerMutationState>;
 }) {
   const [customerToDelete, setCustomerToDelete] = React.useState<RecentCustomerRow | null>(null);
@@ -139,6 +168,18 @@ export function RecentCustomersTable({
   });
 
   const searchQuery = (table.getColumn("search")?.getFilterValue() as string) ?? "";
+  const selectedExportRows = table.getFilteredSelectedRowModel().rows.map((row) => row.original);
+  const currentExportRows = table.getPrePaginationRowModel().rows.map((row) => row.original);
+  const exportMenu = (
+    <CsvExportMenu
+      allRows={data}
+      columns={customerExportColumns}
+      currentRows={currentExportRows}
+      filenamePrefix="customers"
+      selectedRows={selectedExportRows}
+      triggerClassName={exportSlotId ? "hidden w-7 px-0 sm:w-auto sm:px-2.5 md:flex" : undefined}
+    />
+  );
   const billingFilter = (table.getColumn("billingBucket")?.getFilterValue() as string) ?? "all";
   const lastScheduledFilter = (table.getColumn("lastScheduledWindow")?.getFilterValue() as string) ?? "all";
   const sortValue = React.useMemo(() => {
@@ -196,6 +237,7 @@ export function RecentCustomersTable({
                 }}
               />
             </div>
+            {exportSlotId ? null : exportMenu}
             <div className="md:hidden">
               <Drawer>
                 <DrawerTrigger asChild>
@@ -585,6 +627,7 @@ export function RecentCustomersTable({
           </div>
         </div>
       </div>
+      {exportSlotId ? <CsvExportSlot id={exportSlotId}>{exportMenu}</CsvExportSlot> : null}
     </>
   );
 }
