@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Mail, Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -57,6 +58,7 @@ export function EstimateActions({
   returnTo: string;
   validThrough: string;
 }) {
+  const router = useRouter();
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [open, setOpen] = React.useState(false);
   const [showStateMessage, setShowStateMessage] = React.useState(false);
@@ -67,13 +69,18 @@ export function EstimateActions({
       return;
     }
 
-    if (notice.type === "success") {
-      toast.success(notice.message);
-      return;
-    }
+    const timeout = window.setTimeout(() => {
+      if (notice.type === "success") {
+        toast.success(notice.message);
+      } else {
+        toast.error(notice.message);
+      }
 
-    toast.error(notice.message);
-  }, [notice?.message, notice?.type]);
+      router.replace(returnTo, { scroll: false });
+    }, 100);
+
+    return () => window.clearTimeout(timeout);
+  }, [notice?.message, notice?.type, returnTo, router]);
 
   React.useEffect(() => {
     if (!state.message || !stateSubmittedAt) {
@@ -188,7 +195,7 @@ export function EstimateActions({
               </DialogContent>
             </Dialog>
             {state.reconnectRequired ? (
-              <Button asChild variant="ghost" size="sm">
+              <Button asChild variant="outline" size="sm">
                 <Link href={`/api/auth/google/mail?returnTo=${encodeURIComponent(returnTo)}`}>Reconnect Gmail</Link>
               </Button>
             ) : null}
