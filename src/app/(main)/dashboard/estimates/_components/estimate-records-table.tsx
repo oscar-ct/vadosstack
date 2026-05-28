@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   type ColumnFiltersState,
@@ -572,6 +573,7 @@ export function EstimateRecordsTable({
   data,
   deleteEstimateRecordAction,
   exportSlotId,
+  initialSelectedEstimateId,
   services,
   updateEstimateStatusAction,
   updateEstimateRecordAction,
@@ -591,6 +593,7 @@ export function EstimateRecordsTable({
     formData: FormData,
   ) => Promise<EstimateRecordMutationState>;
   exportSlotId?: string;
+  initialSelectedEstimateId?: string;
   services: ServiceTemplateRow[];
   updateEstimateStatusAction: (
     state: EstimateRecordMutationState,
@@ -601,6 +604,8 @@ export function EstimateRecordsTable({
     formData: FormData,
   ) => Promise<EstimateRecordMutationState>;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [estimateToDelete, setEstimateToDelete] = React.useState<EstimateRecordRow | null>(null);
   const [estimateToEdit, setEstimateToEdit] = React.useState<EstimateRecordRow | null>(null);
   const [selectedEstimate, setSelectedEstimate] = React.useState<EstimateRecordRow | null>(null);
@@ -705,6 +710,15 @@ export function EstimateRecordsTable({
     table.getColumn("status")?.setFilterValue(value === "all" ? undefined : value);
     table.setPageIndex(0);
   }
+
+  React.useEffect(() => {
+    if (!initialSelectedEstimateId) return;
+
+    const estimate = data.find((item) => item.id === initialSelectedEstimateId);
+    if (estimate) {
+      setSelectedEstimate(estimate);
+    }
+  }, [data, initialSelectedEstimateId]);
 
   React.useEffect(() => {
     if (!selectedEstimate) return;
@@ -1125,7 +1139,16 @@ export function EstimateRecordsTable({
         estimate={selectedEstimate}
         onEditEstimate={openEstimateEditor}
         onOpenChange={(open) => {
-          if (!open) setSelectedEstimate(null);
+          if (!open) {
+            setSelectedEstimate(null);
+
+            if (searchParams.get("estimate")) {
+              const nextParams = new URLSearchParams(searchParams.toString());
+              nextParams.delete("estimate");
+              const nextQuery = nextParams.toString();
+              router.replace(nextQuery ? `/dashboard/estimates?${nextQuery}` : "/dashboard/estimates");
+            }
+          }
         }}
         updateEstimateStatusAction={updateEstimateStatusAction}
       />

@@ -7,6 +7,7 @@ import {
   BriefcaseBusiness,
   CalendarClock,
   CheckCircle2,
+  CheckSquare,
   Clock3,
   Gauge,
   Sparkles,
@@ -32,6 +33,14 @@ type JobAttentionItem = {
   detail: string;
   priority: "Schedule" | "Review hold";
   status: "Unscheduled" | "On Hold";
+  title: string;
+};
+
+type UpcomingTask = {
+  id: string;
+  customerName: string;
+  location?: string;
+  scheduledFor: string;
   title: string;
 };
 
@@ -64,6 +73,104 @@ async function getUpcomingJobs(ownerId: string): Promise<UpcomingJob[]> {
     status: job.status,
     title: job.description,
   }));
+}
+
+async function getUpcomingTasks(ownerId: string): Promise<UpcomingTask[]> {
+  const today = startOfToday();
+  const tasks = await prisma.task.findMany({
+    where: {
+      ownerId,
+      scheduledFor: {
+        gte: today,
+      },
+      status: {
+        not: "Completed",
+      },
+    },
+    include: {
+      customer: true,
+    },
+    orderBy: {
+      scheduledFor: "asc",
+    },
+    take: 5,
+  });
+
+  return tasks.map((task) => ({
+    id: task.id,
+    customerName: task.customer?.name ?? "Task",
+    location: task.location ?? undefined,
+    scheduledFor: task.scheduledFor.toISOString(),
+    title: task.title,
+  }));
+}
+
+function UpcomingTasks({ tasks }: { tasks: UpcomingTask[] }) {
+  return (
+    <Card className="rounded-lg border-border bg-card shadow-sm">
+      <CardHeader className="border-b pb-4">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <span className="grid size-8 place-items-center rounded-md bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/25">
+              <CheckSquare className="size-4" />
+            </span>
+            Upcoming tasks
+          </CardTitle>
+          <CardDescription className="mt-1 text-xs">
+            {tasks.length
+              ? `${tasks.length} open scheduled ${tasks.length === 1 ? "task" : "tasks"}`
+              : "No upcoming tasks"}
+          </CardDescription>
+        </div>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link prefetch={false} href="/dashboard/calendar">
+              Calendar <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 pt-0">
+        {tasks.length ? (
+          tasks.map((task) => (
+            <Link
+              key={task.id}
+              prefetch={false}
+              href="/dashboard/calendar"
+              className="grid min-w-0 gap-3 rounded-md border border-border bg-muted/35 p-3 transition-colors hover:bg-muted/60 sm:grid-cols-[1fr_auto]"
+            >
+              <div className="min-w-0">
+                <div className="truncate font-medium text-sm">{task.title}</div>
+                <div className="truncate text-muted-foreground text-xs">{task.customerName}</div>
+                {task.location ? (
+                  <div className="mt-1 truncate text-muted-foreground text-xs">{task.location}</div>
+                ) : null}
+              </div>
+              <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-end">
+                <Badge
+                  variant="outline"
+                  className="rounded-md border-amber-300 text-amber-700 dark:border-amber-900 dark:text-amber-400"
+                >
+                  {format(new Date(task.scheduledFor), "MMM d")}
+                </Badge>
+                <ArrowRight className="size-4 text-muted-foreground" />
+              </div>
+            </Link>
+          ))
+        ) : (
+          <div className="grid min-h-36 place-items-center rounded-md border border-dashed bg-muted/20 p-6 text-center">
+            <div>
+              <div className="mx-auto grid size-10 place-items-center rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25">
+                <CheckCircle2 className="size-4" />
+              </div>
+              <p className="mt-3 font-medium text-sm">No upcoming tasks</p>
+              <p className="mt-1 text-muted-foreground text-xs">Calendar tasks will appear here.</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 async function getOutstandingJobs(ownerId: string): Promise<OutstandingJob[]> {
@@ -403,8 +510,9 @@ export default async function Page() {
     );
   }
 
-  const [upcomingJobs, outstandingJobs, pendingTimeReviews, jobAttention] = await Promise.all([
+  const [upcomingJobs, upcomingTasks, outstandingJobs, pendingTimeReviews, jobAttention] = await Promise.all([
     getUpcomingJobs(currentUser.id),
+    getUpcomingTasks(currentUser.id),
     getOutstandingJobs(currentUser.id),
     getPendingTimeReviews(currentUser.id),
     getJobAttention(currentUser.id),
@@ -413,6 +521,7 @@ export default async function Page() {
   const outstandingTotal = outstandingJobs.reduce((total, job) => total + job.balanceDue, 0);
   const hasOperationalActivity =
     upcomingJobs.length > 0 ||
+    upcomingTasks.length > 0 ||
     outstandingJobs.length > 0 ||
     pendingTimeReviews.pendingCount > 0 ||
     jobAttention.unscheduledCount > 0 ||
@@ -580,6 +689,7 @@ export default async function Page() {
               onHoldCount={jobAttention.onHoldCount}
               unscheduledCount={jobAttention.unscheduledCount}
             />
+            <UpcomingTasks tasks={upcomingTasks} />
             <UpcomingJobs jobs={upcomingJobs} />
           </div>
           <OutstandingJobs jobs={outstandingJobs} />

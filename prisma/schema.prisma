@@ -22,6 +22,7 @@ model Customer {
   phoneNumbers    CustomerPhoneNumber[]
   jobs            Job[]
   estimateRecords EstimateRecord[]
+  tasks           Task[]
 
   @@unique([id, ownerId])
   @@unique([ownerId, email])
@@ -60,6 +61,7 @@ model Job {
   payments          JobPayment[]
   timeEntries       TimeEntry[]
   timeEntryRequests TimeEntryRequest[]
+  tasks             Task[]
 
   @@unique([id, ownerId])
   @@index([ownerId])
@@ -124,6 +126,7 @@ model User {
   sessions            Session[]
   passwordResetTokens PasswordResetToken[]
   googleMailAccount   GoogleMailAccount?
+  tasks               Task[]
 
   @@map("users")
 }
@@ -151,6 +154,7 @@ model EstimateRecord {
   owner             User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   customer          Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   printableEstimate Estimate?
+  tasks             Task[]
 
   @@unique([id, ownerId])
   @@index([ownerId])
@@ -158,6 +162,35 @@ model EstimateRecord {
   @@index([status])
   @@index([createdAt])
   @@map("estimate_records")
+}
+
+model Task {
+  id               String          @id @default(cuid())
+  ownerId          String
+  customerId       String?
+  jobId            String?
+  estimateRecordId String?
+  title            String
+  notes            String?
+  location         String?
+  scheduledFor     DateTime
+  status           String          @default("Open")
+  priority         String          @default("Normal")
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  owner            User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customer         Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  job              Job?            @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  estimateRecord   EstimateRecord? @relation(fields: [estimateRecordId], references: [id], onDelete: SetNull)
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([customerId])
+  @@index([jobId])
+  @@index([estimateRecordId])
+  @@index([scheduledFor])
+  @@index([status])
+  @@map("tasks")
 }
 
 model Invoice {

@@ -1,5 +1,6 @@
 import {
   BriefcaseBusiness,
+  CalendarDays,
   ChartNoAxesCombined,
   ListTodo,
   type LucideIcon,
@@ -49,6 +50,11 @@ export const sidebarItems: NavGroup[] = [
         title: "Overview",
         url: "/dashboard/overview",
         icon: ListTodo,
+      },
+      {
+        title: "Calendar",
+        url: "/dashboard/calendar",
+        icon: CalendarDays,
       },
       {
         title: "Command Center",

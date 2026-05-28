@@ -119,7 +119,13 @@ async function getServices(ownerId: string): Promise<ServiceTemplateRow[]> {
   }));
 }
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    estimate?: string;
+  }>;
+}) {
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
@@ -131,10 +137,11 @@ export default async function Page() {
     );
   }
 
-  const [customers, estimates, services] = await Promise.all([
+  const [customers, estimates, services, resolvedSearchParams] = await Promise.all([
     getCustomers(currentUser.id),
     getEstimateRecords(currentUser.id),
     getServices(currentUser.id),
+    searchParams,
   ]);
 
   return (
@@ -163,6 +170,7 @@ export default async function Page() {
             data={estimates}
             deleteEstimateRecordAction={deleteEstimateRecordAction}
             exportSlotId="estimates-export-action"
+            initialSelectedEstimateId={resolvedSearchParams?.estimate}
             services={services}
             updateEstimateStatusAction={updateEstimateStatusAction}
             updateEstimateRecordAction={updateEstimateRecordAction}
