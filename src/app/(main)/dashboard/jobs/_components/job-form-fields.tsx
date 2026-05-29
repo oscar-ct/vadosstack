@@ -766,7 +766,7 @@ export function JobFormFields({
             >
               <div className="col-span-2 grid gap-2 md:order-1 md:col-span-4">
                 <Label>Description</Label>
-                <Input
+                <Textarea
                   id={`job-labor-description-${job?.id ?? "new"}-${index}`}
                   aria-label={`Labor ${index + 1} description`}
                   value={item.description}
@@ -778,7 +778,8 @@ export function JobFormFields({
                     )
                   }
                   placeholder="Labor description"
-                  className={mobileFieldClassName}
+                  rows={1}
+                  className={`h-8 min-h-8 resize-y py-1 ${mobileFieldClassName}`}
                 />
               </div>
               <div className="grid min-w-0 gap-2 md:order-3">
@@ -979,7 +980,7 @@ export function JobFormFields({
                   </div>
                   <div className="order-1 col-span-2 grid min-w-0 gap-2 md:order-none md:col-span-1">
                     <Label>Description</Label>
-                    <Input
+                    <Textarea
                       id={`job-material-description-${job?.id ?? "new"}-${index}`}
                       aria-label={`Material ${index + 1} description`}
                       value={material.description}
@@ -991,7 +992,8 @@ export function JobFormFields({
                         )
                       }
                       placeholder="Material description"
-                      className={mobileFieldClassName}
+                      rows={1}
+                      className={`h-8 min-h-8 resize-y py-1 ${mobileFieldClassName}`}
                     />
                   </div>
                   <div className="order-3 grid min-w-0 gap-2 md:order-none">

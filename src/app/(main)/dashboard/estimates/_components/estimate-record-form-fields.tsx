@@ -252,7 +252,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
           >
             <div className="col-span-2 grid gap-2 md:order-1 md:col-span-4">
               <Label>Description</Label>
-              <Input
+              <Textarea
                 aria-label={`Labor ${index + 1} description`}
                 value={item.description}
                 onChange={(event) =>
@@ -263,7 +263,8 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                   )
                 }
                 placeholder={`Labor description`}
-                className={mobileFieldClassName}
+                rows={1}
+                className={`h-8 min-h-8 resize-y py-1 ${mobileFieldClassName}`}
               />
             </div>
             <div className="grid min-w-0 gap-2 md:order-3">
@@ -426,7 +427,7 @@ function MaterialItemsEditor({
             >
               <div className="col-span-2 grid gap-2 md:order-1 md:col-span-4">
                 <Label>Description</Label>
-                <Input
+                <Textarea
                   aria-label={`Material ${index + 1} description`}
                   value={item.description}
                   onChange={(event) =>
@@ -437,7 +438,8 @@ function MaterialItemsEditor({
                     )
                   }
                   placeholder="Material description"
-                  className={mobileFieldClassName}
+                  rows={1}
+                  className={`h-8 min-h-8 resize-y py-1 ${mobileFieldClassName}`}
                 />
               </div>
               <div className="grid min-w-0 gap-2 md:order-3">
