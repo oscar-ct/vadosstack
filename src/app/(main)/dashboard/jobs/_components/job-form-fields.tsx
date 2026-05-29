@@ -802,7 +802,7 @@ export function JobFormFields({
                   className={mobileFieldClassName}
                 />
               </div>
-              <div className="grid min-w-0 gap-2 md:order-4">
+              <div className="grid min-w-0 gap-2 md:order-5">
                 <Label>Rate</Label>
                 <Input
                   id={`job-labor-unit-price-${job?.id ?? "new"}-${index}`}
@@ -836,7 +836,7 @@ export function JobFormFields({
                   className={mobileFieldClassName}
                 />
               </div>
-              <div className="grid min-w-0 gap-2 md:order-5">
+              <div className="grid min-w-0 gap-2 md:order-4">
                 <Label>Unit</Label>
                 <Select
                   value={item.unit || "none"}

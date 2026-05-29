@@ -99,7 +99,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
             className="grid grid-cols-2 gap-3 px-4 py-3 odd:py-0 even:bg-sky-100/80 md:grid-cols-[112px_112px_112px_minmax(0,1fr)_auto]"
           >
             <div className="col-span-2 grid gap-2 md:order-1 md:col-span-4">
-              {index === 0 ? <Label>Description</Label> : null}
+              <Label>Description</Label>
               <Input
                 aria-label={`Labor ${index + 1} description`}
                 value={item.description}
@@ -115,7 +115,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
               />
             </div>
             <div className="grid min-w-0 gap-2 md:order-3">
-              {index === 0 ? <Label>Qty</Label> : null}
+              <Label>Qty</Label>
               <Input
                 aria-label={`Labor ${index + 1} quantity`}
                 value={item.quantity ?? ""}
@@ -134,8 +134,8 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="grid min-w-0 gap-2 md:order-4">
-              {index === 0 ? <Label>Rate</Label> : null}
+            <div className="grid min-w-0 gap-2 md:order-5">
+              <Label>Rate</Label>
               <Input
                 aria-label={`Labor ${index + 1} unit price`}
                 value={item.unitPrice ?? ""}
@@ -167,8 +167,8 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="grid min-w-0 gap-2 md:order-5">
-              {index === 0 ? <Label>Unit</Label> : null}
+            <div className="grid min-w-0 gap-2 md:order-4">
+              <Label>Unit</Label>
               <Select
                 value={item.unit || "none"}
                 onValueChange={(value) =>
@@ -195,7 +195,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
               </Select>
             </div>
             <div className="grid min-w-0 gap-2 md:order-2">
-              {index === 0 ? <Label>Total</Label> : null}
+              <Label>Total</Label>
               <Input
                 aria-label={`Labor ${index + 1} price`}
                 value={item.price}
@@ -269,7 +269,7 @@ function MaterialItemsEditor({
             className="grid grid-cols-2 gap-3 px-4 py-3 odd:py-0 even:bg-amber-100/80 md:grid-cols-[112px_112px_112px_minmax(0,1fr)_auto]"
           >
             <div className="col-span-2 grid gap-2 md:order-1 md:col-span-4">
-              {index === 0 ? <Label>Description</Label> : null}
+              <Label>Description</Label>
               <Input
                 aria-label={`Material ${index + 1} description`}
                 value={item.description}
@@ -285,7 +285,7 @@ function MaterialItemsEditor({
               />
             </div>
             <div className="grid min-w-0 gap-2 md:order-3">
-              {index === 0 ? <Label>Qty</Label> : null}
+              <Label>Qty</Label>
               <Input
                 aria-label={`Material ${index + 1} quantity`}
                 value={item.quantity}
@@ -304,8 +304,8 @@ function MaterialItemsEditor({
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="grid min-w-0 gap-2 md:order-4">
-              {index === 0 ? <Label>Rate</Label> : null}
+            <div className="grid min-w-0 gap-2 md:order-5">
+              <Label>Rate</Label>
               <Input
                 aria-label={`Material ${index + 1} unit price`}
                 value={item.unitPrice}
@@ -337,8 +337,8 @@ function MaterialItemsEditor({
                 className={mobileFieldClassName}
               />
             </div>
-            <div className="grid min-w-0 gap-2 md:order-5">
-              {index === 0 ? <Label>Unit</Label> : null}
+            <div className="grid min-w-0 gap-2 md:order-4">
+              <Label>Unit</Label>
               <Select
                 value={item.unit || "none"}
                 onValueChange={(value) =>
@@ -365,7 +365,7 @@ function MaterialItemsEditor({
               </Select>
             </div>
             <div className="grid min-w-0 gap-2 md:order-2">
-              {index === 0 ? <Label>Total</Label> : null}
+              <Label>Total</Label>
               <Input
                 aria-label={`Material ${index + 1} total`}
                 value={item.price}
