@@ -7,16 +7,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { prisma } from "@/lib/prisma";
 
-import { createJobPaymentAction, deleteJobPaymentAction } from "../jobs/actions";
 import { InvoicesTable, type InvoiceTableItem } from "./_components/invoices-table";
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams?: Promise<{
-    invoice?: string;
-  }>;
-}) {
+export default async function Page() {
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
@@ -28,26 +21,23 @@ export default async function Page({
     );
   }
 
-  const [invoices, resolvedSearchParams] = await Promise.all([
-    prisma.invoice.findMany({
-      where: {
-        ownerId: currentUser.id,
-      },
-      include: {
-        job: {
-          include: {
-            payments: {
-              orderBy: [{ paidOn: "desc" }, { createdAt: "desc" }],
-            },
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      ownerId: currentUser.id,
+    },
+    include: {
+      job: {
+        include: {
+          payments: {
+            orderBy: [{ paidOn: "desc" }, { createdAt: "desc" }],
           },
         },
       },
-      orderBy: {
-        issuedAt: "desc",
-      },
-    }),
-    searchParams,
-  ]);
+    },
+    orderBy: {
+      issuedAt: "desc",
+    },
+  });
 
   const invoiceNumbers = new Map(
     [...invoices]
@@ -66,7 +56,7 @@ export default async function Page({
     jobTitle: invoice.jobTitle,
     jobDescription: invoice.jobDescription ?? undefined,
     jobNumber: invoice.jobId.slice(-6).toUpperCase(),
-    jobHref: `/dashboard/jobs?job=${invoice.jobId}`,
+    jobHref: `/dashboard/jobs/${invoice.jobId}`,
     jobServiceLocation: invoice.serviceLocation ?? undefined,
     paymentStatus: invoice.paymentStatus,
     laborCost: invoice.laborCost.toString(),
@@ -104,13 +94,7 @@ export default async function Page({
         </CardAction>
       </CardHeader>
       <CardContent>
-        <InvoicesTable
-          createJobPaymentAction={createJobPaymentAction}
-          deleteJobPaymentAction={deleteJobPaymentAction}
-          exportSlotId="invoices-export-action"
-          initialManagedInvoiceId={resolvedSearchParams?.invoice}
-          invoices={invoiceItems}
-        />
+        <InvoicesTable exportSlotId="invoices-export-action" invoices={invoiceItems} />
       </CardContent>
     </Card>
   );

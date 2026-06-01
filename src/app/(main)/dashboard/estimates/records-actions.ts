@@ -14,11 +14,13 @@ import { parseMaterials } from "../jobs/_components/materials";
 import { parsePricingItems } from "../jobs/_components/pricing-items";
 
 export type EstimateRecordMutationState = {
+  redirectTo?: string;
   success: boolean;
   message: string;
 };
 
 const estimateRecordStatuses = ["Draft", "Ready to Send", "Waiting on Customer", "Won", "Lost"] as const;
+const estimateJobTypes = ["Residential", "Commercial"] as const;
 
 const emptyToUndefined = (value: FormDataEntryValue | null) => {
   const text = String(value ?? "").trim();
@@ -97,6 +99,23 @@ const materialsSchema = z.array(
   }),
 );
 
+const measurementRoomsSchema = z.array(
+  z.object({
+    id: z.string().trim().optional(),
+    name: z.string().trim().optional(),
+    length: z
+      .string()
+      .trim()
+      .optional()
+      .refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0), "Enter a valid area length."),
+    width: z
+      .string()
+      .trim()
+      .optional()
+      .refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0), "Enter a valid area width."),
+  }),
+);
+
 const estimateRecordSchema = z.object({
   customerId: z.string().trim().optional(),
   newCustomerName: z.string().trim().optional(),
@@ -107,6 +126,8 @@ const estimateRecordSchema = z.object({
   dateBegin: optionalDate,
   dateEnd: optionalDate,
   laborItems: lineItemsSchema,
+  jobType: z.enum(estimateJobTypes).default("Residential"),
+  measurementRooms: measurementRoomsSchema,
   materialTaxRate: optionalMoney,
   materials: materialsSchema,
   scope: z.string().trim().optional(),
@@ -142,6 +163,8 @@ function getEstimatePayload(formData: FormData) {
     dateBegin: emptyToUndefined(formData.get("dateBegin")),
     dateEnd: emptyToUndefined(formData.get("dateEnd")),
     laborItems: parsePricingItems(String(formData.get("laborItems") ?? "")),
+    jobType: formData.get("jobType"),
+    measurementRooms: parseMeasurementRooms(String(formData.get("measurementRooms") ?? "")),
     materialTaxRate: emptyToUndefined(formData.get("materialTaxRate")),
     materials: parseMaterials(String(formData.get("materials") ?? "")),
     scope: emptyToUndefined(formData.get("scope")),
@@ -149,6 +172,15 @@ function getEstimatePayload(formData: FormData) {
     status: formData.get("status"),
     notes: emptyToUndefined(formData.get("notes")),
   };
+}
+
+function parseMeasurementRooms(value: string) {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function normalizeItems(
@@ -195,17 +227,50 @@ function normalizeMaterials<
     );
 }
 
+function normalizeMeasurement(value: string | undefined) {
+  const text = value?.trim() ?? "";
+  if (!text) return "";
+
+  const amount = Number(text);
+  return Number.isFinite(amount) ? amount.toString() : "";
+}
+
+function normalizeMeasurementRooms(rooms: Array<{ id?: string; name?: string; length?: string; width?: string }>) {
+  return rooms
+    .map((room, index) => {
+      const rawName = room.name?.trim() ?? "";
+      const length = normalizeMeasurement(room.length);
+      const width = normalizeMeasurement(room.width);
+      const area = Number(length || 0) * Number(width || 0);
+      const hasRoomData = rawName || Number(length) > 0 || Number(width) > 0;
+
+      return {
+        id: room.id?.trim() || `area-${index + 1}`,
+        name: rawName || `Area ${index + 1}`,
+        length,
+        width,
+        area: Number.isFinite(area) ? area.toFixed(2) : "0.00",
+        hasRoomData,
+      };
+    })
+    .filter((room) => room.hasRoomData)
+    .map(({ hasRoomData: _hasRoomData, ...room }) => room);
+}
+
 function calculateTotal(input: {
   laborItems: Array<{ price: string }>;
+  jobType: (typeof estimateJobTypes)[number];
   materialTaxRate?: string;
   materials: Array<{ price: string }>;
 }) {
   const laborCost = input.laborItems.reduce((total, item) => total + Number(item.price), 0);
   const materialsSubtotal = input.materials.reduce((total, item) => total + Number(item.price), 0);
-  const tax = (laborCost + materialsSubtotal) * (Number(input.materialTaxRate ?? 0) / 100);
+  const taxableSubtotal = input.jobType === "Commercial" ? laborCost + materialsSubtotal : materialsSubtotal;
+  const tax = taxableSubtotal * (Number(input.materialTaxRate ?? 0) / 100);
 
   return {
     laborCost: laborCost.toFixed(2),
+    taxableSubtotal: taxableSubtotal.toFixed(2),
     total: (laborCost + materialsSubtotal + tax).toFixed(2),
   };
 }
@@ -361,16 +426,16 @@ export async function createEstimateRecordAction(
     return { success: false, message: parsed.error.issues[0]?.message ?? "Check the estimate details and try again." };
   }
 
-  let printableEstimateId = "";
+  let createdEstimateId = "";
 
   try {
     const { newCustomerEmail, newCustomerName, newCustomerPhone, ...estimate } = parsed.data;
+    const { jobType, measurementRooms, ...estimateInput } = estimate;
     const laborItems = normalizeItems(estimate.laborItems);
     const materials = normalizeMaterials(estimate.materials);
-    const totals = calculateTotal({ ...estimate, laborItems, materials });
-    const materialsSubtotal = calculateSubtotal(materials);
+    const normalizedMeasurementRooms = normalizeMeasurementRooms(measurementRooms);
+    const totals = calculateTotal({ ...estimate, laborItems, materials, jobType });
     const materialTaxRate = estimate.materialTaxRate ?? "8.25";
-    const materialTaxAmount = (Number(totals.laborCost) + materialsSubtotal) * (Number(materialTaxRate) / 100);
     let customerId = estimate.customerId;
 
     if (!customerId && newCustomerName) {
@@ -395,7 +460,7 @@ export async function createEstimateRecordAction(
 
     const createdEstimate = await prisma.estimateRecord.create({
       data: {
-        ...estimate,
+        ...estimateInput,
         ownerId: currentUser.id,
         customerId,
         dateBegin: estimate.dateBegin ?? null,
@@ -403,55 +468,28 @@ export async function createEstimateRecordAction(
         serviceLocation: estimate.serviceLocation || null,
         laborCost: totals.laborCost,
         laborItems: JSON.stringify(laborItems),
+        jobType,
+        measurementRooms: JSON.stringify(normalizedMeasurementRooms),
         materialTaxRate,
         materials: JSON.stringify(materials),
         estimatedTotal: totals.total,
-        status: estimate.status === "Draft" ? "Ready to Send" : estimate.status,
+        status: estimate.status,
         scope: estimate.scope || null,
         notes: estimate.notes || null,
       },
-      include: {
-        customer: {
-          include: {
-            phoneNumbers: true,
-          },
-        },
-      },
     });
-    const printableItems = [
-      ...laborItems.map((item) => ({ ...item, type: "labor" })),
-      ...materials.map((item) => ({ ...item, type: "material" })),
-    ];
-    const printableEstimate = await prisma.estimate.create({
-      data: {
-        ownerId: currentUser.id,
-        estimateRecordId: createdEstimate.id,
-        customerId: createdEstimate.customerId,
-        customerName: createdEstimate.customer?.name,
-        customerEmail: createdEstimate.customer?.email,
-        customerPhone: createdEstimate.customer?.phoneNumbers[0]?.value,
-        jobTitle: createdEstimate.description,
-        jobDescription: createdEstimate.scope,
-        serviceLocation: createdEstimate.serviceLocation,
-        dateBegin: createdEstimate.dateBegin,
-        dateEnd: createdEstimate.dateEnd,
-        laborCost: totals.laborCost,
-        materialTaxRate,
-        materials: JSON.stringify(printableItems),
-        materialsSubtotal: materialsSubtotal.toFixed(2),
-        materialTaxAmount: materialTaxAmount.toFixed(2),
-        estimatedTotal: totals.total,
-        jobStatus: createdEstimate.status,
-      },
-    });
-    printableEstimateId = printableEstimate.id;
+    createdEstimateId = createdEstimate.id;
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Estimate could not be created." };
   }
 
   revalidatePath("/dashboard/estimates");
   revalidatePath("/dashboard/customers");
-  redirect(`/dashboard/estimates/${printableEstimateId}?from=estimates`);
+  return {
+    success: true,
+    message: "Estimate created.",
+    redirectTo: `/dashboard/estimates/records/${createdEstimateId}`,
+  };
 }
 
 export async function updateEstimateRecordAction(
@@ -476,9 +514,11 @@ export async function updateEstimateRecordAction(
   const { id, newCustomerEmail, newCustomerName, newCustomerPhone, ...estimate } = parsed.data;
 
   try {
+    const { jobType, measurementRooms, ...estimateInput } = estimate;
     const laborItems = normalizeItems(estimate.laborItems);
     const materials = normalizeMaterials(estimate.materials);
-    const totals = calculateTotal({ ...estimate, laborItems, materials });
+    const normalizedMeasurementRooms = normalizeMeasurementRooms(measurementRooms);
+    const totals = calculateTotal({ ...estimate, laborItems, materials, jobType });
     let customerId = estimate.customerId;
 
     if (!customerId && newCustomerName) {
@@ -509,13 +549,15 @@ export async function updateEstimateRecordAction(
         },
       },
       data: {
-        ...estimate,
+        ...estimateInput,
         customerId,
         dateBegin: estimate.dateBegin ?? null,
         dateEnd: estimate.dateEnd ?? null,
         serviceLocation: estimate.serviceLocation || null,
         laborCost: totals.laborCost,
         laborItems: JSON.stringify(laborItems),
+        jobType,
+        measurementRooms: JSON.stringify(normalizedMeasurementRooms),
         materialTaxRate: estimate.materialTaxRate ?? "8.25",
         materials: JSON.stringify(materials),
         estimatedTotal: totals.total,
@@ -548,17 +590,22 @@ export async function deleteEstimateRecordAction(
     return { success: false, message: "Estimate is required." };
   }
 
-  await prisma.estimateRecord.delete({
-    where: {
-      id_ownerId: {
-        id,
-        ownerId: currentUser.id,
+  try {
+    await prisma.estimateRecord.delete({
+      where: {
+        id_ownerId: {
+          id,
+          ownerId: currentUser.id,
+        },
       },
-    },
-  });
+    });
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Estimate could not be deleted." };
+  }
 
   revalidatePath("/dashboard/estimates");
-  return { success: true, message: "Estimate deleted." };
+  revalidatePath("/dashboard/customers");
+  redirect("/dashboard/estimates");
 }
 
 export async function updateEstimateStatusAction(
@@ -681,6 +728,8 @@ export async function convertEstimateToJobAction(
         estimatedCost: "0",
         laborCost: estimate.laborCost ?? "0",
         laborItems: estimate.laborItems,
+        jobType: estimate.jobType,
+        measurementRooms: estimate.measurementRooms,
         materialTaxRate: estimate.materialTaxRate ?? "0",
         materials: estimate.materials,
         finalCost: estimate.estimatedTotal ?? "0",
@@ -767,8 +816,9 @@ export async function createPrintableEstimateAction(
         ...materials.map((item) => ({ ...item, type: "material" })),
       ];
       const materialsSubtotal = calculateSubtotal(materials);
-      const materialTaxAmount =
-        ((Number(estimate.laborCost ?? 0) + materialsSubtotal) * Number(estimate.materialTaxRate ?? 0)) / 100;
+      const taxableSubtotal =
+        estimate.jobType === "Commercial" ? Number(estimate.laborCost ?? 0) + materialsSubtotal : materialsSubtotal;
+      const materialTaxAmount = (taxableSubtotal * Number(estimate.materialTaxRate ?? 0)) / 100;
 
       const printableEstimate = await prisma.estimate.create({
         data: {

@@ -1,12 +1,11 @@
 import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { addDays, format } from "date-fns";
-import { ArrowLeft, BriefcaseBusiness, CalendarDays, MapPin, NotebookText, UserRound } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, MapPin, NotebookText, UserRound } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
-import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/back-button";
 import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
@@ -133,12 +132,6 @@ export default async function Page({
       : resolvedSearchParams?.from === "estimates"
         ? "/dashboard/estimates"
         : "/dashboard/estimates";
-  const backLabel =
-    resolvedSearchParams?.from === "jobs"
-      ? "Jobs"
-      : resolvedSearchParams?.from === "estimates"
-        ? "Estimates"
-        : "Estimates";
   const estimate = await prisma.estimate.findUnique({
     where: {
       id_ownerId: {
@@ -204,12 +197,7 @@ export default async function Page({
   return (
     <div className="mx-auto grid max-w-3xl gap-4 print:max-w-none print:gap-0 print:p-0 print:text-[10px]">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <Button asChild variant="outline" size="sm">
-          <Link prefetch={false} href={backHref}>
-            <ArrowLeft />
-            {backLabel}
-          </Link>
-        </Button>
+        <BackButton fallbackHref={backHref} />
         <div className="flex flex-wrap items-center gap-2">
           <EstimateActions
             action={emailEstimateAction}

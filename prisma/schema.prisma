@@ -41,6 +41,8 @@ model Job {
   estimatedCost     Decimal?
   laborCost         Decimal?           @default(0)
   laborItems        String             @default("[]")
+  jobType           String             @default("Residential")
+  measurementRooms  String             @default("[]")
   materialTaxRate   Decimal?           @default(0)
   materials         String             @default("[]")
   paymentStatus     String             @default("Pending Payment")
@@ -141,6 +143,8 @@ model EstimateRecord {
   dateEnd           DateTime?
   laborCost         Decimal?  @default(0)
   laborItems        String    @default("[]")
+  jobType           String    @default("Residential")
+  measurementRooms  String    @default("[]")
   materialTaxRate   Decimal?  @default(0)
   materials         String    @default("[]")
   estimatedTotal    Decimal?  @default(0)

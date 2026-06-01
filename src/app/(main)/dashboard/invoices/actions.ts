@@ -577,7 +577,8 @@ export async function createInvoiceAction(
     );
     const laborCost = Number(job.laborCost ?? 0);
     const materialTaxRate = Number(job.materialTaxRate ?? 0);
-    const materialTaxAmount = (laborCost + materialsSubtotal) * (materialTaxRate / 100);
+    const taxableSubtotal = materialsSubtotal + (job.jobType === "Commercial" ? laborCost : 0);
+    const materialTaxAmount = taxableSubtotal * (materialTaxRate / 100);
     const balanceDue = calculateOutstandingBalance(job.status, job.finalCost?.toString(), job.amountPaid?.toString());
     const depositPaid = job.depositPaid?.toString() ?? "0";
 

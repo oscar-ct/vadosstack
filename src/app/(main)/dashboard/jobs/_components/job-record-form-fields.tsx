@@ -36,14 +36,13 @@ import { UsStateSelect } from "@/components/us-state-select";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
-import type { JobCustomer } from "../../jobs/_components/jobs-table/schema";
-import { type JobMaterial, stringifyMaterials } from "../../jobs/_components/materials";
-import { type PricingLineItem, stringifyPricingItems } from "../../jobs/_components/pricing-items";
 import { ServicePicker } from "../../services/_components/service-picker";
 import type { ServiceTemplateRow } from "../../services/types";
-import type { EstimateRecordRow } from "./schema";
+import type { JobCustomer, JobRow } from "./jobs-table/schema";
+import { calculateSignedMaterialTotal, type JobMaterial, stringifyMaterials } from "./materials";
+import { type PricingLineItem, stringifyPricingItems } from "./pricing-items";
 
-const statuses = ["Draft", "Ready to Send", "Waiting on Customer", "Won", "Lost"] as const;
+const statuses = ["Unscheduled", "Scheduled", "Completed", "On Hold", "Cancelled"] as const;
 const categories = ["Repair", "Installation", "Other"] as const;
 const newCustomerValue = "new-customer";
 const customLocationValue = "custom-location";
@@ -77,7 +76,7 @@ type CustomLocationFields = {
   zip: string;
 };
 
-type EstimateRecordDraft = {
+type JobRecordDraft = {
   category: string;
   customLocationFields: CustomLocationFields;
   description: string;
@@ -92,6 +91,7 @@ type EstimateRecordDraft = {
   newCustomerPhone: string;
   notes: string;
   savedAt: string;
+  endDate: string;
   scheduledDate: string;
   selectedCustomerId: string;
   selectedLocation: string;
@@ -115,6 +115,9 @@ function createMaterialLineItem(item?: Partial<JobMaterial>): MaterialLineItem {
   return {
     id: crypto.randomUUID(),
     description: item?.description ?? "",
+    type: item?.type ?? "purchase",
+    vendor: item?.vendor ?? "",
+    purchaseDate: item?.purchaseDate ?? "",
     quantity: item?.quantity ?? "1",
     unit: item?.unit ?? "",
     unitPrice: item?.unitPrice ?? item?.price ?? "",
@@ -153,7 +156,7 @@ function formatCustomLocation(fields: CustomLocationFields) {
     .join(", ");
 }
 
-function parseEstimateDate(value?: string) {
+function parseJobDate(value?: string) {
   if (!value) return undefined;
 
   const date = new Date(value);
@@ -169,7 +172,7 @@ function toDateValue(date?: Date) {
 }
 
 function parseDraftDate(value?: string) {
-  return value ? parseEstimateDate(value) : undefined;
+  return value ? parseJobDate(value) : undefined;
 }
 
 function toNumber(value: string) {
@@ -223,9 +226,9 @@ function stringifyMeasurementRooms(rooms: MeasurementRoom[]) {
   );
 }
 
-function parseEstimateDraft(value: string): EstimateRecordDraft | null {
+function parseJobDraft(value: string): JobRecordDraft | null {
   try {
-    const parsed = JSON.parse(value) as Partial<EstimateRecordDraft>;
+    const parsed = JSON.parse(value) as Partial<JobRecordDraft>;
 
     if (parsed.version !== 1) return null;
 
@@ -256,10 +259,11 @@ function parseEstimateDraft(value: string): EstimateRecordDraft | null {
       newCustomerPhone: parsed.newCustomerPhone ?? "",
       notes: parsed.notes ?? "",
       savedAt: parsed.savedAt ?? new Date().toISOString(),
+      endDate: parsed.endDate ?? "",
       scheduledDate: parsed.scheduledDate ?? "",
       selectedCustomerId: parsed.selectedCustomerId ?? selectCustomerValue,
       selectedLocation: parsed.selectedLocation ?? customLocationValue,
-      status: statuses.includes(parsed.status as (typeof statuses)[number]) ? (parsed.status as string) : "Draft",
+      status: statuses.includes(parsed.status as (typeof statuses)[number]) ? (parsed.status as string) : "Unscheduled",
       title: parsed.title ?? "",
       version: 1,
     };
@@ -367,6 +371,182 @@ function ScheduledDatePicker({
   );
 }
 
+// function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (items: LineItem[]) => void }) {
+//   return (
+//     <div className={"grid gap-3"}>
+//       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
+//         <div className="grid gap-1">
+//           <Label className="flex items-center gap-2">
+//             <span className="flex size-7 items-center justify-center rounded-md border border-emerald-600 bg-background">
+//               <Wrench className="size-4 text-emerald-600" />
+//             </span>
+//             Labor
+//           </Label>
+//           <p className="text-muted-foreground text-xs">Add optional labor line items for this job.</p>
+//         </div>
+//         <div className="flex flex-wrap gap-2 sm:justify-end">
+//           <Button type="button" variant="outline" onClick={() => onChange([createLineItem(), ...items])}>
+//             <Plus />
+//             Add labor
+//           </Button>
+//         </div>
+//       </div>
+//       <div className="overflow-hidden rounded-lg border bg-background">
+//         {items.map((item, index) => (
+//           <div
+//             key={item.id}
+//             className="grid grid-cols-2 gap-3 border-t p-3 first:border-t-0 odd:bg-emerald-50/50 md:grid-cols-[44px_minmax(220px,1fr)_82px_110px_96px_110px_36px] md:items-end"
+//           >
+//             <div className="col-span-2 flex items-center justify-between md:col-span-1 md:block">
+//               <span className="inline-flex size-7 items-center justify-center rounded-md border border-emerald-600 bg-background font-medium text-emerald-600 text-xs">
+//                 L{index + 1}
+//               </span>
+//             </div>
+//             <div className="col-span-2 grid gap-2 md:col-span-1">
+//               <Label>Description</Label>
+//               <Textarea
+//                 aria-label={`Labor ${index + 1} description`}
+//                 value={item.description}
+//                 onChange={(event) =>
+//                   onChange(
+//                     items.map((current, itemIndex) =>
+//                       itemIndex === index ? { ...current, description: event.target.value } : current,
+//                     ),
+//                   )
+//                 }
+//                 placeholder={`Labor description`}
+//                 rows={1}
+//                 className={`min-h-10 resize-y bg-background py-2 md:min-h-9 ${mobileFieldClassName}`}
+//               />
+//             </div>
+//             <div className="grid min-w-0 gap-2">
+//               <Label>Qty</Label>
+//               <Input
+//                 aria-label={`Labor ${index + 1} quantity`}
+//                 value={item.quantity ?? ""}
+//                 type="number"
+//                 min="0"
+//                 step="1"
+//                 onChange={(event) =>
+//                   onChange(
+//                     items.map((current, itemIndex) =>
+//                       itemIndex === index
+//                         ? updateCalculatedLineTotal({ ...current, quantity: event.target.value })
+//                         : current,
+//                     ),
+//                   )
+//                 }
+//                 className={`bg-background ${mobileFieldClassName}`}
+//               />
+//             </div>
+//             <div className="grid min-w-0 gap-2">
+//               <Label>Unit</Label>
+//               <Select
+//                 value={item.unit || "none"}
+//                 onValueChange={(value) =>
+//                   onChange(
+//                     items.map((current, itemIndex) =>
+//                       itemIndex === index ? { ...current, unit: value === "none" ? "" : value } : current,
+//                     ),
+//                   )
+//                 }
+//               >
+//                 <SelectTrigger
+//                   aria-label={`Labor ${index + 1} unit`}
+//                   className={`w-full bg-background ${mobileFieldClassName}`}
+//                 >
+//                   <SelectValue />
+//                 </SelectTrigger>
+//                 <SelectContent>
+//                   <SelectGroup>
+//                     <SelectItem value="none">No unit</SelectItem>
+//                     {lineItemUnits.map((unit) => (
+//                       <SelectItem key={unit} value={unit}>
+//                         {unit}
+//                       </SelectItem>
+//                     ))}
+//                   </SelectGroup>
+//                 </SelectContent>
+//               </Select>
+//             </div>
+//             <div className="grid min-w-0 gap-2">
+//               <Label>Rate</Label>
+//               <Input
+//                 aria-label={`Labor ${index + 1} unit price`}
+//                 value={item.unitPrice ?? ""}
+//                 type="number"
+//                 min="0"
+//                 step="0.01"
+//                 onChange={(event) =>
+//                   onChange(
+//                     items.map((current, itemIndex) =>
+//                       itemIndex === index
+//                         ? updateCalculatedLineTotal({ ...current, unitPrice: event.target.value })
+//                         : current,
+//                     ),
+//                   )
+//                 }
+//                 onBlur={() =>
+//                   onChange(
+//                     items.map((current, itemIndex) =>
+//                       itemIndex === index
+//                         ? updateCalculatedLineTotal({
+//                             ...current,
+//                             unitPrice: formatMoneyInputValue(current.unitPrice ?? ""),
+//                           })
+//                         : current,
+//                     ),
+//                   )
+//                 }
+//                 placeholder="0.00"
+//                 className={`bg-background ${mobileFieldClassName}`}
+//               />
+//             </div>
+//             <div className="grid min-w-0 gap-2">
+//               <Label>Total</Label>
+//               <Input
+//                 aria-label={`Labor ${index + 1} price`}
+//                 value={item.price}
+//                 type="number"
+//                 min="0"
+//                 step="0.01"
+//                 onChange={(event) =>
+//                   onChange(
+//                     items.map((current, itemIndex) =>
+//                       itemIndex === index ? { ...current, price: event.target.value } : current,
+//                     ),
+//                   )
+//                 }
+//                 onBlur={() =>
+//                   onChange(
+//                     items.map((current, itemIndex) =>
+//                       itemIndex === index ? { ...current, price: formatMoneyInputValue(current.price) } : current,
+//                     ),
+//                   )
+//                 }
+//                 placeholder="0.00"
+//                 className={`bg-background ${mobileFieldClassName}`}
+//               />
+//             </div>
+//             <div className="col-span-2 flex justify-end md:col-span-1">
+//               <Button
+//                 type="button"
+//                 variant="outline"
+//                 size="icon"
+//                 disabled={items.length === 1}
+//                 onClick={() => onChange(items.length === 1 ? items : items.filter((current) => current.id !== item.id))}
+//                 aria-label={`Remove labor ${index + 1}`}
+//               >
+//                 <Trash2 className="size-4 text-red-500" />
+//               </Button>
+//             </div>
+//           </div>
+//         ))}
+//       </div>
+//     </div>
+//   );
+// }
+
 function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (items: LineItem[]) => void }) {
   return (
     <div className="grid min-w-0 gap-3">
@@ -378,8 +558,9 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
             </span>
             Labor
           </Label>
-          <p className="text-muted-foreground text-xs">Add optional labor line items for this estimate.</p>
+          <p className="text-muted-foreground text-xs">Add optional labor line items for this job.</p>
         </div>
+
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <Button type="button" variant="outline" onClick={() => onChange([createLineItem(), ...items])}>
             <Plus />
@@ -387,6 +568,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
           </Button>
         </div>
       </div>
+
       <div className="min-w-0 overflow-hidden rounded-lg border bg-background">
         {items.map((item, index) => (
           <div
@@ -442,7 +624,10 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                       onChange(
                         items.map((current, itemIndex) =>
                           itemIndex === index
-                            ? updateCalculatedLineTotal({ ...current, quantity: event.target.value })
+                            ? updateCalculatedLineTotal({
+                                ...current,
+                                quantity: event.target.value,
+                              })
                             : current,
                         ),
                       )
@@ -458,7 +643,12 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                     onValueChange={(value) =>
                       onChange(
                         items.map((current, itemIndex) =>
-                          itemIndex === index ? { ...current, unit: value === "none" ? "" : value } : current,
+                          itemIndex === index
+                            ? {
+                                ...current,
+                                unit: value === "none" ? "" : value,
+                              }
+                            : current,
                         ),
                       )
                     }
@@ -494,7 +684,10 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                       onChange(
                         items.map((current, itemIndex) =>
                           itemIndex === index
-                            ? updateCalculatedLineTotal({ ...current, unitPrice: event.target.value })
+                            ? updateCalculatedLineTotal({
+                                ...current,
+                                unitPrice: event.target.value,
+                              })
                             : current,
                         ),
                       )
@@ -534,7 +727,12 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                     onBlur={() =>
                       onChange(
                         items.map((current, itemIndex) =>
-                          itemIndex === index ? { ...current, price: formatMoneyInputValue(current.price) } : current,
+                          itemIndex === index
+                            ? {
+                                ...current,
+                                price: formatMoneyInputValue(current.price),
+                              }
+                            : current,
                         ),
                       )
                     }
@@ -566,6 +764,573 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
   );
 }
 
+// function MaterialItemsEditor({
+//   items,
+//   onChange,
+// }: {
+//   items: MaterialLineItem[];
+//   onChange: (items: MaterialLineItem[]) => void;
+// }) {
+//   return (
+//     <div className="grid gap-3">
+//       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
+//         <div className="grid gap-1">
+//           <Label className="flex items-center gap-2">
+//             <span className="flex size-7 items-center justify-center rounded-md border border-amber-600 bg-background">
+//               <Package className="size-4 text-amber-600" />
+//             </span>
+//             Materials
+//           </Label>
+//           <p className="text-muted-foreground text-xs">Add optional material quantities and unit prices.</p>
+//         </div>
+//         <div className="flex flex-wrap gap-2 sm:justify-end">
+//           <Button type="button" variant="outline" onClick={() => onChange([createMaterialLineItem(), ...items])}>
+//             <Plus />
+//             Add material
+//           </Button>
+//         </div>
+//       </div>
+//       <div className="overflow-hidden rounded-lg border bg-background">
+//         {items.map((item, index) => {
+//           return (
+//             <div
+//               key={item.id}
+//               className="grid grid-cols-2 gap-3 border-t p-3 first:border-t-0 odd:bg-amber-50/50 md:grid-cols-[44px_minmax(220px,1fr)_82px_110px_96px_110px_36px] md:items-end"
+//             >
+//               <div className="col-span-2 flex items-center justify-between md:col-span-1 md:block">
+//                 <span className="inline-flex size-7 items-center justify-center rounded-md border border-amber-600 bg-background font-medium text-amber-600 text-xs">
+//                   M{index + 1}
+//                 </span>
+//               </div>
+//               <div className="col-span-2 grid gap-2 md:col-span-1">
+//                 <Label>Description</Label>
+//                 <Textarea
+//                   aria-label={`Material ${index + 1} description`}
+//                   value={item.description}
+//                   onChange={(event) =>
+//                     onChange(
+//                       items.map((current, itemIndex) =>
+//                         itemIndex === index ? { ...current, description: event.target.value } : current,
+//                       ),
+//                     )
+//                   }
+//                   placeholder="Material description"
+//                   rows={1}
+//                   className={`min-h-10 resize-y bg-background py-2 md:min-h-9 ${mobileFieldClassName}`}
+//                 />
+//               </div>
+//               <div className="col-span-2 grid gap-3 md:col-span-5 md:col-start-2 md:grid-cols-[120px_minmax(120px,1fr)_140px]">
+//                 <div className="grid min-w-0 gap-2">
+//                   <Label>Type</Label>
+//                   <Select
+//                     value={item.type ?? "purchase"}
+//                     onValueChange={(value) =>
+//                       onChange(
+//                         items.map((current, itemIndex) =>
+//                           itemIndex === index
+//                             ? { ...current, type: value === "return" ? "return" : "purchase" }
+//                             : current,
+//                         ),
+//                       )
+//                     }
+//                   >
+//                     <SelectTrigger
+//                       aria-label={`Material ${index + 1} type`}
+//                       className={`w-full bg-background ${mobileFieldClassName}`}
+//                     >
+//                       <SelectValue />
+//                     </SelectTrigger>
+//                     <SelectContent>
+//                       <SelectGroup>
+//                         <SelectItem value="purchase">Purchase</SelectItem>
+//                         <SelectItem value="return">Return</SelectItem>
+//                       </SelectGroup>
+//                     </SelectContent>
+//                   </Select>
+//                 </div>
+//                 <div className="grid min-w-0 gap-2">
+//                   <Label>Vendor</Label>
+//                   <Input
+//                     aria-label={`Material ${index + 1} vendor`}
+//                     value={item.vendor ?? ""}
+//                     onChange={(event) =>
+//                       onChange(
+//                         items.map((current, itemIndex) =>
+//                           itemIndex === index ? { ...current, vendor: event.target.value } : current,
+//                         ),
+//                       )
+//                     }
+//                     className={`bg-background ${mobileFieldClassName}`}
+//                   />
+//                 </div>
+//                 <div className="grid min-w-0 gap-2">
+//                   <Label>Purchase date</Label>
+//                   <Input
+//                     aria-label={`Material ${index + 1} purchase date`}
+//                     value={item.purchaseDate ?? ""}
+//                     type="date"
+//                     onChange={(event) =>
+//                       onChange(
+//                         items.map((current, itemIndex) =>
+//                           itemIndex === index ? { ...current, purchaseDate: event.target.value } : current,
+//                         ),
+//                       )
+//                     }
+//                     className={`bg-background ${mobileFieldClassName}`}
+//                   />
+//                 </div>
+//               </div>
+//               <div className="grid min-w-0 gap-2">
+//                 <Label>Qty</Label>
+//                 <Input
+//                   aria-label={`Material ${index + 1} quantity`}
+//                   value={item.quantity}
+//                   type="number"
+//                   min="0"
+//                   step="1"
+//                   onChange={(event) =>
+//                     onChange(
+//                       items.map((current, itemIndex) =>
+//                         itemIndex === index
+//                           ? updateCalculatedLineTotal({ ...current, quantity: event.target.value })
+//                           : current,
+//                       ),
+//                     )
+//                   }
+//                   className={`bg-background ${mobileFieldClassName}`}
+//                 />
+//               </div>
+//               <div className="grid min-w-0 gap-2">
+//                 <Label>Unit</Label>
+//                 <Select
+//                   value={item.unit || "none"}
+//                   onValueChange={(value) =>
+//                     onChange(
+//                       items.map((current, itemIndex) =>
+//                         itemIndex === index ? { ...current, unit: value === "none" ? "" : value } : current,
+//                       ),
+//                     )
+//                   }
+//                 >
+//                   <SelectTrigger
+//                     aria-label={`Material ${index + 1} unit`}
+//                     className={`w-full bg-background ${mobileFieldClassName}`}
+//                   >
+//                     <SelectValue />
+//                   </SelectTrigger>
+//                   <SelectContent>
+//                     <SelectGroup>
+//                       <SelectItem value="none">No unit</SelectItem>
+//                       {lineItemUnits.map((unit) => (
+//                         <SelectItem key={unit} value={unit}>
+//                           {unit}
+//                         </SelectItem>
+//                       ))}
+//                     </SelectGroup>
+//                   </SelectContent>
+//                 </Select>
+//               </div>
+//               <div className="grid min-w-0 gap-2">
+//                 <Label>Rate</Label>
+//                 <Input
+//                   aria-label={`Material ${index + 1} unit price`}
+//                   value={item.unitPrice}
+//                   type="number"
+//                   min="1"
+//                   step="0.01"
+//                   onChange={(event) =>
+//                     onChange(
+//                       items.map((current, itemIndex) =>
+//                         itemIndex === index
+//                           ? updateCalculatedLineTotal({ ...current, unitPrice: event.target.value })
+//                           : current,
+//                       ),
+//                     )
+//                   }
+//                   onBlur={() =>
+//                     onChange(
+//                       items.map((current, itemIndex) =>
+//                         itemIndex === index
+//                           ? updateCalculatedLineTotal({
+//                               ...current,
+//                               unitPrice: formatMoneyInputValue(current.unitPrice),
+//                             })
+//                           : current,
+//                       ),
+//                     )
+//                   }
+//                   placeholder="0.00"
+//                   className={`bg-background ${mobileFieldClassName}`}
+//                 />
+//               </div>
+//               <div className="grid min-w-0 gap-2">
+//                 <Label>Total</Label>
+//                 <Input
+//                   aria-label={`Material ${index + 1} total`}
+//                   value={item.price}
+//                   type="number"
+//                   min="0"
+//                   step="0.01"
+//                   onChange={(event) =>
+//                     onChange(
+//                       items.map((current, itemIndex) =>
+//                         itemIndex === index ? { ...current, price: event.target.value } : current,
+//                       ),
+//                     )
+//                   }
+//                   onBlur={() =>
+//                     onChange(
+//                       items.map((current, itemIndex) =>
+//                         itemIndex === index ? { ...current, price: formatMoneyInputValue(current.price) } : current,
+//                       ),
+//                     )
+//                   }
+//                   placeholder="0.00"
+//                   className={`bg-background ${mobileFieldClassName}`}
+//                 />
+//               </div>
+//               <div className="col-span-2 flex justify-end md:col-span-1">
+//                 <Button
+//                   type="button"
+//                   variant="outline"
+//                   size="icon"
+//                   disabled={items.length === 1}
+//                   onClick={() =>
+//                     onChange(items.length === 1 ? items : items.filter((current) => current.id !== item.id))
+//                   }
+//                   aria-label={`Remove material ${index + 1}`}
+//                 >
+//                   <Trash2 className="size-4 text-red-500" />
+//                 </Button>
+//               </div>
+//             </div>
+//           );
+//         })}
+//       </div>
+//     </div>
+//   );
+// }
+
+// function MaterialItemsEditor({
+//   items,
+//   onChange,
+// }: {
+//   items: MaterialLineItem[];
+//   onChange: (items: MaterialLineItem[]) => void;
+// }) {
+//   return (
+//       <div className="grid min-w-0 gap-3">
+//         <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
+//           <div className="grid min-w-0 gap-1">
+//             <Label className="flex items-center gap-2">
+//             <span className="flex size-7 items-center justify-center rounded-md border border-amber-600 bg-background">
+//               <Package className="size-4 text-amber-600" />
+//             </span>
+//               Materials
+//             </Label>
+//             <p className="text-muted-foreground text-xs">
+//               Add optional material quantities and unit prices.
+//             </p>
+//           </div>
+//
+//           <div className="flex flex-wrap gap-2 sm:justify-end">
+//             <Button
+//                 type="button"
+//                 variant="outline"
+//                 onClick={() => onChange([createMaterialLineItem(), ...items])}
+//             >
+//               <Plus />
+//               Add material
+//             </Button>
+//           </div>
+//         </div>
+//
+//         <div className="min-w-0 overflow-hidden rounded-lg border bg-background">
+//           {items.map((item, index) => {
+//             return (
+//                 <div key={item.id} className="grid min-w-0 grid-cols-2 gap-3 border-t p-3 first:border-t-0 odd:bg-amber-50/50 lg:grid-cols-[36px_minmax(0,1fr)] lg:gap-x-3 xl:items-start">
+//                   <div className="col-span-2 flex items-center justify-between lg:col-span-1 lg:block lg:pt-7">
+//                     <span className="inline-flex size-7 items-center justify-center rounded-md border border-amber-600 bg-background font-medium text-amber-600 text-xs">
+//                       M{index + 1}
+//                     </span>
+//                     <Button
+//                         type="button"
+//                         variant="outline"
+//                         size="icon"
+//                         disabled={items.length === 1}
+//                         onClick={() =>
+//                             onChange(
+//                                 items.length === 1
+//                                     ? items
+//                                     : items.filter((current) => current.id !== item.id),
+//                             )
+//                         }
+//                         aria-label={`Remove material ${index + 1}`}
+//                         className="lg:hidden"
+//                     >
+//                       <Trash2 className="size-4 text-red-500" />
+//                     </Button>
+//                   </div>
+//
+//                   <div className="col-span-2 grid min-w-0 gap-3 lg:col-span-1">
+//                     <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_120px_minmax(140px,0.7fr)_150px] xl:items-end xl:gap-2">
+//                       <div className="grid min-w-0 gap-2">
+//                         <Label>Description</Label>
+//                         <Textarea
+//                             aria-label={`Material ${index + 1} description`}
+//                             value={item.description}
+//                             onChange={(event) =>
+//                                 onChange(
+//                                     items.map((current, itemIndex) =>
+//                                         itemIndex === index
+//                                             ? { ...current, description: event.target.value }
+//                                             : current,
+//                                     ),
+//                                 )
+//                             }
+//                             placeholder="Material description"
+//                             rows={1}
+//                             className={`min-h-10 resize-y bg-background py-2 ${mobileFieldClassName}`}
+//                         />
+//                       </div>
+//
+//                       <div className="grid min-w-0 grid-cols-2 gap-3 xl:contents">
+//                         <div className="grid min-w-0 gap-2">
+//                           <Label>Type</Label>
+//                           <Select
+//                               value={item.type ?? "purchase"}
+//                               onValueChange={(value) =>
+//                                   onChange(
+//                                       items.map((current, itemIndex) =>
+//                                           itemIndex === index
+//                                               ? {
+//                                                 ...current,
+//                                                 type: value === "return" ? "return" : "purchase",
+//                                               }
+//                                               : current,
+//                                       ),
+//                                   )
+//                               }
+//                           >
+//                             <SelectTrigger
+//                                 aria-label={`Material ${index + 1} type`}
+//                                 className={`w-full min-w-0 bg-background ${mobileFieldClassName}`}
+//                             >
+//                               <SelectValue />
+//                             </SelectTrigger>
+//                             <SelectContent>
+//                               <SelectGroup>
+//                                 <SelectItem value="purchase">Purchase</SelectItem>
+//                                 <SelectItem value="return">Return</SelectItem>
+//                               </SelectGroup>
+//                             </SelectContent>
+//                           </Select>
+//                         </div>
+//
+//                         <div className="order-3 col-span-2 grid min-w-0 gap-2 xl:order-none xl:col-span-1">
+//                           <Label>Vendor</Label>
+//                           <Input
+//                               aria-label={`Material ${index + 1} vendor`}
+//                               value={item.vendor ?? ""}
+//                               onChange={(event) =>
+//                                   onChange(
+//                                       items.map((current, itemIndex) =>
+//                                           itemIndex === index
+//                                               ? { ...current, vendor: event.target.value }
+//                                               : current,
+//                                       ),
+//                                   )
+//                               }
+//                               className={`min-w-0 bg-background ${mobileFieldClassName}`}
+//                           />
+//                         </div>
+//
+//                         <div className="grid min-w-0 gap-2">
+//                           <Label>Purchase date</Label>
+//                           <Input
+//                               aria-label={`Material ${index + 1} purchase date`}
+//                               value={item.purchaseDate ?? ""}
+//                               type="date"
+//                               onChange={(event) =>
+//                                   onChange(
+//                                       items.map((current, itemIndex) =>
+//                                           itemIndex === index
+//                                               ? {
+//                                                 ...current,
+//                                                 purchaseDate: event.target.value,
+//                                               }
+//                                               : current,
+//                                       ),
+//                                   )
+//                               }
+//                               className={`min-w-0 bg-background ${mobileFieldClassName}`}
+//                           />
+//                         </div>
+//                       </div>
+//                     </div>
+//
+//                     <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-[72px_88px_88px_96px_36px] lg:items-end lg:gap-2">
+//                       <div className="grid min-w-0 gap-2">
+//                         <Label>Qty</Label>
+//                         <Input
+//                             aria-label={`Material ${index + 1} quantity`}
+//                             value={item.quantity}
+//                             type="number"
+//                             min="0"
+//                             step="1"
+//                             onChange={(event) =>
+//                                 onChange(
+//                                     items.map((current, itemIndex) =>
+//                                         itemIndex === index
+//                                             ? updateCalculatedLineTotal({
+//                                               ...current,
+//                                               quantity: event.target.value,
+//                                             })
+//                                             : current,
+//                                     ),
+//                                 )
+//                             }
+//                             className={`min-w-0 bg-background ${mobileFieldClassName}`}
+//                         />
+//                       </div>
+//
+//                       <div className="grid min-w-0 gap-2">
+//                         <Label>Unit</Label>
+//                         <Select
+//                             value={item.unit || "none"}
+//                             onValueChange={(value) =>
+//                                 onChange(
+//                                     items.map((current, itemIndex) =>
+//                                         itemIndex === index
+//                                             ? {
+//                                               ...current,
+//                                               unit: value === "none" ? "" : value,
+//                                             }
+//                                             : current,
+//                                     ),
+//                                 )
+//                             }
+//                         >
+//                           <SelectTrigger
+//                               aria-label={`Material ${index + 1} unit`}
+//                               className={`w-full min-w-0 bg-background ${mobileFieldClassName}`}
+//                           >
+//                             <SelectValue />
+//                           </SelectTrigger>
+//                           <SelectContent>
+//                             <SelectGroup>
+//                               <SelectItem value="none">No unit</SelectItem>
+//                               {lineItemUnits.map((unit) => (
+//                                   <SelectItem key={unit} value={unit}>
+//                                     {unit}
+//                                   </SelectItem>
+//                               ))}
+//                             </SelectGroup>
+//                           </SelectContent>
+//                         </Select>
+//                       </div>
+//
+//                       <div className="grid min-w-0 gap-2">
+//                         <Label>Rate</Label>
+//                         <Input
+//                             aria-label={`Material ${index + 1} unit price`}
+//                             value={item.unitPrice}
+//                             type="number"
+//                             min="1"
+//                             step="0.01"
+//                             onChange={(event) =>
+//                                 onChange(
+//                                     items.map((current, itemIndex) =>
+//                                         itemIndex === index
+//                                             ? updateCalculatedLineTotal({
+//                                               ...current,
+//                                               unitPrice: event.target.value,
+//                                             })
+//                                             : current,
+//                                     ),
+//                                 )
+//                             }
+//                             onBlur={() =>
+//                                 onChange(
+//                                     items.map((current, itemIndex) =>
+//                                         itemIndex === index
+//                                             ? updateCalculatedLineTotal({
+//                                               ...current,
+//                                               unitPrice: formatMoneyInputValue(
+//                                                   current.unitPrice,
+//                                               ),
+//                                             })
+//                                             : current,
+//                                     ),
+//                                 )
+//                             }
+//                             placeholder="0.00"
+//                             className={`min-w-0 bg-background ${mobileFieldClassName}`}
+//                         />
+//                       </div>
+//
+//                       <div className="grid min-w-0 gap-2">
+//                         <Label>Total</Label>
+//                         <Input
+//                             aria-label={`Material ${index + 1} total`}
+//                             value={item.price}
+//                             type="number"
+//                             min="0"
+//                             step="0.01"
+//                             onChange={(event) =>
+//                                 onChange(
+//                                     items.map((current, itemIndex) =>
+//                                         itemIndex === index
+//                                             ? { ...current, price: event.target.value }
+//                                             : current,
+//                                     ),
+//                                 )
+//                             }
+//                             onBlur={() =>
+//                                 onChange(
+//                                     items.map((current, itemIndex) =>
+//                                         itemIndex === index
+//                                             ? {
+//                                               ...current,
+//                                               price: formatMoneyInputValue(current.price),
+//                                             }
+//                                             : current,
+//                                     ),
+//                                 )
+//                             }
+//                             placeholder="0.00"
+//                             className={`min-w-0 bg-background ${mobileFieldClassName}`}
+//                         />
+//                       </div>
+//
+//                       <div className="hidden justify-end lg:flex">
+//                         <Button
+//                             type="button"
+//                             variant="outline"
+//                             size="icon"
+//                             disabled={items.length === 1}
+//                             onClick={() =>
+//                                 onChange(
+//                                     items.length === 1
+//                                         ? items
+//                                         : items.filter((current) => current.id !== item.id),
+//                                 )
+//                             }
+//                             aria-label={`Remove material ${index + 1}`}
+//                         >
+//                           <Trash2 className="size-4 text-red-500" />
+//                         </Button>
+//                       </div>
+//                     </div>
+//                   </div>
+//                 </div>
+//             );
+//           })}
+//         </div>
+//       </div>
+//   );
+// }
+
 function MaterialItemsEditor({
   items,
   onChange,
@@ -585,6 +1350,7 @@ function MaterialItemsEditor({
           </Label>
           <p className="text-muted-foreground text-xs">Add optional material quantities and unit prices.</p>
         </div>
+
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <Button type="button" variant="outline" onClick={() => onChange([createMaterialLineItem(), ...items])}>
             <Plus />
@@ -592,17 +1358,19 @@ function MaterialItemsEditor({
           </Button>
         </div>
       </div>
+
       <div className="min-w-0 overflow-hidden rounded-lg border bg-background">
         {items.map((item, index) => {
           return (
             <div
               key={item.id}
-              className="grid min-w-0 grid-cols-2 gap-3 border-t p-3 first:border-t-0 odd:bg-amber-50/50 sm:grid-cols-4 lg:grid-cols-[36px_minmax(0,1fr)] lg:gap-x-3 xl:grid-cols-[36px_minmax(0,1fr)_72px_88px_88px_96px_36px] xl:items-end xl:gap-2 dark:odd:bg-amber-900"
+              className="grid min-w-0 grid-cols-2 gap-3 border-t p-3 first:border-t-0 odd:bg-amber-50/50 lg:grid-cols-[36px_minmax(0,1fr)] lg:gap-x-3 dark:odd:bg-amber-900"
             >
-              <div className="col-span-2 flex items-center justify-between sm:col-span-4 lg:col-span-1 lg:block lg:pt-7 xl:self-end xl:pt-0 xl:pb-1">
+              <div className="col-span-2 flex items-center justify-between lg:col-span-1 lg:block lg:pt-7">
                 <span className="inline-flex size-7 items-center justify-center rounded-md border border-amber-600 bg-background font-medium text-amber-600 text-xs">
                   M{index + 1}
                 </span>
+
                 <Button
                   type="button"
                   variant="outline"
@@ -618,8 +1386,8 @@ function MaterialItemsEditor({
                 </Button>
               </div>
 
-              <div className="col-span-2 grid min-w-0 gap-3 sm:col-span-4 lg:col-span-1 xl:contents">
-                <div className="grid min-w-0 gap-2 xl:col-span-1">
+              <div className="col-span-2 grid min-w-0 gap-3 lg:col-span-1 xl:grid-cols-[120px_minmax(0,1fr)_150px_72px_88px_88px_96px_36px] xl:items-end xl:gap-2">
+                <div className="grid min-w-0 gap-2 xl:col-span-5 xl:col-start-2 xl:row-start-1">
                   <Label>Description</Label>
                   <Textarea
                     aria-label={`Material ${index + 1} description`}
@@ -637,8 +1405,72 @@ function MaterialItemsEditor({
                   />
                 </div>
 
+                <div className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-[120px_150px_minmax(0,1fr)] lg:items-end lg:gap-2 xl:contents">
+                  <div className="grid min-w-0 gap-2 xl:col-start-1 xl:row-start-1">
+                    <Label>Type</Label>
+                    <Select
+                      value={item.type ?? "purchase"}
+                      onValueChange={(value) =>
+                        onChange(
+                          items.map((current, itemIndex) =>
+                            itemIndex === index
+                              ? { ...current, type: value === "return" ? "return" : "purchase" }
+                              : current,
+                          ),
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={`Material ${index + 1} type`}
+                        className={`w-full min-w-0 bg-background ${mobileFieldClassName}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="purchase">Purchase</SelectItem>
+                          <SelectItem value="return">Return</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid min-w-0 gap-2 xl:col-start-3 xl:row-start-2">
+                    <Label>Purchase date</Label>
+                    <Input
+                      aria-label={`Material ${index + 1} purchase date`}
+                      value={item.purchaseDate ?? ""}
+                      type="date"
+                      onChange={(event) =>
+                        onChange(
+                          items.map((current, itemIndex) =>
+                            itemIndex === index ? { ...current, purchaseDate: event.target.value } : current,
+                          ),
+                        )
+                      }
+                      className={`min-w-0 bg-background ${mobileFieldClassName}`}
+                    />
+                  </div>
+
+                  <div className="col-span-2 grid min-w-0 gap-2 lg:col-span-1 xl:col-span-2 xl:col-start-1 xl:row-start-2">
+                    <Label>Vendor</Label>
+                    <Input
+                      aria-label={`Material ${index + 1} vendor`}
+                      value={item.vendor ?? ""}
+                      onChange={(event) =>
+                        onChange(
+                          items.map((current, itemIndex) =>
+                            itemIndex === index ? { ...current, vendor: event.target.value } : current,
+                          ),
+                        )
+                      }
+                      className={`min-w-0 bg-background ${mobileFieldClassName}`}
+                    />
+                  </div>
+                </div>
+
                 <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-[72px_88px_88px_96px_36px] lg:items-end lg:gap-2 xl:contents">
-                  <div className="grid min-w-0 gap-2">
+                  <div className="grid min-w-0 gap-2 xl:col-start-4 xl:row-start-2">
                     <Label>Qty</Label>
                     <Input
                       aria-label={`Material ${index + 1} quantity`}
@@ -659,7 +1491,7 @@ function MaterialItemsEditor({
                     />
                   </div>
 
-                  <div className="grid w-full min-w-0 gap-2">
+                  <div className="grid min-w-0 gap-2 xl:col-start-5 xl:row-start-2">
                     <Label>Unit</Label>
                     <Select
                       value={item.unit || "none"}
@@ -690,7 +1522,7 @@ function MaterialItemsEditor({
                     </Select>
                   </div>
 
-                  <div className="grid min-w-0 gap-2">
+                  <div className="grid min-w-0 gap-2 xl:col-start-6 xl:row-start-2">
                     <Label>Rate</Label>
                     <Input
                       aria-label={`Material ${index + 1} unit price`}
@@ -724,7 +1556,7 @@ function MaterialItemsEditor({
                     />
                   </div>
 
-                  <div className="grid min-w-0 gap-2">
+                  <div className="grid min-w-0 gap-2 xl:col-start-7 xl:row-start-1">
                     <Label>Total</Label>
                     <Input
                       aria-label={`Material ${index + 1} total`}
@@ -751,7 +1583,7 @@ function MaterialItemsEditor({
                     />
                   </div>
 
-                  <div className="hidden justify-end lg:flex">
+                  <div className="hidden justify-end lg:flex xl:col-start-8 xl:row-start-2">
                     <Button
                       type="button"
                       variant="outline"
@@ -931,11 +1763,11 @@ function WorkspaceSectionHeader({
   );
 }
 
-export function EstimateRecordFormFields({
+export function JobRecordFormFields({
   clearDraft = false,
   customers,
   draftKey,
-  estimate,
+  job,
   presentation = "modal",
   resetKey = 0,
   services,
@@ -943,46 +1775,43 @@ export function EstimateRecordFormFields({
   clearDraft?: boolean;
   customers: JobCustomer[];
   draftKey?: string;
-  estimate?: EstimateRecordRow;
+  job?: JobRow;
   presentation?: "modal" | "workspace";
   resetKey?: number;
   services: ServiceTemplateRow[];
 }) {
   const [customerPickerOpen, setCustomerPickerOpen] = React.useState(false);
-  const [title, setTitle] = React.useState(estimate?.description ?? "");
-  const [description, setDescription] = React.useState(estimate?.scope ?? "");
-  const [category, setCategory] = React.useState(estimate?.category ?? "Other");
-  const [status, setStatus] = React.useState(estimate?.status ?? "Draft");
-  const [scheduledDate, setScheduledDate] = React.useState<Date | undefined>(() =>
-    parseEstimateDate(estimate?.dateBegin),
-  );
-  const [notes, setNotes] = React.useState(estimate?.notes ?? "");
+  const [title, setTitle] = React.useState(job?.description ?? "");
+  const [description, setDescription] = React.useState(job?.scope ?? "");
+  const [category, setCategory] = React.useState(job?.category ?? "Other");
+  const [status, setStatus] = React.useState(job?.status ?? "Unscheduled");
+  const [scheduledDate, setScheduledDate] = React.useState<Date | undefined>(() => parseJobDate(job?.dateBegin));
+  const [endDate, setEndDate] = React.useState<Date | undefined>(() => parseJobDate(job?.dateEnd));
+  const [notes, setNotes] = React.useState(job?.notes ?? "");
   const [newCustomerName, setNewCustomerName] = React.useState("");
   const [newCustomerEmail, setNewCustomerEmail] = React.useState("");
   const [newCustomerPhone, setNewCustomerPhone] = React.useState("");
-  const [selectedCustomerId, setSelectedCustomerId] = React.useState(estimate?.customerId ?? selectCustomerValue);
+  const [selectedCustomerId, setSelectedCustomerId] = React.useState(job?.customerId ?? selectCustomerValue);
   const [laborItems, setLaborItems] = React.useState<LineItem[]>(
-    estimate?.laborItems.length ? estimate.laborItems.map((item) => createLineItem(item)) : [createLineItem()],
+    job?.laborItems.length ? job.laborItems.map((item) => createLineItem(item)) : [createLineItem()],
   );
   const [materials, setMaterials] = React.useState<MaterialLineItem[]>(
-    estimate?.materials.length
-      ? estimate.materials.map((item) => createMaterialLineItem(item))
-      : [createMaterialLineItem()],
+    job?.materials.length ? job.materials.map((item) => createMaterialLineItem(item)) : [createMaterialLineItem()],
   );
-  const [jobType, setJobType] = React.useState<JobType>(estimate?.jobType ?? "Residential");
+  const [jobType, setJobType] = React.useState<JobType>(job?.jobType ?? "Residential");
   const [measurementRooms, setMeasurementRooms] = React.useState<MeasurementRoom[]>(
-    estimate?.measurementRooms.length
-      ? estimate.measurementRooms.map((room, index) => createMeasurementRoom(room, index))
+    job?.measurementRooms.length
+      ? job.measurementRooms.map((room, index) => createMeasurementRoom(room, index))
       : [createMeasurementRoom()],
   );
   const [measurementsOpen, setMeasurementsOpen] = React.useState(false);
-  const [taxRate, setTaxRate] = React.useState(Number(estimate?.materialTaxRate ?? "8.25"));
+  const [taxRate, setTaxRate] = React.useState(Number(job?.materialTaxRate ?? "8.25"));
   const isCreatingNewCustomer = selectedCustomerId === newCustomerValue;
   const selectedCustomer = isCreatingNewCustomer
     ? undefined
     : customers.find((customer) => customer.id === selectedCustomerId);
   const addressOptions = selectedCustomer?.addresses ?? [];
-  const initialLocation = estimate?.serviceLocation ?? "";
+  const initialLocation = job?.serviceLocation ?? "";
   const hasSavedInitialLocation = addressOptions.some((address) => formatAddress(address) === initialLocation);
   const [selectedLocation, setSelectedLocation] = React.useState(
     hasSavedInitialLocation && initialLocation ? initialLocation : customLocationValue,
@@ -992,7 +1821,7 @@ export function EstimateRecordFormFields({
   );
   const serviceLocation =
     selectedLocation === customLocationValue ? formatCustomLocation(customLocationFields) : selectedLocation;
-  const initializedFromKeyRef = React.useRef(`${resetKey}:${estimate?.id ?? "new"}`);
+  const initializedFromKeyRef = React.useRef(`${resetKey}:${job?.id ?? "new"}`);
   const draftHydratedRef = React.useRef(false);
   const skipNextDraftSaveRef = React.useRef(true);
   const latestDraftJsonRef = React.useRef<string | undefined>(undefined);
@@ -1000,54 +1829,51 @@ export function EstimateRecordFormFields({
   const [draftSavedAt, setDraftSavedAt] = React.useState<string>();
   const [draftRestoredAt, setDraftRestoredAt] = React.useState<string>();
 
-  const resetToEstimate = React.useCallback(() => {
-    const nextSelectedCustomerId = estimate?.customerId ?? selectCustomerValue;
+  const resetToJob = React.useCallback(() => {
+    const nextSelectedCustomerId = job?.customerId ?? selectCustomerValue;
     const nextCustomer = customers.find((customer) => customer.id === nextSelectedCustomerId);
     const nextAddressOptions = nextCustomer?.addresses ?? [];
-    const nextInitialLocation = estimate?.serviceLocation ?? "";
+    const nextInitialLocation = job?.serviceLocation ?? "";
     const nextHasSavedInitialLocation = nextAddressOptions.some(
       (address) => formatAddress(address) === nextInitialLocation,
     );
 
     setSelectedCustomerId(nextSelectedCustomerId);
-    setLaborItems(
-      estimate?.laborItems.length ? estimate.laborItems.map((item) => createLineItem(item)) : [createLineItem()],
-    );
+    setLaborItems(job?.laborItems.length ? job.laborItems.map((item) => createLineItem(item)) : [createLineItem()]);
     setMaterials(
-      estimate?.materials.length
-        ? estimate.materials.map((item) => createMaterialLineItem(item))
-        : [createMaterialLineItem()],
+      job?.materials.length ? job.materials.map((item) => createMaterialLineItem(item)) : [createMaterialLineItem()],
     );
-    setTitle(estimate?.description ?? "");
-    setDescription(estimate?.scope ?? "");
-    setCategory(estimate?.category ?? "Other");
-    setStatus(estimate?.status ?? "Draft");
-    setScheduledDate(parseEstimateDate(estimate?.dateBegin));
-    setNotes(estimate?.notes ?? "");
+    setTitle(job?.description ?? "");
+    setDescription(job?.scope ?? "");
+    setCategory(job?.category ?? "Other");
+    setStatus(job?.status ?? "Unscheduled");
+    setScheduledDate(parseJobDate(job?.dateBegin));
+    setEndDate(parseJobDate(job?.dateEnd));
+    setNotes(job?.notes ?? "");
     setNewCustomerName("");
     setNewCustomerEmail("");
     setNewCustomerPhone("");
-    setJobType(estimate?.jobType ?? "Residential");
+    setJobType(job?.jobType ?? "Residential");
     setMeasurementRooms(
-      estimate?.measurementRooms.length
-        ? estimate.measurementRooms.map((room, index) => createMeasurementRoom(room, index))
+      job?.measurementRooms.length
+        ? job.measurementRooms.map((room, index) => createMeasurementRoom(room, index))
         : [createMeasurementRoom()],
     );
     setMeasurementsOpen(false);
-    setTaxRate(Number(estimate?.materialTaxRate ?? "8.25"));
+    setTaxRate(Number(job?.materialTaxRate ?? "8.25"));
     setSelectedLocation(nextHasSavedInitialLocation && nextInitialLocation ? nextInitialLocation : customLocationValue);
     setCustomLocationFields(createCustomLocationFields(nextHasSavedInitialLocation ? "" : nextInitialLocation));
-  }, [customers, estimate]);
+  }, [customers, job]);
 
   React.useEffect(() => {
-    const initializedFromKey = `${resetKey}:${estimate?.id ?? "new"}`;
+    const initializedFromKey = `${resetKey}:${job?.id ?? "new"}`;
     if (initializedFromKeyRef.current === initializedFromKey) {
       return;
     }
     initializedFromKeyRef.current = initializedFromKey;
 
-    resetToEstimate();
-  }, [estimate, resetKey, resetToEstimate]);
+    resetToJob();
+  }, [job, resetKey, resetToJob]);
 
   React.useEffect(() => {
     if (!draftKey || typeof window === "undefined") return;
@@ -1059,7 +1885,7 @@ export function EstimateRecordFormFields({
       return;
     }
 
-    const parsed = parseEstimateDraft(draft);
+    const parsed = parseJobDraft(draft);
     if (!parsed) {
       window.localStorage.removeItem(draftKey);
       draftHydratedRef.current = true;
@@ -1075,6 +1901,7 @@ export function EstimateRecordFormFields({
     setCategory(parsed.category);
     setStatus(parsed.status);
     setScheduledDate(parseDraftDate(parsed.scheduledDate));
+    setEndDate(parseDraftDate(parsed.endDate));
     setNotes(parsed.notes);
     setNewCustomerName(parsed.newCustomerName);
     setNewCustomerEmail(parsed.newCustomerEmail);
@@ -1126,7 +1953,7 @@ export function EstimateRecordFormFields({
     }
 
     const savedAt = new Date().toISOString();
-    const draft: EstimateRecordDraft = {
+    const draft: JobRecordDraft = {
       category,
       customLocationFields,
       description,
@@ -1141,6 +1968,7 @@ export function EstimateRecordFormFields({
       newCustomerPhone,
       notes,
       savedAt,
+      endDate: toDateValue(endDate),
       scheduledDate: toDateValue(scheduledDate),
       selectedCustomerId,
       selectedLocation,
@@ -1164,6 +1992,7 @@ export function EstimateRecordFormFields({
     customLocationFields,
     description,
     draftKey,
+    endDate,
     jobType,
     laborItems,
     materials,
@@ -1205,7 +2034,7 @@ export function EstimateRecordFormFields({
     return customers.find((customer) => customer.id === selectedCustomerId)?.name ?? "Select customer";
   }, [customers, isCreatingNewCustomer, selectedCustomerId]);
   const laborSubtotal = laborItems.reduce((total, item) => total + toNumber(item.price), 0);
-  const materialsSubtotal = materials.reduce((total, item) => total + toNumber(item.price), 0);
+  const materialsSubtotal = materials.reduce((total, item) => total + toNumber(calculateSignedMaterialTotal(item)), 0);
   const taxableSubtotal = materialsSubtotal + (jobType === "Commercial" ? laborSubtotal : 0);
   const tax = taxableSubtotal * (taxRate / 100);
   const total = laborSubtotal + materialsSubtotal + tax;
@@ -1235,7 +2064,7 @@ export function EstimateRecordFormFields({
     skipNextDraftSaveRef.current = true;
     setDraftSavedAt(undefined);
     setDraftRestoredAt(undefined);
-    resetToEstimate();
+    resetToJob();
   }
 
   if (presentation === "workspace") {
@@ -1244,7 +2073,7 @@ export function EstimateRecordFormFields({
         <input type="hidden" name="customerId" value={isCreatingNewCustomer ? "" : selectedCustomerId} />
         <input type="hidden" name="serviceLocation" value={serviceLocation} />
         <input type="hidden" name="dateBegin" value={toDateValue(scheduledDate)} />
-        <input type="hidden" name="dateEnd" value="" />
+        <input type="hidden" name="dateEnd" value={toDateValue(endDate)} />
         <input type="hidden" name="laborItems" value={stringifyPricingItems(laborItems)} />
         <input type="hidden" name="materials" value={stringifyMaterials(materials)} />
         <input type="hidden" name="jobType" value={jobType} />
@@ -1262,7 +2091,7 @@ export function EstimateRecordFormFields({
               ) : draftSavedAt ? (
                 <span>Autosaved locally at {formatDraftSavedAt(draftSavedAt)}.</span>
               ) : (
-                <span>Autosave is on locally for this estimate.</span>
+                <span>Autosave is on locally for this job.</span>
               )}
             </div>
             {draftRestoredAt || draftSavedAt ? (
@@ -1286,9 +2115,9 @@ export function EstimateRecordFormFields({
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="grid gap-4">
               <div className="grid gap-2">
-                <Label htmlFor={`estimate-title-${estimate?.id ?? "new"}`}>Estimate title</Label>
+                <Label htmlFor={`job-title-${job?.id ?? "new"}`}>Job title</Label>
                 <Input
-                  id={`estimate-title-${estimate?.id ?? "new"}`}
+                  id={`job-title-${job?.id ?? "new"}`}
                   name="description"
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
@@ -1298,9 +2127,9 @@ export function EstimateRecordFormFields({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`estimate-description-${estimate?.id ?? "new"}`}>Scope of work</Label>
+                <Label htmlFor={`job-description-${job?.id ?? "new"}`}>Scope of work</Label>
                 <Textarea
-                  id={`estimate-description-${estimate?.id ?? "new"}`}
+                  id={`job-description-${job?.id ?? "new"}`}
                   name="scope"
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
@@ -1372,7 +2201,7 @@ export function EstimateRecordFormFields({
                 </PopoverContent>
               </Popover>
               <p className="text-muted-foreground text-xs">
-                Choose an existing customer or create one while building the estimate.
+                Choose an existing customer or create one while building the job.
               </p>
             </div>
           </div>
@@ -1386,9 +2215,9 @@ export function EstimateRecordFormFields({
                 </p>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`estimate-new-customer-name-${estimate?.id ?? "new"}`}>Name</Label>
+                <Label htmlFor={`job-new-customer-name-${job?.id ?? "new"}`}>Name</Label>
                 <Input
-                  id={`estimate-new-customer-name-${estimate?.id ?? "new"}`}
+                  id={`job-new-customer-name-${job?.id ?? "new"}`}
                   name="newCustomerName"
                   value={newCustomerName}
                   onChange={(event) => setNewCustomerName(event.target.value)}
@@ -1398,9 +2227,9 @@ export function EstimateRecordFormFields({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`estimate-new-customer-email-${estimate?.id ?? "new"}`}>Email</Label>
+                <Label htmlFor={`job-new-customer-email-${job?.id ?? "new"}`}>Email</Label>
                 <Input
-                  id={`estimate-new-customer-email-${estimate?.id ?? "new"}`}
+                  id={`job-new-customer-email-${job?.id ?? "new"}`}
                   name="newCustomerEmail"
                   type="email"
                   value={newCustomerEmail}
@@ -1411,9 +2240,9 @@ export function EstimateRecordFormFields({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`estimate-new-customer-phone-${estimate?.id ?? "new"}`}>Phone</Label>
+                <Label htmlFor={`job-new-customer-phone-${job?.id ?? "new"}`}>Phone</Label>
                 <Input
-                  id={`estimate-new-customer-phone-${estimate?.id ?? "new"}`}
+                  id={`job-new-customer-phone-${job?.id ?? "new"}`}
                   name="newCustomerPhone"
                   type="tel"
                   inputMode="numeric"
@@ -1432,7 +2261,7 @@ export function EstimateRecordFormFields({
 
         <section className="grid gap-4 border-b px-0 py-5 md:gap-5 md:px-1">
           <WorkspaceSectionHeader
-            description="Set how this estimate should move through the pipeline and when the work is expected."
+            description="Set the job status, category, and schedule before pricing the work."
             icon={ReceiptText}
             step="2. Status, category, and schedule"
           />
@@ -1460,15 +2289,15 @@ export function EstimateRecordFormFields({
                       {option}
                     </span>
                     <span className="text-muted-foreground text-xs">
-                      {option === "Draft"
-                        ? "Still shaping the estimate."
-                        : option === "Ready to Send"
-                          ? "Ready for the customer."
-                          : option === "Waiting on Customer"
-                            ? "Sent or being reviewed."
-                            : option === "Won"
-                              ? "Approved and ready for job conversion."
-                              : "Closed without moving forward."}
+                      {option === "Unscheduled"
+                        ? "Saved without a firm start date."
+                        : option === "Scheduled"
+                          ? "Work has a date or is ready to assign."
+                          : option === "Completed"
+                            ? "Finished and ready for billing review."
+                            : option === "On Hold"
+                              ? "Paused before the next move."
+                              : "Closed without active work."}
                     </span>
                   </button>
                 ))}
@@ -1477,12 +2306,9 @@ export function EstimateRecordFormFields({
 
             <div className="grid content-start gap-4 py-3 md:p-4 md:pt-0">
               <div className="grid gap-2">
-                <Label htmlFor={`estimate-category-${estimate?.id ?? "new"}`}>Category</Label>
+                <Label htmlFor={`job-category-${job?.id ?? "new"}`}>Category</Label>
                 <Select name="category" value={category} onValueChange={setCategory} required>
-                  <SelectTrigger
-                    id={`estimate-category-${estimate?.id ?? "new"}`}
-                    className="h-11 w-full bg-background"
-                  >
+                  <SelectTrigger id={`job-category-${job?.id ?? "new"}`} className="h-11 w-full bg-background">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1496,13 +2322,19 @@ export function EstimateRecordFormFields({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor={`estimate-scheduled-date-${estimate?.id ?? "new"}`}>Scheduled date</Label>
-                <ScheduledDatePicker
-                  id={`estimate-scheduled-date-${estimate?.id ?? "new"}`}
-                  value={scheduledDate}
-                  onChange={setScheduledDate}
-                />
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <div className="grid gap-2">
+                  <Label htmlFor={`job-scheduled-date-${job?.id ?? "new"}`}>Start date</Label>
+                  <ScheduledDatePicker
+                    id={`job-scheduled-date-${job?.id ?? "new"}`}
+                    value={scheduledDate}
+                    onChange={setScheduledDate}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`job-end-date-${job?.id ?? "new"}`}>End date</Label>
+                  <ScheduledDatePicker id={`job-end-date-${job?.id ?? "new"}`} value={endDate} onChange={setEndDate} />
+                </div>
               </div>
             </div>
           </div>
@@ -1520,7 +2352,7 @@ export function EstimateRecordFormFields({
                 {addressOptions.length ? (
                   <Select value={selectedLocation} onValueChange={setSelectedLocation}>
                     <SelectTrigger
-                      id={`estimate-location-${estimate?.id ?? "new"}`}
+                      id={`job-location-${job?.id ?? "new"}`}
                       className="h-11 w-full min-w-0 overflow-hidden bg-background [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate"
                     >
                       <SelectValue placeholder="Select service location" />
@@ -1545,9 +2377,9 @@ export function EstimateRecordFormFields({
                 {!addressOptions.length || selectedLocation === customLocationValue ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2 grid gap-2">
-                      <Label htmlFor={`estimate-location-street-${estimate?.id ?? "new"}`}>Street address</Label>
+                      <Label htmlFor={`job-location-street-${job?.id ?? "new"}`}>Street address</Label>
                       <Input
-                        id={`estimate-location-street-${estimate?.id ?? "new"}`}
+                        id={`job-location-street-${job?.id ?? "new"}`}
                         value={customLocationFields.street}
                         onChange={(event) =>
                           setCustomLocationFields((current) => ({ ...current, street: event.target.value }))
@@ -1557,9 +2389,9 @@ export function EstimateRecordFormFields({
                       />
                     </div>
                     <div className="col-span-2 grid gap-2 sm:col-span-1">
-                      <Label htmlFor={`estimate-location-apt-${estimate?.id ?? "new"}`}>Apt, suite, unit</Label>
+                      <Label htmlFor={`job-location-apt-${job?.id ?? "new"}`}>Apt, suite, unit</Label>
                       <Input
-                        id={`estimate-location-apt-${estimate?.id ?? "new"}`}
+                        id={`job-location-apt-${job?.id ?? "new"}`}
                         value={customLocationFields.apt}
                         onChange={(event) =>
                           setCustomLocationFields((current) => ({ ...current, apt: event.target.value }))
@@ -1569,9 +2401,9 @@ export function EstimateRecordFormFields({
                       />
                     </div>
                     <div className="grid min-w-0 gap-2">
-                      <Label htmlFor={`estimate-location-city-${estimate?.id ?? "new"}`}>City</Label>
+                      <Label htmlFor={`job-location-city-${job?.id ?? "new"}`}>City</Label>
                       <Input
-                        id={`estimate-location-city-${estimate?.id ?? "new"}`}
+                        id={`job-location-city-${job?.id ?? "new"}`}
                         value={customLocationFields.city}
                         onChange={(event) =>
                           setCustomLocationFields((current) => ({ ...current, city: event.target.value }))
@@ -1581,9 +2413,9 @@ export function EstimateRecordFormFields({
                       />
                     </div>
                     <div className="grid min-w-0 gap-2">
-                      <Label htmlFor={`estimate-location-state-${estimate?.id ?? "new"}`}>State</Label>
+                      <Label htmlFor={`job-location-state-${job?.id ?? "new"}`}>State</Label>
                       <UsStateSelect
-                        id={`estimate-location-state-${estimate?.id ?? "new"}`}
+                        id={`job-location-state-${job?.id ?? "new"}`}
                         value={customLocationFields.state}
                         onChange={(event) =>
                           setCustomLocationFields((current) => ({ ...current, state: event.target.value }))
@@ -1592,9 +2424,9 @@ export function EstimateRecordFormFields({
                       />
                     </div>
                     <div className="col-span-2 grid gap-2 sm:col-span-1">
-                      <Label htmlFor={`estimate-location-zip-${estimate?.id ?? "new"}`}>Zip code</Label>
+                      <Label htmlFor={`job-location-zip-${job?.id ?? "new"}`}>Zip code</Label>
                       <Input
-                        id={`estimate-location-zip-${estimate?.id ?? "new"}`}
+                        id={`job-location-zip-${job?.id ?? "new"}`}
                         value={customLocationFields.zip}
                         onChange={(event) =>
                           setCustomLocationFields((current) => ({ ...current, zip: event.target.value }))
@@ -1614,7 +2446,7 @@ export function EstimateRecordFormFields({
                 Internal notes
               </div>
               <Textarea
-                id={`estimate-notes-${estimate?.id ?? "new"}`}
+                id={`job-notes-${job?.id ?? "new"}`}
                 name="notes"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
@@ -1668,7 +2500,7 @@ export function EstimateRecordFormFields({
 
         <section className="grid gap-4 px-0 py-5 md:gap-5 md:px-1">
           <WorkspaceSectionHeader
-            description="Build the estimate from actual labor and material pieces, then review tax and totals."
+            description="Build the job from actual labor and material pieces, then review tax and totals."
             icon={BadgeDollarSign}
             step="5. Labor, materials, and tax"
           />
@@ -1720,13 +2552,13 @@ export function EstimateRecordFormFields({
             <div className="grid content-start gap-4 rounded-lg border border-sky-200 bg-sky-50/70 p-3 md:w-full md:max-w-sm md:justify-self-end md:p-4 xl:sticky xl:top-20 dark:border-sky-900/60 dark:bg-sky-950/20">
               <div className="flex items-center gap-2 font-semibold text-sky-900 text-sm uppercase tracking-normal dark:text-sky-200">
                 <Calculator className="size-4" />
-                Estimate summary
+                Job summary
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`estimate-tax-rate-${estimate?.id ?? "new"}`}>Sales tax rate</Label>
+                <Label htmlFor={`job-tax-rate-${job?.id ?? "new"}`}>Sales tax rate</Label>
                 <div className="flex items-center gap-2">
                   <Input
-                    id={`estimate-tax-rate-${estimate?.id ?? "new"}`}
+                    id={`job-tax-rate-${job?.id ?? "new"}`}
                     type="number"
                     min="0"
                     max="15"
@@ -1756,7 +2588,7 @@ export function EstimateRecordFormFields({
                   <span className="font-medium tabular-nums">${formatCurrency(tax)}</span>
                 </div>
                 <div className="mt-2 rounded-lg border border-sky-200 bg-background p-3 dark:border-sky-900/60">
-                  <div className="text-muted-foreground text-xs">Customer estimate</div>
+                  <div className="text-muted-foreground text-xs">Customer total</div>
                   <div className="font-semibold text-2xl tabular-nums">${formatCurrency(total)}</div>
                 </div>
               </div>
@@ -1772,7 +2604,7 @@ export function EstimateRecordFormFields({
       <input type="hidden" name="customerId" value={isCreatingNewCustomer ? "" : selectedCustomerId} />
       <input type="hidden" name="serviceLocation" value={serviceLocation} />
       <input type="hidden" name="dateBegin" value={toDateValue(scheduledDate)} />
-      <input type="hidden" name="dateEnd" value="" />
+      <input type="hidden" name="dateEnd" value={toDateValue(endDate)} />
       <input type="hidden" name="laborItems" value={stringifyPricingItems(laborItems)} />
       <input type="hidden" name="materials" value={stringifyMaterials(materials)} />
       <input type="hidden" name="jobType" value={jobType} />
@@ -1786,9 +2618,9 @@ export function EstimateRecordFormFields({
           </div>
         ) : null}
         <div className="grid gap-2 sm:col-span-2">
-          <Label htmlFor={`estimate-title-${estimate?.id ?? "new"}`}>Title</Label>
+          <Label htmlFor={`job-title-${job?.id ?? "new"}`}>Title</Label>
           <Input
-            id={`estimate-title-${estimate?.id ?? "new"}`}
+            id={`job-title-${job?.id ?? "new"}`}
             name="description"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -1798,9 +2630,9 @@ export function EstimateRecordFormFields({
           />
         </div>
         <div className="grid gap-2 sm:col-span-2">
-          <Label htmlFor={`estimate-description-${estimate?.id ?? "new"}`}>Description</Label>
+          <Label htmlFor={`job-description-${job?.id ?? "new"}`}>Description</Label>
           <Textarea
-            id={`estimate-description-${estimate?.id ?? "new"}`}
+            id={`job-description-${job?.id ?? "new"}`}
             name="scope"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
@@ -1869,9 +2701,9 @@ export function EstimateRecordFormFields({
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor={`estimate-status-${estimate?.id ?? "new"}`}>Status</Label>
+          <Label htmlFor={`job-status-${job?.id ?? "new"}`}>Status</Label>
           <Select name="status" value={status} onValueChange={setStatus} required>
-            <SelectTrigger id={`estimate-status-${estimate?.id ?? "new"}`} className={`w-full ${mobileFieldClassName}`}>
+            <SelectTrigger id={`job-status-${job?.id ?? "new"}`} className={`w-full ${mobileFieldClassName}`}>
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
             <SelectContent>
@@ -1888,12 +2720,9 @@ export function EstimateRecordFormFields({
 
         <div className="grid gap-4 sm:col-span-2 md:grid-cols-2">
           <div className="grid gap-2">
-            <Label htmlFor={`estimate-category-${estimate?.id ?? "new"}`}>Category</Label>
+            <Label htmlFor={`job-category-${job?.id ?? "new"}`}>Category</Label>
             <Select name="category" value={category} onValueChange={setCategory} required>
-              <SelectTrigger
-                id={`estimate-category-${estimate?.id ?? "new"}`}
-                className={`w-full ${mobileFieldClassName}`}
-              >
+              <SelectTrigger id={`job-category-${job?.id ?? "new"}`} className={`w-full ${mobileFieldClassName}`}>
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
@@ -1908,18 +2737,18 @@ export function EstimateRecordFormFields({
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor={`estimate-scheduled-date-${estimate?.id ?? "new"}`}>Scheduled date</Label>
+            <Label htmlFor={`job-scheduled-date-${job?.id ?? "new"}`}>Scheduled date</Label>
             <ScheduledDatePicker
-              id={`estimate-scheduled-date-${estimate?.id ?? "new"}`}
+              id={`job-scheduled-date-${job?.id ?? "new"}`}
               value={scheduledDate}
               onChange={setScheduledDate}
             />
           </div>
         </div>
         <div className="grid gap-2 sm:col-span-2">
-          <Label htmlFor={`estimate-notes-${estimate?.id ?? "new"}`}>Notes</Label>
+          <Label htmlFor={`job-notes-${job?.id ?? "new"}`}>Notes</Label>
           <Textarea
-            id={`estimate-notes-${estimate?.id ?? "new"}`}
+            id={`job-notes-${job?.id ?? "new"}`}
             name="notes"
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
@@ -1934,13 +2763,13 @@ export function EstimateRecordFormFields({
           <div className="grid gap-1 sm:col-span-2">
             <Label>New customer</Label>
             <p className="text-muted-foreground text-xs">
-              This customer will be created and linked to the estimate. Name, email, and phone are required.
+              This customer will be created and linked to the job. Name, email, and phone are required.
             </p>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor={`estimate-new-customer-name-${estimate?.id ?? "new"}`}>Customer name</Label>
+            <Label htmlFor={`job-new-customer-name-${job?.id ?? "new"}`}>Customer name</Label>
             <Input
-              id={`estimate-new-customer-name-${estimate?.id ?? "new"}`}
+              id={`job-new-customer-name-${job?.id ?? "new"}`}
               name="newCustomerName"
               value={newCustomerName}
               onChange={(event) => setNewCustomerName(event.target.value)}
@@ -1950,9 +2779,9 @@ export function EstimateRecordFormFields({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor={`estimate-new-customer-email-${estimate?.id ?? "new"}`}>Customer email</Label>
+            <Label htmlFor={`job-new-customer-email-${job?.id ?? "new"}`}>Customer email</Label>
             <Input
-              id={`estimate-new-customer-email-${estimate?.id ?? "new"}`}
+              id={`job-new-customer-email-${job?.id ?? "new"}`}
               name="newCustomerEmail"
               type="email"
               value={newCustomerEmail}
@@ -1963,9 +2792,9 @@ export function EstimateRecordFormFields({
             />
           </div>
           <div className="grid gap-2 sm:col-span-2">
-            <Label htmlFor={`estimate-new-customer-phone-${estimate?.id ?? "new"}`}>Customer phone</Label>
+            <Label htmlFor={`job-new-customer-phone-${job?.id ?? "new"}`}>Customer phone</Label>
             <Input
-              id={`estimate-new-customer-phone-${estimate?.id ?? "new"}`}
+              id={`job-new-customer-phone-${job?.id ?? "new"}`}
               name="newCustomerPhone"
               type="tel"
               inputMode="numeric"
@@ -1983,17 +2812,17 @@ export function EstimateRecordFormFields({
 
       <div className="grid gap-4 rounded-lg border border-emerald-200/80 bg-emerald-50/60 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
         <div className="grid gap-1">
-          <Label htmlFor={`estimate-location-${estimate?.id ?? "new"}`}>Service location</Label>
+          <Label htmlFor={`job-location-${job?.id ?? "new"}`}>Service location</Label>
           <p className="text-emerald-900/70 text-xs dark:text-emerald-200/70">
             {addressOptions.length
-              ? "Choose a saved customer location or enter a custom address for this estimate."
-              : "Enter the service address for this estimate."}
+              ? "Choose a saved customer location or enter a custom address for this job."
+              : "Enter the service address for this job."}
           </p>
         </div>
         {addressOptions.length ? (
           <Select value={selectedLocation} onValueChange={setSelectedLocation}>
             <SelectTrigger
-              id={`estimate-location-${estimate?.id ?? "new"}`}
+              id={`job-location-${job?.id ?? "new"}`}
               className="w-full min-w-0 overflow-hidden [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate"
             >
               <SelectValue placeholder="Select service location" />
@@ -2016,9 +2845,9 @@ export function EstimateRecordFormFields({
         {!addressOptions.length || selectedLocation === customLocationValue ? (
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 grid gap-2 sm:col-span-2">
-              <Label htmlFor={`estimate-location-street-${estimate?.id ?? "new"}`}>Street address</Label>
+              <Label htmlFor={`job-location-street-${job?.id ?? "new"}`}>Street address</Label>
               <Input
-                id={`estimate-location-street-${estimate?.id ?? "new"}`}
+                id={`job-location-street-${job?.id ?? "new"}`}
                 value={customLocationFields.street}
                 onChange={(event) =>
                   setCustomLocationFields((current) => ({
@@ -2031,9 +2860,9 @@ export function EstimateRecordFormFields({
               />
             </div>
             <div className="col-span-2 grid gap-2 sm:col-span-1">
-              <Label htmlFor={`estimate-location-apt-${estimate?.id ?? "new"}`}>Apt, suite, unit</Label>
+              <Label htmlFor={`job-location-apt-${job?.id ?? "new"}`}>Apt, suite, unit</Label>
               <Input
-                id={`estimate-location-apt-${estimate?.id ?? "new"}`}
+                id={`job-location-apt-${job?.id ?? "new"}`}
                 value={customLocationFields.apt}
                 onChange={(event) =>
                   setCustomLocationFields((current) => ({
@@ -2046,9 +2875,9 @@ export function EstimateRecordFormFields({
               />
             </div>
             <div className="grid min-w-0 gap-2">
-              <Label htmlFor={`estimate-location-city-${estimate?.id ?? "new"}`}>City</Label>
+              <Label htmlFor={`job-location-city-${job?.id ?? "new"}`}>City</Label>
               <Input
-                id={`estimate-location-city-${estimate?.id ?? "new"}`}
+                id={`job-location-city-${job?.id ?? "new"}`}
                 value={customLocationFields.city}
                 onChange={(event) =>
                   setCustomLocationFields((current) => ({
@@ -2061,9 +2890,9 @@ export function EstimateRecordFormFields({
               />
             </div>
             <div className="grid min-w-0 gap-2">
-              <Label htmlFor={`estimate-location-state-${estimate?.id ?? "new"}`}>State</Label>
+              <Label htmlFor={`job-location-state-${job?.id ?? "new"}`}>State</Label>
               <UsStateSelect
-                id={`estimate-location-state-${estimate?.id ?? "new"}`}
+                id={`job-location-state-${job?.id ?? "new"}`}
                 value={customLocationFields.state}
                 onChange={(event) =>
                   setCustomLocationFields((current) => ({
@@ -2075,9 +2904,9 @@ export function EstimateRecordFormFields({
               />
             </div>
             <div className="col-span-2 grid gap-2 sm:col-span-1">
-              <Label htmlFor={`estimate-location-zip-${estimate?.id ?? "new"}`}>Zip code</Label>
+              <Label htmlFor={`job-location-zip-${job?.id ?? "new"}`}>Zip code</Label>
               <Input
-                id={`estimate-location-zip-${estimate?.id ?? "new"}`}
+                id={`job-location-zip-${job?.id ?? "new"}`}
                 value={customLocationFields.zip}
                 onChange={(event) =>
                   setCustomLocationFields((current) => ({
@@ -2105,17 +2934,17 @@ export function EstimateRecordFormFields({
 
       <div className="grid gap-4 rounded-lg border bg-muted/20 p-4">
         <div className="grid gap-1">
-          <Label>Estimate totals</Label>
+          <Label>Job totals</Label>
           <p className="text-muted-foreground text-xs">
             Review calculated totals. Tax defaults to 8.25% but can be adjusted when needed.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <div className="grid gap-2">
-            <Label htmlFor={`estimate-tax-rate-${estimate?.id ?? "new"}`}>Tax rate</Label>
+            <Label htmlFor={`job-tax-rate-${job?.id ?? "new"}`}>Tax rate</Label>
             <div className="flex items-center gap-2">
               <Input
-                id={`estimate-tax-rate-${estimate?.id ?? "new"}`}
+                id={`job-tax-rate-${job?.id ?? "new"}`}
                 type="number"
                 min="0"
                 max="15"
@@ -2140,7 +2969,7 @@ export function EstimateRecordFormFields({
             <span className="font-medium text-sm">${formatCurrency(tax)}</span>
           </div>
           <div className="col-span-2 grid gap-1 rounded-md bg-background p-3 sm:col-span-1 sm:bg-transparent sm:p-0">
-            <span className="text-muted-foreground text-xs">Estimate value</span>
+            <span className="text-muted-foreground text-xs">Job total</span>
             <span className="font-semibold text-base">${formatCurrency(total)}</span>
           </div>
         </div>

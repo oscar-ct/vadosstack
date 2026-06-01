@@ -4,7 +4,7 @@
 import * as React from "react";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import {
   type ColumnFiltersState,
@@ -61,14 +61,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import type { InvoiceMutationState } from "../../../invoices/types";
-import type { ServiceTemplateRow } from "../../../services/types";
-import type { JobMutationState } from "../../actions";
 import { getAmountDueDisplay, getJobOverdueDate, getJobsColumns, statusIcon } from "./columns";
-import { DeleteJobDialog } from "./delete-job-dialog";
-import { EditJobDialog } from "./edit-job-dialog";
-import { JobDetailsDialog } from "./job-details-dialog";
-import type { JobCustomer, JobRow } from "./schema";
+import type { JobRow } from "./schema";
 
 const statusOptions = [
   { value: "all", label: "All" },
@@ -121,34 +115,8 @@ const jobExportColumns: CsvColumn<JobRow>[] = [
   { header: "Notes", value: (job) => job.notes },
 ];
 
-export function JobsTable({
-  customers,
-  createJobPaymentAction,
-  createInvoiceAction,
-  data,
-  deleteJobAction,
-  deleteJobPaymentAction,
-  exportSlotId,
-  initialSelectedJobId,
-  services,
-  updateJobAction,
-}: {
-  customers: JobCustomer[];
-  createJobPaymentAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
-  createInvoiceAction: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
-  data: JobRow[];
-  deleteJobAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
-  deleteJobPaymentAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
-  exportSlotId?: string;
-  initialSelectedJobId?: string;
-  services: ServiceTemplateRow[];
-  updateJobAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
-}) {
+export function JobsTable({ data, exportSlotId }: { data: JobRow[]; exportSlotId?: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [jobToDelete, setJobToDelete] = React.useState<JobRow | null>(null);
-  const [jobToEdit, setJobToEdit] = React.useState<JobRow | null>(null);
-  const [selectedJob, setSelectedJob] = React.useState<JobRow | null>(null);
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]);
@@ -163,9 +131,9 @@ export function JobsTable({
   const columns = React.useMemo(
     () =>
       getJobsColumns({
-        onEditJob: setJobToEdit,
+        onEditJob: (job) => router.push(`/dashboard/jobs/${job.id}/edit`),
       }),
-    [],
+    [router],
   );
 
   const table = useReactTable({
@@ -244,70 +212,8 @@ export function JobsTable({
     table.setPageIndex(0);
   }
 
-  React.useEffect(() => {
-    if (!initialSelectedJobId) return;
-
-    const job = data.find((item) => item.id === initialSelectedJobId);
-    if (job) {
-      setSelectedJob(job);
-    }
-  }, [data, initialSelectedJobId]);
-
-  React.useEffect(() => {
-    if (!selectedJob) return;
-
-    const refreshedJob = data.find((item) => item.id === selectedJob.id);
-    if (refreshedJob && refreshedJob !== selectedJob) {
-      setSelectedJob(refreshedJob);
-    }
-  }, [data, selectedJob]);
-
   return (
     <>
-      <DeleteJobDialog
-        key={jobToDelete?.id ?? "delete-job"}
-        action={deleteJobAction}
-        job={jobToDelete}
-        open={!!jobToDelete}
-        onOpenChange={(open) => {
-          if (!open) setJobToDelete(null);
-        }}
-      />
-      <EditJobDialog
-        key={jobToEdit?.id ?? "edit-job"}
-        action={updateJobAction}
-        customers={customers}
-        job={jobToEdit}
-        onDeleteJob={setJobToDelete}
-        open={!!jobToEdit}
-        onOpenChange={(open) => {
-          if (!open) setJobToEdit(null);
-        }}
-        services={services}
-      />
-      <JobDetailsDialog
-        createJobPaymentAction={createJobPaymentAction}
-        createInvoiceAction={createInvoiceAction}
-        deleteJobPaymentAction={deleteJobPaymentAction}
-        job={selectedJob}
-        onEditJob={(job) => {
-          setSelectedJob(null);
-          setJobToEdit(job);
-        }}
-        open={!!selectedJob}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedJob(null);
-
-            if (searchParams.get("job")) {
-              const nextParams = new URLSearchParams(searchParams.toString());
-              nextParams.delete("job");
-              const nextQuery = nextParams.toString();
-              router.replace(nextQuery ? `/dashboard/jobs?${nextQuery}` : "/dashboard/jobs");
-            }
-          }
-        }}
-      />
       <div className="space-y-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
@@ -567,7 +473,7 @@ export function JobsTable({
                           variant="outline"
                           className="h-7 border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800"
                         >
-                          <Link prefetch={false} href={`/dashboard/invoices/${row.original.invoiceId}?from=jobs`}>
+                          <Link prefetch={false} href={`/dashboard/invoices/${row.original.invoiceId}`}>
                             <ReceiptText className="size-3.5" />
                             View invoice
                           </Link>
@@ -580,13 +486,17 @@ export function JobsTable({
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setSelectedJob(row.original)}>
-                        <Eye className="size-4" />
-                        View
+                      <Button asChild variant="outline" size="sm">
+                        <Link prefetch={false} href={`/dashboard/jobs/${row.original.id}`}>
+                          <Eye className="size-4" />
+                          View
+                        </Link>
                       </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setJobToEdit(row.original)}>
-                        <Pencil className="size-4" />
-                        Edit
+                      <Button asChild variant="outline" size="sm">
+                        <Link prefetch={false} href={`/dashboard/jobs/${row.original.id}/edit`}>
+                          <Pencil className="size-4" />
+                          Edit
+                        </Link>
                       </Button>
                     </div>
                   </CardContent>
@@ -623,14 +533,14 @@ export function JobsTable({
                     aria-label={`View ${row.original.description} details`}
                     onClick={(event) => {
                       if (shouldIgnoreRowClick(event.target)) return;
-                      setSelectedJob(row.original);
+                      router.push(`/dashboard/jobs/${row.original.id}`);
                     }}
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
                       if (shouldIgnoreRowClick(event.target)) return;
 
                       event.preventDefault();
-                      setSelectedJob(row.original);
+                      router.push(`/dashboard/jobs/${row.original.id}`);
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (

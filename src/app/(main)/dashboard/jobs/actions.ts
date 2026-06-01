@@ -14,10 +14,12 @@ import { calculateSignedMaterialTotal, parseMaterials } from "./_components/mate
 import { parsePricingItems } from "./_components/pricing-items";
 
 const jobStatuses = ["Unscheduled", "Scheduled", "Completed", "On Hold", "Cancelled"] as const;
+const jobTypes = ["Residential", "Commercial"] as const;
 
 export type JobMutationState = {
   success: boolean;
   message: string;
+  redirectTo?: string;
 };
 
 const emptyToUndefined = (value: FormDataEntryValue | null) => {
@@ -100,6 +102,16 @@ const laborItemsSchema = z.array(
   }),
 );
 
+const measurementRoomsSchema = z.array(
+  z.object({
+    id: z.string().trim().optional(),
+    name: z.string().trim().optional(),
+    length: z.string().trim().optional(),
+    width: z.string().trim().optional(),
+    area: z.string().trim().optional(),
+  }),
+);
+
 const jobSchema = z.object({
   customerId: z.string().trim().optional(),
   newCustomerName: z.string().trim().optional(),
@@ -111,6 +123,8 @@ const jobSchema = z.object({
   dateEnd: optionalDate,
   estimatedCost: optionalMoney,
   laborItems: laborItemsSchema,
+  jobType: z.enum(jobTypes).default("Residential"),
+  measurementRooms: measurementRoomsSchema,
   materialTaxRate: optionalMoney,
   materials: materialsSchema,
   scope: z.string().trim().optional(),
@@ -143,6 +157,8 @@ function getJobPayload(formData: FormData) {
     dateEnd: emptyToUndefined(formData.get("dateEnd")),
     estimatedCost: emptyToUndefined(formData.get("estimatedCost")),
     laborItems: parsePricingItems(String(formData.get("laborItems") ?? "")),
+    jobType: formData.get("jobType") === "Commercial" ? "Commercial" : "Residential",
+    measurementRooms: parseMeasurementRooms(String(formData.get("measurementRooms") ?? "")),
     materialTaxRate: emptyToUndefined(formData.get("materialTaxRate")),
     materials: parseMaterials(String(formData.get("materials") ?? "")),
     scope: emptyToUndefined(formData.get("scope")),
@@ -154,6 +170,47 @@ function getJobPayload(formData: FormData) {
       .filter(Boolean),
     notes: emptyToUndefined(formData.get("notes")),
   };
+}
+
+function parseMeasurementRooms(value: string) {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.map((room) => {
+      const current = room && typeof room === "object" ? (room as Record<string, unknown>) : {};
+      return {
+        id: typeof current.id === "string" ? current.id : undefined,
+        name: typeof current.name === "string" ? current.name : "",
+        length: typeof current.length === "string" ? current.length : "",
+        width: typeof current.width === "string" ? current.width : "",
+        area: typeof current.area === "string" ? current.area : "",
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+function normalizeMeasurementRooms(
+  rooms: Array<{ id?: string; name?: string; length?: string; width?: string; area?: string }>,
+) {
+  return rooms
+    .map((room) => {
+      const length = room.length?.trim() ?? "";
+      const width = room.width?.trim() ?? "";
+      const area = Number(length) * Number(width);
+
+      return {
+        id: room.id?.trim() || undefined,
+        name: room.name?.trim() ?? "",
+        length,
+        width,
+        area: Number.isFinite(area) && area > 0 ? area.toFixed(2) : (room.area?.trim() ?? ""),
+      };
+    })
+    .filter((room) => room.name || room.length || room.width || room.area);
 }
 
 async function createCustomerForJob({
@@ -296,6 +353,7 @@ function normalizeLaborItems(
 }
 
 function calculateFinalCost(job: {
+  jobType?: "Residential" | "Commercial";
   laborItems: Array<{ price: string }>;
   materialTaxRate?: string;
   materials: Array<{ quantity: string; unitPrice: string; price: string; type?: "purchase" | "return" }>;
@@ -306,7 +364,8 @@ function calculateFinalCost(job: {
     (total, material) => total + Number(calculateSignedMaterialTotal(material)),
     0,
   );
-  const tax = (laborCost + materialsSubtotal) * (materialTaxRate / 100);
+  const taxableSubtotal = materialsSubtotal + (job.jobType === "Commercial" ? laborCost : 0);
+  const tax = taxableSubtotal * (materialTaxRate / 100);
 
   return (laborCost + materialsSubtotal + tax).toFixed(2);
 }
@@ -476,6 +535,7 @@ export async function createJobAction(_previousState: JobMutationState, formData
     const { newCustomerEmail, newCustomerName, newCustomerPhone, ...job } = parsed.data;
     const materials = normalizeMaterials(job.materials);
     const laborItems = normalizeLaborItems(job.laborItems);
+    const measurementRooms = normalizeMeasurementRooms(job.measurementRooms);
     const laborCost = laborItems.reduce((total, item) => total + Number(item.price), 0).toFixed(2);
     const calculatedFinalCost = calculateFinalCost({ ...job, laborItems, materials });
     const normalizedStatus = normalizeJobStatus(job.status, job.dateBegin, job.dateEnd);
@@ -532,6 +592,8 @@ export async function createJobAction(_previousState: JobMutationState, formData
         estimatedCost: "0",
         laborCost,
         laborItems: JSON.stringify(laborItems),
+        jobType: job.jobType,
+        measurementRooms: JSON.stringify(measurementRooms),
         materialTaxRate: job.materialTaxRate ?? "0",
         materials: JSON.stringify(materials),
         paymentStatus: deriveJobPaymentStatus(normalizedStatus, calculatedFinalCost, "0"),
@@ -545,20 +607,21 @@ export async function createJobAction(_previousState: JobMutationState, formData
     });
 
     await syncCustomerBillingStatus(createdJob.customerId, currentUser.id);
+
+    revalidatePath("/dashboard/jobs");
+    revalidatePath("/dashboard/customers");
+
+    return {
+      success: true,
+      message: "Job created.",
+      redirectTo: `/dashboard/jobs/${createdJob.id}`,
+    };
   } catch (error) {
     return {
       success: false,
       message: error instanceof Error ? error.message : "Job could not be created. Please try again.",
     };
   }
-
-  revalidatePath("/dashboard/jobs");
-  revalidatePath("/dashboard/customers");
-
-  return {
-    success: true,
-    message: "Job created.",
-  };
 }
 
 export async function updateJobAction(_previousState: JobMutationState, formData: FormData): Promise<JobMutationState> {
@@ -589,6 +652,7 @@ export async function updateJobAction(_previousState: JobMutationState, formData
   try {
     const materials = normalizeMaterials(job.materials);
     const laborItems = normalizeLaborItems(job.laborItems);
+    const measurementRooms = normalizeMeasurementRooms(job.measurementRooms);
     const laborCost = laborItems.reduce((total, item) => total + Number(item.price), 0).toFixed(2);
     const calculatedFinalCost = calculateFinalCost({ ...job, laborItems, materials });
     const normalizedStatus = normalizeJobStatus(job.status, job.dateBegin, job.dateEnd);
@@ -662,6 +726,8 @@ export async function updateJobAction(_previousState: JobMutationState, formData
         estimatedCost: "0",
         laborCost,
         laborItems: JSON.stringify(laborItems),
+        jobType: job.jobType,
+        measurementRooms: JSON.stringify(measurementRooms),
         materialTaxRate: job.materialTaxRate ?? "0",
         materials: JSON.stringify(materials),
         paymentStatus: deriveJobPaymentStatus(normalizedStatus, calculatedFinalCost, await getJobPaidTotal(id)),
@@ -691,6 +757,7 @@ export async function updateJobAction(_previousState: JobMutationState, formData
   return {
     success: true,
     message: "Job updated.",
+    redirectTo: `/dashboard/jobs/${id}`,
   };
 }
 
@@ -941,7 +1008,7 @@ export async function deleteJobAction(_previousState: JobMutationState, formData
 
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard/estimates");
-
+  // redirect("/dashboard/jobs");
   return {
     success: true,
     message: "Job deleted.",

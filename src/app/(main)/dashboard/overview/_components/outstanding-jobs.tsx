@@ -53,7 +53,7 @@ export function OutstandingJobs({ jobs }: { jobs: OutstandingJob[] }) {
               <Link
                 key={job.id}
                 prefetch={false}
-                href={`/dashboard/jobs?job=${job.id}`}
+                href={`/dashboard/jobs/${job.id}`}
                 className="grid min-w-0 gap-3 rounded-md border border-border bg-muted/35 p-3 transition-colors hover:bg-muted/60"
               >
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">

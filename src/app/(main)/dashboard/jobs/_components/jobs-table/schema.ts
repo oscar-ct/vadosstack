@@ -39,6 +39,16 @@ export const jobRowSchema = z.object({
   dateEnd: z.string().optional(),
   estimatedCost: z.string().optional(),
   laborCost: z.string().optional(),
+  jobType: z.enum(["Residential", "Commercial"]).default("Residential"),
+  measurementRooms: z.array(
+    z.object({
+      id: z.string().optional(),
+      name: z.string(),
+      length: z.string(),
+      width: z.string(),
+      area: z.string().optional(),
+    }),
+  ),
   laborItems: z.array(
     z.object({
       description: z.string(),

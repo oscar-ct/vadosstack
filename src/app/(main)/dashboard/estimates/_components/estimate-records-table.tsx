@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import {
   type ColumnFiltersState,
@@ -17,33 +17,24 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { format, parseISO } from "date-fns";
 import {
   ArrowUpDown,
   BriefcaseBusiness,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  CircleDollarSign,
-  Clock3,
   Eye,
-  FileText,
   NotebookText,
   Pencil,
-  RotateCcw,
   Search,
-  Send,
   SlidersHorizontal,
-  XCircle,
 } from "lucide-react";
 
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Drawer,
   DrawerClose,
@@ -67,16 +58,6 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-import type { JobCustomer } from "../../jobs/_components/jobs-table/schema";
-import type { ServiceTemplateRow } from "../../services/types";
-import type { EstimateRecordMutationState } from "../records-actions";
-import {
-  ConvertEstimateButton,
-  DeleteEstimateRecordDialog,
-  EditEstimateRecordDialog,
-  PrintableEstimateButton,
-  UpdateEstimateStatusButton,
-} from "./estimate-record-dialogs";
 import { getEstimateRecordsColumns } from "./estimate-records-table/columns";
 import type { EstimateRecordRow } from "./schema";
 
@@ -152,85 +133,6 @@ function formatMoney(value?: string) {
   return value ? `$${Number(value).toFixed(2)}` : "$0.00";
 }
 
-function formatLineItemMeta(item: { quantity?: string; unit?: string; unitPrice?: string }) {
-  const parts: string[] = [];
-
-  if (item.quantity) {
-    parts.push(["Qty", item.quantity, item.unit].filter(Boolean).join(" "));
-  }
-
-  if (item.unitPrice) {
-    parts.push(item.unit ? `Rate ${formatMoney(item.unitPrice)}/${item.unit}` : `Rate ${formatMoney(item.unitPrice)}`);
-  }
-
-  return parts.join(" · ");
-}
-
-function formatOptionalMoney(value?: string) {
-  return value === undefined ? undefined : formatMoney(value);
-}
-
-function formatDate(value?: string) {
-  return value ? format(parseISO(value), "MMM d, yyyy") : undefined;
-}
-
-// function formatDateStartToEnd(value?: string, value2?: string) {
-//   const startDate = value ? format(parseISO(value), "MMM d, yyyy") : undefined;
-//   const endDate = value2 ? format(parseISO(value2), "MMM d, yyyy") : undefined;
-//
-//   if (!startDate) {
-//     return "Unscheduled";
-//   }
-//
-//   if (!endDate) {
-//     return `${startDate} - Not scheduled`;
-//   }
-//
-//   return `${startDate} - ${endDate}`;
-// }
-
-function DetailItem({ label, value, className }: { label: string; value?: string; className?: string }) {
-  return (
-    <div className={cn(className, "grid", "gap-1")}>
-      <span className="text-muted-foreground text-xs">{label}</span>
-      <span className="font-medium text-sm">{value ?? "Not on file"}</span>
-    </div>
-  );
-}
-
-function withLineItemKeys<T extends { description: string; price: string }>(items: T[]) {
-  const seen = new Map<string, number>();
-
-  return items.map((item) => {
-    const baseKey = `${item.description}-${item.price}`;
-    const occurrence = (seen.get(baseKey) ?? 0) + 1;
-    seen.set(baseKey, occurrence);
-
-    return {
-      ...item,
-      key: `${baseKey}-${occurrence}`,
-    };
-  });
-}
-
-function getLaborSubtotal(estimate: EstimateRecordRow) {
-  return estimate.laborItems.length
-    ? estimate.laborItems.reduce((total, item) => total + Number(item.price || 0), 0).toFixed(2)
-    : (estimate.laborCost ?? "0.00");
-}
-
-function getMaterialsSubtotal(estimate: EstimateRecordRow) {
-  return estimate.materials.reduce((total, material) => total + Number(material.price || 0), 0).toFixed(2);
-}
-
-function getMaterialTaxAmount(estimate: EstimateRecordRow) {
-  const subtotal = Number(getMaterialsSubtotal(estimate));
-  const laborCost = Number(getLaborSubtotal(estimate));
-  const taxRate = Number(estimate.materialTaxRate ?? 0);
-
-  return (((laborCost + subtotal) * taxRate) / 100).toFixed(2);
-}
-
 function estimateStatusClassName(status: string) {
   if (status === "Won") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900";
   if (status === "Lost") return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900";
@@ -239,376 +141,17 @@ function estimateStatusClassName(status: string) {
   return "bg-muted-foreground/10 text-muted-foreground";
 }
 
-function getEstimateWorkflow(status: string) {
-  if (status === "Draft") {
-    return {
-      action: "Continue estimate",
-      nextStep: "Finish writing the scope and pricing, then mark the estimate ready to send.",
-      title: "Drafting",
-    };
-  }
-  if (status === "Ready to Send") {
-    return {
-      action: "Send estimate",
-      nextStep: "Create or open the PDF, email it to the customer, then move it to waiting.",
-      title: "Ready to send",
-    };
-  }
-  if (status === "Waiting on Customer") {
-    return {
-      action: "Follow up",
-      nextStep: "Follow up with the customer, then mark the estimate won or lost.",
-      title: "Waiting on customer",
-    };
-  }
-  if (status === "Won") {
-    return {
-      action: "Convert to job",
-      nextStep: "Convert the approved estimate into a job.",
-      title: "Won",
-    };
-  }
-  if (status === "Lost") {
-    return {
-      action: "Reopen if needed",
-      nextStep: "Keep the record for history, or reopen it if the customer changes their mind.",
-      title: "Lost",
-    };
-  }
-
-  return {
-    action: "Review",
-    nextStep: "Review this estimate and choose the next workflow step.",
-    title: status,
-  };
+function nextActionLabel(status: string) {
+  if (status === "Draft") return "Continue estimate";
+  if (status === "Ready to Send") return "Send estimate";
+  if (status === "Waiting on Customer") return "Follow up";
+  if (status === "Won") return "Convert to job";
+  if (status === "Lost") return "Reopen if needed";
+  return "Review";
 }
 
-function EstimateDetailsDialog({
-  convertEstimateToJobAction,
-  createPrintableEstimateAction,
-  estimate,
-  onEditEstimate,
-  onOpenChange,
-  updateEstimateStatusAction,
-}: {
-  convertEstimateToJobAction: (
-    state: EstimateRecordMutationState,
-    formData: FormData,
-  ) => Promise<EstimateRecordMutationState>;
-  createPrintableEstimateAction: (
-    state: EstimateRecordMutationState,
-    formData: FormData,
-  ) => Promise<EstimateRecordMutationState>;
-  estimate: EstimateRecordRow | null;
-  onEditEstimate: (estimate: EstimateRecordRow) => void;
-  onOpenChange: (open: boolean) => void;
-  updateEstimateStatusAction: (
-    state: EstimateRecordMutationState,
-    formData: FormData,
-  ) => Promise<EstimateRecordMutationState>;
-}) {
-  const laborItems = React.useMemo(() => withLineItemKeys(estimate?.laborItems ?? []), [estimate?.laborItems]);
-  const materials = React.useMemo(() => withLineItemKeys(estimate?.materials ?? []), [estimate?.materials]);
-  const workflow = estimate ? getEstimateWorkflow(estimate.status) : null;
-
-  return (
-    <Dialog open={!!estimate} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-5xl">
-        {estimate ? (
-          <>
-            <DialogHeader className="border-b pt-2 pr-10 pb-4">
-              <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md border bg-muted">
-                  <FileText className="size-5 text-muted-foreground" />
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <DialogTitle className="truncate text-wrap font-semibold tracking-tight">
-                      {estimate.description}
-                    </DialogTitle>
-                    <DialogDescription className="truncate">{estimate.customerName ?? "No customer"}</DialogDescription>
-                  </div>
-                  {/*<Badge*/}
-                  {/*  variant="outline"*/}
-                  {/*  className={`h-8 w-fit shrink-0 px-2 ${estimateStatusClassName(estimate.status)}`}*/}
-                  {/*>*/}
-                  {/*  {estimate.status}*/}
-                  {/*</Badge>*/}
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    onOpenChange(false);
-                    onEditEstimate(estimate);
-                  }}
-                >
-                  <Pencil />
-                  Edit estimate
-                </Button>
-                {estimate.status === "Draft" ? (
-                  <>
-                    <UpdateEstimateStatusButton
-                      action={updateEstimateStatusAction}
-                      estimate={estimate}
-                      status="Ready to Send"
-                    >
-                      <CheckCircle2 />
-                      Mark ready
-                    </UpdateEstimateStatusButton>
-                    <PrintableEstimateButton
-                      action={createPrintableEstimateAction}
-                      className=""
-                      estimate={estimate}
-                      size="sm"
-                    />
-                  </>
-                ) : null}
-                {estimate.status === "Ready to Send" ? (
-                  <>
-                    <PrintableEstimateButton
-                      action={createPrintableEstimateAction}
-                      className=""
-                      estimate={estimate}
-                      size="sm"
-                    />
-                    {estimate.printableEstimateId ? (
-                      <Button asChild size="sm">
-                        <Link href={`/dashboard/estimates/${estimate.printableEstimateId}?from=estimates`}>
-                          <Send />
-                          Email estimate
-                        </Link>
-                      </Button>
-                    ) : null}
-                    <UpdateEstimateStatusButton
-                      action={updateEstimateStatusAction}
-                      estimate={estimate}
-                      status="Waiting on Customer"
-                    >
-                      <Clock3 />
-                      Mark waiting
-                    </UpdateEstimateStatusButton>
-                  </>
-                ) : null}
-                {estimate.status === "Waiting on Customer" ? (
-                  <>
-                    <UpdateEstimateStatusButton
-                      action={updateEstimateStatusAction}
-                      estimate={estimate}
-                      status="Won"
-                      variant="default"
-                    >
-                      <CheckCircle2 />
-                      Mark won
-                    </UpdateEstimateStatusButton>
-                    <UpdateEstimateStatusButton action={updateEstimateStatusAction} estimate={estimate} status="Lost">
-                      <XCircle />
-                      Mark lost
-                    </UpdateEstimateStatusButton>
-                  </>
-                ) : null}
-                {estimate.status === "Won" ? (
-                  <ConvertEstimateButton
-                    action={convertEstimateToJobAction}
-                    className=""
-                    estimate={estimate}
-                    size="sm"
-                  />
-                ) : null}
-                {estimate.status === "Lost" ? (
-                  <UpdateEstimateStatusButton action={updateEstimateStatusAction} estimate={estimate} status="Draft">
-                    <RotateCcw />
-                    Reopen
-                  </UpdateEstimateStatusButton>
-                ) : null}
-              </div>
-            </DialogHeader>
-
-            <div className="grid gap-4">
-              {workflow ? (
-                <section className="grid gap-2 rounded-lg border bg-muted/20 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-medium text-sm">{workflow.title}</div>
-                    <Badge variant="outline" className={estimateStatusClassName(estimate.status)}>
-                      {estimate.status}
-                    </Badge>
-                  </div>
-                  <p className="text-muted-foreground text-sm">{workflow.nextStep}</p>
-                </section>
-              ) : null}
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-                <section className="grid gap-4 rounded-lg border p-4">
-                  <div className="grid gap-1">
-                    <Badge variant="secondary" className="w-fit">
-                      {estimate.category}
-                    </Badge>
-                    <p className="text-muted-foreground text-sm">{estimate.scope || "No description on file."}</p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <DetailItem label="Customer" value={estimate.customerName} />
-                    <DetailItem label="Service location" value={estimate.serviceLocation} />
-                    <DetailItem label="Notes" value={estimate.notes || "No notes on file"} />
-                    <DetailItem
-                      label="Scheduled date"
-                      value={estimate.dateBegin ? formatDate(estimate.dateBegin) : "Unscheduled"}
-                    />
-                  </div>
-                </section>
-
-                <section className="grid gap-3 rounded-lg border bg-muted/20 p-4">
-                  <div className="flex items-center gap-2 font-medium text-sm">
-                    <CircleDollarSign className="size-4 text-muted-foreground" />
-                    Estimate summary
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <DetailItem label="Estimate value" value={formatOptionalMoney(estimate.estimatedTotal)} />
-                    <DetailItem label="Created" value={format(parseISO(estimate.createdAt), "MMM d, yyyy")} />
-                    <DetailItem label="Labor" value={formatMoney(getLaborSubtotal(estimate))} />
-                    <DetailItem label="Materials" value={formatMoney(getMaterialsSubtotal(estimate))} />
-                    <DetailItem
-                      label={`Tax${estimate.materialTaxRate ? ` (${estimate.materialTaxRate}%)` : ""}`}
-                      value={formatMoney(getMaterialTaxAmount(estimate))}
-                    />
-                    <DetailItem label="Status" value={estimate.status} />
-                  </div>
-                </section>
-              </div>
-
-              <section className="grid gap-3">
-                <div className="flex items-center gap-2 font-medium text-sm">
-                  <CircleDollarSign className="size-4 text-muted-foreground" />
-                  Labor and materials
-                </div>
-                <div className="grid gap-3">
-                  <div className="rounded-lg border border-sky-200/80 bg-sky-50/50 p-3 dark:border-sky-900/60 dark:bg-sky-950/20">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <div className="font-medium text-sm">Labor</div>
-                      <span className="text-muted-foreground text-xs">{laborItems.length} item(s)</span>
-                    </div>
-                    {laborItems.length ? (
-                      <div className="divide-y divide-sky-200/70 dark:divide-sky-900/60">
-                        {laborItems.map((item) => (
-                          <div
-                            key={item.key}
-                            className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-2 text-sm first:pt-0 last:pb-0"
-                          >
-                            <span className="min-w-0 whitespace-normal break-words">
-                              {item.description || "Labor item"}
-                              {formatLineItemMeta(item) ? (
-                                <span className="mt-0.5 block text-muted-foreground text-xs">
-                                  {formatLineItemMeta(item)}
-                                </span>
-                              ) : null}
-                            </span>
-                            <span className="whitespace-nowrap text-right tabular-nums">{formatMoney(item.price)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-sm">No labor line items.</p>
-                    )}
-                  </div>
-                  {laborItems.length ? (
-                    <div className="flex justify-end pt-2">
-                      <span className="whitespace-nowrap text-right font-medium tabular-nums">
-                        Labor total: {formatMoney(getLaborSubtotal(estimate))}
-                      </span>
-                    </div>
-                  ) : null}
-
-                  <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 p-3 dark:border-amber-900/60 dark:bg-amber-950/20">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <div className="font-medium text-sm">Materials</div>
-                      <span className="text-muted-foreground text-xs">{materials.length} item(s)</span>
-                    </div>
-                    {materials.length ? (
-                      <div className="divide-y divide-amber-200/70 dark:divide-amber-900/60">
-                        {materials.map((material) => (
-                          <div
-                            key={material.key}
-                            className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-2 text-sm first:pt-0 last:pb-0"
-                          >
-                            <span className="min-w-0 whitespace-normal break-words">
-                              {material.description || "Material item"}
-                              {formatLineItemMeta(material) ? (
-                                <span className="mt-0.5 block text-muted-foreground text-xs">
-                                  {formatLineItemMeta(material)}
-                                </span>
-                              ) : null}
-                            </span>
-                            <span className="whitespace-nowrap text-right tabular-nums">
-                              {formatMoney(material.price)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-sm">No material line items.</p>
-                    )}
-                  </div>
-                  {materials.length ? (
-                    <div className="flex justify-end pt-2">
-                      <span className="whitespace-nowrap text-right font-medium tabular-nums">
-                        Materials total: {formatMoney(getMaterialsSubtotal(estimate))}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-              </section>
-            </div>
-          </>
-        ) : null}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export function EstimateRecordsTable({
-  convertEstimateToJobAction,
-  createPrintableEstimateAction,
-  customers,
-  data,
-  deleteEstimateRecordAction,
-  exportSlotId,
-  initialSelectedEstimateId,
-  services,
-  updateEstimateStatusAction,
-  updateEstimateRecordAction,
-}: {
-  convertEstimateToJobAction: (
-    state: EstimateRecordMutationState,
-    formData: FormData,
-  ) => Promise<EstimateRecordMutationState>;
-  createPrintableEstimateAction: (
-    state: EstimateRecordMutationState,
-    formData: FormData,
-  ) => Promise<EstimateRecordMutationState>;
-  customers: JobCustomer[];
-  data: EstimateRecordRow[];
-  deleteEstimateRecordAction: (
-    state: EstimateRecordMutationState,
-    formData: FormData,
-  ) => Promise<EstimateRecordMutationState>;
-  exportSlotId?: string;
-  initialSelectedEstimateId?: string;
-  services: ServiceTemplateRow[];
-  updateEstimateStatusAction: (
-    state: EstimateRecordMutationState,
-    formData: FormData,
-  ) => Promise<EstimateRecordMutationState>;
-  updateEstimateRecordAction: (
-    state: EstimateRecordMutationState,
-    formData: FormData,
-  ) => Promise<EstimateRecordMutationState>;
-}) {
+export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRecordRow[]; exportSlotId?: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [estimateToDelete, setEstimateToDelete] = React.useState<EstimateRecordRow | null>(null);
-  const [estimateToEdit, setEstimateToEdit] = React.useState<EstimateRecordRow | null>(null);
-  const [selectedEstimate, setSelectedEstimate] = React.useState<EstimateRecordRow | null>(null);
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]);
@@ -619,10 +162,12 @@ export function EstimateRecordsTable({
     pageIndex: 0,
     pageSize,
   });
-  const openEstimateEditor = React.useCallback((estimate: EstimateRecordRow) => {
-    setSelectedEstimate(null);
-    setEstimateToEdit(estimate);
-  }, []);
+  const openEstimateEditor = React.useCallback(
+    (estimate: EstimateRecordRow) => {
+      router.push(`/dashboard/estimates/records/${estimate.id}/edit`);
+    },
+    [router],
+  );
   const columns = React.useMemo(
     () =>
       getEstimateRecordsColumns({
@@ -711,65 +256,8 @@ export function EstimateRecordsTable({
     table.setPageIndex(0);
   }
 
-  React.useEffect(() => {
-    if (!initialSelectedEstimateId) return;
-
-    const estimate = data.find((item) => item.id === initialSelectedEstimateId);
-    if (estimate) {
-      setSelectedEstimate(estimate);
-    }
-  }, [data, initialSelectedEstimateId]);
-
-  React.useEffect(() => {
-    if (!selectedEstimate) return;
-    const refreshedEstimate = data.find((estimate) => estimate.id === selectedEstimate.id);
-    if (!refreshedEstimate) {
-      setSelectedEstimate(null);
-      return;
-    }
-    if (refreshedEstimate && refreshedEstimate !== selectedEstimate) {
-      setSelectedEstimate(refreshedEstimate);
-    }
-  }, [data, selectedEstimate]);
-
-  React.useEffect(() => {
-    if (!estimateToEdit) return;
-    const refreshedEstimate = data.find((estimate) => estimate.id === estimateToEdit.id);
-    if (!refreshedEstimate) {
-      setEstimateToEdit(null);
-      return;
-    }
-    if (refreshedEstimate !== estimateToEdit) {
-      setEstimateToEdit(refreshedEstimate);
-    }
-  }, [data, estimateToEdit]);
-
   return (
     <>
-      <DeleteEstimateRecordDialog
-        key={estimateToDelete?.id ?? "delete-estimate"}
-        action={deleteEstimateRecordAction}
-        estimate={estimateToDelete}
-        open={!!estimateToDelete}
-        onOpenChange={(open) => {
-          if (!open) setEstimateToDelete(null);
-        }}
-      />
-      <EditEstimateRecordDialog
-        key={estimateToEdit?.id ?? "edit-estimate"}
-        action={updateEstimateRecordAction}
-        customers={customers}
-        estimate={estimateToEdit}
-        onDeleteEstimate={(estimate) => {
-          setEstimateToEdit(null);
-          window.setTimeout(() => setEstimateToDelete(estimate), 0);
-        }}
-        open={!!estimateToEdit}
-        onOpenChange={(open) => {
-          if (!open) setEstimateToEdit(null);
-        }}
-        services={services}
-      />
       <div className="grid gap-4">
         <div className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -956,7 +444,7 @@ export function EstimateRecordsTable({
                     onClick={(event) => {
                       if (event.target instanceof HTMLElement && event.target.closest("button, a, input, label"))
                         return;
-                      setSelectedEstimate(row.original);
+                      router.push(`/dashboard/estimates/records/${row.original.id}`);
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (
@@ -1000,7 +488,7 @@ export function EstimateRecordsTable({
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground text-xs">Next step</span>
-                    <span className="text-right">{getEstimateWorkflow(estimate.status).action}</span>
+                    <span className="text-right">{nextActionLabel(estimate.status)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground text-xs">Scheduled date</span>
@@ -1036,13 +524,17 @@ export function EstimateRecordsTable({
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setSelectedEstimate(estimate)}>
-                    <Eye className="size-4" />
-                    View
+                  <Button asChild variant="outline" size="sm">
+                    <Link prefetch={false} href={`/dashboard/estimates/records/${estimate.id}`}>
+                      <Eye className="size-4" />
+                      View
+                    </Link>
                   </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => openEstimateEditor(estimate)}>
-                    <Pencil className="size-4" />
-                    Edit
+                  <Button asChild variant="outline" size="sm">
+                    <Link prefetch={false} href={`/dashboard/estimates/records/${estimate.id}/edit`}>
+                      <Pencil className="size-4" />
+                      Edit
+                    </Link>
                   </Button>
                 </div>
               </CardContent>
@@ -1133,25 +625,6 @@ export function EstimateRecordsTable({
         </div>
       </div>
       {exportSlotId ? <CsvExportSlot id={exportSlotId}>{exportMenu}</CsvExportSlot> : null}
-      <EstimateDetailsDialog
-        convertEstimateToJobAction={convertEstimateToJobAction}
-        createPrintableEstimateAction={createPrintableEstimateAction}
-        estimate={selectedEstimate}
-        onEditEstimate={openEstimateEditor}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedEstimate(null);
-
-            if (searchParams.get("estimate")) {
-              const nextParams = new URLSearchParams(searchParams.toString());
-              nextParams.delete("estimate");
-              const nextQuery = nextParams.toString();
-              router.replace(nextQuery ? `/dashboard/estimates?${nextQuery}` : "/dashboard/estimates");
-            }
-          }
-        }}
-        updateEstimateStatusAction={updateEstimateStatusAction}
-      />
     </>
   );
 }

@@ -88,7 +88,7 @@ export function CustomerDueJobsPopover({ customer }: { customer: RecentCustomerR
               href={
                 job.linkedInvoiceId
                   ? `/dashboard/invoices?invoice=${job.linkedInvoiceId}`
-                  : `/dashboard/jobs?job=${job.linkedJobId ?? job.id}`
+                  : `/dashboard/jobs/${job.linkedJobId ?? job.id}`
               }
               className="grid gap-1 border-b p-3 transition-colors last:border-b-0 hover:bg-muted/50"
             >

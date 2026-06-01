@@ -1,14 +1,11 @@
 "use client";
 "use no memo";
 
-import Link from "next/link";
-
 import type { ColumnDef } from "@tanstack/react-table";
 import { differenceInCalendarDays, endOfDay, format, parseISO, startOfDay } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import type { InvoiceTableItem } from "./schema";
@@ -79,11 +76,7 @@ function getDueFilterBucket(invoice: InvoiceTableItem) {
   return "upcoming";
 }
 
-export function getInvoicesColumns({
-  onManageInvoice,
-}: {
-  onManageInvoice: (invoice: InvoiceTableItem) => void;
-}): ColumnDef<InvoiceTableItem>[] {
+export function getInvoicesColumns(): ColumnDef<InvoiceTableItem>[] {
   return [
     {
       id: "select",
@@ -97,7 +90,7 @@ export function getInvoicesColumns({
         </div>
       ),
       cell: ({ row }) => (
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center" data-invoice-row-ignore>
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(!!value)}
@@ -145,15 +138,7 @@ export function getInvoicesColumns({
     {
       accessorKey: "invoiceNumber",
       header: "Invoice ID",
-      cell: ({ row }) => (
-        <Link
-          prefetch={false}
-          href={row.original.href}
-          className="font-medium text-blue-600 underline-offset-4 hover:underline"
-        >
-          {row.original.invoiceNumber}
-        </Link>
-      ),
+      cell: ({ row }) => <span className="font-medium">{row.original.invoiceNumber}</span>,
       enableHiding: false,
     },
     {
@@ -201,18 +186,6 @@ export function getInvoicesColumns({
         </div>
       ),
       sortingFn: (rowA, rowB) => Number(rowA.original.balanceDue ?? 0) - Number(rowB.original.balanceDue ?? 0),
-    },
-    {
-      id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
-      cell: ({ row }) => (
-        <div className="flex justify-end">
-          <Button type="button" variant="outline" size="sm" onClick={() => onManageInvoice(row.original)}>
-            Manage
-          </Button>
-        </div>
-      ),
-      enableHiding: true,
     },
     {
       id: "status",

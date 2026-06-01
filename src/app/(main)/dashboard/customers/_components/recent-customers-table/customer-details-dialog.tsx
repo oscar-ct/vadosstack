@@ -206,7 +206,7 @@ export function CustomerDetailsDialog({
                           <div className="flex items-start justify-self-start sm:justify-self-end">
                             {job.linkedJobId ? (
                               <Button asChild variant="outline" size="sm">
-                                <Link prefetch={false} href={`/dashboard/jobs?job=${job.linkedJobId}`}>
+                                <Link prefetch={false} href={`/dashboard/jobs/${job.linkedJobId}`}>
                                   Open job
                                   <ExternalLink className="size-3.5" />
                                 </Link>

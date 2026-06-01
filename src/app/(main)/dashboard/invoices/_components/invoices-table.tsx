@@ -4,7 +4,7 @@
 import * as React from "react";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import {
   type ColumnFiltersState,
@@ -253,7 +253,7 @@ function DeleteInvoicePaymentDialog({
   );
 }
 
-function InvoiceDetailsDialog({
+export function InvoiceDetailsDialog({
   createJobPaymentAction,
   deleteJobPaymentAction,
   invoice,
@@ -308,24 +308,15 @@ function InvoiceDetailsDialog({
                 {formatCustomerName(invoice.customerName)} · issued {formatDate(invoice.issuedAt)}
               </DialogDescription>
             </div>
-            <div className={"flex w-full justify-between"}>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline" className={`w-fit ${getStatusClassName(status)}`}>
-                  {status}
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className={`w-fit ${getStatusClassName(status)}`}>
+                {status}
+              </Badge>
+              {dueState.label !== "Paid" && (
+                <Badge variant="outline" className={`w-fit ${dueState.className}`}>
+                  {dueState.label}
                 </Badge>
-                {dueState.label !== "Paid" && (
-                  <Badge variant="outline" className={`w-fit ${dueState.className}`}>
-                    {dueState.label}
-                  </Badge>
-                )}
-              </div>
-              <div className="flex justify-end">
-                <Button asChild size="sm">
-                  <Link prefetch={false} href={invoice.href}>
-                    View invoice
-                  </Link>
-                </Button>
-              </div>
+              )}
             </div>
           </div>
         </DialogHeader>
@@ -567,22 +558,8 @@ function InvoiceDetailsDialog({
   );
 }
 
-export function InvoicesTable({
-  createJobPaymentAction,
-  deleteJobPaymentAction,
-  exportSlotId,
-  initialManagedInvoiceId,
-  invoices,
-}: {
-  createJobPaymentAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
-  deleteJobPaymentAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
-  exportSlotId?: string;
-  initialManagedInvoiceId?: string;
-  invoices: InvoiceTableItem[];
-}) {
+export function InvoicesTable({ exportSlotId, invoices }: { exportSlotId?: string; invoices: InvoiceTableItem[] }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [invoiceToManage, setInvoiceToManage] = React.useState<InvoiceTableItem | null>(null);
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "issuedAt", desc: true }]);
@@ -595,23 +572,7 @@ export function InvoicesTable({
     search: false,
     status: false,
   });
-  const columns = React.useMemo(() => getInvoicesColumns({ onManageInvoice: setInvoiceToManage }), []);
-  React.useEffect(() => {
-    const managedInvoiceId = searchParams.get("invoice") ?? initialManagedInvoiceId;
-    if (!managedInvoiceId) return;
-
-    const invoice = invoices.find((item) => item.id === managedInvoiceId);
-    if (invoice) setInvoiceToManage(invoice);
-  }, [initialManagedInvoiceId, invoices, searchParams]);
-
-  React.useEffect(() => {
-    if (!invoiceToManage) return;
-
-    const refreshedInvoice = invoices.find((invoice) => invoice.id === invoiceToManage.id);
-    if (refreshedInvoice && refreshedInvoice !== invoiceToManage) {
-      setInvoiceToManage(refreshedInvoice);
-    }
-  }, [invoiceToManage, invoices]);
+  const columns = React.useMemo(() => getInvoicesColumns(), []);
 
   const table = useReactTable({
     data: invoices,
@@ -714,24 +675,6 @@ export function InvoicesTable({
 
   return (
     <div className="grid gap-4">
-      <InvoiceDetailsDialog
-        createJobPaymentAction={createJobPaymentAction}
-        deleteJobPaymentAction={deleteJobPaymentAction}
-        invoice={invoiceToManage}
-        open={!!invoiceToManage}
-        onOpenChange={(open) => {
-          if (!open) {
-            setInvoiceToManage(null);
-
-            if (searchParams.get("invoice")) {
-              const nextParams = new URLSearchParams(searchParams.toString());
-              nextParams.delete("invoice");
-              const nextQuery = nextParams.toString();
-              router.replace(nextQuery ? `/dashboard/invoices?${nextQuery}` : "/dashboard/invoices");
-            }
-          }
-        }}
-      />
       <div
         className={
           dueSummary.pastDueCount > 0
@@ -942,16 +885,15 @@ export function InvoicesTable({
             const invoice = row.original;
 
             return (
-              <div key={row.id} className="grid gap-3 rounded-lg border bg-card p-3">
+              <Link
+                key={row.id}
+                prefetch={false}
+                href={invoice.href}
+                className="grid gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <Link
-                      prefetch={false}
-                      href={invoice.href}
-                      className="font-medium text-blue-600 underline-offset-4 hover:underline"
-                    >
-                      {invoice.invoiceNumber}
-                    </Link>
+                    <div className="font-medium">{invoice.invoiceNumber}</div>
                     <div className="truncate text-muted-foreground text-sm">
                       {formatCustomerName(invoice.customerName)}
                     </div>
@@ -996,11 +938,9 @@ export function InvoicesTable({
                       </Badge>
                     ) : null}
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setInvoiceToManage(invoice)}>
-                    Manage
-                  </Button>
+                  <span className="text-muted-foreground text-sm">Open invoice</span>
                 </div>
-              </div>
+              </Link>
             );
           })
         ) : (
@@ -1026,7 +966,26 @@ export function InvoicesTable({
           <TableBody>
             {currentRows.length ? (
               currentRows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                  tabIndex={0}
+                  role="link"
+                  className="cursor-pointer"
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest("[data-invoice-row-ignore]")) {
+                      return;
+                    }
+
+                    router.push(row.original.href);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      router.push(row.original.href);
+                    }
+                  }}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="p-3 align-middle">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

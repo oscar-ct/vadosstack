@@ -1,14 +1,13 @@
 import { Fragment } from "react";
 
 import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { addDays, format } from "date-fns";
-import { ArrowLeft, BriefcaseBusiness, CalendarDays, MapPin, ReceiptText, UserRound } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, MapPin, ReceiptText, UserRound } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
-import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/back-button";
 import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
@@ -18,8 +17,11 @@ import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
 import { parsePricingItems } from "../../jobs/_components/pricing-items";
+import { createJobPaymentAction, deleteJobPaymentAction } from "../../jobs/actions";
 import { DeleteInvoiceButton } from "../_components/delete-invoice-button";
 import { InvoiceActions } from "../_components/invoice-actions";
+import type { InvoiceTableItem } from "../_components/invoices-table";
+import { ManageInvoiceDialogButton } from "../_components/manage-invoice-dialog-button";
 import { deleteInvoiceAction, emailInvoiceAction } from "../actions";
 
 type InvoiceMaterial = {
@@ -154,7 +156,6 @@ export default async function Page({
       : resolvedSearchParams?.from === "invoices"
         ? "/dashboard/invoices"
         : "/dashboard/invoices";
-  const backLabel = resolvedSearchParams?.from === "jobs" ? "Jobs" : "Invoices";
   const invoice = await prisma.invoice.findUnique({
     where: {
       id_ownerId: {
@@ -238,6 +239,39 @@ export default async function Page({
     },
   });
   const currentHref = `/dashboard/invoices/${invoice.id}?from=${resolvedSearchParams?.from ?? "invoices"}`;
+  const managedInvoice: InvoiceTableItem = {
+    id: invoice.id,
+    jobId: invoice.jobId,
+    customerName: invoice.customerName ?? undefined,
+    invoiceNumber,
+    href: currentHref,
+    issuedAt: invoice.issuedAt.toISOString(),
+    dueAt: dueDate.toISOString(),
+    jobTitle: invoice.jobTitle,
+    jobDescription: invoice.jobDescription ?? undefined,
+    jobNumber: invoice.jobId.slice(-6).toUpperCase(),
+    jobHref: `/dashboard/jobs/${invoice.jobId}`,
+    jobServiceLocation: invoice.serviceLocation ?? undefined,
+    paymentStatus: invoice.paymentStatus,
+    laborCost: invoice.laborCost.toString(),
+    materialsSubtotal: invoice.materialsSubtotal.toString(),
+    materialTaxAmount: invoice.materialTaxAmount.toString(),
+    depositPaid: invoice.depositPaid.toString(),
+    amountPaid: invoice.amountPaid.toString(),
+    balanceDue: invoice.balanceDue.toString(),
+    total: invoice.finalCost.toString(),
+    payments: invoice.job.payments.map((payment) => ({
+      id: payment.id,
+      paidOn: payment.paidOn.toISOString(),
+      amount: payment.amount.toString(),
+      paymentType: payment.paymentType,
+      method: payment.method,
+      referenceNumber: payment.referenceNumber ?? undefined,
+      description: payment.description,
+      notes: payment.notes ?? undefined,
+      createdAt: payment.createdAt.toISOString(),
+    })),
+  };
   const gmailError = resolvedSearchParams?.gmail_error;
   const gmailNotice = resolvedSearchParams?.gmail_connected
     ? { message: "Gmail is connected. You can email invoices from this account.", type: "success" as const }
@@ -248,19 +282,13 @@ export default async function Page({
   return (
     <div className="mx-auto grid max-w-3xl gap-4 print:max-w-none print:gap-0 print:p-0 print:text-[10px]">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <Button asChild variant="outline" size="sm">
-          <Link prefetch={false} href={backHref}>
-            <ArrowLeft />
-            {backLabel}
-          </Link>
-        </Button>
+        <BackButton fallbackHref={backHref} />
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link prefetch={false} href={`/dashboard/invoices?invoice=${invoice.id}`}>
-              <ReceiptText />
-              Manage invoice
-            </Link>
-          </Button>
+          <ManageInvoiceDialogButton
+            createJobPaymentAction={createJobPaymentAction}
+            deleteJobPaymentAction={deleteJobPaymentAction}
+            invoice={managedInvoice}
+          />
           <InvoiceActions
             action={emailInvoiceAction}
             balanceDue={formatMoney(invoice.balanceDue)}

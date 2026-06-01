@@ -126,7 +126,7 @@ export default async function Page() {
       status: job.status,
       amount: formatMoney(job.finalCost) ?? formatMoney(job.estimatedCost),
       location: job.serviceLocation ?? undefined,
-      href: `/dashboard/jobs?job=${job.id}`,
+      href: `/dashboard/jobs/${job.id}`,
     })),
     ...tasks.map((task) => ({
       id: `task-${task.id}`,

@@ -1,131 +1,16 @@
-import { NotebookText } from "lucide-react";
+import Link from "next/link";
+
+import { NotebookText, Plus } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
+import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 
-import type { JobCustomer } from "../jobs/_components/jobs-table/schema";
-import { parseMaterials } from "../jobs/_components/materials";
-import { parsePricingItems } from "../jobs/_components/pricing-items";
-import type { ServiceTemplateRow } from "../services/types";
-import { CreateEstimateRecordDialog } from "./_components/estimate-record-dialogs";
 import { EstimateRecordsTable } from "./_components/estimate-records-table";
-import type { EstimateRecordRow } from "./_components/schema";
-import {
-  convertEstimateToJobAction,
-  createEstimateRecordAction,
-  createPrintableEstimateAction,
-  deleteEstimateRecordAction,
-  updateEstimateRecordAction,
-  updateEstimateStatusAction,
-} from "./records-actions";
+import { getEstimateRecords } from "./_lib/estimate-record-data";
 
-function formatMoney(value: { toString: () => string } | null) {
-  return value ? value.toString() : undefined;
-}
-
-function normalizeEstimateStatus(status: string) {
-  return status === "Estimate Provided" ? "Waiting on Customer" : status;
-}
-
-async function getCustomers(ownerId: string): Promise<JobCustomer[]> {
-  const customers = await prisma.customer.findMany({
-    where: {
-      ownerId,
-    },
-    include: {
-      addresses: true,
-    },
-    orderBy: {
-      name: "asc",
-    },
-  });
-
-  return customers.map((customer) => ({
-    id: customer.id,
-    name: customer.name,
-    addresses: customer.addresses.map((address) => ({
-      id: address.id,
-      label: address.label ?? undefined,
-      line1: address.line1,
-      line2: address.line2 ?? undefined,
-      city: address.city ?? undefined,
-      state: address.state ?? undefined,
-      postalCode: address.postalCode ?? undefined,
-      country: address.country ?? undefined,
-    })),
-  }));
-}
-
-async function getEstimateRecords(ownerId: string): Promise<EstimateRecordRow[]> {
-  const estimates = await prisma.estimateRecord.findMany({
-    where: {
-      ownerId,
-    },
-    include: {
-      customer: true,
-      printableEstimate: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-
-  return estimates.map((estimate) => ({
-    id: estimate.id,
-    convertedJobId: estimate.convertedJobId ?? undefined,
-    printableEstimateId: estimate.printableEstimate?.id,
-    customerId: estimate.customerId ?? undefined,
-    customerName: estimate.customer?.name ?? undefined,
-    description: estimate.description,
-    serviceLocation: estimate.serviceLocation ?? undefined,
-    dateBegin: estimate.dateBegin?.toISOString(),
-    dateEnd: estimate.dateEnd?.toISOString(),
-    laborCost: formatMoney(estimate.laborCost),
-    laborItems: parsePricingItems(estimate.laborItems),
-    materialTaxRate: formatMoney(estimate.materialTaxRate),
-    materials: parseMaterials(estimate.materials),
-    estimatedTotal: formatMoney(estimate.estimatedTotal),
-    scope: estimate.scope ?? undefined,
-    category: estimate.category,
-    status: normalizeEstimateStatus(estimate.status),
-    notes: estimate.notes ?? undefined,
-    createdAt: estimate.createdAt.toISOString(),
-  }));
-}
-
-async function getServices(ownerId: string): Promise<ServiceTemplateRow[]> {
-  const services = await prisma.serviceTemplate.findMany({
-    where: {
-      ownerId,
-    },
-    orderBy: {
-      title: "asc",
-    },
-  });
-
-  return services.map((service) => ({
-    id: service.id,
-    title: service.title,
-    description: service.description ?? undefined,
-    category: service.category,
-    notes: service.notes ?? undefined,
-    laborItems: parsePricingItems(service.laborItems),
-    materialTaxRate: service.materialTaxRate.toString(),
-    materials: parseMaterials(service.materials),
-    createdAt: service.createdAt.toISOString(),
-    updatedAt: service.updatedAt.toISOString(),
-  }));
-}
-
-export default async function Page({
-  searchParams,
-}: {
-  searchParams?: Promise<{
-    estimate?: string;
-  }>;
-}) {
+export default async function Page() {
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
@@ -137,12 +22,7 @@ export default async function Page({
     );
   }
 
-  const [customers, estimates, services, resolvedSearchParams] = await Promise.all([
-    getCustomers(currentUser.id),
-    getEstimateRecords(currentUser.id),
-    getServices(currentUser.id),
-    searchParams,
-  ]);
+  const estimates = await getEstimateRecords(currentUser.id);
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
@@ -158,23 +38,17 @@ export default async function Page({
             Work estimates from draft, to sending, to customer decision, to job conversion.
           </CardDescription>
           <CardAction className="flex items-center gap-2">
-            <CreateEstimateRecordDialog action={createEstimateRecordAction} customers={customers} services={services} />
+            <Button asChild size="sm">
+              <Link prefetch={false} href="/dashboard/estimates/create">
+                <Plus />
+                Create
+              </Link>
+            </Button>
             <div id="estimates-export-action" />
           </CardAction>
         </CardHeader>
         <CardContent className="pt-0">
-          <EstimateRecordsTable
-            convertEstimateToJobAction={convertEstimateToJobAction}
-            createPrintableEstimateAction={createPrintableEstimateAction}
-            customers={customers}
-            data={estimates}
-            deleteEstimateRecordAction={deleteEstimateRecordAction}
-            exportSlotId="estimates-export-action"
-            initialSelectedEstimateId={resolvedSearchParams?.estimate}
-            services={services}
-            updateEstimateStatusAction={updateEstimateStatusAction}
-            updateEstimateRecordAction={updateEstimateRecordAction}
-          />
+          <EstimateRecordsTable data={estimates} exportSlotId="estimates-export-action" />
         </CardContent>
       </Card>
     </div>
