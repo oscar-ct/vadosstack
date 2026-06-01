@@ -50,6 +50,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
+  --breakpoint-2xl: 1440px;
 }
 
 /* Default theme styles (used when no data-theme-preset is set or when 'default' is selected).
