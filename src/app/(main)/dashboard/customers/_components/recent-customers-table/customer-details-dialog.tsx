@@ -11,6 +11,7 @@ import {
   FileText,
   Mail,
   MapPin,
+  Pencil,
   ReceiptText,
   UserRound,
 } from "lucide-react";
@@ -51,10 +52,12 @@ function formatDate(value?: string) {
 
 export function CustomerDetailsDialog({
   customer,
+  onEditCustomer,
   open,
   onOpenChange,
 }: {
   customer: RecentCustomerRow | null;
+  onEditCustomer: (customer: RecentCustomerRow) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -71,14 +74,20 @@ export function CustomerDetailsDialog({
         {customer ? (
           <>
             <DialogHeader className="border-b p-4 pr-12">
-              <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md border bg-muted">
-                  <UserRound className="size-5 text-muted-foreground" />
-                </span>
-                <div className="min-w-0">
-                  <DialogTitle className="truncate">{customer.name}</DialogTitle>
-                  <DialogDescription className="truncate">Customer #{customer.id}</DialogDescription>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted">
+                    <UserRound className="size-5 text-muted-foreground" />
+                  </span>
+                  <div className="min-w-0">
+                    <DialogTitle className="truncate">{customer.name}</DialogTitle>
+                    <DialogDescription className="truncate">Customer #{customer.id}</DialogDescription>
+                  </div>
                 </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => onEditCustomer(customer)}>
+                  <Pencil />
+                  Edit
+                </Button>
               </div>
             </DialogHeader>
 

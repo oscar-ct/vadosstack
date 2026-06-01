@@ -121,7 +121,7 @@ export function getEstimateRecordsColumns({
               </Link>
             </Button>
           ) : (
-            <Minus className={"size-3.5"} />
+            <Minus className={"size-2.5"} />
           )}
         </div>
       ),

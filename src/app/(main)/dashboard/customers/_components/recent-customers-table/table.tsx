@@ -23,8 +23,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   CreditCard,
-  Eye,
-  Pencil,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
@@ -217,6 +215,10 @@ export function RecentCustomersTable({
       />
       <CustomerDetailsDialog
         customer={selectedCustomer}
+        onEditCustomer={(customer) => {
+          setSelectedCustomer(null);
+          setCustomerToEdit(customer);
+        }}
         open={!!selectedCustomer}
         onOpenChange={(open) => {
           if (!open) setSelectedCustomer(null);
@@ -428,7 +430,22 @@ export function RecentCustomersTable({
               const billingDisplay = getCustomerBillingDisplay(row.original);
 
               return (
-                <Card key={row.id} size="sm" className="gap-0 py-0">
+                <Card
+                  key={row.id}
+                  size="sm"
+                  className="cursor-pointer gap-0 py-0 transition-colors hover:bg-muted/40"
+                  role="link"
+                  tabIndex={0}
+                  onClick={(event) => {
+                    if (shouldIgnoreRowClick(event.target)) return;
+                    setSelectedCustomer(row.original);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    setSelectedCustomer(row.original);
+                  }}
+                >
                   <CardContent className="grid gap-4 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -472,20 +489,8 @@ export function RecentCustomersTable({
                         <CustomerDueJobsPopover customer={row.original} />
                       </div>
                     ) : null}
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedCustomer(row.original)}
-                      >
-                        <Eye className="size-4" />
-                        View
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setCustomerToEdit(row.original)}>
-                        <Pencil className="size-4" />
-                        Edit
-                      </Button>
+                    <div className="flex items-center justify-end">
+                      <span className="text-muted-foreground text-sm">Open customer</span>
                     </div>
                   </CardContent>
                 </Card>

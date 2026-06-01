@@ -25,8 +25,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Eye,
-  Pencil,
   ReceiptText,
   Search,
   SlidersHorizontal,
@@ -408,8 +406,23 @@ export function JobsTable({ data, exportSlotId }: { data: JobRow[]; exportSlotId
               //   table.getState().pagination.pageIndex * table.getState().pagination.pageSize + index + 1;
 
               return (
-                <Card key={row.id} size="sm" className="gap-0 py-0">
-                  <CardContent className="grid gap-4 p-4">
+                <Card
+                  key={row.id}
+                  size="sm"
+                  className="cursor-pointer gap-0 transition-colors hover:bg-muted/40"
+                  role="link"
+                  tabIndex={0}
+                  onClick={(event) => {
+                    if (event.target instanceof HTMLElement && event.target.closest("button, a, input, label")) return;
+                    router.push(`/dashboard/jobs/${row.original.id}`);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    router.push(`/dashboard/jobs/${row.original.id}`);
+                  }}
+                >
+                  <CardContent className="grid gap-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className={"min-w-0"}>
                         <div className="flex items-center gap-2">
@@ -468,36 +481,23 @@ export function JobsTable({ data, exportSlotId }: { data: JobRow[]; exportSlotId
                     </div>
                     <div>
                       {row.original.invoiceId ? (
-                        <Badge
+                        <Button
                           asChild
                           variant="outline"
-                          className="h-7 border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800"
+                          size={"xs"}
+                          className="border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
                         >
                           <Link prefetch={false} href={`/dashboard/invoices/${row.original.invoiceId}`}>
                             <ReceiptText className="size-3.5" />
                             View invoice
                           </Link>
-                        </Badge>
+                        </Button>
                       ) : (
-                        <Badge variant="outline" className="h-7 bg-muted/30 px-2 text-muted-foreground">
-                          <ReceiptText className="size-3.5" />
-                          Not invoiced
-                        </Badge>
+                        <span className={"text-muted-foreground"}>Not invoiced</span>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button asChild variant="outline" size="sm">
-                        <Link prefetch={false} href={`/dashboard/jobs/${row.original.id}`}>
-                          <Eye className="size-4" />
-                          View
-                        </Link>
-                      </Button>
-                      <Button asChild variant="outline" size="sm">
-                        <Link prefetch={false} href={`/dashboard/jobs/${row.original.id}/edit`}>
-                          <Pencil className="size-4" />
-                          Edit
-                        </Link>
-                      </Button>
+                    <div className="flex items-center justify-end">
+                      <span className="text-muted-foreground text-sm">Open job</span>
                     </div>
                   </CardContent>
                 </Card>

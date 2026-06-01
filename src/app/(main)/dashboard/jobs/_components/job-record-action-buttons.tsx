@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toDateInputValue } from "@/lib/date-only";
+import { cn } from "@/lib/utils";
 
 import type { InvoiceMutationState } from "../../invoices/types";
 import type { JobMutationState } from "../actions";
@@ -58,9 +59,23 @@ export function JobInvoiceButton({
 }) {
   const [state, formAction, isPending] = React.useActionState(action, initialInvoiceState);
 
+  React.useEffect(() => {
+    if (!state.message || state.success) return;
+
+    toast.error(state.message);
+  }, [state]);
+
   if (job.invoiceId) {
     return (
-      <Button asChild size={size} className={className} variant="outline">
+      <Button
+        asChild
+        size={size}
+        className={cn(
+          "flex h-7 justify-center border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950",
+          className,
+        )}
+        variant="outline"
+      >
         <Link prefetch={false} href={`/dashboard/invoices/${job.invoiceId}`}>
           <ReceiptText />
           View invoice
@@ -72,11 +87,19 @@ export function JobInvoiceButton({
   return (
     <form action={formAction} className="grid gap-2">
       <input type="hidden" name="jobId" value={job.id} />
-      <Button type="submit" size={size} className={className} variant="outline" disabled={isPending}>
+      <Button
+        type="submit"
+        size={size}
+        className={cn(
+          "flex h-7 justify-center border-amber-200 bg-amber-50 px-2 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950",
+          className,
+        )}
+        variant="outline"
+        disabled={isPending}
+      >
         <ReceiptText />
         {isPending ? "Creating..." : "Create invoice"}
       </Button>
-      {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
     </form>
   );
 }

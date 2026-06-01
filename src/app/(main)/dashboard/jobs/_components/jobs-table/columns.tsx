@@ -5,7 +5,16 @@ import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { endOfDay, format, isBefore, parseISO, startOfDay } from "date-fns";
-import { CalendarOff, CircleCheckIcon, Clock3Icon, PauseCircle, Pencil, ReceiptText, XCircle } from "lucide-react";
+import {
+  CalendarOff,
+  CircleCheckIcon,
+  Clock3Icon,
+  Minus,
+  PauseCircle,
+  Pencil,
+  ReceiptText,
+  XCircle,
+} from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
 import { Badge } from "@/components/ui/badge";
@@ -252,21 +261,19 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
       cell: ({ row }) => (
         <div className="flex justify-start">
           {row.original.invoiceId ? (
-            <Badge
+            <Button
               asChild
               variant="outline"
-              className="h-7 border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
+              size={"xs"}
+              className="border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
             >
               <Link prefetch={false} href={`/dashboard/invoices/${row.original.invoiceId}`}>
                 <ReceiptText className="size-3.5" />
                 View invoice
               </Link>
-            </Badge>
+            </Button>
           ) : (
-            <Badge variant="outline" className="h-7 bg-muted/30 px-2 text-muted-foreground">
-              <ReceiptText className="size-3.5" />
-              Not invoiced
-            </Badge>
+            <Minus className={"size-2.5"} />
           )}
         </div>
       ),
