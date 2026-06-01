@@ -105,7 +105,7 @@ export function JobRecordWorkspace({
 
       <form ref={formRef} action={formAction} className="grid gap-4">
         {job ? <input type="hidden" name="id" value={job.id} /> : null}
-        <Card className="rounded-lg">
+        <Card className="overflow-visible rounded-lg">
           <CardHeader className="border-b">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="grid gap-1">

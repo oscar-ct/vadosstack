@@ -2504,7 +2504,7 @@ export function JobRecordFormFields({
             icon={BadgeDollarSign}
             step="5. Labor, materials, and tax"
           />
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="relative grid items-start gap-4 2xl:grid-cols-[minmax(0,1fr)_260px]">
             <div className="grid gap-4">
               <div className="grid gap-3 py-4">
                 <button
@@ -2549,7 +2549,7 @@ export function JobRecordFormFields({
               <MaterialItemsEditor items={materials} onChange={setMaterials} />
             </div>
 
-            <div className="grid content-start gap-4 rounded-lg border border-sky-200 bg-sky-50/70 p-3 md:w-full md:max-w-sm md:justify-self-end md:p-4 xl:sticky xl:top-20 dark:border-sky-900/60 dark:bg-sky-950/20">
+            <div className="grid content-start gap-4 rounded-lg border border-sky-200 bg-sky-50/70 p-3 md:w-full md:max-w-sm md:justify-self-end md:p-4 2xl:sticky 2xl:top-20 dark:border-sky-900/60 dark:bg-sky-950/20">
               <div className="flex items-center gap-2 font-semibold text-sky-900 text-sm uppercase tracking-normal dark:text-sky-200">
                 <Calculator className="size-4" />
                 Job summary
