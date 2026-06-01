@@ -866,5 +866,5 @@ export async function createPrintableEstimateAction(
   }
 
   revalidatePath("/dashboard/estimates");
-  redirect(`/dashboard/estimates/${printableEstimateId}?from=estimates`);
+  redirect(`/dashboard/estimates/${printableEstimateId}`);
 }

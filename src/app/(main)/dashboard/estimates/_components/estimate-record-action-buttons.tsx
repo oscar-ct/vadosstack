@@ -19,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import type { EstimateRecordMutationState } from "../records-actions";
 import type { EstimateRecordRow } from "./schema";
@@ -128,10 +129,18 @@ export function PrintableEstimateButton({
 
   if (estimate.printableEstimateId) {
     return (
-      <Button asChild size={size} className={className} variant="outline">
-        <a href={`/dashboard/estimates/${estimate.printableEstimateId}?from=estimates`}>
+      <Button
+        asChild
+        size={size}
+        className={cn(
+          "flex h-7 justify-center border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950",
+          className,
+        )}
+        variant="outline"
+      >
+        <a href={`/dashboard/estimates/${estimate.printableEstimateId}`}>
           <NotebookText />
-          View PDF
+          Final Estimate
         </a>
       </Button>
     );
@@ -140,9 +149,18 @@ export function PrintableEstimateButton({
   return (
     <form action={formAction} className="grid gap-2">
       <input type="hidden" name="id" value={estimate.id} />
-      <Button type="submit" size={size} className={className} variant="outline" disabled={isPending}>
+      <Button
+        type="submit"
+        size={size}
+        className={cn(
+          "flex h-7 justify-center border-amber-200 bg-amber-50 px-2 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950",
+          className,
+        )}
+        variant="outline"
+        disabled={isPending}
+      >
         <NotebookText />
-        {isPending ? "Creating..." : "Create PDF"}
+        {isPending ? "Creating..." : "Finalize Estimate"}
       </Button>
       {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
     </form>

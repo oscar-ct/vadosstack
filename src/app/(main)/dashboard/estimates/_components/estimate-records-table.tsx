@@ -24,9 +24,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Eye,
   NotebookText,
-  Pencil,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
@@ -464,8 +462,23 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
         </div>
         <div className="grid gap-6 md:hidden">
           {paginatedData.map((estimate) => (
-            <Card key={estimate.id} size="sm" className={"gap-0 py-0"}>
-              <CardContent className="grid gap-4 p-4">
+            <Card
+              key={estimate.id}
+              size="sm"
+              className="cursor-pointer gap-0 transition-colors hover:bg-muted/40"
+              role="link"
+              tabIndex={0}
+              onClick={(event) => {
+                if (event.target instanceof HTMLElement && event.target.closest("button, a, input, label")) return;
+                router.push(`/dashboard/estimates/records/${estimate.id}`);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                router.push(`/dashboard/estimates/records/${estimate.id}`);
+              }}
+            >
+              <CardContent className="grid gap-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className={"min-w-0"}>
                     <div className="truncate text-wrap font-medium text-sm">{estimate.description}</div>
@@ -503,39 +516,24 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
                 </div>
                 <div>
                   {estimate.printableEstimateId ? (
-                    <Button asChild variant="outline" size="sm" className="border-sky-200 bg-sky-50 text-sky-700">
-                      <Link
-                        prefetch={false}
-                        href={`/dashboard/estimates/${estimate.printableEstimateId}?from=estimates`}
-                      >
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
+                    >
+                      <Link prefetch={false} href={`/dashboard/estimates/${estimate.printableEstimateId}`}>
                         <NotebookText />
-                        View PDF
+                        Final estimate
                       </Link>
                     </Button>
                   ) : (
-                    <Badge
-                      variant="outline"
-                      className="flex h-7 w-min justify-center px-2 text-muted-foreground text-xs"
-                    >
-                      <NotebookText className="size-3.5" />
-                      No PDF
-                    </Badge>
+                    <span className={"text-muted-foreground"}>No final estimate</span>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <Button asChild variant="outline" size="sm">
-                    <Link prefetch={false} href={`/dashboard/estimates/records/${estimate.id}`}>
-                      <Eye className="size-4" />
-                      View
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" size="sm">
-                    <Link prefetch={false} href={`/dashboard/estimates/records/${estimate.id}/edit`}>
-                      <Pencil className="size-4" />
-                      Edit
-                    </Link>
-                  </Button>
+                <div className="flex items-center justify-end">
+                  <span className="text-muted-foreground text-sm">Open estimate</span>
                 </div>
               </CardContent>
             </Card>

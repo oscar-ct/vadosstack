@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { format, parseISO } from "date-fns";
-import { NotebookText, Pencil } from "lucide-react";
+import { Minus, NotebookText, Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -115,16 +115,13 @@ export function getEstimateRecordsColumns({
               size="xs"
               className="flex h-7 justify-center border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
             >
-              <Link prefetch={false} href={`/dashboard/estimates/${row.original.printableEstimateId}?from=estimates`}>
+              <Link prefetch={false} href={`/dashboard/estimates/${row.original.printableEstimateId}`}>
                 <NotebookText className="size-3.5" />
-                View PDF
+                Final estimate
               </Link>
             </Button>
           ) : (
-            <Badge variant="outline" className="flex h-7 justify-center px-2 text-muted-foreground text-xs">
-              <NotebookText className="size-3.5" />
-              No PDF
-            </Badge>
+            <Minus className={"size-3.5"} />
           )}
         </div>
       ),

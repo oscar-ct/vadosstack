@@ -15,8 +15,7 @@ import { prisma } from "@/lib/prisma";
 
 import { parseMaterials as parseJobMaterials } from "../../jobs/_components/materials";
 import { parsePricingItems } from "../../jobs/_components/pricing-items";
-import { DeleteEstimateButton } from "../_components/delete-estimate-button";
-import { EstimateActions } from "../_components/estimate-actions";
+import { DeleteEstimateButton, EstimateActions } from "../_components/estimate-actions";
 import { deleteEstimateAction, emailEstimateAction } from "../actions";
 
 type EstimateMaterial = {
@@ -186,7 +185,9 @@ export default async function Page({
       userId: currentUser.id,
     },
   });
-  const currentHref = `/dashboard/estimates/${estimate.id}?from=${resolvedSearchParams?.from ?? "estimates"}`;
+  const currentHref = resolvedSearchParams?.from
+    ? `/dashboard/estimates/${estimate.id}?from=${resolvedSearchParams.from}`
+    : `/dashboard/estimates/${estimate.id}`;
   const gmailError = resolvedSearchParams?.gmail_error;
   const gmailNotice = resolvedSearchParams?.gmail_connected
     ? { message: "Gmail is connected. You can email estimates from this account.", type: "success" as const }

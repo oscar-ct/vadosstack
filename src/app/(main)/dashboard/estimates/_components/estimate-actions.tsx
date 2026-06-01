@@ -5,11 +5,22 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { Mail, Printer } from "lucide-react";
+import { Mail, Printer, Trash2 } from "lucide-react";
 import { siGmail } from "simple-icons";
 import { toast } from "sonner";
 
 import { SimpleIcon } from "@/components/simple-icon";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +33,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+import type { EstimateMutationState } from "../types";
+
 type EmailEstimateState = {
   success: boolean;
   message: string;
@@ -30,6 +43,11 @@ type EmailEstimateState = {
 };
 
 const initialState: EmailEstimateState = {
+  success: false,
+  message: "",
+};
+
+const deleteInitialState: EstimateMutationState = {
   success: false,
   message: "",
 };
@@ -129,7 +147,7 @@ export function EstimateActions({
             <DialogTrigger asChild>
               <Button type="button" variant="outline" size="sm" disabled={!customerEmail}>
                 <Mail />
-                Email estimate
+                Email
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -201,5 +219,73 @@ export function EstimateActions({
         )}
       </div>
     </div>
+  );
+}
+
+export function DeleteEstimateButton({
+  action,
+  estimateId,
+  redirectTo,
+}: {
+  action: (state: EstimateMutationState, formData: FormData) => Promise<EstimateMutationState>;
+  estimateId: string;
+  redirectTo?: string;
+}) {
+  const formRef = React.useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const [state, formAction, isPending] = React.useActionState(action, deleteInitialState);
+
+  React.useEffect(() => {
+    if (!state.success) return;
+
+    setOpen(false);
+    toast.success(state.message || "Estimate deleted.");
+    if (redirectTo) {
+      router.replace(redirectTo);
+      return;
+    }
+
+    router.refresh();
+  }, [redirectTo, router, state]);
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <Trash2 />
+          Delete
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete estimate?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This removes the estimate snapshot. You can create a new estimate from the job after updating details.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <form ref={formRef} action={formAction}>
+          <input type="hidden" name="id" value={estimateId} />
+          <input type="hidden" name="redirectTo" value={redirectTo ?? ""} />
+        </form>
+
+        {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant={"destructive"}
+            disabled={isPending}
+            onClick={(event) => {
+              event.preventDefault();
+              formRef.current?.requestSubmit();
+            }}
+          >
+            {isPending ? "Deleting..." : "Delete estimate"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
