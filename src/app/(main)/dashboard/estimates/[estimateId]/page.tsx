@@ -196,7 +196,7 @@ export default async function Page({
       : null;
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-4 print:max-w-none print:gap-0 print:p-0 print:text-[10px]">
+    <div className="mx-auto grid h-[calc(100svh-6rem)] max-w-5xl grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden print:h-auto print:max-w-none print:gap-0 print:overflow-visible print:p-0 print:text-[10px]">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <BackButton fallbackHref={backHref} />
         <div className="flex flex-wrap items-center gap-2">
@@ -216,232 +216,218 @@ export default async function Page({
         </div>
       </div>
 
-      <article className="grid gap-5 rounded-md border bg-card p-5 shadow-sm print:min-h-[9.6in] print:gap-3 print:border-0 print:bg-white print:p-5 print:text-neutral-950 print:shadow-none">
-        <header className="grid gap-4 border-b pb-2 sm:grid-cols-[1fr_auto] print:gap-2 print:border-neutral-300 print:pb-2">
-          <div className="grid gap-1">
-            <div className="mb-2 flex items-start gap-3">
-              <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 print:size-10 print:border-neutral-300 print:bg-neutral-50">
-                <Image
-                  src={companyLogoSrc}
-                  alt=""
-                  width={48}
-                  height={48}
-                  unoptimized
-                  className="size-full object-contain p-1"
-                  priority
-                />
-              </div>
-              <div className="grid gap-0.5">
-                <div className="font-semibold text-lg leading-none print:text-sm">{currentUser.companyName}</div>
-                <div className="text-muted-foreground text-xs">{companyEmail}</div>
-                {currentUser.companyPhone ? (
-                  <div className="text-muted-foreground text-xs">{currentUser.companyPhone}</div>
-                ) : null}
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-2 font-semibold text-xl print:mt-2 print:text-base">
-              <NotebookText className="size-5 text-muted-foreground print:size-4" />
-              Estimate
-            </div>
-            <div className="grid gap-0.5 text-muted-foreground text-xs">
-              <span>Estimate #{estimateNumber}</span>
-              <span>Issued {format(estimate.issuedAt, "MMM d, yyyy")}</span>
-              <span>Valid through {format(validThrough, "MMM d, yyyy")}</span>
-            </div>
-          </div>
-          <div className="grid gap-1 rounded-md border bg-muted/20 p-3 text-left sm:text-right print:border-neutral-300 print:bg-neutral-50 print:p-2">
-            <span className="text-muted-foreground text-xs">Estimated total</span>
-            <span className="font-semibold text-2xl text-sky-700 dark:text-sky-400 print:text-xl">
-              {formatMoney(estimate.estimatedTotal)}
-            </span>
-            <span className="text-muted-foreground text-xs">valid through {format(validThrough, "MMM d, yyyy")}</span>
-          </div>
-        </header>
-        <section className="grid gap-3 sm:grid-cols-2 print:grid-cols-2 print:gap-2">
-          <div className="grid gap-2">
-            <div className="flex items-center gap-2 font-medium text-xs">
-              <UserRound className="size-3.5 text-muted-foreground" />
-              Prepared For
-            </div>
-            <div className="h-16 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
-              <div className="font-medium">{estimate.customerName ?? "No customer on file"}</div>
-              <div className="text-muted-foreground">{estimate.customerEmail ?? "No email on file"}</div>
-              <div className="text-muted-foreground">
-                {estimate.customerPhone ? formatPhoneNumber(estimate.customerPhone) : "No phone on file"}
-              </div>
-            </div>
-          </div>
-          <div className="grid gap-2">
-            <div className="flex items-center gap-2 font-medium text-xs">
-              <BriefcaseBusiness className="size-3.5 text-muted-foreground" />
-              Job
-            </div>
-            <div className="h-16 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
-              <div className="font-medium">{estimate.jobTitle}</div>
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-3 sm:grid-cols-2 print:grid-cols-2 print:gap-2">
-          <div className="grid gap-2">
-            <div className="flex items-center gap-2 font-medium text-xs">
-              <CalendarDays className="size-3.5 text-muted-foreground" />
-              Schedule
-            </div>
-            <div className="grid h-16 gap-0.5 whitespace-pre-line rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
-              {formatEstimateSchedule(estimate.dateBegin, estimate.dateEnd)}
-            </div>
-          </div>
-          <div className="grid gap-2">
-            <div className="flex items-center gap-2 font-medium text-xs">
-              <MapPin className="size-3.5 text-muted-foreground" />
-              Service Location
-            </div>
-            <div className="h-16 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
-              {estimate.serviceLocation ?? "Not on file"}
-            </div>
-          </div>
-        </section>
-
-        {estimate.jobDescription ? (
-          <section className="grid gap-1">
-            <div className="font-medium text-xs">Job Description</div>
-            <p className="whitespace-pre-line rounded-md border bg-muted/20 p-2 text-xs print:line-clamp-3 print:border-neutral-300 print:bg-neutral-50">
-              {estimate.jobDescription}
-            </p>
-          </section>
-        ) : null}
-
-        <section className="grid gap-2">
-          <div className="font-medium text-xs">Labor</div>
-          <div className="overflow-hidden rounded-md border print:border-neutral-300">
-            <div className="hidden grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs md:grid print:grid print:border-neutral-300 print:bg-neutral-100">
-              <span>Description</span>
-              <span className="text-right">Qty</span>
-              <span className="text-right">Unit</span>
-              <span className="text-right">Rate</span>
-              <span className="text-right">Amount</span>
-            </div>
-            {keyedLaborItems.length ? (
-              keyedLaborItems.map((item) => (
-                <div
-                  key={item.rowKey}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-2 py-1.5 text-xs last:border-b-0 md:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] md:gap-2 print:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] print:gap-2 print:border-neutral-200"
-                >
-                  <span className="min-w-0 break-words">
-                    {formatDash(item.description)}
-                    {formatLineMeta(item) ? (
-                      <span className="mt-0.5 block text-muted-foreground md:hidden print:hidden">
-                        {formatLineMeta(item)}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="hidden text-right tabular-nums md:block print:block">
-                    {formatDash(item.quantity)}
-                  </span>
-                  <span className="hidden text-right md:block print:block">{formatDash(item.unit)}</span>
-                  <span className="hidden text-right tabular-nums md:block print:block">
-                    {formatOptionalMoney(item.unitPrice)}
-                  </span>
-                  <span className="text-right tabular-nums">{formatOptionalMoney(item.price)}</span>
+      <div className="-mx-4 min-h-0 overflow-auto px-4 pb-4 print:contents">
+        <article className="mx-auto grid min-h-[1056px] w-[816px] max-w-none gap-5 rounded-md border bg-card p-5 shadow-sm print:min-h-[9.6in] print:w-auto print:gap-3 print:border-0 print:bg-white print:p-5 print:text-neutral-950 print:shadow-none">
+          <header className="grid grid-cols-[1fr_auto] gap-4 border-b pb-2 print:border-neutral-300 print:pb-2">
+            <div className="grid gap-1">
+              <div className="mb-2 flex items-start gap-3">
+                <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 print:size-10 print:border-neutral-300 print:bg-neutral-50">
+                  <Image
+                    src={companyLogoSrc}
+                    alt=""
+                    width={48}
+                    height={48}
+                    unoptimized
+                    className="size-full object-contain p-1"
+                    priority
+                  />
                 </div>
-              ))
-            ) : (
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-2 py-1.5 text-xs md:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] md:gap-2 print:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] print:gap-2">
-                <span>Labor</span>
-                <span className="hidden text-right md:block print:block">-</span>
-                <span className="hidden text-right md:block print:block">-</span>
-                <span className="hidden text-right md:block print:block">-</span>
-                <span className="text-right">{formatMoney(estimate.laborCost)}</span>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="grid gap-2">
-          <div className="font-medium text-xs">Materials</div>
-          <div className="overflow-hidden rounded-md border print:border-neutral-300">
-            <div className="hidden grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs md:grid print:grid print:border-neutral-300 print:bg-neutral-100">
-              <span>Description</span>
-              <span className="text-right">Qty</span>
-              <span className="text-right">Unit</span>
-              <span className="text-right">Rate</span>
-              <span className="text-right">Amount</span>
-            </div>
-            {keyedMaterialItems.length ? (
-              keyedMaterialItems.map((material) => (
-                <div
-                  key={material.rowKey}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-2 py-1.5 text-xs last:border-b-0 md:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] md:gap-2 print:grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] print:gap-2 print:border-neutral-200"
-                >
-                  <span className="min-w-0 break-words">
-                    {formatDash(material.description)}
-                    {formatLineMeta(material) ? (
-                      <span className="mt-0.5 block text-muted-foreground md:hidden print:hidden">
-                        {formatLineMeta(material)}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="hidden text-right tabular-nums md:block print:block">
-                    {formatDash(material.quantity)}
-                  </span>
-                  <span className="hidden text-right md:block print:block">{formatDash(material.unit)}</span>
-                  <span className="hidden text-right tabular-nums md:block print:block">
-                    {formatOptionalMoney(material.unitPrice)}
-                  </span>
-                  <span className="text-right tabular-nums">{formatOptionalMoney(material.price)}</span>
+                <div className="grid gap-0.5">
+                  <div className="font-semibold text-lg leading-none print:text-sm">{currentUser.companyName}</div>
+                  <div className="text-muted-foreground text-xs">{companyEmail}</div>
+                  {currentUser.companyPhone ? (
+                    <div className="text-muted-foreground text-xs">{currentUser.companyPhone}</div>
+                  ) : null}
                 </div>
-              ))
-            ) : (
-              <div className="px-2 py-1.5 text-muted-foreground text-xs">No material line items.</div>
-            )}
-          </div>
-        </section>
-
-        <section className="grid justify-end gap-2">
-          <div className="grid min-w-64 gap-1.5 rounded-md border bg-muted/20 p-3 text-xs print:min-w-56 print:border-neutral-300 print:bg-neutral-50 print:p-2">
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-muted-foreground">Materials subtotal</span>
-              <span className="font-medium">{formatMoney(estimate.materialsSubtotal)}</span>
+              </div>
+              <div className="mt-3 flex items-center gap-2 font-semibold text-xl print:mt-2 print:text-base">
+                <NotebookText className="size-5 text-muted-foreground print:size-4" />
+                Estimate
+              </div>
+              <div className="grid gap-0.5 text-muted-foreground text-xs">
+                <span>Estimate #{estimateNumber}</span>
+                <span>Issued {format(estimate.issuedAt, "MMM d, yyyy")}</span>
+                <span>Valid through {format(validThrough, "MMM d, yyyy")}</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-muted-foreground">Tax ({estimate.materialTaxRate.toString()}%)</span>
-              <span className="font-medium">{formatMoney(estimate.materialTaxAmount)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-lg text-muted-foreground">Estimated total</span>
-              <span className="font-semibold text-lg text-sky-700 dark:text-sky-400 print:text-base">
+            <div className="grid gap-1 rounded-md border bg-muted/20 p-3 text-right print:border-neutral-300 print:bg-neutral-50 print:p-2">
+              <span className="text-muted-foreground text-xs">Estimated total</span>
+              <span className="font-semibold text-2xl text-sky-700 dark:text-sky-400 print:text-xl">
                 {formatMoney(estimate.estimatedTotal)}
               </span>
+              <span className="text-muted-foreground text-xs">valid through {format(validThrough, "MMM d, yyyy")}</span>
+            </div>
+          </header>
+          <section className="grid grid-cols-2 gap-3">
+            <div className="grid gap-2">
+              <div className="flex items-center gap-2 font-medium text-xs">
+                <UserRound className="size-3.5 text-muted-foreground" />
+                Prepared For
+              </div>
+              <div className="h-16 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
+                <div className="font-medium">{estimate.customerName ?? "No customer on file"}</div>
+                <div className="text-muted-foreground">{estimate.customerEmail ?? "No email on file"}</div>
+                <div className="text-muted-foreground">
+                  {estimate.customerPhone ? formatPhoneNumber(estimate.customerPhone) : "No phone on file"}
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <div className="flex items-center gap-2 font-medium text-xs">
+                <BriefcaseBusiness className="size-3.5 text-muted-foreground" />
+                Job
+              </div>
+              <div className="h-16 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
+                <div className="font-medium">{estimate.jobTitle}</div>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid grid-cols-2 gap-3">
+            <div className="grid gap-2">
+              <div className="flex items-center gap-2 font-medium text-xs">
+                <CalendarDays className="size-3.5 text-muted-foreground" />
+                Schedule
+              </div>
+              <div className="grid h-16 gap-0.5 whitespace-pre-line rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
+                {formatEstimateSchedule(estimate.dateBegin, estimate.dateEnd)}
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <div className="flex items-center gap-2 font-medium text-xs">
+                <MapPin className="size-3.5 text-muted-foreground" />
+                Service Location
+              </div>
+              <div className="h-16 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
+                {estimate.serviceLocation ?? "Not on file"}
+              </div>
+            </div>
+          </section>
+
+          {estimate.jobDescription ? (
+            <section className="grid gap-1">
+              <div className="font-medium text-xs">Job Description</div>
+              <p className="whitespace-pre-line rounded-md border bg-muted/20 p-2 text-xs print:line-clamp-3 print:border-neutral-300 print:bg-neutral-50">
+                {estimate.jobDescription}
+              </p>
+            </section>
+          ) : null}
+
+          <section className="grid gap-2">
+            <div className="font-medium text-xs">Labor</div>
+            <div className="overflow-hidden rounded-md border print:border-neutral-300">
+              <div className="grid grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100">
+                <span>Description</span>
+                <span className="text-right">Qty</span>
+                <span className="text-right">Unit</span>
+                <span className="text-right">Rate</span>
+                <span className="text-right">Amount</span>
+              </div>
+              {keyedLaborItems.length ? (
+                keyedLaborItems.map((item) => (
+                  <div
+                    key={item.rowKey}
+                    className="grid grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 print:border-neutral-200"
+                  >
+                    <span className="min-w-0 break-words">
+                      {formatDash(item.description)}
+                      {formatLineMeta(item) ? <span className="hidden">{formatLineMeta(item)}</span> : null}
+                    </span>
+                    <span className="block text-right tabular-nums">{formatDash(item.quantity)}</span>
+                    <span className="block text-right">{formatDash(item.unit)}</span>
+                    <span className="block text-right tabular-nums">{formatOptionalMoney(item.unitPrice)}</span>
+                    <span className="text-right tabular-nums">{formatOptionalMoney(item.price)}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="grid grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 px-2 py-1.5 text-xs">
+                  <span>Labor</span>
+                  <span className="block text-right">-</span>
+                  <span className="block text-right">-</span>
+                  <span className="block text-right">-</span>
+                  <span className="text-right">{formatMoney(estimate.laborCost)}</span>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="grid gap-2">
+            <div className="font-medium text-xs">Materials</div>
+            <div className="overflow-hidden rounded-md border print:border-neutral-300">
+              <div className="grid grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100">
+                <span>Description</span>
+                <span className="text-right">Qty</span>
+                <span className="text-right">Unit</span>
+                <span className="text-right">Rate</span>
+                <span className="text-right">Amount</span>
+              </div>
+              {keyedMaterialItems.length ? (
+                keyedMaterialItems.map((material) => (
+                  <div
+                    key={material.rowKey}
+                    className="grid grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 print:border-neutral-200"
+                  >
+                    <span className="min-w-0 break-words">
+                      {formatDash(material.description)}
+                      {formatLineMeta(material) ? <span className="hidden">{formatLineMeta(material)}</span> : null}
+                    </span>
+                    <span className="block text-right tabular-nums">{formatDash(material.quantity)}</span>
+                    <span className="block text-right">{formatDash(material.unit)}</span>
+                    <span className="block text-right tabular-nums">{formatOptionalMoney(material.unitPrice)}</span>
+                    <span className="text-right tabular-nums">{formatOptionalMoney(material.price)}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="px-2 py-1.5 text-muted-foreground text-xs">No material line items.</div>
+              )}
+            </div>
+          </section>
+
+          <section className="grid justify-end gap-2">
+            <div className="grid min-w-64 gap-1.5 rounded-md border bg-muted/20 p-3 text-xs print:min-w-56 print:border-neutral-300 print:bg-neutral-50 print:p-2">
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-muted-foreground">Materials subtotal</span>
+                <span className="font-medium">{formatMoney(estimate.materialsSubtotal)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-muted-foreground">Tax ({estimate.materialTaxRate.toString()}%)</span>
+                <span className="font-medium">{formatMoney(estimate.materialTaxAmount)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-lg text-muted-foreground">Estimated total</span>
+                <span className="font-semibold text-lg text-sky-700 dark:text-sky-400 print:text-base">
+                  {formatMoney(estimate.estimatedTotal)}
+                </span>
+              </div>
+              <Separator />
+              <p className="text-muted-foreground">
+                This estimate is a snapshot of the job details at the time it was created.
+              </p>
+            </div>
+          </section>
+
+          <section className="grid gap-2 rounded-md border bg-muted/20 p-3 text-xs print:border-neutral-300 print:bg-neutral-50">
+            <div className="font-semibold">Payment Schedule</div>
+            <div className="grid gap-1">
+              <div className="flex items-center justify-between gap-6">
+                <span>1st payment due before work begins (half of estimate amount)</span>
+                <span className="font-medium">{`$${paymentAmount.toFixed(2)}`}</span>
+              </div>
+              <div className="flex items-center justify-between gap-6">
+                <span>2nd payment due when the job is completed</span>
+                <span className="font-medium">{`$${paymentAmount.toFixed(2)}`}</span>
+              </div>
             </div>
             <Separator />
-            <p className="text-muted-foreground">
-              This estimate is a snapshot of the job details at the time it was created.
+            <p>
+              Any additional work or materials not included in this estimate will be reviewed with the customer and
+              billed as an extra charge.
             </p>
-          </div>
-        </section>
-
-        <section className="grid gap-2 rounded-md border bg-muted/20 p-3 text-xs print:border-neutral-300 print:bg-neutral-50">
-          <div className="font-semibold">Payment Schedule</div>
-          <div className="grid gap-1">
-            <div className="flex items-center justify-between gap-6">
-              <span>1st payment due before work begins (half of estimate amount)</span>
-              <span className="font-medium">{`$${paymentAmount.toFixed(2)}`}</span>
-            </div>
-            <div className="flex items-center justify-between gap-6">
-              <span>2nd payment due when the job is completed</span>
-              <span className="font-medium">{`$${paymentAmount.toFixed(2)}`}</span>
-            </div>
-          </div>
-          <Separator />
-          <p>
-            Any additional work or materials not included in this estimate will be reviewed with the customer and billed
-            as an extra charge.
-          </p>
-          <p className="font-medium">Please make all checks payable to: {currentUser.companyName}</p>
-          <p className="font-semibold">Thank you for your business!</p>
-        </section>
-      </article>
+            <p className="font-medium">Please make all checks payable to: {currentUser.companyName}</p>
+            <p className="font-semibold">Thank you for your business!</p>
+          </section>
+        </article>
+      </div>
     </div>
   );
 }

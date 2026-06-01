@@ -433,7 +433,7 @@ export function RecentCustomersTable({
                 <Card
                   key={row.id}
                   size="sm"
-                  className="cursor-pointer gap-0 py-0 transition-colors hover:bg-muted/40"
+                  className="cursor-pointer gap-0 transition-colors hover:bg-muted/40"
                   role="link"
                   tabIndex={0}
                   onClick={(event) => {
@@ -446,7 +446,7 @@ export function RecentCustomersTable({
                     setSelectedCustomer(row.original);
                   }}
                 >
-                  <CardContent className="grid gap-4 p-4">
+                  <CardContent className="grid gap-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate font-medium text-sm">{row.original.name}</div>

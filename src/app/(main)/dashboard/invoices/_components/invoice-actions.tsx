@@ -5,11 +5,22 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { Mail, Printer } from "lucide-react";
+import { CircleDollarSign, Mail, Printer, Trash2 } from "lucide-react";
 import { siGmail } from "simple-icons";
 import { toast } from "sonner";
 
 import { SimpleIcon } from "@/components/simple-icon";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +33,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+import type { JobMutationState } from "../../jobs/actions";
+import type { InvoiceMutationState } from "../types";
+import { InvoiceDetailsDialog, type InvoiceTableItem } from "./invoices-table";
+
 type EmailInvoiceState = {
   success: boolean;
   message: string;
@@ -30,6 +45,11 @@ type EmailInvoiceState = {
 };
 
 const initialState: EmailInvoiceState = {
+  success: false,
+  message: "",
+};
+
+const deleteInitialState: InvoiceMutationState = {
   success: false,
   message: "",
 };
@@ -129,7 +149,7 @@ export function InvoiceActions({
             <DialogTrigger asChild>
               <Button type="button" variant="outline" size="sm" disabled={!customerEmail}>
                 <Mail />
-                Email invoice
+                Email
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -201,5 +221,109 @@ export function InvoiceActions({
         )}
       </div>
     </div>
+  );
+}
+
+export function ManageInvoiceDialogButton({
+  createJobPaymentAction,
+  deleteJobPaymentAction,
+  invoice,
+}: {
+  createJobPaymentAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
+  deleteJobPaymentAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
+  invoice: InvoiceTableItem;
+}) {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
+        className={
+          "border-emerald-200 bg-emerald-50 px-2 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950"
+        }
+      >
+        <CircleDollarSign />
+        Manage
+      </Button>
+      <InvoiceDetailsDialog
+        createJobPaymentAction={createJobPaymentAction}
+        deleteJobPaymentAction={deleteJobPaymentAction}
+        invoice={invoice}
+        open={open}
+        onOpenChange={setOpen}
+      />
+    </>
+  );
+}
+
+export function DeleteInvoiceButton({
+  action,
+  invoiceId,
+  redirectTo,
+}: {
+  action: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
+  invoiceId: string;
+  redirectTo?: string;
+}) {
+  const formRef = React.useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const [state, formAction, isPending] = React.useActionState(action, deleteInitialState);
+
+  React.useEffect(() => {
+    if (!state.success) return;
+
+    setOpen(false);
+    toast.success(state.message || "Invoice deleted.");
+    if (redirectTo) {
+      router.replace(redirectTo);
+      return;
+    }
+
+    router.refresh();
+  }, [redirectTo, router, state]);
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <Trash2 />
+          Delete
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete invoice?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This removes the invoice snapshot. You can create a new invoice from the job after updating the balance.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <form ref={formRef} action={formAction}>
+          <input type="hidden" name="id" value={invoiceId} />
+          <input type="hidden" name="redirectTo" value={redirectTo ?? ""} />
+        </form>
+
+        {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant={"destructive"}
+            disabled={isPending}
+            onClick={(event) => {
+              event.preventDefault();
+              formRef.current?.requestSubmit();
+            }}
+          >
+            {isPending ? "Deleting..." : "Delete invoice"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

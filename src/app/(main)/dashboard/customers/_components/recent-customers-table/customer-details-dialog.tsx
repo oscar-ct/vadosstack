@@ -18,7 +18,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
@@ -74,29 +74,28 @@ export function CustomerDetailsDialog({
         {customer ? (
           <>
             <DialogHeader className="border-b p-4 pr-12">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted">
-                    <UserRound className="size-5 text-muted-foreground" />
-                  </span>
-                  <div className="min-w-0">
-                    <DialogTitle className="truncate">{customer.name}</DialogTitle>
-                    <DialogDescription className="truncate">Customer #{customer.id}</DialogDescription>
-                  </div>
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted">
+                  <UserRound className="size-5 text-muted-foreground" />
+                </span>
+                <div className="min-w-0">
+                  <DialogTitle>{customer.name}</DialogTitle>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => onEditCustomer(customer)}>
-                  <Pencil />
-                  Edit
-                </Button>
               </div>
             </DialogHeader>
 
             <ScrollArea className="max-h-[calc(100svh-9rem)]">
               <div className="grid gap-5 p-4">
                 <section className="grid gap-3">
-                  <div className="flex items-center gap-2 font-medium text-sm">
-                    <Mail className="size-4 text-muted-foreground" />
-                    Contact
+                  <div className={"flex justify-between"}>
+                    <div className="flex items-center gap-2 font-medium text-sm">
+                      <Mail className="size-4 text-muted-foreground" />
+                      Contact
+                    </div>
+                    <Button type="button" variant="outline" size="xs" onClick={() => onEditCustomer(customer)}>
+                      <Pencil />
+                      Edit
+                    </Button>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <DetailItem label="Email" value={customer.email} />
