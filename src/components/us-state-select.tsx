@@ -138,7 +138,6 @@ export function UsStateSelect({
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => event.stopPropagation()}
             placeholder="Search state..."
-            autoFocus
           />
         </div>
         {selectedValue ? (

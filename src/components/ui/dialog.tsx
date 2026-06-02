@@ -50,12 +50,15 @@ function DialogOverlay({
 function DialogContent({
   className,
   children,
+  allowAutoFocus = false,
   disableOutsideClose = false,
   onEscapeKeyDown,
+  onOpenAutoFocus,
   onInteractOutside,
   showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  allowAutoFocus?: boolean
   disableOutsideClose?: boolean
   showCloseButton?: boolean
 }) {
@@ -71,6 +74,12 @@ function DialogContent({
         onEscapeKeyDown={(event) => {
           onEscapeKeyDown?.(event)
           if (disableOutsideClose) {
+            event.preventDefault()
+          }
+        }}
+        onOpenAutoFocus={(event) => {
+          onOpenAutoFocus?.(event)
+          if (!allowAutoFocus && !event.defaultPrevented) {
             event.preventDefault()
           }
         }}
