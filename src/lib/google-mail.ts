@@ -7,6 +7,11 @@ export const GOOGLE_MAIL_RETURN_TO_COOKIE_NAME = "studio-google-mail-return-to";
 export const GOOGLE_MAIL_OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
 
 type GmailSendMessage = {
+  attachments?: Array<{
+    content: Buffer | string;
+    contentType: string;
+    filename: string;
+  }>;
   from: string;
   html: string;
   subject: string;
@@ -100,28 +105,68 @@ function sanitizeHeader(value: string) {
   return value.replace(/[\r\n]+/g, " ").trim();
 }
 
-function createRawMessage({ from, html, subject, text, to }: GmailSendMessage) {
-  const boundary = `vadosstack-${randomBytes(12).toString("hex")}`;
-  const message = [
-    `From: ${sanitizeHeader(from)}`,
-    `To: ${sanitizeHeader(to)}`,
-    `Subject: ${encodeSubject(sanitizeHeader(subject))}`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+function chunkBase64(value: string) {
+  return value.match(/.{1,76}/g)?.join("\r\n") ?? value;
+}
+
+function createRawMessage({ attachments = [], from, html, subject, text, to }: GmailSendMessage) {
+  const alternativeBoundary = `vadosstack-alt-${randomBytes(12).toString("hex")}`;
+  const mixedBoundary = `vadosstack-mixed-${randomBytes(12).toString("hex")}`;
+  const alternativePart = [
+    `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"`,
     "",
-    `--${boundary}`,
+    `--${alternativeBoundary}`,
     'Content-Type: text/plain; charset="UTF-8"',
     "Content-Transfer-Encoding: 7bit",
     "",
     text,
     "",
-    `--${boundary}`,
+    `--${alternativeBoundary}`,
     'Content-Type: text/html; charset="UTF-8"',
     "Content-Transfer-Encoding: 7bit",
     "",
     html,
     "",
-    `--${boundary}--`,
+    `--${alternativeBoundary}--`,
+  ].join("\r\n");
+
+  if (!attachments.length) {
+    const message = [
+      `From: ${sanitizeHeader(from)}`,
+      `To: ${sanitizeHeader(to)}`,
+      `Subject: ${encodeSubject(sanitizeHeader(subject))}`,
+      "MIME-Version: 1.0",
+      alternativePart,
+    ].join("\r\n");
+
+    return base64UrlEncode(message);
+  }
+
+  const attachmentParts = attachments.map((attachment) => {
+    const filename = sanitizeHeader(attachment.filename);
+    const content = typeof attachment.content === "string" ? Buffer.from(attachment.content) : attachment.content;
+
+    return [
+      `--${mixedBoundary}`,
+      `Content-Type: ${sanitizeHeader(attachment.contentType)}; name="${filename}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${filename}"`,
+      "",
+      chunkBase64(content.toString("base64")),
+    ].join("\r\n");
+  });
+
+  const message = [
+    `From: ${sanitizeHeader(from)}`,
+    `To: ${sanitizeHeader(to)}`,
+    `Subject: ${encodeSubject(sanitizeHeader(subject))}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
+    "",
+    `--${mixedBoundary}`,
+    alternativePart,
+    ...attachmentParts,
+    `--${mixedBoundary}--`,
   ].join("\r\n");
 
   return base64UrlEncode(message);

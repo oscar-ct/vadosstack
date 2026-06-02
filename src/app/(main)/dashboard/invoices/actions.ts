@@ -7,9 +7,10 @@ import { addDays, format } from "date-fns";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
+import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { calculateOutstandingBalance } from "@/lib/customer-billing";
-import { formatDateOnly } from "@/lib/date-only";
 import { formatDocumentNumber } from "@/lib/document-number";
+import { plainTextToEmailHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
 import {
   decryptGoogleToken,
@@ -20,7 +21,8 @@ import {
 import { prisma } from "@/lib/prisma";
 
 import { calculateSignedMaterialTotal } from "../jobs/_components/materials";
-import { type PricingLineItem, parsePricingItems } from "../jobs/_components/pricing-items";
+import { parsePricingItems } from "../jobs/_components/pricing-items";
+import { renderInvoicePdfBuffer } from "./_lib/invoice-pdf";
 import type { InvoiceMutationState } from "./types";
 
 const invoiceJobSchema = z.object({
@@ -105,391 +107,70 @@ function formatMoney(value: { toString: () => string } | string | number) {
   return `$${Number(value.toString()).toFixed(2)}`;
 }
 
-function formatDash(value?: string) {
-  return value?.trim() ? value : "-";
-}
+function getSubmittedEmailContent(formData: FormData, fallback: { html: string; subject: string; text: string }) {
+  const subject = String(formData.get("subject") ?? "").trim() || fallback.subject;
+  const text = String(formData.get("message") ?? "").trim() || fallback.text;
 
-function formatOptionalMoney(value?: string) {
-  return value ? formatMoney(value) : "-";
-}
-
-function formatNegativeOptionalMoney(value?: string) {
-  return value ? `-${formatMoney(value)}` : "-";
-}
-
-function formatLineMeta(item: { quantity?: string; unit?: string; unitPrice?: string }) {
-  return [
-    item.quantity?.trim() ? `Qty: ${item.quantity}` : null,
-    item.unit?.trim() ? `Unit: ${item.unit}` : null,
-    item.unitPrice?.trim() ? `Rate: ${formatOptionalMoney(item.unitPrice)}` : null,
-  ]
-    .filter(Boolean)
-    .join(" | ");
-}
-
-function formatMaterialMeta(material: InvoiceMaterial) {
-  const materialDate = formatMaterialDate(material.purchaseDate);
-
-  return [
-    materialDate ? `Date: ${materialDate}` : null,
-    material.vendor.trim() ? `Vendor: ${material.vendor}` : null,
-    formatLineMeta(material),
-  ]
-    .filter(Boolean)
-    .join(" | ");
-}
-
-function formatMaybeDate(value: Date | null) {
-  return value ? format(value, "MMM d, yyyy") : "Not scheduled";
-}
-
-function formatMaterialDate(value: string) {
-  if (!value) return "";
-
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : format(date, "MMM d, yyyy");
-}
-
-function formatPlainList(items: Array<string | null | false | undefined>) {
-  return items.filter(Boolean).join("\n");
-}
-
-function renderDetailCard(title: string, rows: Array<string | null | false | undefined>) {
-  return `<td class="detail-card-cell" style="width:50%;padding:0 6px 12px 0;vertical-align:top;">
-    <div style="font-size:12px;font-weight:700;color:#171412;margin-bottom:8px;">${escapeHtml(title)}</div>
-    <div style="min-height:56px;border:1px solid #e5ded3;background:#faf8f3;border-radius:8px;padding:10px;font-size:12px;line-height:1.55;color:#3d352f;">
-      ${rows
-        .filter(Boolean)
-        .map((row, index) =>
-          index === 0
-            ? `<div style="font-weight:700;color:#171412;">${escapeHtml(String(row))}</div>`
-            : `<div style="color:#594431;">${escapeHtml(String(row))}</div>`,
-        )
-        .join("")}
-    </div>
-  </td>`;
-}
-
-function renderAmountRow(label: string, value: string, options: { strong?: boolean } = {}) {
-  return `<tr>
-    <td style="padding:8px 0;color:${options.strong ? "#171412" : "#594431"};font-weight:${options.strong ? "700" : "400"};">${escapeHtml(label)}</td>
-    <td style="padding:8px 0;text-align:right;font-weight:${options.strong ? "800" : "700"};color:${options.strong ? "#be123c" : "#171412"};">${escapeHtml(value)}</td>
-  </tr>`;
+  return {
+    html: text === fallback.text ? fallback.html : plainTextToEmailHtml(text),
+    subject,
+    text,
+  };
 }
 
 function createInvoiceEmailContent({
+  balanceDue,
   companyName,
-  companyEmail,
-  companyPhone,
+  customerName,
   dueDate,
-  invoice,
   invoiceNumber,
-  laborItems,
-  materials,
-  payments,
 }: {
+  balanceDue: string;
   companyName: string;
-  companyEmail: string;
-  companyPhone: string | null;
+  customerName: string | null;
   dueDate: Date;
-  invoice: {
-    amountPaid: { toString: () => string };
-    balanceDue: { toString: () => string };
-    customerName: string | null;
-    finalCost: { toString: () => string };
-    issuedAt: Date;
-    customerEmail: string | null;
-    customerPhone: string | null;
-    dateBegin: Date | null;
-    dateEnd: Date | null;
-    jobDescription: string | null;
-    jobStatus: string;
-    jobTitle: string;
-    laborCost: { toString: () => string };
-    materialTaxRate: { toString: () => string };
-    materialTaxAmount: { toString: () => string };
-    materialsSubtotal: { toString: () => string };
-    serviceLocation: string | null;
-  };
   invoiceNumber: string;
-  laborItems: PricingLineItem[];
-  materials: InvoiceMaterial[];
-  payments: Array<{
-    amount: { toString: () => string };
-    description: string;
-    method: string;
-    paidOn: Date;
-  }>;
 }) {
   const subject = `Invoice ${invoiceNumber} from ${companyName}`;
-  const customerName = invoice.customerName ?? "there";
-  const purchaseMaterials = materials.filter((material) => material.type !== "return");
-  const returnMaterials = materials.filter((material) => material.type === "return");
-  const returnTotal = returnMaterials.reduce((total, material) => total + Number(material.price || 0), 0);
+  const greetingName = customerName?.trim() || "there";
   const text = [
-    `Hi ${customerName},`,
+    `Hi ${greetingName},`,
     "",
-    `Invoice ${invoiceNumber} from ${companyName}`,
-    `Issued: ${format(invoice.issuedAt, "MMM d, yyyy")}`,
+    `Your invoice ${invoiceNumber} from ${companyName} is attached as a PDF.`,
+    `Balance due: ${balanceDue}`,
     `Due: ${format(dueDate, "MMM d, yyyy")}`,
-    `Balance due: ${formatMoney(invoice.balanceDue)}`,
     "",
-    "Bill To",
-    formatPlainList([invoice.customerName ?? "No customer on file", invoice.customerEmail, invoice.customerPhone]),
-    "",
-    `Job: ${invoice.jobTitle}`,
-    `Status: ${invoice.jobStatus}`,
-    `Start: ${formatMaybeDate(invoice.dateBegin)}`,
-    `End: ${formatMaybeDate(invoice.dateEnd)}`,
-    `Service location: ${invoice.serviceLocation ?? "Not on file"}`,
-    invoice.jobDescription ? `Description:\n${invoice.jobDescription}` : null,
-    "",
-    laborItems.length
-      ? `Labor:\n${laborItems
-          .map(
-            (item) =>
-              `- ${formatDash(item.description)} | Qty: ${formatDash(item.quantity)} | Unit: ${formatDash(item.unit)} | Rate: ${formatOptionalMoney(item.unitPrice)} | Amount: ${formatMoney(item.price || 0)}`,
-          )
-          .join("\n")}`
-      : `Labor: ${formatMoney(invoice.laborCost)}`,
-    purchaseMaterials.length
-      ? `Materials:\n${purchaseMaterials
-          .map(
-            (material) =>
-              `- ${formatDash(material.description)} | Date: ${formatDash(formatMaterialDate(material.purchaseDate))} | Vendor: ${formatDash(material.vendor)} | Qty: ${formatDash(material.quantity)} | Unit: ${formatDash(material.unit)} | Rate: ${formatOptionalMoney(material.unitPrice)} | Amount: ${formatMoney(material.price || 0)}`,
-          )
-          .join("\n")}`
-      : "Materials: No material line items.",
-    returnMaterials.length
-      ? `Returns:\n${returnMaterials
-          .map(
-            (material) =>
-              `- ${formatDash(material.description)} | Date: ${formatDash(formatMaterialDate(material.purchaseDate))} | Vendor: ${formatDash(material.vendor)} | Qty: ${formatDash(material.quantity)} | Unit: ${formatDash(material.unit)} | Rate: ${formatOptionalMoney(material.unitPrice)} | Amount: -${formatMoney(material.price || 0)}`,
-          )
-          .join("\n")}`
-      : null,
-    `Net materials: ${formatMoney(invoice.materialsSubtotal)}`,
-    `Tax (${invoice.materialTaxRate.toString()}%): ${formatMoney(invoice.materialTaxAmount)}`,
-    payments.length
-      ? `Transaction History:\n${payments
-          .map(
-            (payment) =>
-              `- ${formatDateOnly(payment.paidOn)} ${payment.description} (${payment.method}): ${formatMoney(payment.amount)}`,
-          )
-          .join("\n")}`
-      : "Transaction History: No payments recorded yet.",
-    "",
-    `Final cost: ${formatMoney(invoice.finalCost)}`,
-    `Amount paid: ${formatMoney(invoice.amountPaid)}`,
-    `Balance due: ${formatMoney(invoice.balanceDue)}`,
-    "",
-    invoice.jobDescription ? `Notes:\n${invoice.jobDescription}` : null,
+    "Please review the attached invoice at your convenience.",
     "",
     "Thank you.",
     companyName,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const laborRows = laborItems.length
-    ? laborItems
-        .map(
-          (item) => `<tr>
-            <td style="padding:9px;border-top:1px solid #eee7dd;">
-              <div>${escapeHtml(formatDash(item.description))}</div>
-              ${
-                formatLineMeta(item)
-                  ? `<div style="margin-top:3px;color:#594431;font-size:11px;line-height:1.4;">${escapeHtml(formatLineMeta(item))}</div>`
-                  : ""
-              }
-            </td>
-            <td style="padding:9px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatMoney(item.price || 0)}</td>
-          </tr>`,
-        )
-        .join("")
-    : `<tr>
-        <td style="padding:9px;border-top:1px solid #eee7dd;">Labor</td>
-        <td style="padding:9px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatMoney(invoice.laborCost)}</td>
-      </tr>`;
-  const purchaseRows = purchaseMaterials.length
-    ? purchaseMaterials
-        .map(
-          (material) => `<tr>
-            <td style="padding:8px;border-top:1px solid #eee7dd;">
-              <div>${escapeHtml(formatDash(material.description))}</div>
-              ${
-                formatMaterialMeta(material)
-                  ? `<div style="margin-top:3px;color:#594431;font-size:11px;line-height:1.4;">${escapeHtml(formatMaterialMeta(material))}</div>`
-                  : ""
-              }
-            </td>
-            <td style="padding:8px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatMoney(material.price || 0)}</td>
-          </tr>`,
-        )
-        .join("")
-    : `<tr><td colspan="2" style="padding:10px;border-top:1px solid #eee7dd;color:#594431;">No material line items.</td></tr>`;
-  const returnRows = returnMaterials
-    .map(
-      (material) => `<tr>
-        <td style="padding:8px;border-top:1px solid #eee7dd;">
-          <div>${escapeHtml(formatDash(material.description))}</div>
-          ${
-            formatMaterialMeta(material)
-              ? `<div style="margin-top:3px;color:#594431;font-size:11px;line-height:1.4;">${escapeHtml(formatMaterialMeta(material))}</div>`
-              : ""
-          }
-        </td>
-        <td style="padding:8px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatNegativeOptionalMoney(material.price)}</td>
-      </tr>`,
-    )
-    .join("");
-  const paymentRows = payments.length
-    ? payments
-        .map(
-          (payment) => `<tr>
-            <td style="padding:8px;border-top:1px solid #eee7dd;">${formatDateOnly(payment.paidOn)}</td>
-            <td style="padding:8px;border-top:1px solid #eee7dd;">${escapeHtml(payment.description)}</td>
-            <td style="padding:8px;border-top:1px solid #eee7dd;color:#594431;">${escapeHtml(payment.method)}</td>
-            <td style="padding:8px;border-top:1px solid #eee7dd;text-align:right;font-weight:700;">${formatMoney(payment.amount)}</td>
-          </tr>`,
-        )
-        .join("")
-    : `<tr><td colspan="4" style="padding:10px;border-top:1px solid #eee7dd;color:#594431;">No payments recorded yet.</td></tr>`;
+  ].join("\n");
   const html = `<!doctype html>
 <html>
-  <head>
-    <style>
-      @media only screen and (max-width: 600px) {
-        .email-shell { padding: 16px 10px !important; }
-        .email-card { padding: 16px !important; }
-        .invoice-total-panel { width: 160px !important; }
-        .invoice-total-amount { font-size: 21px !important; line-height: 1.1 !important; }
-        .detail-card-cell { display: block !important; width: 100% !important; padding: 0 0 10px 0 !important; }
-        .detail-card-row { display: block !important; width: 100% !important; }
-        .invoice-summary-table { width: 100% !important; margin-left: 0 !important; box-sizing: border-box !important; }
-      }
-    </style>
-  </head>
   <body style="margin:0;background:#f4f1eb;color:#171412;font-family:Arial,Helvetica,sans-serif;">
-    <div class="email-shell" style="max-width:780px;margin:0 auto;padding:24px 16px;">
-      <div style="background:#ffffff;border:1px solid #e4ddd2;border-radius:10px;padding:20px 22px;margin-bottom:16px;box-shadow:0 8px 24px rgba(23,20,18,0.05);">
-        <p style="margin:0 0 10px;font-size:15px;color:#171412;">Hello ${escapeHtml(customerName)},</p>
+    <div style="max-width:560px;margin:0 auto;padding:24px 16px;">
+      <div style="background:#ffffff;border:1px solid #e4ddd2;border-radius:10px;padding:22px;box-shadow:0 8px 24px rgba(23,20,18,0.05);">
+        <p style="margin:0 0 10px;font-size:15px;color:#171412;">Hello ${escapeHtml(greetingName)},</p>
         <p style="margin:0;color:#3d352f;font-size:14px;line-height:1.65;">
-          Your invoice from ${escapeHtml(companyName)} is ready and has a balance due of
-          <strong style="color:#be123c;">${formatMoney(invoice.balanceDue)}</strong> by ${format(dueDate, "MMM d, yyyy")}.
-          Please review the details below at your convenience.
+          Your invoice <strong>${escapeHtml(invoiceNumber)}</strong> from ${escapeHtml(companyName)} is attached as a PDF.
         </p>
-        <p style="margin:12px 0 0;color:#594431;font-size:13px;line-height:1.6;">
-          If you have any questions about the work completed, payment status, or invoice details, reply to this email
-          and we will be happy to help.
-        </p>
-      </div>
-      <div class="email-card" style="background:#ffffff;border:1px solid #e4ddd2;border-radius:10px;padding:22px;box-shadow:0 8px 24px rgba(23,20,18,0.06);">
-        <table style="width:100%;border-collapse:collapse;border-bottom:1px solid #e5ded3;padding-bottom:12px;margin-bottom:18px;">
+        <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
           <tr>
-            <td style="vertical-align:top;padding-bottom:16px;">
-              <div style="font-size:19px;font-weight:800;line-height:1.1;">${escapeHtml(companyName)}</div>
-              <div style="font-size:12px;color:#594431;margin-top:5px;">${escapeHtml(companyEmail)}</div>
-              ${companyPhone ? `<div style="font-size:12px;color:#594431;margin-top:3px;">${escapeHtml(companyPhone)}</div>` : ""}
-              <div style="font-size:20px;font-weight:800;margin-top:22px;">Invoice</div>
-              <div style="font-size:12px;color:#594431;margin-top:8px;">Invoice #${escapeHtml(invoiceNumber)}</div>
-              <div style="font-size:12px;color:#594431;margin-top:3px;">Issued ${format(invoice.issuedAt, "MMM d, yyyy")}</div>
-            </td>
-            <td class="invoice-total-panel" style="width:190px;vertical-align:top;text-align:right;padding-bottom:16px;">
-              <div style="border:1px solid #e5ded3;background:#faf8f3;border-radius:8px;padding:14px;">
-                <div style="font-size:12px;color:#594431;">Balance due</div>
-                <div class="invoice-total-amount" style="font-size:27px;font-weight:800;color:#be123c;margin-top:4px;">${formatMoney(invoice.balanceDue)}</div>
-                <div style="font-size:12px;color:#594431;margin-top:4px;">by ${format(dueDate, "MMM d, yyyy")}</div>
-              </div>
-            </td>
+            <td style="padding:8px 0;color:#594431;border-top:1px solid #eee7dd;">Balance due</td>
+            <td style="padding:8px 0;text-align:right;font-weight:700;border-top:1px solid #eee7dd;color:#be123c;">${escapeHtml(balanceDue)}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#594431;border-top:1px solid #eee7dd;">Due</td>
+            <td style="padding:8px 0;text-align:right;font-weight:700;border-top:1px solid #eee7dd;">${format(dueDate, "MMM d, yyyy")}</td>
           </tr>
         </table>
-
-        <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
-          <tr class="detail-card-row">
-            ${renderDetailCard("Bill To", [
-              invoice.customerName ?? "No customer on file",
-              invoice.customerEmail ?? "No email on file",
-              invoice.customerPhone ?? "No phone on file",
-            ])}
-            ${renderDetailCard("Job", [invoice.jobTitle, `Status: ${invoice.jobStatus}`])}
-          </tr>
-          <tr class="detail-card-row">
-            ${renderDetailCard("Schedule", [
-              `Start: ${formatMaybeDate(invoice.dateBegin)}`,
-              `End: ${formatMaybeDate(invoice.dateEnd)}`,
-            ])}
-            ${renderDetailCard("Service Location", [invoice.serviceLocation ?? "Not on file"])}
-          </tr>
-        </table>
-
-        ${
-          invoice.jobDescription
-            ? `<div style="margin:2px 0 18px;">
-                <div style="font-size:12px;font-weight:700;margin-bottom:8px;">Job Description</div>
-                <div style="border:1px solid #e5ded3;background:#faf8f3;border-radius:8px;padding:10px;font-size:12px;line-height:1.55;color:#3d352f;">${escapeHtml(invoice.jobDescription).replace(/\n/g, "<br />")}</div>
-              </div>`
-            : ""
-        }
-
-        <div style="font-size:12px;font-weight:700;margin:0 0 8px;">Labor</div>
-        <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e5ded3;border-radius:8px;overflow:hidden;margin-bottom:18px;font-size:12px;">
-          <tr style="background:#faf8f3;">
-            <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Description</th>
-            <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Amount</th>
-          </tr>
-          ${laborRows}
-        </table>
-
-        <div style="font-size:12px;font-weight:700;margin:0 0 8px;">Materials</div>
-        <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e5ded3;border-radius:8px;overflow:hidden;margin-bottom:10px;font-size:12px;">
-          <tr style="background:#faf8f3;">
-            <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Description</th>
-            <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Amount</th>
-          </tr>
-          ${purchaseRows}
-        </table>
-
-        ${
-          returnRows
-            ? `<table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e5ded3;border-radius:8px;overflow:hidden;margin-bottom:10px;font-size:12px;">
-                <tr style="background:#faf8f3;">
-                  <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Returns</th>
-                  <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Amount</th>
-                </tr>
-                ${returnRows}
-              </table>`
-            : ""
-        }
-
-        <table class="invoice-summary-table" style="width:270px;margin-left:auto;border:1px solid #e5ded3;background:#faf8f3;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:18px;">
-          ${returnMaterials.length ? renderAmountRow("Minus returns", `-${formatMoney(returnTotal)}`) : ""}
-          ${renderAmountRow("Net materials", formatMoney(invoice.materialsSubtotal))}
-          ${renderAmountRow(`Tax (${invoice.materialTaxRate.toString()}%)`, formatMoney(invoice.materialTaxAmount))}
-        </table>
-
-        <div style="font-size:12px;font-weight:700;margin:0 0 8px;">Transaction History</div>
-        <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e5ded3;border-radius:8px;overflow:hidden;margin-bottom:18px;font-size:12px;">
-          <tr style="background:#faf8f3;">
-            <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Date</th>
-            <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Description</th>
-            <th style="padding:9px;text-align:left;border-bottom:1px solid #e5ded3;">Method</th>
-            <th style="padding:9px;text-align:right;border-bottom:1px solid #e5ded3;">Amount</th>
-          </tr>
-          ${paymentRows}
-        </table>
-
-        <table class="invoice-summary-table" style="width:300px;margin-left:auto;border:1px solid #e5ded3;background:#faf8f3;border-radius:8px;padding:10px 14px;font-size:12px;">
-          ${renderAmountRow("Final cost", formatMoney(invoice.finalCost))}
-          ${renderAmountRow("Amount paid", formatMoney(invoice.amountPaid))}
-          <tr><td colspan="2" style="border-top:1px solid #e5ded3;height:8px;"></td></tr>
-          ${renderAmountRow("Balance due", formatMoney(invoice.balanceDue), { strong: true })}
-        </table>
-
-        <div style="margin-top:22px;border-top:1px solid #e5ded3;padding-top:16px;color:#594431;font-size:12px;line-height:1.5;">
+        <p style="margin:0;color:#594431;font-size:13px;line-height:1.6;">
+          Please review the attached invoice at your convenience. If you have any questions, reply to this email and we will be happy to help.
+        </p>
+        <p style="margin:18px 0 0;color:#3d352f;font-size:14px;line-height:1.6;">
           Thank you,<br />
-          <strong style="color:#171412;">${escapeHtml(companyName)}</strong>
-        </div>
+          <strong>${escapeHtml(companyName)}</strong>
+        </p>
       </div>
     </div>
   </body>
@@ -714,26 +395,60 @@ export async function emailInvoiceAction(
     const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);
     const laborItems = parsePricingItems(invoice.job.laborItems);
     const materials = parseInvoiceMaterials(invoice.materials);
+    const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
     const emailContent = createInvoiceEmailContent({
+      balanceDue: formatMoney(invoice.balanceDue),
       companyName: currentUser.companyName,
-      companyEmail: currentUser.companyEmail ?? currentUser.email,
-      companyPhone: currentUser.companyPhone,
+      customerName: invoice.customerName,
       dueDate,
-      invoice,
       invoiceNumber,
-      laborItems,
-      materials,
-      payments: invoice.job.payments,
     });
-    subject = emailContent.subject;
+    const submittedEmailContent = getSubmittedEmailContent(formData, emailContent);
+    const pdfBuffer = await renderInvoicePdfBuffer({
+      amountPaid: invoice.amountPaid,
+      balanceDue: invoice.balanceDue,
+      companyEmail: currentUser.companyEmail ?? currentUser.email,
+      companyLogoSrc,
+      companyName: currentUser.companyName,
+      companyPhone: currentUser.companyPhone,
+      customerEmail: invoice.customerEmail,
+      customerName: invoice.customerName,
+      customerPhone: invoice.customerPhone,
+      dateBegin: invoice.dateBegin,
+      dateEnd: invoice.dateEnd,
+      depositPaid: invoice.depositPaid,
+      dueDate,
+      finalCost: invoice.finalCost,
+      invoiceNumber,
+      issuedAt: invoice.issuedAt,
+      jobDescription: invoice.jobDescription,
+      jobTitle: invoice.jobTitle,
+      laborCost: invoice.laborCost,
+      laborItems,
+      materialTaxAmount: invoice.materialTaxAmount,
+      materialTaxRate: invoice.materialTaxRate,
+      materials,
+      materialsSubtotal: invoice.materialsSubtotal,
+      payments: invoice.job.payments,
+      serviceLocation: invoice.serviceLocation,
+    });
+    const pdfFilename = `${invoiceNumber.replace(/[^a-z0-9-]+/gi, "-")}.pdf`;
+    subject = submittedEmailContent.subject;
     const refreshToken = decryptGoogleToken(googleMailAccount.refreshTokenCipher);
     const accessToken = await refreshGoogleAccessToken(refreshToken);
 
     await sendGmailMessage(accessToken, {
+      attachments: [
+        {
+          content: pdfBuffer,
+          contentType: "application/pdf",
+          filename: pdfFilename,
+        },
+      ],
       from: googleMailAccount.email,
-      html: emailContent.html,
-      subject: emailContent.subject,
-      text: emailContent.text,
+      html: submittedEmailContent.html,
+      subject: submittedEmailContent.subject,
+      text: submittedEmailContent.text,
       to: invoice.customerEmail,
     });
 

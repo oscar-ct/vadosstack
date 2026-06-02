@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { Mail, Printer, Trash2 } from "lucide-react";
+import { Download, Mail, Trash2 } from "lucide-react";
 import { siGmail } from "simple-icons";
 import { toast } from "sonner";
 
@@ -32,6 +32,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 import type { EstimateMutationState } from "../types";
 
@@ -54,6 +57,7 @@ const deleteInitialState: EstimateMutationState = {
 
 export function EstimateActions({
   action,
+  companyName,
   customerEmail,
   customerName,
   estimateId,
@@ -65,6 +69,7 @@ export function EstimateActions({
   validThrough,
 }: {
   action: (state: EmailEstimateState, formData: FormData) => Promise<EmailEstimateState>;
+  companyName: string;
   customerEmail?: string | null;
   customerName?: string | null;
   estimateId: string;
@@ -85,6 +90,28 @@ export function EstimateActions({
   const stateSubmittedAt = state.submittedAt;
   const canSendEmail = gmailConnected && (!state.reconnectRequired || open);
   const gmailConnectLabel = state.reconnectRequired ? "Reconnect Gmail" : "Connect Gmail";
+  const defaultSubject = React.useMemo(
+    () => `Estimate ${estimateNumber} from ${companyName}`,
+    [companyName, estimateNumber],
+  );
+  const defaultMessage = React.useMemo(
+    () =>
+      [
+        `Hi ${customerName?.trim() || "there"},`,
+        "",
+        `Your estimate ${estimateNumber} from ${companyName} is attached as a PDF.`,
+        `Estimated total: ${estimatedTotal}`,
+        `Valid through: ${validThrough}`,
+        "",
+        "Please review the attached estimate at your convenience.",
+        "",
+        "Thank you.",
+        companyName,
+      ].join("\n"),
+    [companyName, customerName, estimateNumber, estimatedTotal, validThrough],
+  );
+  const [emailSubject, setEmailSubject] = React.useState(defaultSubject);
+  const [emailMessage, setEmailMessage] = React.useState(defaultMessage);
 
   React.useEffect(() => {
     if (!notice?.message) {
@@ -129,9 +156,11 @@ export function EstimateActions({
   return (
     <div className="grid gap-2 print:hidden">
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" onClick={() => window.print()}>
-          <Printer />
-          Print / Save PDF
+        <Button asChild size="sm">
+          <Link href={`/dashboard/estimates/${estimateId}/pdf`} prefetch={false}>
+            <Download />
+            Download PDF
+          </Link>
         </Button>
         {canSendEmail ? (
           <Dialog
@@ -141,6 +170,8 @@ export function EstimateActions({
 
               if (nextOpen) {
                 setShowStateMessage(false);
+                setEmailSubject(defaultSubject);
+                setEmailMessage(defaultMessage);
               }
             }}
           >
@@ -150,7 +181,7 @@ export function EstimateActions({
                 Email
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Send estimate?</DialogTitle>
                 <DialogDescription>
@@ -181,6 +212,36 @@ export function EstimateActions({
                 </div>
               </div>
 
+              <div className="grid gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`estimate-email-subject-${estimateId}`}>Subject</Label>
+                  <Input
+                    id={`estimate-email-subject-${estimateId}`}
+                    name="subject"
+                    value={emailSubject}
+                    onChange={(event) => setEmailSubject(event.target.value)}
+                    form={`estimate-email-form-${estimateId}`}
+                    required
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`estimate-email-message-${estimateId}`}>Message</Label>
+                  <Textarea
+                    id={`estimate-email-message-${estimateId}`}
+                    name="message"
+                    value={emailMessage}
+                    onChange={(event) => setEmailMessage(event.target.value)}
+                    form={`estimate-email-form-${estimateId}`}
+                    className="min-h-48 font-mono text-sm"
+                    required
+                  />
+                  <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                    <span className="font-medium">PDF attached</span>
+                    <span className="truncate text-muted-foreground">{estimateNumber}.pdf</span>
+                  </div>
+                </div>
+              </div>
+
               {showStateMessage && state.message ? (
                 <p
                   className={
@@ -199,7 +260,7 @@ export function EstimateActions({
                     Cancel
                   </Button>
                 </DialogClose>
-                <form action={formAction}>
+                <form id={`estimate-email-form-${estimateId}`} action={formAction}>
                   <input type="hidden" name="estimateId" value={estimateId} />
                   <Button type="submit" disabled={isPending || state.success || state.reconnectRequired}>
                     <Mail />

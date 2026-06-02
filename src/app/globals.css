@@ -160,7 +160,7 @@ These serve as the fallback; there is no separate default.css file. */
 @media print {
   @page {
     size: letter;
-    margin: 0.45in;
+    margin: 0;
   }
 
   body {

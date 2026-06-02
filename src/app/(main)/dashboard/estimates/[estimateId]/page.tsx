@@ -202,6 +202,7 @@ export default async function Page({
         <div className="flex flex-wrap items-center gap-2">
           <EstimateActions
             action={emailEstimateAction}
+            companyName={currentUser.companyName}
             customerEmail={estimate.customerEmail}
             customerName={estimate.customerName}
             estimateId={estimate.id}

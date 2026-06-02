@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { CircleDollarSign, Mail, Printer, Trash2 } from "lucide-react";
+import { CircleDollarSign, Download, Mail, Trash2 } from "lucide-react";
 import { siGmail } from "simple-icons";
 import { toast } from "sonner";
 
@@ -32,6 +32,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 import type { JobMutationState } from "../../jobs/actions";
 import type { InvoiceMutationState } from "../types";
@@ -57,6 +60,7 @@ const deleteInitialState: InvoiceMutationState = {
 export function InvoiceActions({
   action,
   balanceDue,
+  companyName,
   customerEmail,
   customerName,
   dueDate,
@@ -68,6 +72,7 @@ export function InvoiceActions({
 }: {
   action: (state: EmailInvoiceState, formData: FormData) => Promise<EmailInvoiceState>;
   balanceDue: string;
+  companyName: string;
   customerEmail?: string | null;
   customerName?: string | null;
   dueDate: string;
@@ -87,6 +92,28 @@ export function InvoiceActions({
   const stateSubmittedAt = state.submittedAt;
   const canSendEmail = gmailConnected && (!state.reconnectRequired || open);
   const gmailConnectLabel = state.reconnectRequired ? "Reconnect Gmail" : "Connect Gmail";
+  const defaultSubject = React.useMemo(
+    () => `Invoice ${invoiceNumber} from ${companyName}`,
+    [companyName, invoiceNumber],
+  );
+  const defaultMessage = React.useMemo(
+    () =>
+      [
+        `Hi ${customerName?.trim() || "there"},`,
+        "",
+        `Your invoice ${invoiceNumber} from ${companyName} is attached as a PDF.`,
+        `Balance due: ${balanceDue}`,
+        `Due: ${dueDate}`,
+        "",
+        "Please review the attached invoice at your convenience.",
+        "",
+        "Thank you.",
+        companyName,
+      ].join("\n"),
+    [balanceDue, companyName, customerName, dueDate, invoiceNumber],
+  );
+  const [emailSubject, setEmailSubject] = React.useState(defaultSubject);
+  const [emailMessage, setEmailMessage] = React.useState(defaultMessage);
 
   React.useEffect(() => {
     if (!notice?.message) {
@@ -131,9 +158,11 @@ export function InvoiceActions({
   return (
     <div className="grid gap-2 print:hidden">
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" onClick={() => window.print()}>
-          <Printer />
-          Print / Save PDF
+        <Button asChild size="sm">
+          <Link href={`/dashboard/invoices/${invoiceId}/pdf`} prefetch={false}>
+            <Download />
+            Download PDF
+          </Link>
         </Button>
         {canSendEmail ? (
           <Dialog
@@ -143,6 +172,8 @@ export function InvoiceActions({
 
               if (nextOpen) {
                 setShowStateMessage(false);
+                setEmailSubject(defaultSubject);
+                setEmailMessage(defaultMessage);
               }
             }}
           >
@@ -152,7 +183,7 @@ export function InvoiceActions({
                 Email
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Send invoice?</DialogTitle>
                 <DialogDescription>
@@ -183,6 +214,36 @@ export function InvoiceActions({
                 </div>
               </div>
 
+              <div className="grid gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`invoice-email-subject-${invoiceId}`}>Subject</Label>
+                  <Input
+                    id={`invoice-email-subject-${invoiceId}`}
+                    name="subject"
+                    value={emailSubject}
+                    onChange={(event) => setEmailSubject(event.target.value)}
+                    form={`invoice-email-form-${invoiceId}`}
+                    required
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`invoice-email-message-${invoiceId}`}>Message</Label>
+                  <Textarea
+                    id={`invoice-email-message-${invoiceId}`}
+                    name="message"
+                    value={emailMessage}
+                    onChange={(event) => setEmailMessage(event.target.value)}
+                    form={`invoice-email-form-${invoiceId}`}
+                    className="min-h-48 font-mono text-sm"
+                    required
+                  />
+                  <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                    <span className="font-medium">PDF attached</span>
+                    <span className="truncate text-muted-foreground">{invoiceNumber}.pdf</span>
+                  </div>
+                </div>
+              </div>
+
               {showStateMessage && state.message ? (
                 <p
                   className={
@@ -201,7 +262,7 @@ export function InvoiceActions({
                     Cancel
                   </Button>
                 </DialogClose>
-                <form action={formAction}>
+                <form id={`invoice-email-form-${invoiceId}`} action={formAction}>
                   <input type="hidden" name="invoiceId" value={invoiceId} />
                   <Button type="submit" disabled={isPending || state.success || state.reconnectRequired}>
                     <Mail />

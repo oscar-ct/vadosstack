@@ -278,6 +278,7 @@ export default async function Page({
           <InvoiceActions
             action={emailInvoiceAction}
             balanceDue={formatMoney(invoice.balanceDue)}
+            companyName={currentUser.companyName}
             customerEmail={invoice.customerEmail}
             customerName={invoice.customerName}
             dueDate={format(dueDate, "MMM d, yyyy")}
@@ -296,16 +297,16 @@ export default async function Page({
           <header className="grid grid-cols-[1fr_auto] gap-4 border-b pb-2 print:border-neutral-300 print:pb-2">
             <div className="grid gap-1">
               <div className="mb-2 flex items-start gap-3">
-                <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 print:size-10 print:border-neutral-300 print:bg-neutral-50">
-                  <Image
-                    src={companyLogoSrc}
-                    alt=""
-                    width={48}
-                    height={48}
-                    unoptimized
-                    className="size-full object-contain p-1"
-                  />
-                </div>
+                {/*<div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 print:size-10 print:border-neutral-300 print:bg-neutral-50">*/}
+                <Image
+                  src={companyLogoSrc}
+                  alt="companyLogo"
+                  width={56}
+                  height={56}
+                  unoptimized
+                  className="object-contain p-1"
+                />
+                {/*</div>*/}
                 <div className="grid gap-0.5">
                   <div className="font-semibold text-lg leading-none print:text-sm">{currentUser.companyName}</div>
                   <div className="text-muted-foreground text-xs">{companyEmail}</div>
@@ -353,7 +354,6 @@ export default async function Page({
               </div>
               <div className="h-16 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
                 <div className="font-medium">{invoice.jobTitle}</div>
-                <div className="text-muted-foreground">Status: {invoice.jobStatus}</div>
               </div>
             </div>
           </section>
