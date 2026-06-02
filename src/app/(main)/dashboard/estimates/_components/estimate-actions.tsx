@@ -181,7 +181,7 @@ export function EstimateActions({
                 Email
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl">
+            <DialogContent className="max-h-[calc(100svh-1rem)] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Send estimate?</DialogTitle>
                 <DialogDescription>
@@ -232,7 +232,7 @@ export function EstimateActions({
                     value={emailMessage}
                     onChange={(event) => setEmailMessage(event.target.value)}
                     form={`estimate-email-form-${estimateId}`}
-                    className="min-h-48 font-mono text-sm"
+                    className="min-h-36 font-mono text-sm sm:min-h-48"
                     required
                   />
                   <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
