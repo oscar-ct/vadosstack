@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 
 import { createHash, randomBytes } from "node:crypto";
 
-const SESSION_COOKIE_NAME = "studio-admin-session";
+const SESSION_COOKIE_NAME = "vadosstack";
 const ONE_DAY_IN_MS = 24 * 60 * 60 * 1000;
 const THIRTY_DAYS_IN_MS = 30 * ONE_DAY_IN_MS;
 
