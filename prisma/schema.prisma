@@ -335,6 +335,17 @@ model PendingAccountConfirmation {
   @@map("pending_account_confirmations")
 }
 
+model RateLimitAttempt {
+  id        String   @id @default(cuid())
+  action    String
+  keyHash   String
+  createdAt DateTime @default(now())
+
+  @@index([action, keyHash, createdAt])
+  @@index([createdAt])
+  @@map("rate_limit_attempts")
+}
+
 model GoogleMailAccount {
   id                 String   @id @default(cuid())
   userId             String   @unique

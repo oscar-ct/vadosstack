@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { hashAccountConfirmationToken } from "@/lib/account-confirmation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
 
 import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 
@@ -21,6 +22,16 @@ type ConfirmationState = {
 };
 
 async function confirmAccount(token: string): Promise<ConfirmationState> {
+  const ip = await getRateLimitIp();
+  const allowed = await consumeRateLimit("account-confirmation", [ip]);
+
+  if (!allowed) {
+    return {
+      description: "Too many confirmation attempts. Please wait a few minutes and try again.",
+      title: "Too many attempts",
+    };
+  }
+
   const tokenHash = hashAccountConfirmationToken(token);
   const pendingAccount = await prisma.pendingAccountConfirmation.findUnique({
     where: {

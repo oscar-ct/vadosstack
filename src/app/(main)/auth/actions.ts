@@ -19,6 +19,7 @@ import {
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { createPasswordResetToken, createPasswordResetUrl, hashPasswordResetToken } from "@/lib/password-reset";
 import { prisma } from "@/lib/prisma";
+import { AUTH_RATE_LIMIT_MESSAGE, consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
 import { resend } from "@/lib/resend";
 
 const PASSWORD_RESET_SUCCESS_MESSAGE =
@@ -81,9 +82,20 @@ export async function loginAction(_previousState: AuthFormState, formData: FormD
     };
   }
 
+  const email = parsed.data.email.toLowerCase();
+  const ip = await getRateLimitIp();
+  const allowed = await consumeRateLimit("login", [ip, email]);
+
+  if (!allowed) {
+    return {
+      success: false,
+      message: AUTH_RATE_LIMIT_MESSAGE,
+    };
+  }
+
   const user = await prisma.user.findUnique({
     where: {
-      email: parsed.data.email,
+      email,
     },
   });
 
@@ -115,6 +127,16 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
   }
 
   const email = parsed.data.email.toLowerCase();
+  const ip = await getRateLimitIp();
+  const allowed = await consumeRateLimit("register", [ip, email]);
+
+  if (!allowed) {
+    return {
+      success: false,
+      message: AUTH_RATE_LIMIT_MESSAGE,
+    };
+  }
+
   const existingUser = await prisma.user.findUnique({
     where: {
       email,
@@ -219,6 +241,16 @@ export async function requestPasswordResetAction(
   }
 
   const email = parsed.data.email.toLowerCase();
+  const ip = await getRateLimitIp();
+  const allowed = await consumeRateLimit("password-reset", [ip, email]);
+
+  if (!allowed) {
+    return {
+      success: false,
+      message: AUTH_RATE_LIMIT_MESSAGE,
+    };
+  }
+
   const user = await prisma.user.findUnique({
     where: {
       email,
@@ -309,6 +341,16 @@ export async function resetPasswordAction(_previousState: AuthFormState, formDat
     return {
       success: false,
       message: parsed.error.issues[0]?.message ?? "Check your new password and try again.",
+    };
+  }
+
+  const ip = await getRateLimitIp();
+  const allowed = await consumeRateLimit("reset-password", [ip]);
+
+  if (!allowed) {
+    return {
+      success: false,
+      message: AUTH_RATE_LIMIT_MESSAGE,
     };
   }
 

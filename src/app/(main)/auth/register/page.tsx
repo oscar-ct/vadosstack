@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 
 import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
+import { AuthDatabaseWarmup } from "../_components/auth-database-warmup";
 import { RegisterCard } from "../_components/register-card";
 import { registerAction } from "../actions";
 
@@ -16,6 +17,7 @@ export default async function RegisterV1() {
 
   return (
     <div className="flex h-dvh">
+      <AuthDatabaseWarmup />
       <div className="flex w-full items-center justify-center bg-background p-8 lg:w-2/3">
         <RegisterCard action={registerAction} />
       </div>
