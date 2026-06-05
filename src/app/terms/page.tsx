@@ -6,7 +6,7 @@ import { PolicyPage } from "../(external)/_components/policy-page";
 
 const title = "Terms of Service";
 const description =
-  "Basic terms for using VadosStack to manage customers, jobs, estimates, invoices, services, and employee time.";
+  "Basic terms for using VadosStack to manage customers, jobs, tasks, estimates, invoices, services, and employee time.";
 
 export const metadata: Metadata = {
   title,
@@ -24,7 +24,7 @@ const sections = [
   {
     title: "Use of the Service",
     body: [
-      "VadosStack provides software tools for service businesses, including customer management, job tracking, estimates, invoices, service templates, company settings, and employee time tracking.",
+      "VadosStack provides software tools for service businesses, including customer management, job tracking, task scheduling, estimates, invoices, service templates, company settings, email delivery records, and employee time tracking.",
       "You are responsible for the information you enter, the accuracy of business records you create, and how you use exported or generated documents with your customers, employees, vendors, or tax professionals.",
     ],
   },
@@ -52,10 +52,10 @@ const sections = [
   {
     title: "Email Sending and Gmail Integration",
     body: [
-      "If you connect Gmail, VadosStack may send invoice emails from your connected Google account when you choose to use the email invoice feature.",
-      "You are responsible for the accuracy of invoice content, recipient email addresses, customer information, payment details, and any message sent through your connected email account.",
-      "The Gmail integration is intended for transactional invoice-related messages to your customers. You may not use it for spam, bulk marketing, deceptive messages, unlawful content, harassment, or messages that violate Google policies or applicable email laws.",
-      "You can revoke Gmail access through your Google Account permissions. If access is revoked, disconnected, or rejected by Google, invoice email sending may be unavailable until you reconnect the account.",
+      "If you connect Gmail, VadosStack may send estimate or invoice emails from your connected Google account when you choose to use the email estimate or email invoice feature.",
+      "You are responsible for the accuracy of estimate and invoice content, recipient email addresses, customer information, pricing, payment details, attachments, and any message sent through your connected email account.",
+      "The Gmail integration is intended for transactional estimate- and invoice-related messages to your customers. You may not use it for spam, bulk marketing, deceptive messages, unlawful content, harassment, or messages that violate Google policies or applicable email laws.",
+      "You should only connect a Gmail account that you own or are authorized to use. You can revoke Gmail access through your Google Account permissions. If access is revoked, disconnected, or rejected by Google, estimate or invoice email sending may be unavailable until you reconnect the account.",
     ],
   },
   {
@@ -86,7 +86,7 @@ export default function TermsPage() {
       title={title}
       eyebrow="Clear terms for everyday use"
       description={description}
-      lastUpdated="May 21, 2026"
+      lastUpdated="June 5, 2026"
       sections={sections}
     />
   );
