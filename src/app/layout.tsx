@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -71,6 +72,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           >
             {children}
             <Toaster />
+            <Analytics />
           </PreferencesStoreProvider>
         </TooltipProvider>
       </body>
