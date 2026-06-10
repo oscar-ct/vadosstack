@@ -471,7 +471,7 @@ export function LandingExperience() {
                 className="max-w-3xl text-balance font-semibold text-4xl leading-[1.02] tracking-normal md:text-6xl"
               >
                 <span className="mb-3 block font-semibold text-[#d9443c] text-base uppercase">VadosStack</span> Field
-                service management software for contractors.
+                service management software for service businesses.
               </motion.h1>
               <motion.p
                 variants={reveal}

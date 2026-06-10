@@ -5,9 +5,9 @@ import { APP_CONFIG } from "@/config/app-config";
 import { LandingExperience } from "./_components/landing-experience";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vadosstack.com";
-const title = "Field Service Management Software for Contractors";
+const title = "Field Service Management Software for Service Businesses";
 const description =
-  "VadosStack field service management software helps contractors manage customers, jobs, estimates, invoices, service templates, and employee time tracking in one dashboard.";
+  "VadosStack field service management software helps service businesses manage customers, jobs, estimates, invoices, service templates, and employee time tracking in one dashboard.";
 
 export const metadata: Metadata = {
   title,
