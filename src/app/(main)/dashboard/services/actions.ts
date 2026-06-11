@@ -13,6 +13,7 @@ import { parsePricingItems } from "../jobs/_components/pricing-items";
 export type ServiceTemplateMutationState = {
   success: boolean;
   message: string;
+  redirectTo?: string;
 };
 
 const serviceCategories = ["Repair", "Installation", "Other"] as const;
@@ -157,11 +158,13 @@ export async function createServiceTemplateAction(
     return { success: false, message: parsed.error.issues[0]?.message ?? "Check the service details and try again." };
   }
 
+  let createdServiceId = "";
+
   try {
     const laborItems = normalizeItems(parsed.data.laborItems);
     const materials = normalizeMaterials(parsed.data.materials);
 
-    await prisma.serviceTemplate.create({
+    const service = await prisma.serviceTemplate.create({
       data: {
         ownerId: currentUser.id,
         title: parsed.data.title,
@@ -173,6 +176,7 @@ export async function createServiceTemplateAction(
         materials: JSON.stringify(materials),
       },
     });
+    createdServiceId = service.id;
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Service could not be created." };
   }
@@ -180,7 +184,7 @@ export async function createServiceTemplateAction(
   revalidatePath("/dashboard/services");
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard/estimates");
-  return { success: true, message: "Service created." };
+  return { success: true, message: "Service created.", redirectTo: `/dashboard/services/${createdServiceId}/edit` };
 }
 
 export async function updateServiceTemplateAction(
@@ -230,6 +234,7 @@ export async function updateServiceTemplateAction(
   }
 
   revalidatePath("/dashboard/services");
+  revalidatePath(`/dashboard/services/${id}/edit`);
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard/estimates");
   return { success: true, message: "Service updated." };
@@ -263,5 +268,5 @@ export async function deleteServiceTemplateAction(
   revalidatePath("/dashboard/services");
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard/estimates");
-  return { success: true, message: "Service deleted." };
+  return { success: true, message: "Service deleted.", redirectTo: "/dashboard/services" };
 }

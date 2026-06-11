@@ -1,44 +1,14 @@
-import { PackageCheck } from "lucide-react";
+import Link from "next/link";
+
+import { PackageCheck, Plus } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 
-import { parseMaterials } from "../jobs/_components/materials";
-import { parsePricingItems } from "../jobs/_components/pricing-items";
-import { CreateServiceDialog } from "./_components/service-dialogs";
 import { ServicesDashboard } from "./_components/services-dashboard";
-import { createServiceTemplateAction, deleteServiceTemplateAction, updateServiceTemplateAction } from "./actions";
-import type { ServiceTemplateRow } from "./types";
-
-function formatMoney(value: { toString: () => string } | null) {
-  return value ? value.toString() : "0";
-}
-
-async function getServices(ownerId: string): Promise<ServiceTemplateRow[]> {
-  const services = await prisma.serviceTemplate.findMany({
-    where: {
-      ownerId,
-    },
-    orderBy: {
-      title: "asc",
-    },
-  });
-
-  return services.map((service) => ({
-    id: service.id,
-    title: service.title,
-    description: service.description ?? undefined,
-    category: service.category,
-    notes: service.notes ?? undefined,
-    laborItems: parsePricingItems(service.laborItems),
-    materialTaxRate: formatMoney(service.materialTaxRate),
-    materials: parseMaterials(service.materials),
-    createdAt: service.createdAt.toISOString(),
-    updatedAt: service.updatedAt.toISOString(),
-  }));
-}
+import { getServices } from "./_lib/service-data";
 
 export default async function Page() {
   const currentUser = await getCurrentUser();
@@ -55,28 +25,32 @@ export default async function Page() {
   const services = await getServices(currentUser.id);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 leading-none">
-          <span className={"text-lg"}>Services</span>
-          <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            <PackageCheck className="size-4 text-muted-foreground" />
+    <div className="@container/main mx-auto grid w-full max-w-7xl gap-4 md:gap-6">
+      <Card className="overflow-hidden rounded-lg">
+        <CardHeader className="border-b bg-muted/20">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="grid max-w-2xl gap-2">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-normal">
+                <PackageCheck className="size-4" />
+                Service library
+              </div>
+              <CardTitle className="text-xl">Services</CardTitle>
+              <CardDescription>
+                Keep your repeatable work scopes easy to scan, price, and reuse in jobs or estimates.
+              </CardDescription>
+            </div>
+            <Button asChild size="sm">
+              <Link prefetch={false} href="/dashboard/services/create">
+                <Plus />
+                Create service
+              </Link>
+            </Button>
           </div>
-        </CardTitle>
-        <CardDescription>
-          Build reusable job and estimate templates with saved titles, descriptions, labor, and materials.
-        </CardDescription>
-        <CardAction>
-          <CreateServiceDialog action={createServiceTemplateAction} />
-        </CardAction>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <ServicesDashboard
-          services={services}
-          deleteServiceTemplateAction={deleteServiceTemplateAction}
-          updateServiceTemplateAction={updateServiceTemplateAction}
-        />
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent className="p-4 md:p-5">
+          <ServicesDashboard services={services} />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
