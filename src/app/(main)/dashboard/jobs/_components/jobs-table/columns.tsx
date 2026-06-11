@@ -17,10 +17,14 @@ import {
 } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
+import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 
+import type { InvoiceMutationState } from "../../../invoices/types";
+import { getJobBillingState } from "../job-billing-state";
+import { JobInvoiceButton } from "../job-record-action-buttons";
 import type { JobRow } from "./schema";
 
 export function statusIcon(status: string) {
@@ -57,48 +61,17 @@ export function getJobOverdueDate(job: Pick<JobRow, "dateEnd" | "status">) {
 //   return value ? `$${parseFloat(value).toFixed(2)}` : "Not set";
 // }
 
-function toMoneyNumber(value?: string) {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 export function getAmountDueDisplay(job: JobRow) {
-  const balance = toMoneyNumber(job.outstandingBalance);
-  const finalCost = toMoneyNumber(job.finalCost);
-
-  if (!job.invoiceId) {
-    return {
-      amountClassName: "text-muted-foreground",
-      label: "No balance",
-    };
-  }
-
-  if (finalCost <= 0) {
-    return {
-      amountClassName: "text-muted-foreground",
-      label: "Not Priced",
-    };
-  }
-
-  if (finalCost > 0 && balance <= 0) {
-    return {
-      amountClassName: "text-emerald-700 dark:text-emerald-400",
-      label: "Paid in full",
-    };
-  }
-  return {
-    amountClassName: "text-rose-700 dark:text-rose-400",
-    label: "Balance due",
-  };
-
-  // return {
-  //   amountClassName: "text-rose-700 dark:text-rose-400",
-  //   amountLabel: `${formatMoney(job.outstandingBalance)} due`,
-  //   label: `Outstanding: ${formatMoney(job.outstandingBalance)}`,
-  // };
+  return getJobBillingState(job);
 }
 
-export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void }): ColumnDef<JobRow>[] {
+export function getJobsColumns({
+  createInvoiceAction,
+  onEditJob,
+}: {
+  createInvoiceAction: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
+  onEditJob: (job: JobRow) => void;
+}): ColumnDef<JobRow>[] {
   return [
     {
       id: "select",
@@ -181,7 +154,8 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
           </div>
         </div>
       ),
-      sortingFn: (rowA, rowB) => toMoneyNumber(rowA.original.finalCost) - toMoneyNumber(rowB.original.finalCost),
+      sortingFn: (rowA, rowB) =>
+        getJobBillingState(rowA.original).finalCost - getJobBillingState(rowB.original).finalCost,
       enableHiding: false,
     },
     {
@@ -189,7 +163,11 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
       header: "Customer",
       cell: ({ row }) => (
         <div className="grid min-w-0 gap-1.5">
-          <span className="truncate text-sm leading-none">{row.original.customerName ?? "No customer"}</span>
+          <CustomerLink
+            customerId={row.original.customerId}
+            name={row.original.customerName}
+            className="block truncate font-medium text-sm"
+          />
           <span className="truncate text-muted-foreground text-xs leading-none">
             {row.original.serviceLocation ?? "No address on file"}
           </span>
@@ -248,9 +226,7 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
         return (
           <div className="grid gap-0.5">
             <span className={`font-medium text-[12px] ${amountDue.amountClassName}`}>{amountDue.label}</span>
-            {/*<span className="w-fit px-1.5 text-[11px] text-muted-foreground">*/}
-            {/*  {row.original.invoiceId ? "Invoiced" : "Not invoiced"}*/}
-            {/*</span>*/}
+            <span className="max-w-36 truncate text-[11px] text-muted-foreground">{amountDue.detail}</span>
           </div>
         );
       },
@@ -272,8 +248,12 @@ export function getJobsColumns({ onEditJob }: { onEditJob: (job: JobRow) => void
                 View invoice
               </Link>
             </Button>
+          ) : getJobBillingState(row.original).canCreateInvoice ? (
+            <JobInvoiceButton action={createInvoiceAction} job={row.original} size="xs" />
           ) : (
-            <Minus className={"size-2.5"} />
+            <span className="flex h-7 items-center text-muted-foreground text-xs">
+              <Minus className="size-3" />
+            </span>
           )}
         </div>
       ),

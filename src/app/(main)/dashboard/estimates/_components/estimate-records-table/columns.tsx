@@ -7,6 +7,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { format, parseISO } from "date-fns";
 import { Minus, NotebookText, Pencil } from "lucide-react";
 
+import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -71,7 +72,13 @@ export function getEstimateRecordsColumns({
     {
       accessorKey: "customerName",
       header: "Customer",
-      cell: ({ row }) => row.original.customerName ?? "No customer",
+      cell: ({ row }) => (
+        <CustomerLink
+          customerId={row.original.customerId}
+          name={row.original.customerName}
+          className="block truncate"
+        />
+      ),
     },
     {
       accessorKey: "description",

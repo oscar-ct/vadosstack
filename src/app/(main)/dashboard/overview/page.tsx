@@ -183,6 +183,11 @@ async function getOutstandingJobs(ownerId: string): Promise<OutstandingJob[]> {
     },
     include: {
       customer: true,
+      invoice: {
+        select: {
+          id: true,
+        },
+      },
     },
     orderBy: {
       updatedAt: "desc",
@@ -197,6 +202,7 @@ async function getOutstandingJobs(ownerId: string): Promise<OutstandingJob[]> {
       balanceDue: calculateOutstandingBalance(job.status, job.finalCost?.toString(), job.amountPaid?.toString()),
       customerName: job.customer?.name ?? "Customer not assigned",
       finalCost: toMoneyNumber(job.finalCost?.toString()),
+      invoiceId: job.invoice?.id,
       paymentStatus: job.paymentStatus,
       title: job.description,
     }))

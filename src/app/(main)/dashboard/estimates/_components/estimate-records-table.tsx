@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
+import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -482,7 +483,11 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
                 <div className="flex items-start justify-between gap-3">
                   <div className={"min-w-0"}>
                     <div className="truncate text-wrap font-medium text-sm">{estimate.description}</div>
-                    <div className="text-muted-foreground text-sm">{estimate.customerName ?? "No customer"}</div>
+                    <CustomerLink
+                      customerId={estimate.customerId}
+                      name={estimate.customerName}
+                      className="block truncate text-muted-foreground text-sm"
+                    />
                   </div>
                   <span className="font-medium text-sm">{formatMoney(estimate.estimatedTotal)}</span>
                 </div>

@@ -320,6 +320,7 @@ export async function updateCustomerAction(
   }
 
   revalidatePath("/dashboard/customers");
+  revalidatePath(`/dashboard/customers/${id}`);
 
   return {
     success: true,

@@ -26,11 +26,13 @@ const initialState: CustomerMutationState = {
 export function DeleteCustomerDialog({
   action,
   customer,
+  onDeleted,
   open,
   onOpenChange,
 }: {
   action: (state: CustomerMutationState, formData: FormData) => Promise<CustomerMutationState>;
   customer: RecentCustomerRow | null;
+  onDeleted?: () => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -42,7 +44,8 @@ export function DeleteCustomerDialog({
 
     onOpenChange(false);
     toast.success(state.message || "Customer deleted.");
-  }, [onOpenChange, state]);
+    onDeleted?.();
+  }, [onDeleted, onOpenChange, state]);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>

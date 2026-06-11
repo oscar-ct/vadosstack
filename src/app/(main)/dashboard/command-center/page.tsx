@@ -84,7 +84,14 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
     }),
     prisma.job.findMany({
       where: { ownerId },
-      include: { customer: true },
+      include: {
+        customer: true,
+        invoice: {
+          select: {
+            id: true,
+          },
+        },
+      },
       orderBy: { updatedAt: "desc" },
       take: 500,
     }),
@@ -302,8 +309,21 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
   const onHoldJobs = jobs
     .filter((job) => job.status === "On Hold")
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-  const unpaidBillableJobs = jobs
-    .filter((job) => Math.max(0, money(job.finalCost) - money(job.amountPaid)) > 0)
+  const jobsMissingFinalPrice = jobs
+    .filter((job) => job.status !== "Cancelled")
+    .filter((job) => !job.invoice && job.customerId && money(job.finalCost) <= 0)
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  const billableJobsWithBalance = jobs
+    .filter((job) => job.status !== "Cancelled")
+    .filter((job) => Math.max(0, money(job.finalCost) - money(job.amountPaid)) > 0);
+  const readyToInvoiceJobs = billableJobsWithBalance
+    .filter((job) => !job.invoice && job.customerId && money(job.finalCost) > 0)
+    .sort(
+      (a, b) =>
+        Math.max(0, money(b.finalCost) - money(b.amountPaid)) - Math.max(0, money(a.finalCost) - money(a.amountPaid)),
+    );
+  const unpaidInvoicedJobs = billableJobsWithBalance
+    .filter((job) => job.invoice)
     .sort(
       (a, b) =>
         Math.max(0, money(b.finalCost) - money(b.amountPaid)) - Math.max(0, money(a.finalCost) - money(a.amountPaid)),
@@ -342,6 +362,16 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
       severity: "amber" as const,
       value: "On hold",
     })),
+    ...jobsMissingFinalPrice.slice(0, 4).map((job) => ({
+      id: job.id,
+      type: "Invoice prep",
+      title: compactTitle(job.description, "Job needs final price"),
+      detail: `${job.customer?.name ?? "Customer not assigned"} · add billable totals before invoicing`,
+      href: `/dashboard/jobs/${job.id}/edit`,
+      priority: "Price",
+      severity: "amber" as const,
+      value: "No total",
+    })),
     ...readyEstimates.slice(0, 4).map((estimate) => ({
       id: estimate.id,
       type: "Estimate",
@@ -362,12 +392,22 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
       severity: "cyan" as const,
       value: Math.round(money(estimate.estimatedTotal)),
     })),
-    ...unpaidBillableJobs.slice(0, 4).map((job) => ({
+    ...readyToInvoiceJobs.slice(0, 4).map((job) => ({
+      id: job.id,
+      type: "Invoice prep",
+      title: compactTitle(job.description, "Job ready to invoice"),
+      detail: `${job.customer?.name ?? "Customer not assigned"} · balance due with no invoice`,
+      href: `/dashboard/jobs/${job.id}`,
+      priority: "Invoice",
+      severity: "amber" as const,
+      value: Math.round(Math.max(0, money(job.finalCost) - money(job.amountPaid))),
+    })),
+    ...unpaidInvoicedJobs.slice(0, 4).map((job) => ({
       id: job.id,
       type: "Receivable",
       title: compactTitle(job.description, "Job has balance"),
-      detail: `${job.customer?.name ?? "Customer not assigned"} · ${job.status.toLowerCase()} with balance`,
-      href: "/dashboard/invoices",
+      detail: `${job.customer?.name ?? "Customer not assigned"} · invoice open with balance`,
+      href: job.invoice ? `/dashboard/invoices/${job.invoice.id}` : "/dashboard/invoices",
       priority: "Collect",
       severity: "emerald" as const,
       value: Math.round(Math.max(0, money(job.finalCost) - money(job.amountPaid))),

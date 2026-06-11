@@ -33,6 +33,7 @@ import {
 import type { DateRange } from "react-day-picker";
 
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
+import { CustomerLink } from "@/components/customer-link";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+import type { InvoiceMutationState } from "../../../invoices/types";
+import { getJobBillingState } from "../job-billing-state";
+import { JobInvoiceButton } from "../job-record-action-buttons";
 import { getAmountDueDisplay, getJobOverdueDate, getJobsColumns, statusIcon } from "./columns";
 import type { JobRow } from "./schema";
 
@@ -113,7 +117,15 @@ const jobExportColumns: CsvColumn<JobRow>[] = [
   { header: "Notes", value: (job) => job.notes },
 ];
 
-export function JobsTable({ data, exportSlotId }: { data: JobRow[]; exportSlotId?: string }) {
+export function JobsTable({
+  createInvoiceAction,
+  data,
+  exportSlotId,
+}: {
+  createInvoiceAction: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
+  data: JobRow[];
+  exportSlotId?: string;
+}) {
   const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -129,9 +141,10 @@ export function JobsTable({ data, exportSlotId }: { data: JobRow[]; exportSlotId
   const columns = React.useMemo(
     () =>
       getJobsColumns({
+        createInvoiceAction,
         onEditJob: (job) => router.push(`/dashboard/jobs/${job.id}/edit`),
       }),
-    [router],
+    [createInvoiceAction, router],
   );
 
   const table = useReactTable({
@@ -402,6 +415,7 @@ export function JobsTable({ data, exportSlotId }: { data: JobRow[]; exportSlotId
           {table.getRowModel().rows.length ? (
             table.getRowModel().rows.map((row) => {
               const amountDue = getAmountDueDisplay(row.original);
+              const billingState = getJobBillingState(row.original);
               // const rowNumber =
               //   table.getState().pagination.pageIndex * table.getState().pagination.pageSize + index + 1;
 
@@ -429,9 +443,11 @@ export function JobsTable({ data, exportSlotId }: { data: JobRow[]; exportSlotId
                           {/*<span className="text-muted-foreground text-xs tabular-nums">#{rowNumber}</span>*/}
                           <div className="truncate text-wrap font-medium text-sm">{row.original.description}</div>
                         </div>
-                        <div className="text-muted-foreground text-sm">
-                          {row.original.customerName ?? "No customer"}
-                        </div>
+                        <CustomerLink
+                          customerId={row.original.customerId}
+                          name={row.original.customerName}
+                          className="block truncate font-medium text-sm"
+                        />
                       </div>
                       <Badge variant="outline" className="bg-muted-foreground/10 px-1.5">
                         {statusIcon(row.original.status)}
@@ -476,7 +492,11 @@ export function JobsTable({ data, exportSlotId }: { data: JobRow[]; exportSlotId
                       </div>
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-muted-foreground text-xs">Billing Status</span>
-                        <span className={amountDue.amountClassName}>{amountDue.label}</span>
+                        <span className={`text-right ${amountDue.amountClassName}`}>{amountDue.label}</span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="text-muted-foreground text-xs">Invoice Readiness</span>
+                        <span className="max-w-52 text-right text-muted-foreground text-xs">{amountDue.detail}</span>
                       </div>
                     </div>
                     <div>
@@ -492,8 +512,10 @@ export function JobsTable({ data, exportSlotId }: { data: JobRow[]; exportSlotId
                             View invoice
                           </Link>
                         </Button>
+                      ) : billingState.canCreateInvoice ? (
+                        <JobInvoiceButton action={createInvoiceAction} job={row.original} size="xs" />
                       ) : (
-                        <span className={"text-muted-foreground"}>Not invoiced</span>
+                        <span className="text-muted-foreground text-sm">Not invoiced</span>
                       )}
                     </div>
                     <div className="flex items-center justify-end">

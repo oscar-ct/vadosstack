@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { CheckCircle2, Clock3, MailCheck, MailWarning, Send, UserRound } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
+import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -76,9 +77,59 @@ export default async function Page() {
     }),
   ]);
 
+  const invoiceDocumentIds = records
+    .filter((record) => record.documentType === "invoice" && record.documentId)
+    .map((record) => record.documentId as string);
+  const estimateDocumentIds = records
+    .filter((record) => record.documentType === "estimate" && record.documentId)
+    .map((record) => record.documentId as string);
+  const [invoiceCustomerLinks, estimateCustomerLinks] = await Promise.all([
+    invoiceDocumentIds.length
+      ? prisma.invoice.findMany({
+          where: {
+            ownerId: currentUser.id,
+            id: {
+              in: invoiceDocumentIds,
+            },
+          },
+          select: {
+            customerId: true,
+            id: true,
+          },
+        })
+      : [],
+    estimateDocumentIds.length
+      ? prisma.estimate.findMany({
+          where: {
+            ownerId: currentUser.id,
+            id: {
+              in: estimateDocumentIds,
+            },
+          },
+          select: {
+            customerId: true,
+            id: true,
+          },
+        })
+      : [],
+  ]);
+  const invoiceCustomerIdByDocumentId = new Map(
+    invoiceCustomerLinks.map((invoice) => [invoice.id, invoice.customerId]),
+  );
+  const estimateCustomerIdByDocumentId = new Map(
+    estimateCustomerLinks.map((estimate) => [estimate.id, estimate.customerId]),
+  );
+
+  function getRecordCustomerId(record: (typeof records)[number]) {
+    if (!record.documentId) return undefined;
+    if (record.documentType === "invoice") return invoiceCustomerIdByDocumentId.get(record.documentId) ?? undefined;
+    if (record.documentType === "estimate") return estimateCustomerIdByDocumentId.get(record.documentId) ?? undefined;
+    return undefined;
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
+    <div className="@container/main flex flex-col gap-4 md:gap-6">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-3">
         <div className="rounded-lg border bg-card p-4 text-card-foreground">
           <div className="flex items-center justify-between gap-3">
             <p className="font-medium text-muted-foreground text-sm">Total emails</p>
@@ -114,12 +165,12 @@ export default async function Page() {
             Recent estimate and invoice email attempts, including successful sends and errors.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {records.length ? (
             <>
-              <div className="hidden md:block">
+              <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="bg-muted/15">
                     <TableRow>
                       <TableHead>Status</TableHead>
                       <TableHead>Record</TableHead>
@@ -131,85 +182,107 @@ export default async function Page() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {records.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell>
-                          <StatusBadge status={record.status} />
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">
-                            {record.documentNumber ?? formatDocumentType(record.documentType)}
-                          </div>
-                          <div className="text-muted-foreground text-xs">{formatDocumentType(record.documentType)}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="max-w-48 truncate font-medium">{record.recipientName || "No name"}</div>
-                          <div className="max-w-48 truncate text-muted-foreground text-xs">
-                            {record.recipientEmail || "No email"}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">{formatAmount(record.documentTotal)}</TableCell>
-                        <TableCell className="max-w-48 truncate text-muted-foreground">
-                          {record.senderEmail || "Not connected"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{formatDate(record.sentAt)}</TableCell>
-                        <TableCell>
-                          <div className="max-w-72 truncate text-muted-foreground">
-                            {record.status === "success"
-                              ? record.subject || "Email sent"
-                              : record.errorMessage || "Send failed"}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {records.map((record) => {
+                      const customerId = getRecordCustomerId(record);
+
+                      return (
+                        <TableRow key={record.id}>
+                          <TableCell>
+                            <StatusBadge status={record.status} />
+                          </TableCell>
+                          <TableCell>
+                            <div className="truncate font-medium">
+                              {record.documentNumber ?? formatDocumentType(record.documentType)}
+                            </div>
+                            <div className="text-muted-foreground text-xs">
+                              {formatDocumentType(record.documentType)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <CustomerLink
+                              customerId={customerId}
+                              name={record.recipientName}
+                              fallback="No name"
+                              className="block max-w-48 truncate font-medium"
+                            />
+                            <div className="max-w-48 truncate text-muted-foreground text-xs">
+                              {record.recipientEmail || "No email"}
+                            </div>
+                          </TableCell>
+                          <TableCell className="truncate font-medium">{formatAmount(record.documentTotal)}</TableCell>
+                          <TableCell className="max-w-48 truncate text-muted-foreground">
+                            {record.senderEmail || "Not connected"}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-muted-foreground">
+                            {formatDate(record.sentAt)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="max-w-72 truncate text-muted-foreground">
+                              {record.status === "success"
+                                ? record.subject || "Email sent"
+                                : record.errorMessage || "Send failed"}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
 
               <div className="space-y-3 md:hidden">
-                {records.map((record) => (
-                  <div key={record.id} className="rounded-lg border bg-background p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-medium leading-6">
-                          {record.documentNumber ?? formatDocumentType(record.documentType)}
-                        </div>
-                        <div className="text-muted-foreground text-xs">{formatDocumentType(record.documentType)}</div>
-                      </div>
-                      <StatusBadge status={record.status} />
-                    </div>
+                {records.map((record) => {
+                  const customerId = getRecordCustomerId(record);
 
-                    <div className="mt-3 grid gap-2 text-sm">
-                      <div className="flex min-w-0 items-start gap-2">
-                        <UserRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  return (
+                    <div key={record.id} className="min-w-0 rounded-lg border bg-background p-3">
+                      <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="truncate font-medium">{record.recipientName || "No name"}</div>
-                          <div className="truncate text-muted-foreground text-xs">
-                            {record.recipientEmail || "No email"}
+                          <div className="font-medium leading-6">
+                            {record.documentNumber ?? formatDocumentType(record.documentType)}
+                          </div>
+                          <div className="text-muted-foreground text-xs">{formatDocumentType(record.documentType)}</div>
+                        </div>
+                        <StatusBadge status={record.status} />
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-sm">
+                        <div className="flex min-w-0 items-start gap-2">
+                          <UserRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0">
+                            <CustomerLink
+                              customerId={customerId}
+                              name={record.recipientName}
+                              fallback="No name"
+                              className="block truncate font-medium"
+                            />
+                            <div className="truncate text-muted-foreground text-xs">
+                              {record.recipientEmail || "No email"}
+                            </div>
                           </div>
                         </div>
+                        <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                          <Send className="size-4 shrink-0" />
+                          <span className="truncate">{record.senderEmail || "Not connected"}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
+                          <span className="font-medium text-muted-foreground text-xs uppercase">Amount</span>
+                          <span className="font-semibold">{formatAmount(record.documentTotal)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Clock3 className="size-4 shrink-0" />
+                          <span>{formatDate(record.sentAt)}</span>
+                        </div>
                       </div>
-                      <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                        <Send className="size-4 shrink-0" />
-                        <span className="truncate">{record.senderEmail || "Not connected"}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
-                        <span className="font-medium text-muted-foreground text-xs uppercase">Amount</span>
-                        <span className="font-semibold">{formatAmount(record.documentTotal)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Clock3 className="size-4 shrink-0" />
-                        <span>{formatDate(record.sentAt)}</span>
-                      </div>
-                    </div>
 
-                    <div className="mt-3 rounded-md bg-muted/50 px-3 py-2 text-muted-foreground text-sm">
-                      {record.status === "success"
-                        ? record.subject || "Email sent"
-                        : record.errorMessage || "Send failed"}
+                      <div className="mt-3 rounded-md bg-muted/50 px-3 py-2 text-muted-foreground text-sm">
+                        {record.status === "success"
+                          ? record.subject || "Email sent"
+                          : record.errorMessage || "Send failed"}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           ) : (

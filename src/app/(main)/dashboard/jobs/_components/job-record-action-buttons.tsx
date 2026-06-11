@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 
 import type { InvoiceMutationState } from "../../invoices/types";
 import type { JobMutationState } from "../actions";
+import { getJobBillingState } from "./job-billing-state";
 import type { JobRow } from "./jobs-table/schema";
 
 const initialState: JobMutationState = {
@@ -58,6 +59,8 @@ export function JobInvoiceButton({
   size?: React.ComponentProps<typeof Button>["size"];
 }) {
   const [state, formAction, isPending] = React.useActionState(action, initialInvoiceState);
+  const billingState = getJobBillingState(job);
+  const createInvoiceLabel = billingState.kind === "paidNotInvoiced" ? "Create paid invoice" : "Create invoice";
 
   React.useEffect(() => {
     if (!state.message || state.success) return;
@@ -91,14 +94,18 @@ export function JobInvoiceButton({
         type="submit"
         size={size}
         className={cn(
-          "flex h-7 justify-center border-amber-200 bg-amber-50 px-2 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950",
+          "flex h-7 justify-center px-2",
+          billingState.canCreateInvoice
+            ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950"
+            : "border-muted bg-muted/30 text-muted-foreground hover:bg-muted/30 hover:text-muted-foreground",
           className,
         )}
         variant="outline"
-        disabled={isPending}
+        disabled={isPending || !billingState.canCreateInvoice}
+        title={billingState.detail}
       >
         <ReceiptText />
-        {isPending ? "Creating..." : "Create invoice"}
+        {isPending ? "Creating..." : billingState.canCreateInvoice ? createInvoiceLabel : billingState.label}
       </Button>
     </form>
   );

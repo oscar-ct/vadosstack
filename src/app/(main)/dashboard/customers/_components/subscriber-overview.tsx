@@ -4,7 +4,7 @@ import { Users } from "lucide-react";
 
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-import type { CreateCustomerState, CustomerMutationState } from "../actions";
+import type { CreateCustomerState } from "../actions";
 import { CreateCustomerDialog } from "./create-customer-dialog";
 import type { RecentCustomerRow } from "./recent-customers-table/schema";
 import { RecentCustomersTable } from "./recent-customers-table/table";
@@ -12,13 +12,9 @@ import { RecentCustomersTable } from "./recent-customers-table/table";
 export function SubscriberOverview({
   createCustomerAction,
   data,
-  deleteCustomerAction,
-  updateCustomerAction,
 }: {
   createCustomerAction: (state: CreateCustomerState, formData: FormData) => Promise<CreateCustomerState>;
   data: RecentCustomerRow[];
-  deleteCustomerAction: (state: CustomerMutationState, formData: FormData) => Promise<CustomerMutationState>;
-  updateCustomerAction: (state: CustomerMutationState, formData: FormData) => Promise<CustomerMutationState>;
 }) {
   return (
     <Card>
@@ -37,12 +33,7 @@ export function SubscriberOverview({
       </CardHeader>
 
       <CardContent className="pt-0">
-        <RecentCustomersTable
-          data={data}
-          deleteCustomerAction={deleteCustomerAction}
-          exportSlotId="customers-export-action"
-          updateCustomerAction={updateCustomerAction}
-        />
+        <RecentCustomersTable data={data} exportSlotId="customers-export-action" />
       </CardContent>
     </Card>
   );

@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { differenceInCalendarDays, endOfToday, format, parseISO } from "date-fns";
-import { Pencil, UserRound, WalletCards } from "lucide-react";
+import { UserRound, WalletCards } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -111,10 +111,8 @@ export function CustomerDueJobsPopover({ customer }: { customer: RecentCustomerR
 }
 
 export function getRecentCustomersColumns({
-  onEditCustomer,
   onViewCustomer,
 }: {
-  onEditCustomer: (customer: RecentCustomerRow) => void;
   onViewCustomer: (customer: RecentCustomerRow) => void;
 }): ColumnDef<RecentCustomerRow>[] {
   return [
@@ -253,25 +251,6 @@ export function getRecentCustomersColumns({
           <span className="text-muted-foreground text-xs">{row.original.jobCount === 1 ? "job" : "jobs"}</span>
         </Button>
       ),
-    },
-    {
-      id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
-      cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            onClick={() => onEditCustomer(row.original)}
-            aria-label={`Edit ${row.original.name}`}
-          >
-            <Pencil className="size-4" />
-          </Button>
-        </div>
-      ),
-      enableHiding: false,
     },
   ];
 }

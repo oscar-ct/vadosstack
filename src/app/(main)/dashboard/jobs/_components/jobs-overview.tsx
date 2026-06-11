@@ -7,10 +7,17 @@ import { BriefcaseBusiness, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+import type { InvoiceMutationState } from "../../invoices/types";
 import type { JobRow } from "./jobs-table/schema";
 import { JobsTable } from "./jobs-table/table";
 
-export function JobsOverview({ data }: { data: JobRow[] }) {
+export function JobsOverview({
+  createInvoiceAction,
+  data,
+}: {
+  createInvoiceAction: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
+  data: JobRow[];
+}) {
   return (
     <Card>
       <CardHeader>
@@ -35,7 +42,7 @@ export function JobsOverview({ data }: { data: JobRow[] }) {
       </CardHeader>
 
       <CardContent className="pt-0">
-        <JobsTable data={data} exportSlotId="jobs-export-action" />
+        <JobsTable createInvoiceAction={createInvoiceAction} data={data} exportSlotId="jobs-export-action" />
       </CardContent>
     </Card>
   );

@@ -48,6 +48,7 @@ export default async function Page() {
   const invoiceItems: InvoiceTableItem[] = invoices.map((invoice) => ({
     id: invoice.id,
     jobId: invoice.jobId,
+    customerId: invoice.customerId ?? undefined,
     customerName: invoice.customerName ?? undefined,
     invoiceNumber: invoiceNumbers.get(invoice.id) ?? formatDocumentNumber("INV", 1),
     href: `/dashboard/invoices/${invoice.id}?from=invoices`,

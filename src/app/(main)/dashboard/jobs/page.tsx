@@ -1,6 +1,7 @@
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getCurrentUser } from "@/lib/auth";
 
+import { createInvoiceAction } from "../invoices/actions";
 import { JobsOverview } from "./_components/jobs-overview";
 import { getJobs } from "./_lib/job-data";
 
@@ -20,7 +21,7 @@ export default async function Page() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <JobsOverview data={jobs} />
+      <JobsOverview createInvoiceAction={createInvoiceAction} data={jobs} />
     </div>
   );
 }

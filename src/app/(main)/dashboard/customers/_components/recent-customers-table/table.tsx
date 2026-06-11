@@ -3,6 +3,8 @@
 
 import * as React from "react";
 
+import { useRouter } from "next/navigation";
+
 import {
   type ColumnFiltersState,
   flexRender,
@@ -52,11 +54,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import type { CustomerMutationState } from "../../actions";
 import { CustomerDueJobsPopover, getCustomerBillingDisplay, getRecentCustomersColumns } from "./columns";
-import { CustomerDetailsDialog } from "./customer-details-dialog";
-import { DeleteCustomerDialog } from "./delete-customer-dialog";
-import { EditCustomerDialog } from "./edit-customer-dialog";
 import type { RecentCustomerRow } from "./schema";
 
 const billingOptions = [
@@ -108,20 +106,8 @@ const customerExportColumns: CsvColumn<RecentCustomerRow>[] = [
   { header: "Notes", value: (customer) => customer.notes },
 ];
 
-export function RecentCustomersTable({
-  data,
-  deleteCustomerAction,
-  exportSlotId,
-  updateCustomerAction,
-}: {
-  data: RecentCustomerRow[];
-  deleteCustomerAction: (state: CustomerMutationState, formData: FormData) => Promise<CustomerMutationState>;
-  exportSlotId?: string;
-  updateCustomerAction: (state: CustomerMutationState, formData: FormData) => Promise<CustomerMutationState>;
-}) {
-  const [customerToDelete, setCustomerToDelete] = React.useState<RecentCustomerRow | null>(null);
-  const [customerToEdit, setCustomerToEdit] = React.useState<RecentCustomerRow | null>(null);
-  const [selectedCustomer, setSelectedCustomer] = React.useState<RecentCustomerRow | null>(null);
+export function RecentCustomersTable({ data, exportSlotId }: { data: RecentCustomerRow[]; exportSlotId?: string }) {
+  const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "lastScheduledJobDate", desc: true }]);
@@ -137,10 +123,9 @@ export function RecentCustomersTable({
   const columns = React.useMemo(
     () =>
       getRecentCustomersColumns({
-        onEditCustomer: setCustomerToEdit,
-        onViewCustomer: setSelectedCustomer,
+        onViewCustomer: (customer) => router.push(`/dashboard/customers/${customer.id}`),
       }),
-    [],
+    [router],
   );
 
   const table = useReactTable({
@@ -194,36 +179,6 @@ export function RecentCustomersTable({
 
   return (
     <>
-      <DeleteCustomerDialog
-        key={customerToDelete?.id ?? "delete-customer"}
-        action={deleteCustomerAction}
-        customer={customerToDelete}
-        open={!!customerToDelete}
-        onOpenChange={(open) => {
-          if (!open) setCustomerToDelete(null);
-        }}
-      />
-      <EditCustomerDialog
-        key={customerToEdit?.id ?? "edit-customer"}
-        action={updateCustomerAction}
-        customer={customerToEdit}
-        onDeleteCustomer={setCustomerToDelete}
-        open={!!customerToEdit}
-        onOpenChange={(open) => {
-          if (!open) setCustomerToEdit(null);
-        }}
-      />
-      <CustomerDetailsDialog
-        customer={selectedCustomer}
-        onEditCustomer={(customer) => {
-          setSelectedCustomer(null);
-          setCustomerToEdit(customer);
-        }}
-        open={!!selectedCustomer}
-        onOpenChange={(open) => {
-          if (!open) setSelectedCustomer(null);
-        }}
-      />
       <div className="space-y-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
@@ -438,12 +393,12 @@ export function RecentCustomersTable({
                   tabIndex={0}
                   onClick={(event) => {
                     if (shouldIgnoreRowClick(event.target)) return;
-                    setSelectedCustomer(row.original);
+                    router.push(`/dashboard/customers/${row.original.id}`);
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== "Enter" && event.key !== " ") return;
                     event.preventDefault();
-                    setSelectedCustomer(row.original);
+                    router.push(`/dashboard/customers/${row.original.id}`);
                   }}
                 >
                   <CardContent className="grid gap-4">
@@ -526,14 +481,14 @@ export function RecentCustomersTable({
                     aria-label={`View ${row.original.name} details`}
                     onClick={(event) => {
                       if (shouldIgnoreRowClick(event.target)) return;
-                      setSelectedCustomer(row.original);
+                      router.push(`/dashboard/customers/${row.original.id}`);
                     }}
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
                       if (shouldIgnoreRowClick(event.target)) return;
 
                       event.preventDefault();
-                      setSelectedCustomer(row.original);
+                      router.push(`/dashboard/customers/${row.original.id}`);
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (

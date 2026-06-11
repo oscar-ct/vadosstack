@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { differenceInCalendarDays, endOfDay, format, parseISO, startOfDay } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
+import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -144,7 +145,15 @@ export function getInvoicesColumns(): ColumnDef<InvoiceTableItem>[] {
     {
       accessorKey: "customerName",
       header: "Customer",
-      cell: ({ row }) => <span className="whitespace-nowrap">{formatCustomerName(row.original.customerName)}</span>,
+      cell: ({ row }) => (
+        <span data-invoice-row-ignore>
+          <CustomerLink
+            customerId={row.original.customerId}
+            name={row.original.customerName}
+            className="block whitespace-nowrap"
+          />
+        </span>
+      ),
     },
     {
       accessorKey: "jobTitle",

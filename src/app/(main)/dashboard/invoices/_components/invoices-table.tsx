@@ -36,6 +36,7 @@ import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
 
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
+import { CustomerLink } from "@/components/customer-link";
 import { DateRangePicker } from "@/components/date-range-picker";
 import {
   AlertDialog,
@@ -129,10 +130,6 @@ const invoiceExportColumns: CsvColumn<InvoiceTableItem>[] = [
   { header: "Balance due", value: (invoice) => invoice.balanceDue },
   { header: "Service location", value: (invoice) => invoice.jobServiceLocation },
 ];
-
-function formatCustomerName(name?: string) {
-  return name ?? "No customer";
-}
 
 function formatPaymentType(value: string) {
   return value === "deposit" ? "Deposit" : "Invoice payment";
@@ -305,7 +302,9 @@ export function InvoiceDetailsDialog({
             <div>
               <DialogTitle>{invoice.invoiceNumber}</DialogTitle>
               <DialogDescription>
-                {formatCustomerName(invoice.customerName)} · issued {formatDate(invoice.issuedAt)}
+                <CustomerLink customerId={invoice.customerId} name={invoice.customerName} />
+                {" - issued "}
+                {formatDate(invoice.issuedAt)}
               </DialogDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -885,18 +884,24 @@ export function InvoicesTable({ exportSlotId, invoices }: { exportSlotId?: strin
             const invoice = row.original;
 
             return (
-              <Link
+              <div
                 key={row.id}
-                prefetch={false}
-                href={invoice.href}
-                className="grid gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40"
+                className="relative grid gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40"
               >
+                <Link
+                  prefetch={false}
+                  href={invoice.href}
+                  className="absolute inset-0 z-10 rounded-lg"
+                  aria-label={`Open invoice ${invoice.invoiceNumber}`}
+                />
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-medium">{invoice.invoiceNumber}</div>
-                    <div className="truncate text-muted-foreground text-sm">
-                      {formatCustomerName(invoice.customerName)}
-                    </div>
+                    <CustomerLink
+                      customerId={invoice.customerId}
+                      name={invoice.customerName}
+                      className="relative z-20 block truncate text-muted-foreground text-sm"
+                    />
                   </div>
                   <div className="font-semibold text-sm tabular-nums">{formatMoney(invoice.total)}</div>
                 </div>
@@ -940,7 +945,7 @@ export function InvoicesTable({ exportSlotId, invoices }: { exportSlotId?: strin
                   </div>
                   <span className="text-muted-foreground text-sm">Open invoice</span>
                 </div>
-              </Link>
+              </div>
             );
           })
         ) : (

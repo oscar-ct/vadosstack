@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
+import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
@@ -80,14 +81,28 @@ function hasPositiveNumber(value?: string) {
   return Number.isFinite(amount) && amount > 0;
 }
 
-function InfoTile({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value?: string }) {
+function InfoTile({
+  customerId,
+  icon: Icon,
+  label,
+  value,
+}: {
+  customerId?: string;
+  icon: LucideIcon;
+  label: string;
+  value?: string;
+}) {
   return (
     <div className="grid gap-1 rounded-lg border bg-background p-3">
       <div className="flex items-center gap-2 text-muted-foreground text-xs">
         <Icon className="size-3.5" />
         {label}
       </div>
-      <div className="font-medium text-sm">{value ?? "Not on file"}</div>
+      {customerId ? (
+        <CustomerLink customerId={customerId} name={value} fallback="Not on file" className="font-medium text-sm" />
+      ) : (
+        <div className="font-medium text-sm">{value ?? "Not on file"}</div>
+      )}
     </div>
   );
 }
@@ -314,7 +329,12 @@ export default async function Page({
         <div className="grid gap-5">
           <SectionPanel icon={ClipboardList} title="Estimate Details">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <InfoTile icon={UserRound} label="Customer" value={estimate.customerName} />
+              <InfoTile
+                customerId={estimate.customerId}
+                icon={UserRound}
+                label="Customer"
+                value={estimate.customerName}
+              />
               <InfoTile icon={MapPin} label="Service location" value={estimate.serviceLocation} />
               <InfoTile icon={CalendarDays} label="Scheduled" value={scheduledDate} />
               <InfoTile icon={Building2} label="Job type" value={estimate.jobType} />

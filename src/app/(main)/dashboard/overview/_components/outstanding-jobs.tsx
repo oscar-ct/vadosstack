@@ -12,6 +12,7 @@ export type OutstandingJob = {
   balanceDue: number;
   customerName: string;
   finalCost: number;
+  invoiceId?: string;
   paymentStatus: string;
   title: string;
 };
@@ -89,9 +90,12 @@ export function OutstandingJobs({ jobs }: { jobs: OutstandingJob[] }) {
                     )}
                   </div>
                 </div>
-                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-muted-foreground text-xs">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 text-muted-foreground text-xs">
                   <span className="min-w-0 truncate">
                     {formatCurrency(amountPaid)} paid · {formatCurrency(amountDue)} due
+                  </span>
+                  <span className="shrink-0 text-muted-foreground/80">
+                    {job.invoiceId ? "Invoice open" : "Ready to invoice"}
                   </span>
                   <ArrowRight className="size-3.5 shrink-0" />
                 </div>

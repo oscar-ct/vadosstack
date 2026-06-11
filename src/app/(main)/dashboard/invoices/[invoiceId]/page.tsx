@@ -228,6 +228,7 @@ export default async function Page({
   const managedInvoice: InvoiceTableItem = {
     id: invoice.id,
     jobId: invoice.jobId,
+    customerId: invoice.customerId ?? undefined,
     customerName: invoice.customerName ?? undefined,
     invoiceNumber,
     href: currentHref,

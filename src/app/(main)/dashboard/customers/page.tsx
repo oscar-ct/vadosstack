@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 
 import type { RecentCustomerRow } from "./_components/recent-customers-table/schema";
 import { SubscriberOverview } from "./_components/subscriber-overview";
-import { createCustomerAction, deleteCustomerAction, updateCustomerAction } from "./actions";
+import { createCustomerAction } from "./actions";
 
 function formatMoney(value: { toString: () => string } | null) {
   return value ? `$${value.toString()}` : undefined;
@@ -135,12 +135,7 @@ export default async function Page() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <SubscriberOverview
-        createCustomerAction={createCustomerAction}
-        data={customers}
-        deleteCustomerAction={deleteCustomerAction}
-        updateCustomerAction={updateCustomerAction}
-      />
+      <SubscriberOverview createCustomerAction={createCustomerAction} data={customers} />
     </div>
   );
 }

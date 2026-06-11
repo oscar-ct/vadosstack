@@ -15,6 +15,7 @@ const invoicePaymentSchema = z.object({
 export const invoiceTableItemSchema = z.object({
   id: z.string(),
   jobId: z.string(),
+  customerId: z.string().optional(),
   customerName: z.string().optional(),
   invoiceNumber: z.string(),
   href: z.string(),
