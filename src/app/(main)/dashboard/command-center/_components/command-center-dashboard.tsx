@@ -25,6 +25,8 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { cn, formatCurrency } from "@/lib/utils";
 
+import type { ManagerActionQueueItem } from "../../_lib/manager-action-queue";
+
 type Severity = "amber" | "cyan" | "emerald" | "rose";
 
 export type CommandCenterData = {
@@ -32,6 +34,7 @@ export type CommandCenterData = {
   generatedAt: string;
   totals: {
     customers: number;
+    leads: number;
     activeEmployees: number;
     jobs: number;
     activeJobs: number;
@@ -81,16 +84,7 @@ export type CommandCenterData = {
     value: number;
     share: number;
   }>;
-  actionQueue: Array<{
-    id: string;
-    type: string;
-    title: string;
-    detail: string;
-    href: string;
-    priority: string;
-    severity: Severity;
-    value: string | number;
-  }>;
+  actionQueue: ManagerActionQueueItem[];
 };
 
 const cashFlowConfig = {

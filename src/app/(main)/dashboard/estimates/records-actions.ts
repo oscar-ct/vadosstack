@@ -117,6 +117,7 @@ const measurementRoomsSchema = z.array(
 );
 
 const estimateRecordSchema = z.object({
+  leadId: z.string().trim().optional(),
   customerId: z.string().trim().optional(),
   newCustomerName: z.string().trim().optional(),
   newCustomerEmail: z.string().trim().optional(),
@@ -154,6 +155,7 @@ const updateEstimateStatusSchema = z.object({
 
 function getEstimatePayload(formData: FormData) {
   return {
+    leadId: emptyToUndefined(formData.get("leadId")),
     customerId: emptyToUndefined(formData.get("customerId")),
     newCustomerName: emptyToUndefined(formData.get("newCustomerName")),
     newCustomerEmail: emptyToUndefined(formData.get("newCustomerEmail")),
@@ -430,7 +432,7 @@ export async function createEstimateRecordAction(
 
   try {
     const { newCustomerEmail, newCustomerName, newCustomerPhone, ...estimate } = parsed.data;
-    const { jobType, measurementRooms, ...estimateInput } = estimate;
+    const { jobType, leadId, measurementRooms, ...estimateInput } = estimate;
     const laborItems = normalizeItems(estimate.laborItems);
     const materials = normalizeMaterials(estimate.materials);
     const normalizedMeasurementRooms = normalizeMeasurementRooms(measurementRooms);
@@ -479,12 +481,50 @@ export async function createEstimateRecordAction(
       },
     });
     createdEstimateId = createdEstimate.id;
+
+    if (leadId) {
+      const lead = await prisma.lead.findUnique({
+        where: {
+          id_ownerId: {
+            id: leadId,
+            ownerId: currentUser.id,
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+      if (lead) {
+        await prisma.lead.update({
+          where: {
+            id_ownerId: {
+              id: lead.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            customerId,
+            estimateRecordId: createdEstimate.id,
+            status:
+              estimate.status === "Waiting on Customer" || estimate.status === "Ready to Send"
+                ? "Estimate Sent"
+                : lead.status === "New" || lead.status === "Contacted"
+                  ? "Estimate Needed"
+                  : lead.status,
+          },
+        });
+      }
+    }
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Estimate could not be created." };
   }
 
   revalidatePath("/dashboard/estimates");
   revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/leads");
+  revalidatePath("/dashboard/command-center");
   return {
     success: true,
     message: "Estimate created.",

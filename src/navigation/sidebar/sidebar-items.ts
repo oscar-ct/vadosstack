@@ -5,6 +5,7 @@ import {
   ListTodo,
   type LucideIcon,
   MailCheck,
+  MessagesSquare,
   NotebookText,
   PackageCheck,
   ReceiptText,
@@ -60,6 +61,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Command Center",
         url: "/dashboard/command-center",
         icon: ChartNoAxesCombined,
+        isNew: true,
+      },
+      {
+        title: "Leads",
+        url: "/dashboard/leads",
+        icon: MessagesSquare,
         isNew: true,
       },
       {

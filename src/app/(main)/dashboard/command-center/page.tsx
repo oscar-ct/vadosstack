@@ -1,20 +1,10 @@
-import {
-  addMonths,
-  differenceInCalendarDays,
-  endOfMonth,
-  format,
-  isAfter,
-  isBefore,
-  startOfMonth,
-  startOfToday,
-  subDays,
-  subMonths,
-} from "date-fns";
+import { addMonths, endOfMonth, format, isAfter, isBefore, startOfMonth, startOfToday, subMonths } from "date-fns";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+import { buildManagerActionQueue } from "../_lib/manager-action-queue";
 import { CommandCenterDashboard, type CommandCenterData } from "./_components/command-center-dashboard";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +13,6 @@ const ACTIVE_JOB_STATUSES = new Set(["Scheduled"]);
 const WON_ESTIMATE_STATUSES = new Set(["Converted", "Approved", "Accepted", "Won"]);
 const LOST_ESTIMATE_STATUSES = new Set(["Declined", "Cancelled", "Lost"]);
 const FOLLOW_UP_ESTIMATE_STATUSES = new Set(["Estimate Provided", "Waiting on Customer"]);
-const READY_ESTIMATE_STATUSES = new Set(["Ready to Send"]);
 
 function money(value: { toString(): string } | number | string | null | undefined) {
   const parsed = Number(value ?? 0);
@@ -38,40 +27,11 @@ function percent(part: number, total: number) {
   return Math.round((part / total) * 100);
 }
 
-function compactTitle(value: string | null | undefined, fallback: string) {
-  const trimmed = value?.trim();
-
-  if (!trimmed) {
-    return fallback;
-  }
-
-  return trimmed.length > 76 ? `${trimmed.slice(0, 73)}...` : trimmed;
-}
-
-function formatTimeRequestAction(action: string) {
-  const normalizedAction = action.toLowerCase();
-
-  if (normalizedAction === "create") {
-    return "new time entry";
-  }
-
-  if (normalizedAction === "edit" || normalizedAction === "update") {
-    return "time edit";
-  }
-
-  if (normalizedAction === "delete") {
-    return "time deletion";
-  }
-
-  return normalizedAction;
-}
-
 async function getCommandCenterData(ownerId: string, companyName: string): Promise<CommandCenterData> {
   const today = startOfToday();
   const sixMonthStart = startOfMonth(subMonths(today, 5));
-  const staleCutoff = subDays(today, 14);
 
-  const [customers, jobs, estimates, invoices, timeRequests, timeEntries, activeEmployees] = await Promise.all([
+  const [customers, leads, jobs, estimates, invoices, timeRequests, timeEntries, activeEmployees] = await Promise.all([
     prisma.customer.findMany({
       where: { ownerId },
       select: {
@@ -80,6 +40,11 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
         joinedAt: true,
       },
       orderBy: { joinedAt: "desc" },
+      take: 500,
+    }),
+    prisma.lead.findMany({
+      where: { ownerId },
+      orderBy: [{ followUpAt: "asc" }, { createdAt: "desc" }],
       take: 500,
     }),
     prisma.job.findMany({
@@ -297,128 +262,19 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
       ),
     }));
 
-  const staleEstimates = estimates
-    .filter((estimate) => FOLLOW_UP_ESTIMATE_STATUSES.has(estimate.status) && isBefore(estimate.createdAt, staleCutoff))
-    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const readyEstimates = estimates
-    .filter((estimate) => READY_ESTIMATE_STATUSES.has(estimate.status))
-    .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
-  const unscheduledJobs = jobs
-    .filter((job) => job.status === "Unscheduled")
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-  const onHoldJobs = jobs
-    .filter((job) => job.status === "On Hold")
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-  const jobsMissingFinalPrice = jobs
-    .filter((job) => job.status !== "Cancelled")
-    .filter((job) => !job.invoice && job.customerId && money(job.finalCost) <= 0)
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-  const billableJobsWithBalance = jobs
-    .filter((job) => job.status !== "Cancelled")
-    .filter((job) => Math.max(0, money(job.finalCost) - money(job.amountPaid)) > 0);
-  const readyToInvoiceJobs = billableJobsWithBalance
-    .filter((job) => !job.invoice && job.customerId && money(job.finalCost) > 0)
-    .sort(
-      (a, b) =>
-        Math.max(0, money(b.finalCost) - money(b.amountPaid)) - Math.max(0, money(a.finalCost) - money(a.amountPaid)),
-    );
-  const unpaidInvoicedJobs = billableJobsWithBalance
-    .filter((job) => job.invoice)
-    .sort(
-      (a, b) =>
-        Math.max(0, money(b.finalCost) - money(b.amountPaid)) - Math.max(0, money(a.finalCost) - money(a.amountPaid)),
-    );
-
-  const actionQueue = [
-    ...pendingTimeRequests.slice(0, 4).map((request) => ({
-      id: request.id,
-      type: "Time review",
-      title: `${request.employee.name} requested ${formatTimeRequestAction(request.action)}`,
-      detail: request.workedOn
-        ? `Worked ${format(request.workedOn, "MMM d")} · submitted ${format(request.requestedAt, "MMM d")}`
-        : `Submitted ${format(request.requestedAt, "MMM d")}`,
-      href: `/dashboard/time-tracking?request=${request.id}`,
-      priority: "Review",
-      severity: "amber" as const,
-      value: request.hours ? `${money(request.hours)}h` : "Pending",
-    })),
-    ...unscheduledJobs.slice(0, 4).map((job) => ({
-      id: job.id,
-      type: "Job",
-      title: compactTitle(job.description, "Job needs scheduling"),
-      detail: `${job.customer?.name ?? "Customer not assigned"} · no scheduled date`,
-      href: `/dashboard/jobs/${job.id}`,
-      priority: "Schedule",
-      severity: "rose" as const,
-      value: "Unscheduled",
-    })),
-    ...onHoldJobs.slice(0, 4).map((job) => ({
-      id: job.id,
-      type: "Job",
-      title: compactTitle(job.description, "Job is on hold"),
-      detail: `${job.customer?.name ?? "Customer not assigned"} · review blocker or next step`,
-      href: `/dashboard/jobs/${job.id}`,
-      priority: "Review hold",
-      severity: "amber" as const,
-      value: "On hold",
-    })),
-    ...jobsMissingFinalPrice.slice(0, 4).map((job) => ({
-      id: job.id,
-      type: "Invoice prep",
-      title: compactTitle(job.description, "Job needs final price"),
-      detail: `${job.customer?.name ?? "Customer not assigned"} · add billable totals before invoicing`,
-      href: `/dashboard/jobs/${job.id}/edit`,
-      priority: "Price",
-      severity: "amber" as const,
-      value: "No total",
-    })),
-    ...readyEstimates.slice(0, 4).map((estimate) => ({
-      id: estimate.id,
-      type: "Estimate",
-      title: compactTitle(estimate.description, "Estimate ready to send"),
-      detail: `${estimate.customer?.name ?? "Customer not assigned"} · ready to email`,
-      href: `/dashboard/estimates/records/${estimate.id}`,
-      priority: "Send",
-      severity: "cyan" as const,
-      value: Math.round(money(estimate.estimatedTotal)),
-    })),
-    ...staleEstimates.slice(0, 4).map((estimate) => ({
-      id: estimate.id,
-      type: "Estimate",
-      title: compactTitle(estimate.description, "Estimate needs follow-up"),
-      detail: `${estimate.customer?.name ?? "Customer not assigned"} · ${differenceInCalendarDays(today, estimate.createdAt)} days old`,
-      href: `/dashboard/estimates/records/${estimate.id}`,
-      priority: "Follow up",
-      severity: "cyan" as const,
-      value: Math.round(money(estimate.estimatedTotal)),
-    })),
-    ...readyToInvoiceJobs.slice(0, 4).map((job) => ({
-      id: job.id,
-      type: "Invoice prep",
-      title: compactTitle(job.description, "Job ready to invoice"),
-      detail: `${job.customer?.name ?? "Customer not assigned"} · balance due with no invoice`,
-      href: `/dashboard/jobs/${job.id}`,
-      priority: "Invoice",
-      severity: "amber" as const,
-      value: Math.round(Math.max(0, money(job.finalCost) - money(job.amountPaid))),
-    })),
-    ...unpaidInvoicedJobs.slice(0, 4).map((job) => ({
-      id: job.id,
-      type: "Receivable",
-      title: compactTitle(job.description, "Job has balance"),
-      detail: `${job.customer?.name ?? "Customer not assigned"} · invoice open with balance`,
-      href: job.invoice ? `/dashboard/invoices/${job.invoice.id}` : "/dashboard/invoices",
-      priority: "Collect",
-      severity: "emerald" as const,
-      value: Math.round(Math.max(0, money(job.finalCost) - money(job.amountPaid))),
-    })),
-  ].slice(0, 8);
+  const actionQueue = buildManagerActionQueue({
+    estimates,
+    jobs,
+    leads,
+    timeRequests: pendingTimeRequests,
+  });
 
   return {
     companyName,
     generatedAt: new Date().toISOString(),
     totals: {
       customers: customers.length,
+      leads: leads.length,
       activeEmployees,
       jobs: jobs.length,
       activeJobs: activeJobs.length,

@@ -100,6 +100,18 @@ type EstimateRecordDraft = {
   version: 1;
 };
 
+export type LeadEstimatePrefill = {
+  leadId: string;
+  customerId?: string;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  description: string;
+  serviceLocation?: string;
+  category?: string;
+  notes?: string;
+};
+
 function createLineItem(item?: Partial<PricingLineItem>): LineItem {
   return {
     id: crypto.randomUUID(),
@@ -936,6 +948,7 @@ export function EstimateRecordFormFields({
   customers,
   draftKey,
   estimate,
+  leadPrefill,
   presentation = "modal",
   resetKey = 0,
   services,
@@ -944,23 +957,36 @@ export function EstimateRecordFormFields({
   customers: JobCustomer[];
   draftKey?: string;
   estimate?: EstimateRecordRow;
+  leadPrefill?: LeadEstimatePrefill;
   presentation?: "modal" | "workspace";
   resetKey?: number;
   services: ServiceTemplateRow[];
 }) {
   const [customerPickerOpen, setCustomerPickerOpen] = React.useState(false);
-  const [title, setTitle] = React.useState(estimate?.description ?? "");
-  const [description, setDescription] = React.useState(estimate?.scope ?? "");
-  const [category, setCategory] = React.useState(estimate?.category ?? "Other");
+  const [title, setTitle] = React.useState(estimate?.description ?? leadPrefill?.description ?? "");
+  const [description, setDescription] = React.useState(estimate?.scope ?? leadPrefill?.notes ?? "");
+  const [category, setCategory] = React.useState(
+    estimate?.category ??
+      (categories.includes(leadPrefill?.category as (typeof categories)[number]) ? leadPrefill?.category : "Other") ??
+      "Other",
+  );
   const [status, setStatus] = React.useState(estimate?.status ?? "Draft");
   const [scheduledDate, setScheduledDate] = React.useState<Date | undefined>(() =>
     parseEstimateDate(estimate?.dateBegin),
   );
   const [notes, setNotes] = React.useState(estimate?.notes ?? "");
-  const [newCustomerName, setNewCustomerName] = React.useState("");
-  const [newCustomerEmail, setNewCustomerEmail] = React.useState("");
-  const [newCustomerPhone, setNewCustomerPhone] = React.useState("");
-  const [selectedCustomerId, setSelectedCustomerId] = React.useState(estimate?.customerId ?? selectCustomerValue);
+  const [newCustomerName, setNewCustomerName] = React.useState(
+    leadPrefill?.customerId ? "" : (leadPrefill?.customerName ?? ""),
+  );
+  const [newCustomerEmail, setNewCustomerEmail] = React.useState(
+    leadPrefill?.customerId ? "" : (leadPrefill?.customerEmail ?? ""),
+  );
+  const [newCustomerPhone, setNewCustomerPhone] = React.useState(
+    leadPrefill?.customerId ? "" : (leadPrefill?.customerPhone ?? ""),
+  );
+  const [selectedCustomerId, setSelectedCustomerId] = React.useState(
+    estimate?.customerId ?? leadPrefill?.customerId ?? (leadPrefill ? newCustomerValue : selectCustomerValue),
+  );
   const [laborItems, setLaborItems] = React.useState<LineItem[]>(
     estimate?.laborItems.length ? estimate.laborItems.map((item) => createLineItem(item)) : [createLineItem()],
   );
@@ -982,7 +1008,7 @@ export function EstimateRecordFormFields({
     ? undefined
     : customers.find((customer) => customer.id === selectedCustomerId);
   const addressOptions = selectedCustomer?.addresses ?? [];
-  const initialLocation = estimate?.serviceLocation ?? "";
+  const initialLocation = estimate?.serviceLocation ?? leadPrefill?.serviceLocation ?? "";
   const hasSavedInitialLocation = addressOptions.some((address) => formatAddress(address) === initialLocation);
   const [selectedLocation, setSelectedLocation] = React.useState(
     hasSavedInitialLocation && initialLocation ? initialLocation : customLocationValue,
@@ -1001,7 +1027,8 @@ export function EstimateRecordFormFields({
   const [draftRestoredAt, setDraftRestoredAt] = React.useState<string>();
 
   const resetToEstimate = React.useCallback(() => {
-    const nextSelectedCustomerId = estimate?.customerId ?? selectCustomerValue;
+    const nextSelectedCustomerId =
+      estimate?.customerId ?? leadPrefill?.customerId ?? (leadPrefill ? newCustomerValue : selectCustomerValue);
     const nextCustomer = customers.find((customer) => customer.id === nextSelectedCustomerId);
     const nextAddressOptions = nextCustomer?.addresses ?? [];
     const nextInitialLocation = estimate?.serviceLocation ?? "";
@@ -1018,15 +1045,19 @@ export function EstimateRecordFormFields({
         ? estimate.materials.map((item) => createMaterialLineItem(item))
         : [createMaterialLineItem()],
     );
-    setTitle(estimate?.description ?? "");
-    setDescription(estimate?.scope ?? "");
-    setCategory(estimate?.category ?? "Other");
+    setTitle(estimate?.description ?? leadPrefill?.description ?? "");
+    setDescription(estimate?.scope ?? leadPrefill?.notes ?? "");
+    setCategory(
+      estimate?.category ??
+        (categories.includes(leadPrefill?.category as (typeof categories)[number]) ? leadPrefill?.category : "Other") ??
+        "Other",
+    );
     setStatus(estimate?.status ?? "Draft");
     setScheduledDate(parseEstimateDate(estimate?.dateBegin));
     setNotes(estimate?.notes ?? "");
-    setNewCustomerName("");
-    setNewCustomerEmail("");
-    setNewCustomerPhone("");
+    setNewCustomerName(leadPrefill?.customerId ? "" : (leadPrefill?.customerName ?? ""));
+    setNewCustomerEmail(leadPrefill?.customerId ? "" : (leadPrefill?.customerEmail ?? ""));
+    setNewCustomerPhone(leadPrefill?.customerId ? "" : (leadPrefill?.customerPhone ?? ""));
     setJobType(estimate?.jobType ?? "Residential");
     setMeasurementRooms(
       estimate?.measurementRooms.length
@@ -1037,7 +1068,7 @@ export function EstimateRecordFormFields({
     setTaxRate(Number(estimate?.materialTaxRate ?? "8.25"));
     setSelectedLocation(nextHasSavedInitialLocation && nextInitialLocation ? nextInitialLocation : customLocationValue);
     setCustomLocationFields(createCustomLocationFields(nextHasSavedInitialLocation ? "" : nextInitialLocation));
-  }, [customers, estimate]);
+  }, [customers, estimate, leadPrefill]);
 
   React.useEffect(() => {
     const initializedFromKey = `${resetKey}:${estimate?.id ?? "new"}`;
@@ -1242,6 +1273,7 @@ export function EstimateRecordFormFields({
     return (
       <div className="grid gap-0 md:gap-2">
         <input type="hidden" name="customerId" value={isCreatingNewCustomer ? "" : selectedCustomerId} />
+        {leadPrefill ? <input type="hidden" name="leadId" value={leadPrefill.leadId} /> : null}
         <input type="hidden" name="serviceLocation" value={serviceLocation} />
         <input type="hidden" name="dateBegin" value={toDateValue(scheduledDate)} />
         <input type="hidden" name="dateEnd" value="" />

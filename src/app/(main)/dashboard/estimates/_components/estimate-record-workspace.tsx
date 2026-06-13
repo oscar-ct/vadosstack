@@ -16,7 +16,7 @@ import type { ServiceTemplateRow } from "../../services/types";
 import type { EstimateRecordMutationState } from "../records-actions";
 import { EstimateBackButton } from "./estimate-back-button";
 import { DeleteEstimateRecordButton } from "./estimate-record-action-buttons";
-import { EstimateRecordFormFields } from "./estimate-record-form-fields";
+import { EstimateRecordFormFields, type LeadEstimatePrefill } from "./estimate-record-form-fields";
 import type { EstimateRecordRow } from "./schema";
 
 const initialState: EstimateRecordMutationState = {
@@ -24,8 +24,8 @@ const initialState: EstimateRecordMutationState = {
   message: "",
 };
 
-function getEstimateDraftKey(mode: "create" | "edit", estimateId?: string) {
-  return `estimate-record-draft:${mode}:${estimateId ?? "new"}`;
+function getEstimateDraftKey(mode: "create" | "edit", estimateId?: string, leadId?: string) {
+  return `estimate-record-draft:${mode}:${estimateId ?? leadId ?? "new"}`;
 }
 
 function formatMoney(value?: string) {
@@ -57,6 +57,7 @@ export function EstimateRecordWorkspace({
   customers,
   deleteAction,
   estimate,
+  leadPrefill,
   mode,
   services,
 }: {
@@ -64,6 +65,7 @@ export function EstimateRecordWorkspace({
   customers: JobCustomer[];
   deleteAction?: (state: EstimateRecordMutationState, formData: FormData) => Promise<EstimateRecordMutationState>;
   estimate?: EstimateRecordRow;
+  leadPrefill?: LeadEstimatePrefill;
   mode: "create" | "edit";
   services: ServiceTemplateRow[];
 }) {
@@ -71,7 +73,10 @@ export function EstimateRecordWorkspace({
   const formRef = React.useRef<HTMLFormElement>(null);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const copy = getWorkspaceCopy(mode);
-  const draftKey = React.useMemo(() => getEstimateDraftKey(mode, estimate?.id), [estimate?.id, mode]);
+  const draftKey = React.useMemo(
+    () => getEstimateDraftKey(mode, estimate?.id, leadPrefill?.leadId),
+    [estimate?.id, leadPrefill?.leadId, mode],
+  );
 
   React.useEffect(() => {
     if (!state.success) return;
@@ -131,6 +136,7 @@ export function EstimateRecordWorkspace({
               customers={customers}
               draftKey={draftKey}
               estimate={estimate}
+              leadPrefill={leadPrefill}
               presentation="workspace"
               services={services}
             />

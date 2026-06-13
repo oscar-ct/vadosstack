@@ -22,6 +22,7 @@ model Customer {
   phoneNumbers    CustomerPhoneNumber[]
   jobs            Job[]
   estimateRecords EstimateRecord[]
+  leads           Lead[]
   tasks           Task[]
 
   @@unique([id, ownerId])
@@ -115,6 +116,7 @@ model User {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   customers           Customer[]
+  leads               Lead[]
   jobs                Job[]
   jobPayments         JobPayment[]
   invoices            Invoice[]
@@ -158,6 +160,7 @@ model EstimateRecord {
   owner             User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   customer          Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   printableEstimate Estimate?
+  lead              Lead?
   tasks             Task[]
 
   @@unique([id, ownerId])
@@ -166,6 +169,40 @@ model EstimateRecord {
   @@index([status])
   @@index([createdAt])
   @@map("estimate_records")
+}
+
+model Lead {
+  id               String          @id @default(cuid())
+  ownerId          String
+  customerId       String?
+  estimateRecordId String?         @unique
+  name             String
+  email            String?
+  phone            String?
+  source           String?
+  serviceType      String?
+  serviceLocation  String?
+  estimatedValue   Decimal?
+  status           String          @default("New")
+  priority         String          @default("Normal")
+  notes            String?
+  followUpAt       DateTime?
+  lostReason       String?
+  convertedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  owner            User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customer         Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  estimateRecord   EstimateRecord? @relation(fields: [estimateRecordId], references: [id], onDelete: SetNull)
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([customerId])
+  @@index([estimateRecordId])
+  @@index([status])
+  @@index([followUpAt])
+  @@index([source])
+  @@map("leads")
 }
 
 model Task {
