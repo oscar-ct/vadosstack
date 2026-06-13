@@ -22,13 +22,16 @@ import type { RecentCustomerRow } from "./schema";
 
 export function getCustomerBillingDisplay(customer: RecentCustomerRow) {
   const unpaidJobs = customer.unpaidJobs ?? [];
+  const invoiceHistory = customer.invoiceHistory ?? [];
   const hasBalance = unpaidJobs.length > 0;
   const unpaidJobCount = unpaidJobs.length;
 
   if (!hasBalance) {
+    const hasInvoices = invoiceHistory.length > 0;
+
     return {
       amountLabel: "$0.00 due",
-      detail: "All invoices are paid",
+      detail: hasInvoices ? "All invoices are paid" : "No invoices yet",
       actionClassName: "",
       tone: "settled" as const,
       label: "No balance",
@@ -237,7 +240,6 @@ export function getRecentCustomersColumns({
         return (
           <div className="grid gap-0.5">
             <span className="text-sm">{format(scheduledAt, "MMM d, yyyy")}</span>
-            <span className="text-muted-foreground text-xs">at {format(scheduledAt, "h:mm a")}</span>
           </div>
         );
       },
