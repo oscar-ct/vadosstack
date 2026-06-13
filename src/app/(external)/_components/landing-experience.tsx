@@ -72,7 +72,7 @@ const features = [
 ];
 
 const metrics = [
-  ["1", "dashboard for customers, work, billing, and time"],
+  ["10", "dashboards for customers, work, billing, and time"],
   ["6", "core workflows built for daily service operations"],
   ["24/7", "self-serve access for crews that only need time tracking"],
   ["PDF", "estimate and invoice exports ready for customer records"],
@@ -459,13 +459,13 @@ export function LandingExperience() {
               animate="visible"
               variants={stagger}
             >
-              <motion.div
-                variants={reveal}
-                className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#171412]/15 bg-[#f6f1e8]/80 px-3 py-1 text-[#594431] text-sm shadow-sm backdrop-blur"
-              >
-                <Sparkles className="size-4 text-[#d9443c]" />
-                Built for businesses that live in the details
-              </motion.div>
+              {/*<motion.div*/}
+              {/*  variants={reveal}*/}
+              {/*  className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#171412]/15 bg-[#f6f1e8]/80 px-3 py-1 text-[#594431] text-sm shadow-sm backdrop-blur"*/}
+              {/*>*/}
+              {/*  <Sparkles className="size-4 text-[#d9443c]" />*/}
+              {/*  Built for businesses that live in the details*/}
+              {/*</motion.div>*/}
               <motion.h1
                 variants={reveal}
                 className="max-w-3xl text-balance font-semibold text-4xl leading-[1.02] tracking-normal md:text-6xl"
