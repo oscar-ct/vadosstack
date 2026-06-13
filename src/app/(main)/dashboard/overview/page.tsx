@@ -10,6 +10,7 @@ import {
   CheckSquare,
   Clock3,
   Gauge,
+  ListChecks,
   Sparkles,
   WalletCards,
 } from "lucide-react";
@@ -21,7 +22,9 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { getCurrentUser, getDisplayName } from "@/lib/auth";
 import { calculateOutstandingBalance, formatCurrency, toMoneyNumber } from "@/lib/customer-billing";
 import { prisma } from "@/lib/prisma";
+import { cn } from "@/lib/utils";
 
+import { getManagerActionQueue, type ManagerActionQueueItem } from "../_lib/manager-action-queue";
 import { CalendarPanel } from "./_components/calendar-panel";
 import { type OutstandingJob, OutstandingJobs } from "./_components/outstanding-jobs";
 import { type PendingTimeReview, PendingTimeReviews } from "./_components/pending-time-reviews";
@@ -426,6 +429,129 @@ function FocusRow({
   );
 }
 
+const queueSeverityClasses: Record<ManagerActionQueueItem["severity"], string> = {
+  amber: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  cyan: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
+  emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  rose: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+};
+
+function formatQueueValue(value: string | number) {
+  if (typeof value === "number") {
+    return formatCompactCurrency(value);
+  }
+
+  return value;
+}
+
+function ManagerActionQueue({ items }: { items: ManagerActionQueueItem[] }) {
+  const primaryItem = items[0];
+  const secondaryItems = items.slice(1, 6);
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-cyan-500/25 bg-card shadow-sm">
+      <div className="border-cyan-500/20 border-b bg-cyan-500/5 p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-3 flex items-center gap-2 text-cyan-700 text-xs uppercase tracking-[0.14em] dark:text-cyan-300">
+              <ListChecks className="size-4" />
+              Manager action queue
+            </div>
+            <h2 className="font-semibold text-2xl leading-tight">What needs a decision next</h2>
+            <p className="mt-2 max-w-3xl text-muted-foreground text-sm leading-6">
+              Leads, time reviews, estimates, job blockers, invoice prep, and receivables collected into one working
+              list.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm" className="shrink-0 bg-background/80">
+            <Link prefetch={false} href="/dashboard/command-center">
+              Command center
+              <ArrowRight />
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 p-4 sm:p-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.55fr)]">
+        {primaryItem ? (
+          <Link
+            prefetch={false}
+            href={primaryItem.href}
+            className="group grid min-h-52 content-between rounded-lg border border-cyan-500/25 bg-cyan-500/10 p-4 transition-colors hover:bg-cyan-500/15"
+          >
+            <div className="min-w-0">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className={cn("rounded-md", queueSeverityClasses[primaryItem.severity])}>
+                  {primaryItem.priority}
+                </Badge>
+                <Badge variant="secondary" className="rounded-md">
+                  {primaryItem.type}
+                </Badge>
+              </div>
+              <p className="line-clamp-2 font-semibold text-xl leading-snug">{primaryItem.title}</p>
+              <p className="mt-2 line-clamp-2 text-muted-foreground text-sm">{primaryItem.detail}</p>
+            </div>
+            <div className="mt-6 flex items-center justify-between gap-3">
+              <span className="font-semibold text-2xl tabular-nums">{formatQueueValue(primaryItem.value)}</span>
+              <span className="grid size-9 place-items-center rounded-md bg-background/80 text-muted-foreground transition-colors group-hover:text-foreground">
+                <ArrowRight className="size-4" />
+              </span>
+            </div>
+          </Link>
+        ) : (
+          <div className="grid min-h-52 place-items-center rounded-lg border border-dashed bg-muted/20 p-6 text-center">
+            <div>
+              <div className="mx-auto grid size-10 place-items-center rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25">
+                <CheckCircle2 className="size-4" />
+              </div>
+              <p className="mt-3 font-medium text-sm">No urgent actions</p>
+              <p className="mt-1 text-muted-foreground text-xs">The queue will fill as work needs review.</p>
+            </div>
+          </div>
+        )}
+
+        <div className="grid content-start gap-2">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <span className="font-medium text-sm">Next in line</span>
+            <Badge variant="outline" className="rounded-md">
+              {items.length} actions
+            </Badge>
+          </div>
+          {secondaryItems.length ? (
+            secondaryItems.map((item) => (
+              <Link
+                key={`${item.type}-${item.id}`}
+                prefetch={false}
+                href={item.href}
+                className="group grid min-w-0 gap-3 rounded-md border bg-muted/25 px-3 py-2.5 transition-colors hover:bg-muted/45 sm:grid-cols-[1fr_auto]"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={cn("rounded-md", queueSeverityClasses[item.severity])}>
+                      {item.priority}
+                    </Badge>
+                    <span className="text-muted-foreground text-xs">{item.type}</span>
+                  </div>
+                  <p className="mt-1 truncate font-medium text-sm">{item.title}</p>
+                  <p className="truncate text-muted-foreground text-xs">{item.detail}</p>
+                </div>
+                <div className="flex items-center justify-between gap-2 sm:justify-end">
+                  <span className="font-medium text-xs tabular-nums">{formatQueueValue(item.value)}</span>
+                  <ArrowRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </div>
+              </Link>
+            ))
+          ) : (
+            <div className="grid min-h-36 place-items-center rounded-md border border-dashed bg-muted/20 p-6 text-center text-muted-foreground text-sm">
+              No additional actions waiting.
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function JobAttention({
   items,
   onHoldCount,
@@ -516,13 +642,15 @@ export default async function Page() {
     );
   }
 
-  const [upcomingJobs, upcomingTasks, outstandingJobs, pendingTimeReviews, jobAttention] = await Promise.all([
-    getUpcomingJobs(currentUser.id),
-    getUpcomingTasks(currentUser.id),
-    getOutstandingJobs(currentUser.id),
-    getPendingTimeReviews(currentUser.id),
-    getJobAttention(currentUser.id),
-  ]);
+  const [upcomingJobs, upcomingTasks, outstandingJobs, pendingTimeReviews, jobAttention, actionQueue] =
+    await Promise.all([
+      getUpcomingJobs(currentUser.id),
+      getUpcomingTasks(currentUser.id),
+      getOutstandingJobs(currentUser.id),
+      getPendingTimeReviews(currentUser.id),
+      getJobAttention(currentUser.id),
+      getManagerActionQueue(currentUser.id),
+    ]);
   const displayName = getDisplayName(currentUser).split(" ")[0];
   const outstandingTotal = outstandingJobs.reduce((total, job) => total + job.balanceDue, 0);
   const hasOperationalActivity =
@@ -685,6 +813,8 @@ export default async function Page() {
           </div>
         </div>
       </section>
+
+      <ManagerActionQueue items={actionQueue} />
 
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="grid min-w-0 gap-5">
