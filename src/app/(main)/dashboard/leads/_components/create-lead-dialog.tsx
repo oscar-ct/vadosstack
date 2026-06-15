@@ -91,28 +91,18 @@ export function CreateLeadDialog({
         <form ref={formRef} action={formAction} className="grid gap-4">
           <input type="hidden" name="status" value="New" />
 
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="lead-dialog-name">Name</Label>
               <Input id="lead-dialog-name" name="name" placeholder="Jane Smith" required />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="lead-dialog-priority">Priority</Label>
-              <NativeSelect id="lead-dialog-priority" name="priority" defaultValue="Normal" className="w-full">
-                {leadPriorities.map((priority) => (
-                  <NativeSelectOption key={priority} value={priority}>
-                    {priority}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <Label htmlFor="lead-dialog-email">Email</Label>
+              <Input id="lead-dialog-email" name="email" type="email" placeholder="jane@example.com" />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="lead-dialog-email">Email</Label>
-              <Input id="lead-dialog-email" name="email" type="email" placeholder="jane@example.com" />
-            </div>
             <div className="grid gap-2">
               <Label htmlFor="lead-dialog-phone">Phone</Label>
               <Input
@@ -125,6 +115,10 @@ export function CreateLeadDialog({
                 onChange={(event) => setPhoneDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
                 placeholder="555-555-1234"
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="lead-dialog-follow-up">Follow-up date</Label>
+              <Input id="lead-dialog-follow-up" name="followUpAt" type="date" />
             </div>
           </div>
 
@@ -152,6 +146,19 @@ export function CreateLeadDialog({
               </NativeSelect>
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="lead-dialog-priority">Priority</Label>
+              <NativeSelect id="lead-dialog-priority" name="priority" defaultValue="Normal" className="w-full">
+                {leadPriorities.map((priority) => (
+                  <NativeSelectOption key={priority} value={priority}>
+                    {priority}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-[160px_minmax(0,1fr)]">
+            <div className="grid gap-2">
               <Label htmlFor="lead-dialog-value">Estimated value</Label>
               <Input
                 id="lead-dialog-value"
@@ -162,14 +169,7 @@ export function CreateLeadDialog({
                 placeholder="0.00"
               />
             </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="lead-dialog-follow-up">Follow-up date</Label>
-              <Input id="lead-dialog-follow-up" name="followUpAt" type="date" />
-            </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="lead-dialog-location">Service location</Label>
               <Input id="lead-dialog-location" name="serviceLocation" placeholder="123 Main St, Houston, TX" />
             </div>
@@ -177,7 +177,7 @@ export function CreateLeadDialog({
 
           <div className="grid gap-2">
             <Label htmlFor="lead-dialog-notes">Notes</Label>
-            <Textarea id="lead-dialog-notes" name="notes" placeholder="What did they ask for?" className="min-h-24" />
+            <Textarea id="lead-dialog-notes" name="notes" placeholder="What did they ask for?" />
           </div>
 
           {visibleMessage ? <p className="text-destructive text-sm">{visibleMessage}</p> : null}

@@ -11,12 +11,12 @@ import { createLeadAction } from "./actions";
 
 function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
   return (
-    <div className="rounded-lg border bg-card p-4 text-card-foreground">
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-medium text-muted-foreground text-sm">{label}</p>
+    <div className="rounded-lg border bg-card p-3 text-card-foreground sm:p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate font-medium text-muted-foreground text-xs sm:text-sm">{label}</p>
         {icon}
       </div>
-      <p className="mt-2 font-semibold text-2xl tracking-tight">{value}</p>
+      <p className="mt-2 font-semibold text-xl tracking-tight sm:text-2xl">{value}</p>
     </div>
   );
 }
@@ -33,7 +33,7 @@ export default async function Page() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           icon={<UsersRound className="size-4 text-muted-foreground" />}
           label="Total leads"

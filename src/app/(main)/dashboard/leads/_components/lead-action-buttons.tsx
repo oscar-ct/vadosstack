@@ -30,17 +30,19 @@ const initialState: LeadMutationState = {
 
 function SubmitButton({
   children,
+  className,
   icon,
   isPending,
   variant = "outline",
 }: {
   children: React.ReactNode;
+  className?: string;
   icon: React.ReactNode;
   isPending: boolean;
   variant?: "default" | "destructive" | "outline";
 }) {
   return (
-    <Button type="submit" size="sm" variant={variant} disabled={isPending}>
+    <Button type="submit" size="sm" variant={variant} disabled={isPending} className={className}>
       {icon}
       {children}
     </Button>
@@ -102,7 +104,7 @@ export function ConvertLeadButton({
   return (
     <form action={formAction}>
       <input type="hidden" name="id" value={lead.id} />
-      <SubmitButton icon={<UserRound />} isPending={isPending}>
+      <SubmitButton icon={<UserRound />} isPending={isPending} className="w-full sm:w-auto">
         {lead.customerId ? "Open customer" : "Convert to customer"}
       </SubmitButton>
     </form>

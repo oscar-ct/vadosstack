@@ -8,7 +8,7 @@ import { AuthRequiredState } from "@/components/auth-required-state";
 import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -165,26 +165,28 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
       </div>
 
       <Card className="rounded-lg">
-        <CardHeader>
-          <CardTitle className="flex flex-wrap items-center gap-2">
-            <span className="text-xl">{lead.name}</span>
-            <Badge variant="outline" className={cn("w-fit", statusClassName(lead.status))}>
-              {lead.status}
-            </Badge>
-          </CardTitle>
-          <CardDescription>
-            {lead.source ?? "Unknown source"} inquiry created {formatDate(lead.createdAt)}.
-          </CardDescription>
-          <CardAction className="flex flex-wrap items-center gap-2">
+        <CardHeader className="gap-4">
+          <div className="grid min-w-0 gap-2">
+            <CardTitle className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="min-w-0 break-words text-xl leading-tight">{lead.name}</span>
+              <Badge variant="outline" className={cn("w-fit", statusClassName(lead.status))}>
+                {lead.status}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              {lead.source ?? "Unknown source"} inquiry created {formatDate(lead.createdAt)}.
+            </CardDescription>
+          </div>
+          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
             {lead.estimateRecordId ? (
-              <Button asChild size="sm">
+              <Button asChild size="sm" className="w-full sm:w-auto">
                 <Link href={`/dashboard/estimates/records/${lead.estimateRecordId}`}>
                   <ReceiptText />
                   Open estimate
                 </Link>
               </Button>
             ) : (
-              <Button asChild size="sm">
+              <Button asChild size="sm" className="w-full sm:w-auto">
                 <Link href={`/dashboard/estimates/create?leadId=${lead.id}`}>
                   <ReceiptText />
                   Create estimate
@@ -192,7 +194,7 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
               </Button>
             )}
             <ConvertLeadButton action={convertLeadToCustomerAction} lead={lead} />
-          </CardAction>
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
