@@ -27,6 +27,19 @@ type GoogleApiErrorResponse = {
   };
 };
 
+function isGoogleAuthFailure(status: number, detail: string) {
+  const normalized = detail.toLowerCase();
+
+  return (
+    status === 401 ||
+    (status === 403 &&
+      (normalized.includes("insufficient") ||
+        normalized.includes("permission") ||
+        normalized.includes("scope") ||
+        normalized.includes("auth")))
+  );
+}
+
 function base64UrlEncode(value: string | Buffer) {
   return Buffer.from(value).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
@@ -192,6 +205,10 @@ export async function sendGmailMessage(accessToken: string, message: GmailSendMe
       detail = errorResponse.error?.message || errorResponse.error?.status || "";
     } catch {
       detail = await response.text().catch(() => "");
+    }
+
+    if (isGoogleAuthFailure(response.status, detail)) {
+      throw new Error(GMAIL_REFRESH_ERROR_MESSAGE);
     }
 
     throw new Error(

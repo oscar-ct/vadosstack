@@ -284,6 +284,7 @@ export default async function Page({
             customerName={invoice.customerName}
             dueDate={format(dueDate, "MMM d, yyyy")}
             gmailConnected={Boolean(googleMailAccount)}
+            gmailSenderEmail={googleMailAccount?.email ?? null}
             invoiceId={invoice.id}
             invoiceNumber={invoiceNumber}
             notice={gmailNotice}

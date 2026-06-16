@@ -38,6 +38,14 @@ export function AppSidebar({
     email: string;
     invoiceDueDays: number;
     admin: boolean;
+    gmailConnected: boolean;
+    gmailSenderEmail: string | null;
+    emailRecipients: Array<{
+      email: string;
+      id: string;
+      name: string;
+      type: "Customer" | "Lead";
+    }>;
   } | null;
 }) {
   const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
@@ -103,6 +111,9 @@ export function AppSidebar({
           companyEmail={currentUser?.companyEmail ?? null}
           companyPhone={currentUser?.companyPhone ?? null}
           estimateValidDays={currentUser?.estimateValidDays ?? 15}
+          gmailConnected={currentUser?.gmailConnected ?? false}
+          gmailSenderEmail={currentUser?.gmailSenderEmail ?? null}
+          emailRecipients={currentUser?.emailRecipients ?? []}
           invoiceDueDays={currentUser?.invoiceDueDays ?? 15}
           logoSrc={logoSrc}
           onCompanySettingsSaved={refreshCompanyLogo}

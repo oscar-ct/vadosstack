@@ -209,6 +209,7 @@ export default async function Page({
             estimateNumber={estimateNumber}
             estimatedTotal={formatMoney(estimate.estimatedTotal)}
             gmailConnected={Boolean(googleMailAccount)}
+            gmailSenderEmail={googleMailAccount?.email ?? null}
             notice={gmailNotice}
             returnTo={currentHref}
             validThrough={format(validThrough, "MMM d, yyyy")}

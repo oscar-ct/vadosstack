@@ -2,13 +2,12 @@
 
 import * as React from "react";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Mail, Send } from "lucide-react";
 import { siGmail } from "simple-icons";
-import { toast } from "sonner";
 
+import { EmailDeliveryResult, type EmailDeliveryResultValue } from "@/components/email-delivery-result";
 import { SimpleIcon } from "@/components/simple-icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +48,7 @@ export function LeadEmailComposer({
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [subject, setSubject] = React.useState("");
   const [message, setMessage] = React.useState("");
+  const [result, setResult] = React.useState<EmailDeliveryResultValue | null>(null);
   const stateSubmittedAt = state.submittedAt;
   const needsReconnect = state.reconnectRequired;
   const canSendEmail = gmailConnected && !needsReconnect;
@@ -58,13 +58,17 @@ export function LeadEmailComposer({
   React.useEffect(() => {
     if (!state.message || !stateSubmittedAt) return;
 
-    if (state.success) {
-      toast.success(state.message);
-      router.refresh();
-      return;
-    }
+    setResult({
+      id: stateSubmittedAt,
+      message: state.message,
+      type: state.success ? "success" : "error",
+    });
 
-    toast.error(state.message);
+    if (state.success) {
+      setSubject("");
+      setMessage("");
+      router.refresh();
+    }
   }, [router, state.message, state.success, stateSubmittedAt]);
 
   function applyTemplate(template: LeadEmailTemplate) {
@@ -96,10 +100,10 @@ export function LeadEmailComposer({
               size="sm"
               className="border-cyan-300 bg-background text-cyan-800 hover:bg-cyan-50 dark:border-cyan-800 dark:text-cyan-200 dark:hover:bg-cyan-950/40"
             >
-              <Link href={`/api/auth/google/mail?returnTo=${encodeURIComponent(returnTo)}`}>
+              <a href={`/api/auth/google/mail?returnTo=${encodeURIComponent(returnTo)}`}>
                 <SimpleIcon icon={siGmail} className="size-3.5 fill-current" />
                 {gmailConnectLabel}
-              </Link>
+              </a>
             </Button>
           )}
         </CardAction>
@@ -163,17 +167,7 @@ export function LeadEmailComposer({
             </div>
           </div>
 
-          {state.message ? (
-            <p
-              className={
-                state.success
-                  ? "rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700 text-sm dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
-                  : "rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm"
-              }
-            >
-              {state.message}
-            </p>
-          ) : null}
+          <EmailDeliveryResult result={result} onDone={() => setResult(null)} />
 
           <div className="flex justify-end border-cyan-200/80 border-t pt-1 dark:border-cyan-900/60">
             <Button

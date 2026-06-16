@@ -10,7 +10,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { calculateOutstandingBalance } from "@/lib/customer-billing";
 import { formatDocumentNumber } from "@/lib/document-number";
-import { plainTextToEmailHtml } from "@/lib/email-content";
+import { plainTextToEmailHtml, sanitizeEmailHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
 import {
   decryptGoogleToken,
@@ -110,9 +110,10 @@ function formatMoney(value: { toString: () => string } | string | number) {
 function getSubmittedEmailContent(formData: FormData, fallback: { html: string; subject: string; text: string }) {
   const subject = String(formData.get("subject") ?? "").trim() || fallback.subject;
   const text = String(formData.get("message") ?? "").trim() || fallback.text;
+  const html = sanitizeEmailHtml(String(formData.get("html") ?? "").trim());
 
   return {
-    html: text === fallback.text ? fallback.html : plainTextToEmailHtml(text),
+    html: html || (text === fallback.text ? fallback.html : plainTextToEmailHtml(text)),
     subject,
     text,
   };

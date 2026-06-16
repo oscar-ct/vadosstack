@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { Building2, ChevronRight, Command, MailIcon, Trash2 } from "lucide-react";
+import { Building2, ChevronRight, Command, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,7 @@ import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
 import { useDashboardNavigationLoader } from "../dashboard-navigation-loader";
 import { type CompanySettingsState, updateCompanySettingsAction } from "./actions";
+import { EmailComposerDialog } from "./email-composer-dialog";
 
 interface NavMainProps {
   readonly items: readonly NavGroup[];
@@ -54,6 +55,14 @@ interface NavMainProps {
   readonly companyPhone: string | null;
   readonly estimateValidDays: number;
   readonly invoiceDueDays: number;
+  readonly gmailConnected: boolean;
+  readonly gmailSenderEmail: string | null;
+  readonly emailRecipients: Array<{
+    email: string;
+    id: string;
+    name: string;
+    type: "Customer" | "Lead";
+  }>;
   readonly logoSrc: string;
   readonly onCompanySettingsSaved: () => void;
 }
@@ -393,6 +402,9 @@ export function NavMain({
   companyName,
   companyPhone,
   estimateValidDays,
+  gmailConnected,
+  gmailSenderEmail,
+  emailRecipients,
   invoiceDueDays,
   logoSrc,
   onCompanySettingsSaved,
@@ -435,14 +447,11 @@ export function NavMain({
                 logoSrc={logoSrc}
                 onSaved={onCompanySettingsSaved}
               />
-              <Button
-                size="icon"
-                className="h-9 w-9 shrink-0 group-data-[collapsible=icon]:opacity-0"
-                variant="outline"
-              >
-                <MailIcon />
-                <span className="sr-only">Inbox</span>
-              </Button>
+              <EmailComposerDialog
+                gmailConnected={gmailConnected}
+                recipients={emailRecipients}
+                senderEmail={gmailSenderEmail}
+              />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroupContent>

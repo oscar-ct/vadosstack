@@ -8,6 +8,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
+import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
 
@@ -27,7 +28,66 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
     getCurrentUser(),
   ]);
-  const companyLogoSrc = currentUser ? await getCompanyLogoSrc(currentUser.id) : "/dashboard/company-logo?fallback=1";
+  const [companyLogoSrc, googleMailAccount, emailRecipients] = currentUser
+    ? await Promise.all([
+        getCompanyLogoSrc(currentUser.id),
+        prisma.googleMailAccount.findUnique({
+          where: {
+            userId: currentUser.id,
+          },
+          select: {
+            email: true,
+          },
+        }),
+        Promise.all([
+          prisma.customer.findMany({
+            where: {
+              ownerId: currentUser.id,
+              email: {
+                not: null,
+              },
+            },
+            orderBy: {
+              name: "asc",
+            },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
+          }),
+          prisma.lead.findMany({
+            where: {
+              ownerId: currentUser.id,
+              email: {
+                not: null,
+              },
+            },
+            orderBy: {
+              name: "asc",
+            },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
+          }),
+        ]).then(([customers, leads]) => [
+          ...customers.map((customer) => ({
+            email: customer.email ?? "",
+            id: customer.id,
+            name: customer.name,
+            type: "Customer" as const,
+          })),
+          ...leads.map((lead) => ({
+            email: lead.email ?? "",
+            id: lead.id,
+            name: lead.name,
+            type: "Lead" as const,
+          })),
+        ]),
+      ])
+    : ["/dashboard/company-logo?fallback=1", null, []];
 
   return (
     <SidebarProvider
@@ -56,6 +116,9 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
                   companyLogoSrc,
                   invoiceDueDays: currentUser.invoiceDueDays,
                   admin: currentUser.admin,
+                  gmailConnected: Boolean(googleMailAccount),
+                  gmailSenderEmail: googleMailAccount?.email ?? null,
+                  emailRecipients,
                 }
               : null
           }

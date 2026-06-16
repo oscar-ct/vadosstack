@@ -5,11 +5,10 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { Download, Mail, Trash2 } from "lucide-react";
-import { siGmail } from "simple-icons";
+import { Download, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { SimpleIcon } from "@/components/simple-icon";
+import { EmailDeliveryResult, type EmailDeliveryResultValue } from "@/components/email-delivery-result";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,20 +21,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { escapeHtml } from "@/lib/email-content";
 
+import { DocumentEmailComposerDialog } from "../../_components/document-email-composer-dialog";
 import type { EstimateMutationState } from "../types";
 
 type EmailEstimateState = {
@@ -45,15 +33,40 @@ type EmailEstimateState = {
   submittedAt?: number;
 };
 
-const initialState: EmailEstimateState = {
-  success: false,
-  message: "",
-};
-
 const deleteInitialState: EstimateMutationState = {
   success: false,
   message: "",
 };
+
+function createEstimateMessageHtml({
+  companyName,
+  customerName,
+  estimateNumber,
+  estimatedTotal,
+  validThrough,
+}: {
+  companyName: string;
+  customerName?: string | null;
+  estimateNumber: string;
+  estimatedTotal: string;
+  validThrough: string;
+}) {
+  const greetingName = customerName?.trim() || "there";
+  const safeCompanyName = escapeHtml(companyName);
+  const safeEstimateNumber = escapeHtml(estimateNumber);
+  const safeEstimatedTotal = escapeHtml(estimatedTotal);
+  const safeGreetingName = escapeHtml(greetingName);
+  const safeValidThrough = escapeHtml(validThrough);
+
+  return [
+    `<p>Hi ${safeGreetingName},</p>`,
+    `<p>Your estimate <strong>${safeEstimateNumber}</strong> from ${safeCompanyName} is attached as a PDF.</p>`,
+    `<p><span style="color:#0369a1;font-size:22px"><strong>${safeEstimatedTotal}</strong></span><br><span style="color:#52525b">Estimated total</span></p>`,
+    `<p><strong>Valid through:</strong> ${safeValidThrough}</p>`,
+    "<p>Please review the attached estimate at your convenience. If you have any questions, reply to this email and we will be happy to help.</p>",
+    `<p>Thank you,<br><strong>${safeCompanyName}</strong></p>`,
+  ].join("");
+}
 
 export function EstimateActions({
   action,
@@ -64,6 +77,7 @@ export function EstimateActions({
   estimateNumber,
   estimatedTotal,
   gmailConnected,
+  gmailSenderEmail,
   notice,
   returnTo,
   validThrough,
@@ -76,6 +90,7 @@ export function EstimateActions({
   estimateNumber: string;
   estimatedTotal: string;
   gmailConnected: boolean;
+  gmailSenderEmail?: string | null;
   notice?: {
     message: string;
     type: "error" | "success";
@@ -84,12 +99,7 @@ export function EstimateActions({
   validThrough: string;
 }) {
   const router = useRouter();
-  const [state, formAction, isPending] = React.useActionState(action, initialState);
-  const [open, setOpen] = React.useState(false);
-  const [showStateMessage, setShowStateMessage] = React.useState(false);
-  const stateSubmittedAt = state.submittedAt;
-  const canSendEmail = gmailConnected && (!state.reconnectRequired || open);
-  const gmailConnectLabel = state.reconnectRequired ? "Reconnect Gmail" : "Connect Gmail";
+  const [result, setResult] = React.useState<EmailDeliveryResultValue | null>(null);
   const defaultSubject = React.useMemo(
     () => `Estimate ${estimateNumber} from ${companyName}`,
     [companyName, estimateNumber],
@@ -110,48 +120,35 @@ export function EstimateActions({
       ].join("\n"),
     [companyName, customerName, estimateNumber, estimatedTotal, validThrough],
   );
-  const [emailSubject, setEmailSubject] = React.useState(defaultSubject);
-  const [emailMessage, setEmailMessage] = React.useState(defaultMessage);
+  const defaultHtml = React.useMemo(
+    () =>
+      createEstimateMessageHtml({
+        companyName,
+        customerName,
+        estimatedTotal,
+        estimateNumber,
+        validThrough,
+      }),
+    [companyName, customerName, estimateNumber, estimatedTotal, validThrough],
+  );
 
   React.useEffect(() => {
     if (!notice?.message) {
       return;
     }
 
-    const timeout = window.setTimeout(() => {
-      if (notice.type === "success") {
-        toast.success(notice.message);
-      } else {
-        toast.error(notice.message);
-      }
+    setResult({
+      id: `notice-${notice.type}-${notice.message}`,
+      message: notice.message,
+      type: notice.type,
+    });
 
+    const timeout = window.setTimeout(() => {
       router.replace(returnTo, { scroll: false });
-    }, 100);
+    }, 2500);
 
     return () => window.clearTimeout(timeout);
   }, [notice?.message, notice?.type, returnTo, router]);
-
-  React.useEffect(() => {
-    if (!state.message || !stateSubmittedAt) {
-      return;
-    }
-
-    setShowStateMessage(true);
-
-    if (state.reconnectRequired) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setShowStateMessage(false);
-
-      if (state.success) {
-        setOpen(false);
-      }
-    }, 3500);
-
-    return () => window.clearTimeout(timeout);
-  }, [state.message, state.reconnectRequired, state.success, stateSubmittedAt]);
 
   return (
     <div className="grid gap-2 print:hidden">
@@ -162,123 +159,29 @@ export function EstimateActions({
             Download PDF
           </Link>
         </Button>
-        {canSendEmail ? (
-          <Dialog
-            open={open}
-            onOpenChange={(nextOpen) => {
-              setOpen(nextOpen);
-
-              if (nextOpen) {
-                setShowStateMessage(false);
-                setEmailSubject(defaultSubject);
-                setEmailMessage(defaultMessage);
-              }
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button type="button" variant="outline" size="sm" disabled={!customerEmail}>
-                <Mail />
-                Email
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[calc(100svh-1rem)] overflow-y-auto sm:max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Send estimate?</DialogTitle>
-                <DialogDescription>
-                  Review the details before emailing this estimate from your connected Gmail account.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Estimate</span>
-                  <span className="font-medium">{estimateNumber}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Recipient</span>
-                  <span className="max-w-56 truncate font-medium">{customerEmail}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Customer</span>
-                  <span className="max-w-56 truncate font-medium">{customerName ?? "No customer name"}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Estimated total</span>
-                  <span className="font-semibold text-sky-700 dark:text-sky-400">{estimatedTotal}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Valid through</span>
-                  <span className="font-medium">{validThrough}</span>
-                </div>
-              </div>
-
-              <div className="grid gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor={`estimate-email-subject-${estimateId}`}>Subject</Label>
-                  <Input
-                    id={`estimate-email-subject-${estimateId}`}
-                    name="subject"
-                    value={emailSubject}
-                    onChange={(event) => setEmailSubject(event.target.value)}
-                    form={`estimate-email-form-${estimateId}`}
-                    required
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor={`estimate-email-message-${estimateId}`}>Message</Label>
-                  <Textarea
-                    id={`estimate-email-message-${estimateId}`}
-                    name="message"
-                    value={emailMessage}
-                    onChange={(event) => setEmailMessage(event.target.value)}
-                    form={`estimate-email-form-${estimateId}`}
-                    className="min-h-36 font-mono text-sm sm:min-h-48"
-                    required
-                  />
-                  <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
-                    <span className="font-medium">PDF attached</span>
-                    <span className="truncate text-muted-foreground">{estimateNumber}.pdf</span>
-                  </div>
-                </div>
-              </div>
-
-              {showStateMessage && state.message ? (
-                <p
-                  className={
-                    state.success
-                      ? "rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700 text-sm dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
-                      : "rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm"
-                  }
-                >
-                  {state.message}
-                </p>
-              ) : null}
-
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button" variant="outline" disabled={isPending}>
-                    Cancel
-                  </Button>
-                </DialogClose>
-                <form id={`estimate-email-form-${estimateId}`} action={formAction}>
-                  <input type="hidden" name="estimateId" value={estimateId} />
-                  <Button type="submit" disabled={isPending || state.success || state.reconnectRequired}>
-                    <Mail />
-                    {isPending ? "Sending..." : "Send estimate"}
-                  </Button>
-                </form>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        ) : (
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/api/auth/google/mail?returnTo=${encodeURIComponent(returnTo)}`}>
-              <SimpleIcon icon={siGmail} className="size-3.5 fill-current" />
-              {gmailConnectLabel}
-            </Link>
-          </Button>
-        )}
+        <DocumentEmailComposerDialog
+          action={action}
+          attachmentName={`${estimateNumber}.pdf`}
+          defaultHtml={defaultHtml}
+          defaultSubject={defaultSubject}
+          defaultText={defaultMessage}
+          details={[
+            { label: "Estimate", value: estimateNumber },
+            { label: "Recipient", value: customerEmail ?? "No email on file" },
+            { label: "Customer", value: customerName ?? "No customer name" },
+            { label: "Estimated total", value: estimatedTotal, tone: "estimate" },
+            { label: "Valid through", value: validThrough },
+          ]}
+          documentId={estimateId}
+          documentIdField="estimateId"
+          documentLabel="estimate"
+          gmailConnected={gmailConnected}
+          recipientEmail={customerEmail}
+          returnTo={returnTo}
+          senderEmail={gmailSenderEmail}
+        />
       </div>
+      <EmailDeliveryResult result={result} onDone={() => setResult(null)} />
     </div>
   );
 }

@@ -17,7 +17,6 @@ import {
   HardHat,
   ReceiptText,
   ShieldCheck,
-  Sparkles,
   UsersRound,
 } from "lucide-react";
 
