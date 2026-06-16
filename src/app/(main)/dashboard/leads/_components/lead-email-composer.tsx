@@ -79,18 +79,18 @@ export function LeadEmailComposer({
   return (
     <Card className="rounded-lg border border-cyan-200 bg-cyan-50/50 ring-cyan-200/70 dark:border-cyan-900/60 dark:bg-cyan-950/15 dark:ring-cyan-900/50">
       <CardHeader className="border-cyan-200/80 border-b bg-cyan-50/80 dark:border-cyan-900/60 dark:bg-cyan-950/25">
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="min-w-30 flex items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-lg bg-cyan-600 text-white shadow-sm dark:bg-cyan-500">
             <Mail className="size-4" />
           </span>
           <span>Email lead</span>
         </CardTitle>
-        <CardDescription className="text-cyan-950/70 dark:text-cyan-100/70">
+        <CardDescription className="col-span-full text-cyan-950/70 dark:text-cyan-100/70">
           Send a direct Gmail message or start from a helper template.
         </CardDescription>
         <CardAction>
           {canSendEmail ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-700 text-xs dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-1.5 text-emerald-700 text-xs dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
               Gmail connected: {senderEmail ?? "ready"}
             </div>
           ) : (

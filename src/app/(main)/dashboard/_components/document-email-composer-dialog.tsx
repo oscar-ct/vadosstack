@@ -429,8 +429,8 @@ export function DocumentEmailComposerDialog({
           onSubmit={prepareSubmit}
           className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto]"
         >
-          <aside className="min-h-0 min-w-0 border-b bg-muted/30 p-3 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-4">
-            <div className="grid grid-cols-2 gap-2 rounded-lg border bg-background p-3 text-sm lg:grid-cols-1 lg:gap-3">
+          <aside className="min-h-0 min-w-0 border-b bg-muted/30 p-0 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-4">
+            <div className="hidden lg:grid lg:gap-3 lg:rounded-lg lg:border lg:bg-background lg:p-3 lg:text-sm">
               {details.map((detail) => (
                 <div key={detail.label} className="grid gap-1">
                   <span className="text-muted-foreground text-xs">{detail.label}</span>
@@ -447,8 +447,8 @@ export function DocumentEmailComposerDialog({
               ))}
             </div>
 
-            <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border bg-background p-3 text-sm lg:mt-3 lg:grid lg:justify-stretch lg:gap-0">
-              <div className="flex items-center gap-2 font-medium lg:mb-2">
+            <div className="hidden lg:mt-3 lg:grid lg:rounded-lg lg:border lg:border-sky-200 lg:bg-sky-50 lg:p-3 lg:text-sm">
+              <div className="mb-2 flex items-center gap-2 font-medium">
                 <FileText className="size-4 text-muted-foreground" />
                 PDF attached
               </div>
@@ -478,6 +478,31 @@ export function DocumentEmailComposerDialog({
             <input type="hidden" name={documentIdField} value={documentId} />
             <input ref={messageTextInputRef} type="hidden" name="message" value={messageText} readOnly />
             <input ref={messageHtmlInputRef} type="hidden" name="html" value={messageHtml} readOnly />
+
+            <div className="grid grid-cols-2 gap-2 rounded-lg border bg-background p-3 text-sm lg:hidden">
+              {details.map((detail) => (
+                <div key={detail.label} className="grid gap-1">
+                  <span className="text-muted-foreground text-xs">{detail.label}</span>
+                  <span
+                    className={cn(
+                      "min-w-0 break-words font-medium",
+                      detail.tone === "estimate" && "text-sky-700 dark:text-sky-400",
+                      detail.tone === "invoice" && "text-rose-700 dark:text-rose-400",
+                    )}
+                  >
+                    {detail.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm lg:hidden">
+              <div className="flex items-center gap-2 font-medium lg:mb-2">
+                <FileText className="size-4 text-muted-foreground" />
+                PDF attached
+              </div>
+              <div className="min-w-0 truncate text-muted-foreground text-xs">{attachmentName}</div>
+            </div>
 
             <div className="grid gap-2">
               <Label>To</Label>

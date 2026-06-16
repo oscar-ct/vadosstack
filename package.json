@@ -34,9 +34,7 @@
     "setup:services": "ts-node -P tsconfig.scripts.json src/scripts/setup-services.ts"
   },
   "lint-staged": {
-    "*.{js,ts,jsx,tsx}": [
-      "biome check --write --no-errors-on-unmatched"
-    ]
+    "*.{js,ts,jsx,tsx}": ["biome check --write --no-errors-on-unmatched"]
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1051.0",

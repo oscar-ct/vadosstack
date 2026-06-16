@@ -51,7 +51,7 @@ export default async function Page() {
     customerId: invoice.customerId ?? undefined,
     customerName: invoice.customerName ?? undefined,
     invoiceNumber: invoiceNumbers.get(invoice.id) ?? formatDocumentNumber("INV", 1),
-    href: `/dashboard/invoices/${invoice.id}?from=invoices`,
+    href: `/dashboard/invoices/${invoice.id}`,
     issuedAt: invoice.issuedAt.toISOString(),
     dueAt: addDays(invoice.issuedAt, currentUser.invoiceDueDays).toISOString(),
     jobTitle: invoice.jobTitle,
