@@ -8,12 +8,9 @@ import { getTimeTrackingRange, mapEmployeeSummary, mapTimeEntry, toHours } from 
 import { type TimeEntryRequestRow, TimeTrackingDashboard } from "./_components/time-tracking-dashboard";
 import {
   approveTimeEntryRequestAction,
-  createEmployeeAction,
   createTimeEntryAction,
-  deleteEmployeeAction,
   deleteTimeEntryAction,
   rejectTimeEntryRequestAction,
-  updateEmployeeAction,
   updateTimeEntryAction,
 } from "./actions";
 
@@ -185,10 +182,8 @@ export default async function Page({ searchParams }: PageProps) {
   return (
     <TimeTrackingDashboard
       approveTimeEntryRequestAction={approveTimeEntryRequestAction}
-      createEmployeeAction={createEmployeeAction}
       createTimeEntryAction={createTimeEntryAction}
       dayGroups={dayGroups}
-      deleteEmployeeAction={deleteEmployeeAction}
       deleteTimeEntryAction={deleteTimeEntryAction}
       employees={employeeSummaries}
       jobs={jobs.map((job) => ({
@@ -203,7 +198,6 @@ export default async function Page({ searchParams }: PageProps) {
       previousWeekHref={`/dashboard/time-tracking?week=${previousWeek}`}
       rejectTimeEntryRequestAction={rejectTimeEntryRequestAction}
       selectedRequestId={params?.request}
-      updateEmployeeAction={updateEmployeeAction}
       updateTimeEntryAction={updateTimeEntryAction}
     />
   );

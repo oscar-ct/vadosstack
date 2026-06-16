@@ -453,6 +453,18 @@ model Employee {
   name              String
   email             String?
   phone             String?
+  jobTitle          String?
+  department        String?
+  employmentType    String            @default("Employee")
+  payType           String            @default("Hourly")
+  payRate           Decimal?
+  startDate         DateTime?
+  endDate           DateTime?
+  address           String?
+  emergencyName     String?
+  emergencyPhone    String?
+  emergencyRelation String?
+  notes             String?
   active            Boolean            @default(true)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
@@ -464,6 +476,8 @@ model Employee {
   @@unique([ownerId, employeeNumber])
   @@index([ownerId])
   @@index([active])
+  @@index([department])
+  @@index([employmentType])
   @@map("employees")
 }
 

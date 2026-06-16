@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Timer,
   UserCog,
+  UserRoundCog,
   Users,
 } from "lucide-react";
 
@@ -94,6 +95,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Time Tracking",
         url: "/dashboard/time-tracking",
         icon: Timer,
+      },
+      {
+        title: "Employees",
+        url: "/dashboard/employees",
+        icon: UserRoundCog,
+        isNew: true,
       },
       {
         title: "Invoices",

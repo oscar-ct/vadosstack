@@ -1,0 +1,24 @@
+export type EmployeeRow = {
+  id: string;
+  employeeNumber: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  jobTitle?: string;
+  department?: string;
+  employmentType: string;
+  payType: string;
+  payRate?: string;
+  startDate?: string;
+  endDate?: string;
+  address?: string;
+  emergencyName?: string;
+  emergencyPhone?: string;
+  emergencyRelation?: string;
+  notes?: string;
+  active: boolean;
+  totalHours: number;
+  lastWorkedOn?: string;
+  createdAt: string;
+  updatedAt: string;
+};

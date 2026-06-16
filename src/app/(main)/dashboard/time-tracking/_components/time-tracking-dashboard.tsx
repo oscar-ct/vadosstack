@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { format, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, LogOut, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut, Pencil, Plus, Trash2, UserRoundCog } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -35,7 +35,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
 import type { TimeTrackingMutationState } from "../actions";
@@ -257,388 +256,6 @@ function getEmployeeAccent(employeeId: string, employees: EmployeeSummary[]) {
   const index = employeeIndex >= 0 ? employeeIndex : 0;
 
   return employeeAccents[index % employeeAccents.length];
-}
-
-function AddEmployeeDialog({
-  action,
-}: {
-  action: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const [state, setState] = React.useState(initialState);
-  const [isPending, startTransition] = React.useTransition();
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-
-    startTransition(async () => {
-      const result = await action(initialState, formData);
-      setState(result);
-
-      if (result.success) {
-        form.reset();
-        setOpen(false);
-        toast.success(result.message || "Employee added.");
-      }
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <UserPlus />
-          Add employee
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add employee</DialogTitle>
-          <DialogDescription>Create an employee profile for tracking daily hours.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="employee-name">Name</Label>
-            <Input id="employee-name" name="name" placeholder="Employee name" required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="employee-email">Email</Label>
-            <Input id="employee-email" name="email" type="email" placeholder="employee@example.com" />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="employee-phone">Phone</Label>
-            <Input id="employee-phone" name="phone" type="tel" placeholder="(555) 555-1234" />
-          </div>
-          {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving..." : "Save employee"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function EditEmployeeDialog({
-  action,
-  employee,
-  onOpenChange,
-  open,
-}: {
-  action: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
-  employee: EmployeeSummary | null;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-}) {
-  const [state, setState] = React.useState(initialState);
-  const [confirmOpen, setConfirmOpen] = React.useState(false);
-  const [pendingFormData, setPendingFormData] = React.useState<FormData | null>(null);
-  const [isPending, startTransition] = React.useTransition();
-  const pendingEmployeeRows = React.useMemo(() => {
-    if (!employee) return [];
-
-    const getPendingValue = (name: string) => String(pendingFormData?.get(name) ?? "").trim();
-    const formatOptional = (value?: string | null) => {
-      const trimmed = value?.trim();
-      return trimmed ? trimmed : "Not set";
-    };
-    const formatPhone = (value?: string | null) => {
-      const formatted = formatPhoneNumber(value);
-      return formatted.trim() ? formatted : "Not set";
-    };
-    const fields = [
-      {
-        after: getPendingValue("employeeNumber") || employee.employeeNumber,
-        before: employee.employeeNumber,
-        compareAfter: getPendingValue("employeeNumber") || employee.employeeNumber,
-        compareBefore: employee.employeeNumber,
-        label: "Employee number",
-      },
-      {
-        after: getPendingValue("name") || employee.name,
-        before: employee.name,
-        compareAfter: getPendingValue("name") || employee.name,
-        compareBefore: employee.name,
-        label: "Name",
-      },
-      {
-        after: formatOptional(getPendingValue("email")),
-        before: formatOptional(employee.email),
-        compareAfter: getPendingValue("email").toLowerCase(),
-        compareBefore: (employee.email ?? "").trim().toLowerCase(),
-        label: "Email",
-      },
-      {
-        after: formatPhone(getPendingValue("phone")),
-        before: formatPhone(employee.phone),
-        compareAfter: normalizePhoneNumber(getPendingValue("phone")),
-        compareBefore: normalizePhoneNumber(employee.phone),
-        label: "Phone",
-      },
-    ];
-
-    return fields.map((field) => ({
-      ...field,
-      changed: field.compareAfter !== field.compareBefore,
-    }));
-  }, [employee, pendingFormData]);
-
-  React.useEffect(() => {
-    if (open) setState(initialState);
-  }, [open]);
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPendingFormData(new FormData(event.currentTarget));
-    setConfirmOpen(true);
-  }
-
-  function handleConfirmUpdate() {
-    if (!pendingFormData) return;
-
-    startTransition(async () => {
-      const result = await action(initialState, pendingFormData);
-      setState(result);
-
-      if (result.success) {
-        setConfirmOpen(false);
-        setPendingFormData(null);
-        onOpenChange(false);
-        toast.success(result.message || "Employee updated.");
-      }
-    });
-  }
-
-  if (!employee) return null;
-
-  return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit employee</DialogTitle>
-            <DialogDescription>
-              Update employee contact details and their required 4-digit employee number.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4">
-            <input type="hidden" name="employeeId" value={employee.id} />
-            <div className="grid gap-2">
-              <Label htmlFor="edit-employee-number">Employee number</Label>
-              <Input
-                id="edit-employee-number"
-                name="employeeNumber"
-                inputMode="numeric"
-                maxLength={4}
-                minLength={4}
-                pattern="\d{4}"
-                defaultValue={employee.employeeNumber}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-employee-name">Name</Label>
-              <Input id="edit-employee-name" name="name" defaultValue={employee.name} required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-employee-email">Email</Label>
-              <Input id="edit-employee-email" name="email" type="email" defaultValue={employee.email ?? ""} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-employee-phone">Phone</Label>
-              <Input id="edit-employee-phone" name="phone" type="tel" defaultValue={employee.phone ?? ""} />
-            </div>
-            {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                Review changes
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm employee changes?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Please confirm these changes look good before updating this employee record.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="overflow-hidden rounded-lg border">
-            <div className="grid grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b bg-muted/50 px-3 py-2 font-medium text-muted-foreground text-xs">
-              <span>Field</span>
-              <span>Before</span>
-              <span>After</span>
-            </div>
-            <div className="divide-y">
-              {pendingEmployeeRows.map((row) => (
-                <div
-                  key={row.label}
-                  className="grid grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 px-3 py-2 text-sm"
-                >
-                  <span className="min-w-0 truncate text-muted-foreground">{row.label}</span>
-                  <span className="min-w-0 truncate">{row.before}</span>
-                  <span className={cn("min-w-0 truncate", row.changed && "font-medium text-foreground")}>
-                    {row.after}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>Go back</AlertDialogCancel>
-            <Button type="button" onClick={handleConfirmUpdate} disabled={isPending}>
-              {isPending ? "Saving..." : "Confirm changes"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}
-
-function DeleteEmployeeDialog({
-  action,
-  employee,
-}: {
-  action: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
-  employee: EmployeeSummary;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const [state, setState] = React.useState(initialState);
-  const [isPending, startTransition] = React.useTransition();
-
-  function handleDelete() {
-    const formData = new FormData();
-    formData.set("employeeId", employee.id);
-
-    startTransition(async () => {
-      const result = await action(initialState, formData);
-      setState(result);
-
-      if (result.success) {
-        setOpen(false);
-        toast.success(result.message || "Employee deleted.");
-      }
-    });
-  }
-
-  return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button size="icon-sm" variant="ghost" aria-label={`Delete ${employee.name}`}>
-          <Trash2 />
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete this employee?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Warning: deleting {employee.name} will permanently remove the employee and all of their tracked time data.
-            This cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-          <Button type="button" variant="destructive" onClick={handleDelete} disabled={isPending}>
-            {isPending ? "Deleting..." : "Delete employee"}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
-
-function ManageEmployeesDialog({
-  deleteEmployeeAction,
-  employees,
-  onEditEmployee,
-}: {
-  deleteEmployeeAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
-  employees: EmployeeSummary[];
-  onEditEmployee: (employee: EmployeeSummary) => void;
-}) {
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const filteredEmployees = employees.filter((employee) =>
-    [employee.name, employee.employeeNumber, employee.phone, formatPhoneNumber(employee.phone)]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase()),
-  );
-
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Users />
-          Manage employees
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Manage employees</DialogTitle>
-          <DialogDescription>Edit employee details or delete employees you no longer track.</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <div className="grid gap-2">
-            <Label htmlFor="manage-employees-search">Search employees</Label>
-            <Input
-              id="manage-employees-search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search by name, phone, or employee number..."
-            />
-          </div>
-          {employees.length ? (
-            filteredEmployees.map((employee) => (
-              <div key={employee.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                <div className="min-w-0">
-                  <div className="truncate font-medium text-sm">{employee.name}</div>
-                  <div className="text-muted-foreground text-xs">
-                    Employee #{employee.employeeNumber}
-                    {employee.phone ? ` · ${formatPhoneNumber(employee.phone)}` : ""}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={`Edit ${employee.name}`}
-                    onClick={() => onEditEmployee(employee)}
-                  >
-                    <Pencil />
-                  </Button>
-                  <DeleteEmployeeDialog action={deleteEmployeeAction} employee={employee} />
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="rounded-md border bg-muted/20 p-4 text-center text-muted-foreground text-sm">
-              Add your first employee to manage them here.
-            </div>
-          )}
-          {employees.length && !filteredEmployees.length ? (
-            <div className="rounded-md border bg-muted/20 p-4 text-center text-muted-foreground text-sm">
-              No employees match your search.
-            </div>
-          ) : null}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 function EmployeeSelectField({ employees }: { employees: EmployeeSummary[] }) {
@@ -1538,11 +1155,9 @@ function EmployeeRequestRow({
 
 export function TimeTrackingDashboard({
   approveTimeEntryRequestAction,
-  createEmployeeAction,
   createTimeEntryAction,
   dayGroups,
   deleteEmployeeTimeRequestAction,
-  deleteEmployeeAction,
   deleteTimeEntryAction,
   employeeLogoutAction,
   employeeTimeRequests = [],
@@ -1560,7 +1175,6 @@ export function TimeTrackingDashboard({
   secondaryStatValue,
   selectedRequestId,
   showEmployeeControls = true,
-  updateEmployeeAction,
   updateEmployeeTimeRequestAction,
   updateTimeEntryAction,
 }: {
@@ -1568,14 +1182,14 @@ export function TimeTrackingDashboard({
     state: TimeTrackingMutationState,
     formData: FormData,
   ) => Promise<TimeTrackingMutationState>;
-  createEmployeeAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   createTimeEntryAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
+  createEmployeeAction?: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   dayGroups: DayGroup[];
   deleteEmployeeTimeRequestAction?: (
     state: TimeTrackingMutationState,
     formData: FormData,
   ) => Promise<TimeTrackingMutationState>;
-  deleteEmployeeAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
+  deleteEmployeeAction?: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   deleteTimeEntryAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   employeeLogoutAction?: () => Promise<void>;
   employeeTimeRequests?: TimeEntryRequestRow[];
@@ -1596,14 +1210,13 @@ export function TimeTrackingDashboard({
   secondaryStatValue?: string;
   selectedRequestId?: string;
   showEmployeeControls?: boolean;
-  updateEmployeeAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   updateEmployeeTimeRequestAction?: (
     state: TimeTrackingMutationState,
     formData: FormData,
   ) => Promise<TimeTrackingMutationState>;
+  updateEmployeeAction?: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   updateTimeEntryAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
 }) {
-  const [employeeToEdit, setEmployeeToEdit] = React.useState<EmployeeSummary | null>(null);
   const entries = dayGroups.flatMap((group) => group.entries);
   const weekHours = entries.reduce((total, entry) => total + entry.hours, 0);
   const weeklyEmployees = employees.map((employee) => {
@@ -1619,14 +1232,6 @@ export function TimeTrackingDashboard({
 
   return (
     <div className="grid gap-6">
-      <EditEmployeeDialog
-        action={updateEmployeeAction}
-        employee={employeeToEdit}
-        open={!!employeeToEdit}
-        onOpenChange={(open) => {
-          if (!open) setEmployeeToEdit(null);
-        }}
-      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="grid gap-1">
           <h1 className="font-semibold text-2xl tracking-tight">Time Tracking</h1>
@@ -1636,12 +1241,12 @@ export function TimeTrackingDashboard({
         </div>
         {showEmployeeControls ? (
           <div className="flex flex-wrap gap-2">
-            <AddEmployeeDialog action={createEmployeeAction} />
-            <ManageEmployeesDialog
-              deleteEmployeeAction={deleteEmployeeAction}
-              employees={employees}
-              onEditEmployee={setEmployeeToEdit}
-            />
+            <Button asChild variant="outline" size="sm">
+              <Link prefetch={false} href="/dashboard/employees">
+                <UserRoundCog />
+                Manage employees
+              </Link>
+            </Button>
           </div>
         ) : employeeLogoutAction ? (
           <form action={employeeLogoutAction}>
