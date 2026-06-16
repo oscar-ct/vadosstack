@@ -12,7 +12,6 @@ import {
   ReceiptText,
   ShieldCheck,
   Timer,
-  UserCog,
   UserRoundCog,
   Users,
 } from "lucide-react";
@@ -47,7 +46,7 @@ export interface NavGroup {
 export const sidebarItems: NavGroup[] = [
   {
     id: 1,
-    label: "Dashboards",
+    label: "Dashboard",
     items: [
       {
         title: "Overview",
@@ -65,6 +64,12 @@ export const sidebarItems: NavGroup[] = [
         icon: ChartNoAxesCombined,
         isNew: true,
       },
+    ],
+  },
+  {
+    id: 2,
+    label: "Customers",
+    items: [
       {
         title: "Leads",
         url: "/dashboard/leads",
@@ -76,15 +81,21 @@ export const sidebarItems: NavGroup[] = [
         url: "/dashboard/customers",
         icon: Users,
       },
-      {
-        title: "Jobs",
-        url: "/dashboard/jobs",
-        icon: BriefcaseBusiness,
-      },
+    ],
+  },
+  {
+    id: 3,
+    label: "Work",
+    items: [
       {
         title: "Estimates",
         url: "/dashboard/estimates",
         icon: NotebookText,
+      },
+      {
+        title: "Jobs",
+        url: "/dashboard/jobs",
+        icon: BriefcaseBusiness,
       },
       {
         title: "Services",
@@ -102,11 +113,23 @@ export const sidebarItems: NavGroup[] = [
         icon: UserRoundCog,
         isNew: true,
       },
+    ],
+  },
+  {
+    id: 4,
+    label: "Money",
+    items: [
       {
         title: "Invoices",
         url: "/dashboard/invoices",
         icon: ReceiptText,
       },
+    ],
+  },
+  {
+    id: 5,
+    label: "Email",
+    items: [
       {
         title: "Email History",
         url: "/dashboard/email-history",
@@ -118,16 +141,10 @@ export const sidebarItems: NavGroup[] = [
         icon: MailPlus,
         isNew: true,
       },
-      {
-        title: "Employee Portal",
-        url: "/employee-time-tracking",
-        icon: UserCog,
-        newTab: true,
-      },
     ],
   },
   {
-    id: 2,
+    id: 6,
     label: "Admin",
     items: [
       {
