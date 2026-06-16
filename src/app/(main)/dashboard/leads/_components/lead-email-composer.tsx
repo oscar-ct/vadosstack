@@ -79,7 +79,7 @@ export function LeadEmailComposer({
   return (
     <Card className="rounded-lg border border-cyan-200 bg-cyan-50/50 ring-cyan-200/70 dark:border-cyan-900/60 dark:bg-cyan-950/15 dark:ring-cyan-900/50">
       <CardHeader className="border-cyan-200/80 border-b bg-cyan-50/80 dark:border-cyan-900/60 dark:bg-cyan-950/25">
-        <CardTitle className="min-w-30 flex items-center gap-2">
+        <CardTitle className="flex min-w-30 items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-lg bg-cyan-600 text-white shadow-sm dark:bg-cyan-500">
             <Mail className="size-4" />
           </span>
