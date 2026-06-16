@@ -4,7 +4,7 @@ import * as React from "react";
 
 import Link from "next/link";
 
-import { ArrowRight, Mail, MailPlus, NotebookText, ReceiptText, Search, Sparkles } from "lucide-react";
+import { ArrowRight, Mail, MailPlus, MessagesSquare, NotebookText, ReceiptText, Search, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,19 @@ function getSearchText(template: EmailTemplateRow) {
 function getScopeLabel(scope: EmailTemplateRow["scope"]) {
   if (scope === "invoice") return "Invoice";
   if (scope === "estimate") return "Estimate";
+  if (scope === "lead") return "Lead";
   return "General";
 }
 
 function ScopeIcon({ scope }: { scope: EmailTemplateRow["scope"] }) {
-  const Icon = scope === "invoice" ? ReceiptText : scope === "estimate" ? NotebookText : MailPlus;
+  const Icon =
+    scope === "invoice"
+      ? ReceiptText
+      : scope === "estimate"
+        ? NotebookText
+        : scope === "lead"
+          ? MessagesSquare
+          : MailPlus;
 
   return <Icon className="size-3" />;
 }
@@ -41,6 +49,7 @@ export function EmailTemplatesDashboard({ templates }: { templates: EmailTemplat
   const estimateCount = templates.filter((template) => template.scope === "estimate").length;
   const generalCount = templates.filter((template) => template.scope === "general").length;
   const invoiceCount = templates.filter((template) => template.scope === "invoice").length;
+  const leadCount = templates.filter((template) => template.scope === "lead").length;
 
   return (
     <div className="grid gap-4">
@@ -49,6 +58,7 @@ export function EmailTemplatesDashboard({ templates }: { templates: EmailTemplat
           {[
             { count: templates.length, label: "All", value: "All" as const },
             { count: generalCount, label: "General", value: "general" as const },
+            { count: leadCount, label: "Leads", value: "lead" as const },
             { count: estimateCount, label: "Estimates", value: "estimate" as const },
             { count: invoiceCount, label: "Invoices", value: "invoice" as const },
           ].map((scope) => (

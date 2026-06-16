@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export type EmailTemplateScope = "estimate" | "general" | "invoice";
+export type EmailTemplateScope = "estimate" | "general" | "invoice" | "lead";
 
 export type DocumentEmailTemplate = {
   bodyHtml: string;
@@ -138,6 +138,93 @@ const defaultDocumentEmailTemplates: Record<
       ].join(""),
     },
   ],
+  lead: [
+    {
+      title: "New inquiry reply",
+      subject: "Thanks for reaching out about your {{serviceType}}",
+      bodyText: [
+        "Hi {{leadFirstName}},",
+        "",
+        "Thanks for reaching out. I can help with your {{serviceType}}{{serviceLocationPhrase}}. What day and time works best for a quick call or visit so I can understand the scope and next steps?",
+        "",
+        "Thank you,",
+        "{{companyName}}",
+      ].join("\n"),
+      bodyHtml: [
+        "<p>Hi {{leadFirstName}},</p>",
+        "<p>Thanks for reaching out. I can help with your {{serviceType}}{{serviceLocationPhrase}}. What day and time works best for a quick call or visit so I can understand the scope and next steps?</p>",
+        "<p>Thank you,<br><strong>{{companyName}}</strong></p>",
+      ].join(""),
+    },
+    {
+      title: "Estimate scheduling",
+      subject: "Scheduling your {{serviceType}} estimate",
+      bodyText: [
+        "Hi {{leadFirstName}},",
+        "",
+        "I have your request noted and would like to schedule the estimate. Please send a couple of times that work for you, and I will confirm the best slot.",
+        "",
+        "Thank you,",
+        "{{companyName}}",
+      ].join("\n"),
+      bodyHtml: [
+        "<p>Hi {{leadFirstName}},</p>",
+        "<p>I have your request noted and would like to schedule the estimate. Please send a couple of times that work for you, and I will confirm the best slot.</p>",
+        "<p>Thank you,<br><strong>{{companyName}}</strong></p>",
+      ].join(""),
+    },
+    {
+      title: "Estimate follow-up",
+      subject: "Following up on your estimate",
+      bodyText: [
+        "Hi {{leadFirstName}},",
+        "",
+        "I wanted to follow up and see if you had any questions about the estimate. I am happy to clarify scope, timing, or options before you decide.",
+        "",
+        "Thank you,",
+        "{{companyName}}",
+      ].join("\n"),
+      bodyHtml: [
+        "<p>Hi {{leadFirstName}},</p>",
+        "<p>I wanted to follow up and see if you had any questions about the estimate. I am happy to clarify scope, timing, or options before you decide.</p>",
+        "<p>Thank you,<br><strong>{{companyName}}</strong></p>",
+      ].join(""),
+    },
+    {
+      title: "Second follow-up",
+      subject: "Checking in one more time",
+      bodyText: [
+        "Hi {{leadFirstName}},",
+        "",
+        "Checking in one more time on your {{serviceType}} request. If the timing changed or you went another direction, no problem. If you still need help, I can help with next steps.",
+        "",
+        "Thank you,",
+        "{{companyName}}",
+      ].join("\n"),
+      bodyHtml: [
+        "<p>Hi {{leadFirstName}},</p>",
+        "<p>Checking in one more time on your {{serviceType}} request. If the timing changed or you went another direction, no problem. If you still need help, I can help with next steps.</p>",
+        "<p>Thank you,<br><strong>{{companyName}}</strong></p>",
+      ].join(""),
+    },
+    {
+      title: "Polite closeout",
+      subject: "Closing the loop",
+      bodyText: [
+        "Hi {{leadFirstName}},",
+        "",
+        "I am going to close the loop on this request for now. You are welcome to reach back out if the project becomes active again.",
+        "",
+        "Thank you,",
+        "{{companyName}}",
+      ].join("\n"),
+      bodyHtml: [
+        "<p>Hi {{leadFirstName}},</p>",
+        "<p>I am going to close the loop on this request for now. You are welcome to reach back out if the project becomes active again.</p>",
+        "<p>Thank you,<br><strong>{{companyName}}</strong></p>",
+      ].join(""),
+    },
+  ],
 };
 
 function escapeHtml(value: string) {
@@ -185,32 +272,42 @@ export function renderDocumentEmailTemplate(
   };
 }
 
-export async function ensureDefaultDocumentEmailTemplates(ownerId: string) {
-  for (const [scope, templates] of Object.entries(defaultDocumentEmailTemplates) as Array<
-    [EmailTemplateScope, (typeof defaultDocumentEmailTemplates)[EmailTemplateScope]]
-  >) {
-    for (const template of templates) {
-      await prisma.emailTemplate.upsert({
-        where: {
-          ownerId_scope_title: {
-            ownerId,
-            scope,
-            title: template.title,
-          },
-        },
-        create: {
-          ownerId,
-          scope,
-          title: template.title,
-          subject: template.subject,
-          bodyText: template.bodyText,
-          bodyHtml: template.bodyHtml,
-          isDefault: true,
-        },
-        update: {},
-      });
-    }
-  }
+function getDefaultTemplateEntries(scopes?: EmailTemplateScope | EmailTemplateScope[]) {
+  const selectedScopes =
+    scopes === undefined
+      ? (Object.keys(defaultDocumentEmailTemplates) as EmailTemplateScope[])
+      : Array.isArray(scopes)
+        ? scopes
+        : [scopes];
+
+  return selectedScopes.flatMap((scope) =>
+    defaultDocumentEmailTemplates[scope].map((template) => ({
+      ...template,
+      scope,
+    })),
+  );
+}
+
+export async function ensureDefaultDocumentEmailTemplates(
+  ownerId: string,
+  scopes?: EmailTemplateScope | EmailTemplateScope[],
+) {
+  const templates = getDefaultTemplateEntries(scopes);
+
+  if (!templates.length) return;
+
+  await prisma.emailTemplate.createMany({
+    data: templates.map((template) => ({
+      ownerId,
+      scope: template.scope,
+      title: template.title,
+      subject: template.subject,
+      bodyText: template.bodyText,
+      bodyHtml: template.bodyHtml,
+      isDefault: true,
+    })),
+    skipDuplicates: true,
+  });
 }
 
 export async function getRenderedDocumentEmailTemplates({
@@ -222,15 +319,24 @@ export async function getRenderedDocumentEmailTemplates({
   ownerId: string;
   scope: EmailTemplateScope;
 }) {
-  await ensureDefaultDocumentEmailTemplates(ownerId);
-
-  const templates = await prisma.emailTemplate.findMany({
+  let templates = await prisma.emailTemplate.findMany({
     where: {
       ownerId,
       scope,
     },
     orderBy: [{ isDefault: "desc" }, { title: "asc" }],
   });
+
+  if (!templates.length) {
+    await ensureDefaultDocumentEmailTemplates(ownerId, scope);
+    templates = await prisma.emailTemplate.findMany({
+      where: {
+        ownerId,
+        scope,
+      },
+      orderBy: [{ isDefault: "desc" }, { title: "asc" }],
+    });
+  }
 
   return templates.map((template) => renderDocumentEmailTemplate(template, context));
 }

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
-import { plainTextToEmailHtml } from "@/lib/email-content";
+import { plainTextToEmailHtml, sanitizeEmailHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
 import {
   decryptGoogleToken,
@@ -93,6 +93,7 @@ const emailLeadSchema = z.object({
   leadId: z.string().trim().min(1, "Lead is required."),
   subject: z.string().trim().min(1, "Subject is required."),
   message: z.string().trim().min(1, "Message is required."),
+  html: z.string().trim().optional(),
 });
 
 function createEmailLeadState(success: boolean, message: string, reconnectRequired = false): EmailLeadState {
@@ -441,6 +442,7 @@ export async function sendLeadEmailAction(_previousState: EmailLeadState, formDa
     leadId: formData.get("leadId"),
     subject: formData.get("subject"),
     message: formData.get("message"),
+    html: formData.get("html"),
   });
 
   if (!parsed.success) {
@@ -502,7 +504,7 @@ export async function sendLeadEmailAction(_previousState: EmailLeadState, formDa
   try {
     const refreshToken = decryptGoogleToken(googleMailAccount.refreshTokenCipher);
     const accessToken = await refreshGoogleAccessToken(refreshToken);
-    const html = plainTextToEmailHtml(parsed.data.message);
+    const html = sanitizeEmailHtml(parsed.data.html) ?? plainTextToEmailHtml(parsed.data.message);
 
     await sendGmailMessage(accessToken, {
       from: googleMailAccount.email,

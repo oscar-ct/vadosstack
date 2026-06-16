@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
+import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -17,7 +18,7 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { ConvertLeadButton, DeleteLeadButton, LeadStatusButton } from "../_components/lead-action-buttons";
 import { LeadEmailComposer } from "../_components/lead-email-composer";
 import { LeadForm } from "../_components/lead-form";
-import { getLead, type LeadRow } from "../_lib/lead-data";
+import { getLead } from "../_lib/lead-data";
 import {
   convertLeadToCustomerAction,
   deleteLeadAction,
@@ -76,40 +77,6 @@ function DetailTile({ children, icon, label }: { children: React.ReactNode; icon
   );
 }
 
-function buildTemplates(lead: LeadRow) {
-  const firstName = lead.name.split(" ")[0] || lead.name;
-  const service = lead.serviceType?.toLowerCase() ?? "project";
-  const location = lead.serviceLocation ? ` at ${lead.serviceLocation}` : "";
-
-  return [
-    {
-      title: "New inquiry reply",
-      subject: `Thanks for reaching out about your ${service}`,
-      body: `Hi ${firstName}, thanks for reaching out. I can help with your ${service}${location}. What day and time works best for a quick call or visit so I can understand the scope and next steps?`,
-    },
-    {
-      title: "Estimate scheduling",
-      subject: `Scheduling your ${service} estimate`,
-      body: `Hi ${firstName}, I have your request noted and would like to schedule the estimate. Please send a couple of times that work for you, and I will confirm the best slot.`,
-    },
-    {
-      title: "Estimate follow-up",
-      subject: "Following up on your estimate",
-      body: `Hi ${firstName}, I wanted to follow up and see if you had any questions about the estimate. I am happy to clarify scope, timing, or options before you decide.`,
-    },
-    {
-      title: "Second follow-up",
-      subject: "Checking in one more time",
-      body: `Hi ${firstName}, checking in one more time on your ${service} request. If the timing changed or you went another direction, no problem. If you still need help, I can help with next steps.`,
-    },
-    {
-      title: "Polite closeout",
-      subject: "Closing the loop",
-      body: `Hi ${firstName}, I am going to close the loop on this request for now. You are welcome to reach back out if the project becomes active again.`,
-    },
-  ];
-}
-
 export default async function LeadPage({ params, searchParams }: LeadPageProps) {
   const currentUser = await getCurrentUser();
 
@@ -137,7 +104,27 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
     notFound();
   }
 
-  const templates = buildTemplates(lead);
+  const leadFirstName = lead.name.split(" ")[0] || lead.name;
+  const serviceType = lead.serviceType?.toLowerCase() ?? "project";
+  const templates = await getRenderedDocumentEmailTemplates({
+    ownerId: currentUser.id,
+    scope: "lead",
+    context: {
+      companyEmail: currentUser.companyEmail ?? currentUser.email,
+      companyName: currentUser.companyName,
+      companyPhone: currentUser.companyPhone,
+      estimatedValue: lead.estimatedValue ? formatMoney(lead.estimatedValue) : undefined,
+      followUpDate: formatDate(lead.followUpAt),
+      leadEmail: lead.email,
+      leadFirstName,
+      leadName: lead.name,
+      leadPhone: lead.phone ? formatPhoneNumber(lead.phone) : undefined,
+      leadSource: lead.source,
+      serviceLocation: lead.serviceLocation,
+      serviceLocationPhrase: lead.serviceLocation ? ` at ${lead.serviceLocation}` : "",
+      serviceType,
+    },
+  });
   const returnTo = `/dashboard/leads/${lead.id}`;
   const gmailError = resolvedSearchParams?.gmail_error;
   const notice = resolvedSearchParams?.gmail_connected

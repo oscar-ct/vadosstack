@@ -124,6 +124,21 @@ const variableGroups = {
     { label: "Job title", value: "jobTitle" },
     { label: "Service location", value: "serviceLocation" },
   ],
+  lead: [
+    { label: "Lead name", value: "leadName" },
+    { label: "Lead first name", value: "leadFirstName" },
+    { label: "Lead email", value: "leadEmail" },
+    { label: "Lead phone", value: "leadPhone" },
+    { label: "Lead source", value: "leadSource" },
+    { label: "Service type", value: "serviceType" },
+    { label: "Service location", value: "serviceLocation" },
+    { label: "Service location phrase", value: "serviceLocationPhrase" },
+    { label: "Estimated value", value: "estimatedValue" },
+    { label: "Follow-up date", value: "followUpDate" },
+    { label: "Company name", value: "companyName" },
+    { label: "Company email", value: "companyEmail" },
+    { label: "Company phone", value: "companyPhone" },
+  ],
 };
 
 function escapeEditorHtml(value: string) {
@@ -219,7 +234,7 @@ export function EmailTemplateEditor({
   const bodyHtmlInputRef = React.useRef<HTMLInputElement>(null);
   const [, refreshEditorState] = React.useReducer((value: number) => value + 1, 0);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
-  const [scope, setScope] = React.useState<"estimate" | "general" | "invoice">(template?.scope ?? "general");
+  const [scope, setScope] = React.useState<"estimate" | "general" | "invoice" | "lead">(template?.scope ?? "general");
   const [bodyText, setBodyText] = React.useState(template?.bodyText ?? "");
   const [bodyHtml, setBodyHtml] = React.useState(template?.bodyHtml ?? "");
   const [linkUrl, setLinkUrl] = React.useState("");
@@ -456,11 +471,13 @@ export function EmailTemplateEditor({
                   onChange={(event) => {
                     if (event.target.value === "invoice") setScope("invoice");
                     else if (event.target.value === "estimate") setScope("estimate");
+                    else if (event.target.value === "lead") setScope("lead");
                     else setScope("general");
                   }}
                   className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
                   <option value="general">General</option>
+                  <option value="lead">Lead</option>
                   <option value="estimate">Estimate</option>
                   <option value="invoice">Invoice</option>
                 </select>
@@ -479,7 +496,9 @@ export function EmailTemplateEditor({
                       ? "Invoice {{invoiceNumber}} from {{companyName}}"
                       : scope === "estimate"
                         ? "Estimate {{estimateNumber}} from {{companyName}}"
-                        : "Following up from {{companyName}}"
+                        : scope === "lead"
+                          ? "Thanks for reaching out about your {{serviceType}}"
+                          : "Following up from {{companyName}}"
                   }
                   required
                 />

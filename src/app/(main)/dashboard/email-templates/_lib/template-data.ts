@@ -17,7 +17,14 @@ function mapEmailTemplate(template: {
   return {
     id: template.id,
     title: template.title,
-    scope: template.scope === "invoice" ? "invoice" : template.scope === "general" ? "general" : "estimate",
+    scope:
+      template.scope === "invoice"
+        ? "invoice"
+        : template.scope === "lead"
+          ? "lead"
+          : template.scope === "general"
+            ? "general"
+            : "estimate",
     subject: template.subject,
     bodyText: template.bodyText,
     bodyHtml: template.bodyHtml,
@@ -34,7 +41,7 @@ export async function getEmailTemplates(ownerId: string) {
     where: {
       ownerId,
       scope: {
-        in: ["estimate", "general", "invoice"],
+        in: ["estimate", "general", "invoice", "lead"],
       },
     },
     orderBy: [{ scope: "asc" }, { isDefault: "desc" }, { title: "asc" }],
