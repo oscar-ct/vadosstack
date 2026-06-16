@@ -17,6 +17,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import type { DocumentEmailTemplate } from "@/lib/email-templates";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
@@ -40,6 +41,7 @@ export function AppSidebar({
     admin: boolean;
     gmailConnected: boolean;
     gmailSenderEmail: string | null;
+    emailTemplates: DocumentEmailTemplate[];
     emailRecipients: Array<{
       email: string;
       id: string;
@@ -113,6 +115,7 @@ export function AppSidebar({
           estimateValidDays={currentUser?.estimateValidDays ?? 15}
           gmailConnected={currentUser?.gmailConnected ?? false}
           gmailSenderEmail={currentUser?.gmailSenderEmail ?? null}
+          emailTemplates={currentUser?.emailTemplates ?? []}
           emailRecipients={currentUser?.emailRecipients ?? []}
           invoiceDueDays={currentUser?.invoiceDueDays ?? 15}
           logoSrc={logoSrc}

@@ -13,6 +13,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { formatDateOnly } from "@/lib/date-only";
 import { formatDocumentNumber } from "@/lib/document-number";
+import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
@@ -265,6 +266,23 @@ export default async function Page({
     : gmailError
       ? { message: gmailErrorMessages[gmailError] ?? "Gmail could not be connected.", type: "error" as const }
       : null;
+  const emailTemplates = await getRenderedDocumentEmailTemplates({
+    ownerId: currentUser.id,
+    scope: "invoice",
+    context: {
+      balanceDue: formatMoney(invoice.balanceDue),
+      companyEmail,
+      companyName: currentUser.companyName,
+      companyPhone: currentUser.companyPhone,
+      customerEmail: invoice.customerEmail,
+      customerName: invoice.customerName,
+      customerPhone: invoice.customerPhone,
+      dueDate: format(dueDate, "MMM d, yyyy"),
+      invoiceNumber,
+      jobTitle: invoice.jobTitle,
+      serviceLocation: invoice.serviceLocation,
+    },
+  });
 
   return (
     <div className="mx-auto grid h-[calc(100svh-6rem)] max-w-5xl grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden print:h-auto print:max-w-none print:gap-0 print:overflow-visible print:p-0 print:text-[10px]">
@@ -289,6 +307,7 @@ export default async function Page({
             invoiceNumber={invoiceNumber}
             notice={gmailNotice}
             returnTo={currentHref}
+            templates={emailTemplates}
           />
           <DeleteInvoiceButton action={deleteInvoiceAction} invoiceId={invoice.id} redirectTo={backHref} />
         </div>

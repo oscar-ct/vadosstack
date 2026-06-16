@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { escapeHtml } from "@/lib/email-content";
+import type { DocumentEmailTemplate } from "@/lib/email-templates";
 
 import { DocumentEmailComposerDialog } from "../../_components/document-email-composer-dialog";
 import type { JobMutationState } from "../../jobs/actions";
@@ -83,6 +84,7 @@ export function InvoiceActions({
   invoiceId,
   notice,
   returnTo,
+  templates,
 }: {
   action: (state: EmailInvoiceState, formData: FormData) => Promise<EmailInvoiceState>;
   balanceDue: string;
@@ -99,6 +101,7 @@ export function InvoiceActions({
     type: "error" | "success";
   } | null;
   returnTo: string;
+  templates?: DocumentEmailTemplate[];
 }) {
   const router = useRouter();
   const [result, setResult] = React.useState<EmailDeliveryResultValue | null>(null);
@@ -181,6 +184,7 @@ export function InvoiceActions({
           recipientEmail={customerEmail}
           returnTo={returnTo}
           senderEmail={gmailSenderEmail}
+          templates={templates}
         />
       </div>
       <EmailDeliveryResult result={result} onDone={() => setResult(null)} />

@@ -41,6 +41,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import type { DocumentEmailTemplate } from "@/lib/email-templates";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
@@ -57,6 +58,7 @@ interface NavMainProps {
   readonly invoiceDueDays: number;
   readonly gmailConnected: boolean;
   readonly gmailSenderEmail: string | null;
+  readonly emailTemplates: DocumentEmailTemplate[];
   readonly emailRecipients: Array<{
     email: string;
     id: string;
@@ -404,6 +406,7 @@ export function NavMain({
   estimateValidDays,
   gmailConnected,
   gmailSenderEmail,
+  emailTemplates,
   emailRecipients,
   invoiceDueDays,
   logoSrc,
@@ -451,6 +454,7 @@ export function NavMain({
                 gmailConnected={gmailConnected}
                 recipients={emailRecipients}
                 senderEmail={gmailSenderEmail}
+                templates={emailTemplates}
               />
             </SidebarMenuItem>
           </SidebarMenu>

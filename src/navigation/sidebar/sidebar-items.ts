@@ -5,6 +5,7 @@ import {
   ListTodo,
   type LucideIcon,
   MailCheck,
+  MailPlus,
   MessagesSquare,
   NotebookText,
   PackageCheck,
@@ -103,6 +104,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Email History",
         url: "/dashboard/email-history",
         icon: MailCheck,
+      },
+      {
+        title: "Email Templates",
+        url: "/dashboard/email-templates",
+        icon: MailPlus,
+        isNew: true,
       },
       {
         title: "Employee Portal",

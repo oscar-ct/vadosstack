@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { formatDocumentNumber } from "@/lib/document-number";
+import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
@@ -194,6 +195,23 @@ export default async function Page({
     : gmailError
       ? { message: gmailErrorMessages[gmailError] ?? "Gmail could not be connected.", type: "error" as const }
       : null;
+  const emailTemplates = await getRenderedDocumentEmailTemplates({
+    ownerId: currentUser.id,
+    scope: "estimate",
+    context: {
+      companyEmail,
+      companyName: currentUser.companyName,
+      companyPhone: currentUser.companyPhone,
+      customerEmail: estimate.customerEmail,
+      customerName: estimate.customerName,
+      customerPhone: estimate.customerPhone,
+      estimatedTotal: formatMoney(estimate.estimatedTotal),
+      estimateNumber,
+      jobTitle: estimate.jobTitle,
+      serviceLocation: estimate.serviceLocation,
+      validThrough: format(validThrough, "MMM d, yyyy"),
+    },
+  });
 
   return (
     <div className="mx-auto grid h-[calc(100svh-6rem)] max-w-5xl grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden print:h-auto print:max-w-none print:gap-0 print:overflow-visible print:p-0 print:text-[10px]">
@@ -212,6 +230,7 @@ export default async function Page({
             gmailSenderEmail={googleMailAccount?.email ?? null}
             notice={gmailNotice}
             returnTo={currentHref}
+            templates={emailTemplates}
             validThrough={format(validThrough, "MMM d, yyyy")}
           />
           <DeleteEstimateButton action={deleteEstimateAction} estimateId={estimate.id} redirectTo={backHref} />

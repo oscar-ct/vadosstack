@@ -59,6 +59,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { DocumentEmailTemplate } from "@/lib/email-templates";
 import { cn } from "@/lib/utils";
 
 import { type GeneralEmailState, sendGeneralEmailAction } from "./actions";
@@ -67,29 +68,6 @@ const initialState: GeneralEmailState = {
   success: false,
   message: "",
 };
-
-const templates = [
-  {
-    title: "Follow-up",
-    subject: "Following up from VadosStack",
-    body: "Hi there,\n\nI wanted to follow up and see if you had any questions. Reply here whenever it is convenient and I will be happy to help.\n\nThank you.",
-  },
-  {
-    title: "Appointment reminder",
-    subject: "Appointment reminder",
-    body: "Hi there,\n\nThis is a quick reminder about your upcoming appointment. Please reply if anything needs to change.\n\nThank you.",
-  },
-  {
-    title: "Thank you",
-    subject: "Thank you",
-    body: "Hi there,\n\nThank you for choosing us. We appreciate the opportunity to help and are here if you need anything else.\n\nBest.",
-  },
-  {
-    title: "Payment note",
-    subject: "Payment reminder",
-    body: "Hi there,\n\nThis is a friendly reminder that a payment is still pending. Please reply if you have questions or need another copy of the invoice.\n\nThank you.",
-  },
-];
 
 type EmailRecipient = {
   email: string;
@@ -154,10 +132,12 @@ export function EmailComposerDialog({
   gmailConnected,
   recipients,
   senderEmail,
+  templates = [],
 }: {
   gmailConnected: boolean;
   recipients: EmailRecipient[];
   senderEmail?: string | null;
+  templates?: DocumentEmailTemplate[];
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -405,11 +385,11 @@ export function EmailComposerDialog({
   }, []);
 
   const applyTemplate = React.useCallback(
-    (template: (typeof templates)[number]) => {
-      const nextHtml = plainTextToEditorHtml(template.body);
+    (template: DocumentEmailTemplate) => {
+      const nextHtml = template.bodyHtml || plainTextToEditorHtml(template.bodyText);
 
       setSubject(template.subject);
-      setEditorDraft(template.body, nextHtml);
+      setEditorDraft(template.bodyText, nextHtml);
       setBodyError("");
 
       editor?.commands.setContent(nextHtml, { emitUpdate: false });
@@ -588,7 +568,7 @@ export function EmailComposerDialog({
             <div className="flex items-center justify-between gap-3 lg:block">
               <Label className="text-muted-foreground text-xs uppercase tracking-wide">Templates</Label>
               <p className="hidden text-muted-foreground text-xs lg:mt-4 lg:block">
-                Templates are local starter copy for now and can be replaced when the template manager lands.
+                Templates are managed from the email template builder.
               </p>
             </div>
             <div className="mt-2 flex flex-wrap gap-2 lg:grid">

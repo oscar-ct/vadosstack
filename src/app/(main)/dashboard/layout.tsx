@@ -7,6 +7,7 @@ import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sideb
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
+import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
@@ -28,7 +29,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
     getCurrentUser(),
   ]);
-  const [companyLogoSrc, googleMailAccount, emailRecipients] = currentUser
+  const [companyLogoSrc, googleMailAccount, emailTemplates, emailRecipients] = currentUser
     ? await Promise.all([
         getCompanyLogoSrc(currentUser.id),
         prisma.googleMailAccount.findUnique({
@@ -37,6 +38,15 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           },
           select: {
             email: true,
+          },
+        }),
+        getRenderedDocumentEmailTemplates({
+          ownerId: currentUser.id,
+          scope: "general",
+          context: {
+            companyEmail: currentUser.companyEmail ?? currentUser.email,
+            companyName: currentUser.companyName,
+            companyPhone: currentUser.companyPhone,
           },
         }),
         Promise.all([
@@ -87,7 +97,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           })),
         ]),
       ])
-    : ["/dashboard/company-logo?fallback=1", null, []];
+    : ["/dashboard/company-logo?fallback=1", null, [], []];
 
   return (
     <SidebarProvider
@@ -118,6 +128,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
                   admin: currentUser.admin,
                   gmailConnected: Boolean(googleMailAccount),
                   gmailSenderEmail: googleMailAccount?.email ?? null,
+                  emailTemplates,
                   emailRecipients,
                 }
               : null

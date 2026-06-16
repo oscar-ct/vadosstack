@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { escapeHtml } from "@/lib/email-content";
+import type { DocumentEmailTemplate } from "@/lib/email-templates";
 
 import { DocumentEmailComposerDialog } from "../../_components/document-email-composer-dialog";
 import type { EstimateMutationState } from "../types";
@@ -80,6 +81,7 @@ export function EstimateActions({
   gmailSenderEmail,
   notice,
   returnTo,
+  templates,
   validThrough,
 }: {
   action: (state: EmailEstimateState, formData: FormData) => Promise<EmailEstimateState>;
@@ -96,6 +98,7 @@ export function EstimateActions({
     type: "error" | "success";
   } | null;
   returnTo: string;
+  templates?: DocumentEmailTemplate[];
   validThrough: string;
 }) {
   const router = useRouter();
@@ -179,6 +182,7 @@ export function EstimateActions({
           recipientEmail={customerEmail}
           returnTo={returnTo}
           senderEmail={gmailSenderEmail}
+          templates={templates}
         />
       </div>
       <EmailDeliveryResult result={result} onDone={() => setResult(null)} />

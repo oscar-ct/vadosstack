@@ -123,6 +123,7 @@ model User {
   estimates           Estimate[]
   estimateRecords     EstimateRecord[]
   emailRecords        EmailRecord[]
+  emailTemplates      EmailTemplate[]
   serviceTemplates    ServiceTemplate[]
   employees           Employee[]
   timeEntries         TimeEntry[]
@@ -327,6 +328,26 @@ model ServiceTemplate {
   @@index([ownerId])
   @@index([category])
   @@map("service_templates")
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  ownerId   String
+  title     String
+  scope     String
+  subject   String
+  bodyText  String
+  bodyHtml  String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, scope, title])
+  @@index([ownerId])
+  @@index([scope])
+  @@map("email_templates")
 }
 
 model Session {
