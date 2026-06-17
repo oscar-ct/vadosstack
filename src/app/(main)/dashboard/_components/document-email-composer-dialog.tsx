@@ -188,7 +188,7 @@ export function DocumentEmailComposerDialog({
         "aria-label": `${documentLabel} email message`,
         "aria-multiline": "true",
         class:
-          "min-h-56 w-full px-3 py-3 text-sm leading-6 outline-none sm:min-h-80 [&_.is-editor-empty:first-child::before]:pointer-events-none [&_.is-editor-empty:first-child::before]:float-left [&_.is-editor-empty:first-child::before]:h-0 [&_.is-editor-empty:first-child::before]:text-muted-foreground [&_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:my-0 [&_p+_p]:mt-3 [&_ul]:ml-5 [&_ul]:list-disc",
+          "min-h-56 w-full px-3 py-3 text-base leading-6 outline-none sm:min-h-80 sm:text-sm [&_.is-editor-empty:first-child::before]:pointer-events-none [&_.is-editor-empty:first-child::before]:float-left [&_.is-editor-empty:first-child::before]:h-0 [&_.is-editor-empty:first-child::before]:text-muted-foreground [&_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:my-0 [&_p+_p]:mt-3 [&_ul]:ml-5 [&_ul]:list-disc",
         role: "textbox",
       },
     },
@@ -275,7 +275,6 @@ export function DocumentEmailComposerDialog({
       setEditorDraft(template.bodyText, template.bodyHtml);
       setBodyError("");
       editor?.commands.setContent(template.bodyHtml, { emitUpdate: false });
-      editor?.commands.focus("end");
       refreshEditorState();
     },
     [editor, setEditorDraft],
@@ -405,7 +404,7 @@ export function DocumentEmailComposerDialog({
               </DialogDescription>
             </div>
             {gmailConnected && !needsReconnect ? (
-              <div className="max-w-full truncate rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700 text-xs lg:mr-4 lg:max-w-72 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+              <div className="hidden max-w-fit truncate rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700 text-xs md:block lg:mr-4 lg:max-w-72 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
                 Gmail connected: {senderEmail ?? "ready"}
               </div>
             ) : (
@@ -454,9 +453,8 @@ export function DocumentEmailComposerDialog({
               </div>
               <div className="min-w-0 truncate text-muted-foreground text-xs">{attachmentName}</div>
             </div>
-
             {templates.length ? (
-              <div className="mt-3 grid gap-2">
+              <div className="hidden lg:mt-3 lg:grid lg:gap-2">
                 <Label className="text-muted-foreground text-xs uppercase tracking-wide">Templates</Label>
                 {templates.map((template) => (
                   <Button
@@ -503,6 +501,26 @@ export function DocumentEmailComposerDialog({
               </div>
               <div className="min-w-0 truncate text-muted-foreground text-xs">{attachmentName}</div>
             </div>
+
+            {templates.length ? (
+              <div className="grid gap-2 lg:hidden">
+                <Label className="text-muted-foreground text-xs uppercase tracking-wide">Templates</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {templates.map((template) => (
+                    <Button
+                      key={template.title}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="justify-start bg-background"
+                      onClick={() => applyTemplate(template)}
+                    >
+                      {template.title}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid gap-2">
               <Label>To</Label>

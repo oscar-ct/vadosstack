@@ -149,7 +149,7 @@ export function LeadEmailComposer({
         "aria-label": "Lead email message",
         "aria-multiline": "true",
         class:
-          "min-h-44 w-full px-3 py-3 text-sm leading-6 outline-none sm:min-h-64 [&_.is-editor-empty:first-child::before]:pointer-events-none [&_.is-editor-empty:first-child::before]:float-left [&_.is-editor-empty:first-child::before]:h-0 [&_.is-editor-empty:first-child::before]:text-muted-foreground [&_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:my-0 [&_p+_p]:mt-3 [&_ul]:ml-5 [&_ul]:list-disc",
+          "min-h-44 w-full px-3 py-3 text-base leading-6 outline-none sm:min-h-64 sm:text-sm [&_.is-editor-empty:first-child::before]:pointer-events-none [&_.is-editor-empty:first-child::before]:float-left [&_.is-editor-empty:first-child::before]:h-0 [&_.is-editor-empty:first-child::before]:text-muted-foreground [&_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:my-0 [&_p+_p]:mt-3 [&_ul]:ml-5 [&_ul]:list-disc",
         role: "textbox",
       },
     },
@@ -220,7 +220,6 @@ export function LeadEmailComposer({
       setEditorDraft(template.bodyText, html);
       setBodyError("");
       editor?.commands.setContent(html, { emitUpdate: false });
-      editor?.commands.focus("end");
       refreshEditorState();
     },
     [editor, setEditorDraft],
@@ -335,7 +334,7 @@ export function LeadEmailComposer({
         </CardDescription>
         <CardAction>
           {canSendEmail ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-1.5 text-emerald-700 text-xs dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+            <div className="hidden rounded-md border border-emerald-200 bg-emerald-50 p-1.5 text-emerald-700 text-xs md:block dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
               Gmail connected: {senderEmail ?? "ready"}
             </div>
           ) : (

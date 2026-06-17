@@ -82,28 +82,28 @@ export function CreateLeadDialog({
           Create
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create lead</DialogTitle>
           <DialogDescription>Capture a new inquiry before it becomes a customer or estimate.</DialogDescription>
         </DialogHeader>
 
-        <form ref={formRef} action={formAction} className="grid gap-4">
+        <form ref={formRef} action={formAction} className="grid min-w-0 gap-4">
           <input type="hidden" name="status" value="New" />
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="lead-dialog-name">Name</Label>
               <Input id="lead-dialog-name" name="name" placeholder="Jane Smith" required />
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="lead-dialog-email">Email</Label>
               <Input id="lead-dialog-email" name="email" type="email" placeholder="jane@example.com" />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="lead-dialog-phone">Phone</Label>
               <Input
                 id="lead-dialog-phone"
@@ -116,16 +116,16 @@ export function CreateLeadDialog({
                 placeholder="555-555-1234"
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="lead-dialog-follow-up">Follow-up date</Label>
               <Input id="lead-dialog-follow-up" name="followUpAt" type="date" />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="lead-dialog-source">Source</Label>
-              <NativeSelect id="lead-dialog-source" name="source" defaultValue="" className="w-full">
+              <NativeSelect id="lead-dialog-source" name="source" defaultValue="" className="w-full min-w-0">
                 <NativeSelectOption value="">Not set</NativeSelectOption>
                 {leadSources.map((source) => (
                   <NativeSelectOption key={source} value={source}>
@@ -134,9 +134,9 @@ export function CreateLeadDialog({
                 ))}
               </NativeSelect>
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="lead-dialog-service-type">Service type</Label>
-              <NativeSelect id="lead-dialog-service-type" name="serviceType" defaultValue="" className="w-full">
+              <NativeSelect id="lead-dialog-service-type" name="serviceType" defaultValue="" className="w-full min-w-0">
                 <NativeSelectOption value="">Not set</NativeSelectOption>
                 {leadServiceTypes.map((serviceType) => (
                   <NativeSelectOption key={serviceType} value={serviceType}>
@@ -145,9 +145,9 @@ export function CreateLeadDialog({
                 ))}
               </NativeSelect>
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="lead-dialog-priority">Priority</Label>
-              <NativeSelect id="lead-dialog-priority" name="priority" defaultValue="Normal" className="w-full">
+              <NativeSelect id="lead-dialog-priority" name="priority" defaultValue="Normal" className="w-full min-w-0">
                 {leadPriorities.map((priority) => (
                   <NativeSelectOption key={priority} value={priority}>
                     {priority}
@@ -158,7 +158,7 @@ export function CreateLeadDialog({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-[160px_minmax(0,1fr)]">
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="lead-dialog-value">Estimated value</Label>
               <Input
                 id="lead-dialog-value"

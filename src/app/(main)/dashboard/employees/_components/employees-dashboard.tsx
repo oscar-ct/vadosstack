@@ -95,10 +95,10 @@ function getSearchText(employee: EmployeeRow) {
 
 function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 gap-4">
       {employee ? <input type="hidden" name="employeeId" value={employee.id} /> : null}
       <div className="grid gap-4 md:grid-cols-[8rem_minmax(0,1fr)]">
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-number">Number</Label>
           <Input
             id="employee-number"
@@ -111,7 +111,7 @@ function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
             placeholder="Auto"
           />
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-name">Name</Label>
           <Input
             id="employee-name"
@@ -124,34 +124,35 @@ function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-email">Email</Label>
           <Input id="employee-email" name="email" type="email" defaultValue={employee?.email ?? ""} />
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-phone">Phone</Label>
           <Input id="employee-phone" name="phone" type="tel" defaultValue={employee?.phone ?? ""} />
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-job-title">Job title</Label>
           <Input id="employee-job-title" name="jobTitle" defaultValue={employee?.jobTitle ?? ""} />
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-department">Department</Label>
           <Input id="employee-department" name="department" defaultValue={employee?.department ?? ""} />
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-employment-type">Type</Label>
           <NativeSelect
             id="employee-employment-type"
             name="employmentType"
             defaultValue={employee?.employmentType ?? "Employee"}
+            className="w-full min-w-0"
           >
             {employmentTypes.map((type) => (
               <option key={type} value={type}>
@@ -160,9 +161,14 @@ function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
             ))}
           </NativeSelect>
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-pay-type">Pay type</Label>
-          <NativeSelect id="employee-pay-type" name="payType" defaultValue={employee?.payType ?? "Hourly"}>
+          <NativeSelect
+            id="employee-pay-type"
+            name="payType"
+            defaultValue={employee?.payType ?? "Hourly"}
+            className="w-full min-w-0"
+          >
             {payTypes.map((type) => (
               <option key={type} value={type}>
                 {type}
@@ -170,13 +176,18 @@ function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
             ))}
           </NativeSelect>
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-pay-rate">Pay rate</Label>
           <Input id="employee-pay-rate" name="payRate" inputMode="decimal" defaultValue={employee?.payRate ?? ""} />
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-active">Status</Label>
-          <NativeSelect id="employee-active" name="active" defaultValue={employee?.active === false ? "false" : "true"}>
+          <NativeSelect
+            id="employee-active"
+            name="active"
+            defaultValue={employee?.active === false ? "false" : "true"}
+            className="w-full min-w-0"
+          >
             <option value="true">Active</option>
             <option value="false">Inactive</option>
           </NativeSelect>
@@ -184,11 +195,11 @@ function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-start-date">Start date</Label>
           <Input id="employee-start-date" name="startDate" type="date" defaultValue={employee?.startDate ?? ""} />
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-end-date">End date</Label>
           <Input id="employee-end-date" name="endDate" type="date" defaultValue={employee?.endDate ?? ""} />
         </div>
@@ -200,11 +211,11 @@ function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-emergency-name">Emergency contact</Label>
           <Input id="employee-emergency-name" name="emergencyName" defaultValue={employee?.emergencyName ?? ""} />
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-emergency-phone">Emergency phone</Label>
           <Input
             id="employee-emergency-phone"
@@ -213,7 +224,7 @@ function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
             defaultValue={employee?.emergencyPhone ?? ""}
           />
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-emergency-relation">Relationship</Label>
           <Input
             id="employee-emergency-relation"
@@ -270,7 +281,7 @@ function EmployeeDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{employee ? "Edit employee" : "Add employee"}</DialogTitle>
           <DialogDescription>
@@ -279,7 +290,7 @@ function EmployeeDialog({
               : "Create a detailed employee record."}
           </DialogDescription>
         </DialogHeader>
-        <form action={formAction} className="grid gap-4">
+        <form action={formAction} className="grid min-w-0 gap-4">
           <EmployeeFormFields employee={employee} />
           {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
           <DialogFooter>
@@ -292,8 +303,8 @@ function EmployeeDialog({
           </DialogFooter>
         </form>
         {employee && deleteAction ? (
-          <div className="flex items-center justify-between gap-3 border-t pt-4">
-            <div className="grid gap-1">
+          <div className="flex min-w-0 flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="grid min-w-0 gap-1">
               <div className="font-medium text-sm">Delete employee</div>
               <div className="text-muted-foreground text-xs">
                 Permanently removes this employee and their tracked time.
