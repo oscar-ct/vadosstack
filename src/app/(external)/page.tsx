@@ -7,7 +7,7 @@ import { LandingExperience } from "./_components/landing-experience";
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vadosstack.com";
 const title = "Field Service Management Software for Service Businesses";
 const description =
-  "VadosStack field service management software helps service businesses manage customers, jobs, estimates, invoices, service templates, and employee time tracking in one dashboard.";
+  "VadosStack field service management software helps service businesses manage leads, customers, jobs, estimates, invoices, service templates, email templates, and employee time history in one dashboard.";
 
 export const metadata: Metadata = {
   title,
@@ -22,6 +22,8 @@ export const metadata: Metadata = {
     "estimate software",
     "invoice software",
     "employee time tracking",
+    "email template software",
+    "lead management software",
     "customer management",
     "field service dashboard",
   ],
@@ -77,10 +79,14 @@ const jsonLd = {
   },
   featureList: [
     "Customer management",
+    "Lead management",
     "Job scheduling",
     "Estimate creation",
     "Invoice generation",
     "Service templates",
+    "Rich email templates",
+    "Email history",
+    "Employee records",
     "Employee time tracking",
   ],
 };

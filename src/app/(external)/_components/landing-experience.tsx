@@ -15,8 +15,11 @@ import {
   FileText,
   Hammer,
   HardHat,
+  MailPlus,
+  MessagesSquare,
   ReceiptText,
   ShieldCheck,
+  UserRoundCog,
   UsersRound,
 } from "lucide-react";
 
@@ -26,6 +29,13 @@ import { APP_CONFIG } from "@/config/app-config";
 import vadosstackLogoSmall from "../../../../media/vadosstack-logo-transparent-small.png";
 
 const features = [
+  {
+    icon: MessagesSquare,
+    title: "Leads",
+    text: "Track new inquiries, follow-up dates, estimated value, source, notes, and conversion into customer work.",
+    stat: "Pipeline",
+    tone: "bg-[#f7f0f0] text-[#9b332d]",
+  },
   {
     icon: UsersRound,
     title: "Customers",
@@ -62,22 +72,44 @@ const features = [
     tone: "bg-[#fff8d8] text-[#6a5620]",
   },
   {
+    icon: MailPlus,
+    title: "Email templates",
+    text: "Use rich email templates for estimates, invoices, lead follow-ups, and general customer messages.",
+    stat: "Rich composer",
+    tone: "bg-[#eef3ff] text-[#24436f]",
+  },
+  {
+    icon: UserRoundCog,
+    title: "Employees",
+    text: "Manage employee profiles, employment details, pay metadata, emergency contacts, and internal notes.",
+    stat: "Profiles",
+    tone: "bg-[#f7f1ff] text-[#634299]",
+  },
+  {
     icon: CalendarClock,
-    title: "Time",
-    text: "Give employees a focused portal for clock-ins, clock-outs, and time records.",
-    stat: "Crew portal",
+    title: "Time history",
+    text: "Review time entries, employee requests, job-linked hours, and weekly time history from one workspace.",
+    stat: "Hours",
     tone: "bg-[#eaf7f8] text-[#1e5a63]",
   },
 ];
 
 const metrics = [
-  ["10", "dashboards for customers, work, billing, and time"],
-  ["6", "core workflows built for daily service operations"],
-  ["24/7", "self-serve access for crews that only need time tracking"],
-  ["PDF", "estimate and invoice exports ready for customer records"],
+  ["Lead → invoice", "pipeline, customer, estimate, job, and billing records connected"],
+  ["Rich email", "templates and composer tools for leads, estimates, invoices, and general messages"],
+  ["Team time", "employee hours and time requests organized alongside the work"],
+  ["PDF exports", "estimate and invoice files ready for customer records"],
 ];
 
 const workflowTabs = [
+  {
+    title: "Lead",
+    eyebrow: "Capture the request",
+    copy: "Log new opportunities with source, service type, location, follow-up date, estimated value, notes, and contact details.",
+    rows: ["Lead status and source tracked", "Follow-up details visible", "Convert to customer work"],
+    metric: "New",
+    metricLabel: "lead status",
+  },
   {
     title: "Estimate",
     eyebrow: "Price the request",
@@ -105,6 +137,15 @@ const workflowTabs = [
 ];
 
 const industryLabels = ["HVAC", "Plumbing", "Electrical", "Landscaping", "Cleaning", "Remodeling"];
+
+const demoFocusAreas = [
+  "Leads and follow-up",
+  "Estimates and PDFs",
+  "Jobs and scheduling",
+  "Invoices and email history",
+  "Rich email templates",
+  "Employees and time history",
+];
 
 const heroRevenueBars = [
   { height: 34, id: "mon" },
@@ -427,9 +468,9 @@ export function LandingExperience() {
               <a href="#how-it-works" className="transition-colors hover:text-[#d9443c]">
                 How it works
               </a>
-              <Link href="/employee-time-tracking" className="transition-colors hover:text-[#d9443c]">
-                Crew portal
-              </Link>
+              <a href="#free-demo" className="transition-colors hover:text-[#d9443c]">
+                Free demo
+              </a>
             </nav>
             <div className="flex items-center gap-2">
               <Button
@@ -477,15 +518,15 @@ export function LandingExperience() {
                 className="mt-5 max-w-2xl text-[#3d352f] text-lg leading-8 md:text-lg 2xl:text-xl"
               >
                 Field service software for contractors and service teams that need customer management, job tracking,
-                estimate creation, invoice records, service templates, and employee time tracking in one focused
-                workspace.
+                lead follow-up, estimate creation, invoice records, service templates, rich email templates, and
+                employee history in one focused workspace.
               </motion.p>
               <motion.div variants={reveal} className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="rounded-full bg-[#d9443c] text-white hover:bg-[#c53b35]">
-                  <Link href="/register">
-                    Start building your workspace
+                  <a href="#free-demo">
+                    Get a free demo
                     <ArrowRight />
-                  </Link>
+                  </a>
                 </Button>
                 <Button
                   asChild
@@ -493,7 +534,7 @@ export function LandingExperience() {
                   size="lg"
                   className="rounded-full border-[#171412]/20 bg-[#f6f1e8]/80"
                 >
-                  <Link href="/login">Sign in to dashboard</Link>
+                  <Link href="/register">Create account</Link>
                 </Button>
               </motion.div>
               <motion.div
@@ -501,7 +542,7 @@ export function LandingExperience() {
                 className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-[#594431] text-sm"
                 aria-label="Hero workflow highlights"
               >
-                {["Estimate creation", "Job order management", "Customer records"].map((item) => (
+                {["Lead follow-up", "Rich email templates", "Employee time history"].map((item) => (
                   <span key={item} className="inline-flex items-center gap-2">
                     <Check className="size-4 text-[#24533d]" />
                     {item}
@@ -549,11 +590,11 @@ export function LandingExperience() {
           <motion.div variants={reveal} className="mx-auto max-w-4xl text-center">
             <p className="font-medium text-[#d9443c] text-sm uppercase tracking-normal">Features</p>
             <h2 id="workflows-title" className="mt-3 text-balance font-semibold text-4xl tracking-normal md:text-5xl">
-              Top rated field-service workflows, without the clutter.
+              Field-service workflows, without the clutter.
             </h2>
             <p className="mx-auto mt-5 max-w-3xl text-[#594431] text-lg leading-8">
-              VadosStack follows the rhythm of a service business: capture the customer, price the request, schedule the
-              job, finish the work, bill it, and keep the team moving.
+              VadosStack follows the rhythm of a service business: capture the lead, price the request, schedule the
+              job, finish the work, bill it, email the customer, and keep employee records close.
             </p>
           </motion.div>
 
@@ -633,10 +674,10 @@ export function LandingExperience() {
           <motion.div variants={reveal} className="mx-auto max-w-3xl text-center">
             <p className="font-medium text-[#d9443c] text-sm uppercase tracking-normal">How it works</p>
             <h2 id="how-title" className="mt-3 text-balance font-semibold text-4xl tracking-normal md:text-5xl">
-              From request to paid work in three clear moves.
+              From new lead to paid work in clear moves.
             </h2>
           </motion.div>
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
+          <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             {workflowTabs.map((tab, index) => (
               <motion.article
                 key={tab.title}
@@ -693,16 +734,22 @@ export function LandingExperience() {
         </div>
       </MotionSection>
 
-      <MotionSection className="bg-[#dfe8e2] px-5 py-24 md:px-8 lg:px-12 2xl:px-16" aria-labelledby="portal-title">
+      <MotionSection
+        className="bg-[#dfe8e2] px-5 py-24 md:px-8 lg:px-12 2xl:px-16"
+        aria-labelledby="employee-history-title"
+      >
         <div className="mx-auto grid max-w-[1376px] gap-10 md:grid-cols-[1fr_0.8fr] md:items-center">
           <motion.div variants={reveal}>
-            <p className="font-medium text-[#24533d] text-sm uppercase tracking-normal">Employee portal</p>
-            <h2 id="portal-title" className="mt-3 text-balance font-semibold text-4xl tracking-normal md:text-5xl">
-              A simpler doorway for the crew.
+            <p className="font-medium text-[#24533d] text-sm uppercase tracking-normal">Employee history</p>
+            <h2
+              id="employee-history-title"
+              className="mt-3 text-balance font-semibold text-4xl tracking-normal md:text-5xl"
+            >
+              Keep employee details and hours tied to the work.
             </h2>
             <p className="mt-5 max-w-2xl text-[#31443b] text-lg leading-8">
-              Employees do not need the full dashboard to get time captured. Send them to a focused portal built for
-              quick check-ins and clean time records.
+              Store employee profiles, employment details, pay metadata, emergency contacts, notes, time entries, and
+              time change requests without sending the whole crew into the main dashboard.
             </p>
           </motion.div>
           <motion.div
@@ -715,8 +762,8 @@ export function LandingExperience() {
                 <HardHat className="size-5" />
               </div>
               <div>
-                <div className="font-semibold">Crew access</div>
-                <div className="text-[#31443b]/70 text-sm">Fast, separate, and field-friendly.</div>
+                <div className="font-semibold">Crew time access</div>
+                <div className="text-[#31443b]/70 text-sm">Separate, focused, and tied to employee records.</div>
               </div>
             </div>
             <Button asChild size="lg" className="mt-5 w-full rounded-full bg-[#24533d] text-white hover:bg-[#1d4331]">
@@ -729,21 +776,85 @@ export function LandingExperience() {
         </div>
       </MotionSection>
 
+      <MotionSection className="bg-white px-5 py-24 md:px-8 lg:px-12 2xl:px-16" aria-labelledby="demo-title">
+        <div id="free-demo" className="scroll-mt-24" />
+        <div className="mx-auto grid max-w-[1376px] gap-10 lg:grid-cols-[0.9fr_1fr] lg:items-center">
+          <motion.div variants={reveal}>
+            <p className="font-medium text-[#d9443c] text-sm uppercase tracking-normal">Free demo</p>
+            <h2 id="demo-title" className="mt-3 text-balance font-semibold text-4xl tracking-normal md:text-5xl">
+              See how VadosStack would fit your service business.
+            </h2>
+            <p className="mt-5 max-w-2xl text-[#594431] text-lg leading-8">
+              Walk through the workflows that matter most: capturing leads, turning requests into estimates and jobs,
+              sending polished emails, reviewing employee time, and keeping billing records organized.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" className="rounded-full bg-[#d9443c] text-white hover:bg-[#c53b35]">
+                <Link href="/register">
+                  Request a free demo
+                  <ArrowRight />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="rounded-full border-[#171412]/20 bg-white">
+                <Link href="/login">Sign in</Link>
+              </Button>
+            </div>
+          </motion.div>
+
+          <motion.div
+            variants={reveal}
+            className="rounded-[1.5rem] border border-[#171412]/10 bg-[#f7f8fa] p-5 shadow-[0_24px_70px_rgba(47,47,47,0.08)] sm:p-7"
+          >
+            <div className="flex flex-col gap-2 border-[#171412]/10 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="font-semibold text-xl">What should the demo cover?</div>
+                <div className="mt-1 text-[#594431] text-sm">Pick the workflows you want to inspect first.</div>
+              </div>
+              <span className="w-fit rounded-full bg-[#e8f5f0] px-3 py-1 font-medium text-[#24533d] text-xs">
+                Guided walkthrough
+              </span>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {demoFocusAreas.map((area) => (
+                <div key={area} className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-sm shadow-sm">
+                  <span className="grid size-6 place-items-center rounded-full bg-[#e8f5f0] text-[#24533d]">
+                    <Check className="size-3.5" />
+                  </span>
+                  <span className="font-medium text-[#3d352f]">{area}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 rounded-2xl border border-[#171412]/10 bg-white p-4">
+              <div className="font-semibold">Built around real service workflows</div>
+              <p className="mt-2 text-[#594431] text-sm leading-6">
+                No generic tour needed. The demo can focus on the pieces you care about most, from lead follow-up to
+                employee time review.
+              </p>
+            </div>
+          </motion.div>
+        </div>
+      </MotionSection>
+
       <section className="bg-[#171412] px-5 py-20 text-[#f6f1e8] md:px-8 lg:px-12 2xl:px-16">
         <div className="mx-auto w-full max-w-[1376px]">
           <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
             <div>
               <ShieldCheck className="mb-5 size-9 text-[#f5c451]" />
               <h2 className="text-balance font-semibold text-4xl tracking-normal md:text-5xl">
-                Ready when your live site is.
+                Ready to see it with your workflow?
               </h2>
               <p className="mt-5 max-w-2xl text-[#f6f1e8]/72 text-lg leading-8">
-                A public front door for the product, direct sign-in for customers, and a dedicated route for employees.
+                Start with a free demo, then build the workspace around your customers, jobs, estimates, invoices, email
+                templates, and employee records.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="rounded-full bg-[#f5c451] text-[#171412] hover:bg-[#f5c451]/90">
-                <Link href="/register">Create account</Link>
+              <Button
+                asChild
+                size="lg"
+                className="rounded-full bg-[#f5c451] text-[#171412] hover:bg-[#f5c451]/90 [a]:hover:bg-[#f5c451]/90"
+              >
+                <Link href="/register">Get free demo</Link>
               </Button>
               <Button
                 asChild

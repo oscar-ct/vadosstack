@@ -9,6 +9,6 @@ export const APP_CONFIG = {
   meta: {
     title: "VadosStack | Management Software for Service Businesses",
     description:
-      "Save time and increase productivity with simple management software built for service businesses and contractors. Manage customers, jobs, estimates, invoices, services, and employee time tracking in one dashboard.",
+      "Save time with focused management software built for service businesses and contractors. Manage leads, customers, jobs, estimates, invoices, service templates, rich email templates, and employee time history in one dashboard.",
   },
 };
