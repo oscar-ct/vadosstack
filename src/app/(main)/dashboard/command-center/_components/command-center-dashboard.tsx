@@ -25,10 +25,6 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { cn, formatCurrency } from "@/lib/utils";
 
-import type { ManagerActionQueueItem } from "../../_lib/manager-action-queue";
-
-type Severity = "amber" | "cyan" | "emerald" | "rose";
-
 export type CommandCenterData = {
   companyName: string;
   generatedAt: string;
@@ -84,7 +80,6 @@ export type CommandCenterData = {
     value: number;
     share: number;
   }>;
-  actionQueue: ManagerActionQueueItem[];
 };
 
 const cashFlowConfig = {
@@ -142,26 +137,11 @@ const estimateOutcomeColors: Record<string, string> = {
   Lost: "oklch(0.62 0.2 330)",
 };
 
-const severityClasses: Record<Severity, string> = {
-  amber: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  cyan: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
-  emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  rose: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-};
-
 function formatCompactCurrency(value: number) {
   return formatCurrency(value, {
     maximumFractionDigits: value >= 1000 ? 0 : 2,
     minimumFractionDigits: 0,
   });
-}
-
-function formatQueueValue(value: string | number) {
-  if (typeof value === "number") {
-    return formatCompactCurrency(value);
-  }
-
-  return value;
 }
 
 function EmptyState({ label }: { label: string }) {
@@ -247,8 +227,8 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
                 {data.companyName}
               </h1>
               <p className="mt-3 max-w-3xl text-muted-foreground text-sm leading-6">
-                A single view of cash flow, work in motion, estimate momentum, customer concentration, and manager
-                actions that need a decision.
+                A single view of cash flow, work in motion, estimate momentum, customer concentration, and operational
+                health across the company.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
@@ -578,55 +558,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-12">
-        <Card className="shadow-xs xl:col-span-5">
-          <CardHeader>
-            <CardTitle>Manager action queue</CardTitle>
-            <CardDescription>
-              Time reviews, ready/waiting estimates, unscheduled jobs, on-hold jobs, and receivables sorted into one
-              queue.
-            </CardDescription>
-            <CardAction>
-              <Badge variant="outline" className="rounded-md">
-                {data.actionQueue.length} actions
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {data.actionQueue.length ? (
-              <div className="grid gap-2">
-                {data.actionQueue.map((item) => (
-                  <Link
-                    key={`${item.type}-${item.id}`}
-                    prefetch={false}
-                    href={item.href}
-                    className="group grid gap-2 rounded-md border bg-muted/20 px-3 py-2.5 transition-colors hover:bg-muted/35"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline" className={cn("rounded-md", severityClasses[item.severity])}>
-                            {item.priority}
-                          </Badge>
-                          <span className="text-muted-foreground text-xs">{item.type}</span>
-                        </div>
-                        <p className="mt-1 truncate font-medium text-sm">{item.title}</p>
-                        <p className="text-muted-foreground text-xs">{item.detail}</p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2 text-right">
-                        <span className="font-medium text-xs tabular-nums">{formatQueueValue(item.value)}</span>
-                        <ArrowRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <EmptyState label="No urgent actions right now. This queue will fill as reviews, estimates, jobs, and balances need attention." />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-xs xl:col-span-4">
+        <Card className="shadow-xs xl:col-span-7">
           <CardHeader>
             <CardTitle>Service mix</CardTitle>
             <CardDescription>Where job value is coming from by category.</CardDescription>
@@ -654,7 +586,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs xl:col-span-3">
+        <Card className="shadow-xs xl:col-span-5">
           <CardHeader>
             <CardTitle>Labor trend</CardTitle>
             <CardDescription>Approved and entered hours by month.</CardDescription>

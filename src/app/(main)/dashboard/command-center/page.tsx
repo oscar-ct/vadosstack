@@ -4,7 +4,6 @@ import { AuthRequiredState } from "@/components/auth-required-state";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-import { buildManagerActionQueue } from "../_lib/manager-action-queue";
 import { CommandCenterDashboard, type CommandCenterData } from "./_components/command-center-dashboard";
 
 export const dynamic = "force-dynamic";
@@ -262,13 +261,6 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
       ),
     }));
 
-  const actionQueue = buildManagerActionQueue({
-    estimates,
-    jobs,
-    leads,
-    timeRequests: pendingTimeRequests,
-  });
-
   return {
     companyName,
     generatedAt: new Date().toISOString(),
@@ -297,7 +289,6 @@ async function getCommandCenterData(ownerId: string, companyName: string): Promi
     topCustomers,
     jobStatus,
     serviceMix,
-    actionQueue,
   };
 }
 

@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 import { cookies } from "next/headers";
 
+import { endOfToday, startOfToday } from "date-fns";
+
 import { AccountSwitcher } from "@/app/(main)/dashboard/_components/sidebar/account-switcher";
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -29,7 +31,14 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
     getCurrentUser(),
   ]);
-  const [companyLogoSrc, googleMailAccount, emailTemplates, emailRecipients] = currentUser
+  const [
+    companyLogoSrc,
+    googleMailAccount,
+    emailTemplates,
+    emailRecipients,
+    pendingTimeReviewCount,
+    dueTodayTaskCount,
+  ] = currentUser
     ? await Promise.all([
         getCompanyLogoSrc(currentUser.id),
         prisma.googleMailAccount.findUnique({
@@ -96,8 +105,26 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             type: "Lead" as const,
           })),
         ]),
+        prisma.timeEntryRequest.count({
+          where: {
+            ownerId: currentUser.id,
+            status: "Pending",
+          },
+        }),
+        prisma.task.count({
+          where: {
+            ownerId: currentUser.id,
+            scheduledFor: {
+              gte: startOfToday(),
+              lte: endOfToday(),
+            },
+            status: {
+              not: "Completed",
+            },
+          },
+        }),
       ])
-    : ["/dashboard/company-logo?fallback=1", null, [], []];
+    : ["/dashboard/company-logo?fallback=1", null, [], [], 0, 0];
 
   return (
     <SidebarProvider
@@ -114,6 +141,8 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           className="print:hidden"
           variant={variant}
           collapsible={collapsible}
+          dueTodayTaskCount={dueTodayTaskCount}
+          pendingTimeReviewCount={pendingTimeReviewCount}
           currentUser={
             currentUser
               ? {

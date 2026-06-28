@@ -65,8 +65,10 @@ interface NavMainProps {
     name: string;
     type: "Customer" | "Lead";
   }>;
+  readonly dueTodayTaskCount: number;
   readonly logoSrc: string;
   readonly onCompanySettingsSaved: () => void;
+  readonly pendingTimeReviewCount: number;
 }
 
 const initialCompanySettingsState: CompanySettingsState = {
@@ -80,13 +82,76 @@ const IsComingSoon = () => (
   <span className="ml-auto rounded-md bg-gray-200 px-2 py-1 text-xs dark:text-gray-800">Soon</span>
 );
 
+type NavAlert = {
+  count: number;
+  label: string;
+  tone: "amber" | "rose";
+};
+
+const alertBadgeClassNames = {
+  amber: {
+    collapsed: "absolute top-1.5 right-1.5 size-2 rounded-full bg-amber-500 ring-2 ring-sidebar",
+    expanded:
+      "ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-amber-500 px-1.5 font-semibold text-[10px] text-white shadow-sm ring-2 ring-sidebar",
+  },
+  rose: {
+    collapsed: "absolute top-1.5 right-1.5 size-2 rounded-full bg-rose-600 ring-2 ring-sidebar",
+    expanded:
+      "ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1.5 font-semibold text-[10px] text-white shadow-sm ring-2 ring-sidebar",
+  },
+};
+
+function NavAlertBadge({ alert, collapsed = false }: { alert: NavAlert; collapsed?: boolean }) {
+  const { count, label: alertLabel, tone } = alert;
+
+  if (count <= 0) {
+    return null;
+  }
+
+  const label = count > 99 ? "99+" : String(count);
+  const className = collapsed ? alertBadgeClassNames[tone].collapsed : alertBadgeClassNames[tone].expanded;
+
+  return (
+    <span title={`${count} ${alertLabel}`} className={className}>
+      {collapsed ? null : label}
+      <span className="sr-only"> {alertLabel}</span>
+    </span>
+  );
+}
+
+function getItemAlert(item: NavMainItem, dueTodayTaskCount: number, pendingTimeReviewCount: number): NavAlert {
+  if (item.url === "/dashboard/calendar") {
+    return {
+      count: dueTodayTaskCount,
+      label: `task${dueTodayTaskCount === 1 ? "" : "s"} due today`,
+      tone: "amber",
+    };
+  }
+
+  if (item.url === "/dashboard/time-tracking") {
+    return {
+      count: pendingTimeReviewCount,
+      label: `pending time ${pendingTimeReviewCount === 1 ? "review" : "reviews"}`,
+      tone: "rose",
+    };
+  }
+
+  return {
+    count: 0,
+    label: "",
+    tone: "rose",
+  };
+}
+
 const NavItemExpanded = ({
   item,
+  alert,
   isActive,
   isSubmenuOpen,
   onNavigate,
 }: {
   item: NavMainItem;
+  alert: NavAlert;
   isActive: (url: string, subItems?: NavMainItem["subItems"]) => boolean;
   isSubmenuOpen: (subItems?: NavMainItem["subItems"]) => boolean;
   onNavigate: (url: string, isNewTab?: boolean) => void;
@@ -121,6 +186,7 @@ const NavItemExpanded = ({
               >
                 {item.icon && <item.icon />}
                 <span>{item.title}</span>
+                <NavAlertBadge alert={alert} />
                 {item.comingSoon && <IsComingSoon />}
               </Link>
             </SidebarMenuButton>
@@ -155,10 +221,12 @@ const NavItemExpanded = ({
 
 const NavItemCollapsed = ({
   item,
+  alert,
   isActive,
   onNavigate,
 }: {
   item: NavMainItem;
+  alert: NavAlert;
   isActive: (url: string, subItems?: NavMainItem["subItems"]) => boolean;
   onNavigate: (url: string, isNewTab?: boolean) => void;
 }) => {
@@ -170,8 +238,10 @@ const NavItemCollapsed = ({
             disabled={item.comingSoon}
             tooltip={item.title}
             isActive={isActive(item.url, item.subItems)}
+            className="relative"
           >
             {item.icon && <item.icon />}
+            <NavAlertBadge alert={alert} collapsed />
             <span>{item.title}</span>
             <ChevronRight />
           </SidebarMenuButton>
@@ -408,9 +478,11 @@ export function NavMain({
   gmailSenderEmail,
   emailTemplates,
   emailRecipients,
+  dueTodayTaskCount,
   invoiceDueDays,
   logoSrc,
   onCompanySettingsSaved,
+  pendingTimeReviewCount,
 }: NavMainProps) {
   const path = usePathname();
   const { state, isMobile, setOpenMobile } = useSidebar();
@@ -466,6 +538,8 @@ export function NavMain({
           <SidebarGroupContent className="flex flex-col gap-2">
             <SidebarMenu>
               {group.items.map((item) => {
+                const alert = getItemAlert(item, dueTodayTaskCount, pendingTimeReviewCount);
+
                 if (state === "collapsed" && !isMobile) {
                   // If no subItems, just render the button as a link
                   if (!item.subItems) {
@@ -476,6 +550,7 @@ export function NavMain({
                           aria-disabled={item.comingSoon}
                           tooltip={item.title}
                           isActive={isItemActive(item.url)}
+                          className="relative"
                         >
                           <Link
                             prefetch={false}
@@ -484,6 +559,7 @@ export function NavMain({
                             onClick={() => handleNavigate(item.url, item.newTab)}
                           >
                             {item.icon && <item.icon />}
+                            <NavAlertBadge alert={alert} collapsed />
                             <span>{item.title}</span>
                           </Link>
                         </SidebarMenuButton>
@@ -495,6 +571,7 @@ export function NavMain({
                     <NavItemCollapsed
                       key={item.title}
                       item={item}
+                      alert={alert}
                       isActive={isItemActive}
                       onNavigate={handleNavigate}
                     />
@@ -505,6 +582,7 @@ export function NavMain({
                   <NavItemExpanded
                     key={item.title}
                     item={item}
+                    alert={alert}
                     isActive={isItemActive}
                     isSubmenuOpen={isSubmenuOpen}
                     onNavigate={handleNavigate}

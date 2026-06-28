@@ -10,7 +10,7 @@ import {
   CheckSquare,
   Clock3,
   Gauge,
-  ListChecks,
+  MessagesSquare,
   Sparkles,
   WalletCards,
 } from "lucide-react";
@@ -22,12 +22,12 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { getCurrentUser, getDisplayName } from "@/lib/auth";
 import { calculateOutstandingBalance, formatCurrency, toMoneyNumber } from "@/lib/customer-billing";
 import { prisma } from "@/lib/prisma";
-import { cn } from "@/lib/utils";
 
-import { getManagerActionQueue, type ManagerActionQueueItem } from "../_lib/manager-action-queue";
+import { getManagerActionQueue } from "../_lib/manager-action-queue";
 import { CalendarPanel } from "./_components/calendar-panel";
+import { ManagerActionQueue } from "./_components/manager-action-queue";
 import { type OutstandingJob, OutstandingJobs } from "./_components/outstanding-jobs";
-import { type PendingTimeReview, PendingTimeReviews } from "./_components/pending-time-reviews";
+import type { PendingTimeReview } from "./_components/pending-time-reviews";
 import { type UpcomingJob, UpcomingJobs } from "./_components/upcoming-jobs";
 
 type JobAttentionItem = {
@@ -43,9 +43,33 @@ type UpcomingTask = {
   id: string;
   customerName: string;
   location?: string;
+  priority: string;
   scheduledFor: string;
   title: string;
 };
+
+type LeadPipelineItem = {
+  estimatedValue: number;
+  href: string;
+  id: string;
+  meta: string;
+  priority: "Follow up" | "New";
+  title: string;
+};
+
+type LeadOverview = {
+  estimatedValue: number;
+  followUpCount: number;
+  items: LeadPipelineItem[];
+  newCount: number;
+  nextLeadName?: string;
+  openCount: number;
+};
+
+function money(value: { toString(): string } | number | string | null | undefined) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 async function getUpcomingJobs(ownerId: string): Promise<UpcomingJob[]> {
   const today = startOfToday();
@@ -93,9 +117,7 @@ async function getUpcomingTasks(ownerId: string): Promise<UpcomingTask[]> {
     include: {
       customer: true,
     },
-    orderBy: {
-      scheduledFor: "asc",
-    },
+    orderBy: [{ scheduledFor: "asc" }, { priority: "desc" }],
     take: 5,
   });
 
@@ -103,9 +125,138 @@ async function getUpcomingTasks(ownerId: string): Promise<UpcomingTask[]> {
     id: task.id,
     customerName: task.customer?.name ?? "Task",
     location: task.location ?? undefined,
+    priority: task.priority,
     scheduledFor: task.scheduledFor.toISOString(),
     title: task.title,
   }));
+}
+
+function taskPriorityClassName(priority: string) {
+  if (priority === "High") {
+    return "rounded-md border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300";
+  }
+
+  if (priority === "Low") {
+    return "rounded-md border-slate-300 text-slate-600 dark:border-slate-800 dark:text-slate-300";
+  }
+
+  return "rounded-md border-amber-300 text-amber-700 dark:border-amber-900 dark:text-amber-400";
+}
+
+async function getLeadOverview(ownerId: string): Promise<LeadOverview> {
+  const leads = await prisma.lead.findMany({
+    where: {
+      ownerId,
+    },
+    select: {
+      estimatedValue: true,
+      followUpAt: true,
+      id: true,
+      name: true,
+      serviceType: true,
+      status: true,
+    },
+    orderBy: [{ followUpAt: "asc" }, { createdAt: "desc" }],
+    take: 500,
+  });
+  const openLeads = leads.filter((lead) => lead.status !== "Won" && lead.status !== "Lost");
+
+  return {
+    estimatedValue: Math.round(
+      openLeads.reduce((total, lead) => {
+        const value = Number(lead.estimatedValue ?? 0);
+        return total + (Number.isFinite(value) ? value : 0);
+      }, 0),
+    ),
+    followUpCount: openLeads.filter((lead) => lead.followUpAt).length,
+    items: openLeads
+      .filter((lead) => lead.followUpAt || lead.status === "New")
+      .slice(0, 4)
+      .map((lead) => ({
+        estimatedValue: Math.round(money(lead.estimatedValue)),
+        href: `/dashboard/leads/${lead.id}`,
+        id: lead.id,
+        meta: lead.followUpAt
+          ? `${lead.serviceType ?? "Inquiry"} · ${format(lead.followUpAt, "MMM d")}`
+          : `${lead.serviceType ?? "Inquiry"} · newly added`,
+        priority: lead.followUpAt ? ("Follow up" as const) : ("New" as const),
+        title: lead.name,
+      })),
+    newCount: openLeads.filter((lead) => lead.status === "New").length,
+    nextLeadName: openLeads[0]?.name,
+    openCount: openLeads.length,
+  };
+}
+
+function LeadPipelineCard({ leadOverview }: { leadOverview: LeadOverview }) {
+  return (
+    <Card className="rounded-lg border-border bg-card shadow-sm">
+      <CardHeader className="border-b pb-4">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <span className="grid size-8 place-items-center rounded-md bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-300 dark:ring-cyan-500/25">
+              <MessagesSquare className="size-4" />
+            </span>
+            Lead pipeline
+          </CardTitle>
+          <CardDescription className="mt-1 text-xs">
+            {leadOverview.openCount
+              ? `${leadOverview.followUpCount} follow-ups · ${leadOverview.newCount} new`
+              : "No open lead pressure"}
+          </CardDescription>
+        </div>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link prefetch={false} href="/dashboard/leads">
+              Leads <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 pt-0">
+        {leadOverview.items.length ? (
+          leadOverview.items.map((lead) => (
+            <Link
+              key={lead.id}
+              prefetch={false}
+              href={lead.href}
+              className="grid min-w-0 gap-3 rounded-md border border-border bg-muted/35 p-3 transition-colors hover:bg-muted/60 sm:grid-cols-[1fr_auto]"
+            >
+              <div className="min-w-0">
+                <div className="truncate font-medium text-sm">{lead.title}</div>
+                <div className="truncate text-muted-foreground text-xs">{lead.meta}</div>
+              </div>
+              <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-end">
+                <Badge
+                  variant="outline"
+                  className={
+                    lead.priority === "Follow up"
+                      ? "rounded-md border-cyan-300 text-cyan-700 dark:border-cyan-900 dark:text-cyan-400"
+                      : "rounded-md border-amber-300 text-amber-700 dark:border-amber-900 dark:text-amber-400"
+                  }
+                >
+                  {lead.priority}
+                </Badge>
+                <span className="font-medium text-muted-foreground text-xs tabular-nums">
+                  {formatCompactCurrency(lead.estimatedValue)}
+                </span>
+              </div>
+            </Link>
+          ))
+        ) : (
+          <div className="grid min-h-36 place-items-center rounded-md border border-dashed bg-muted/20 p-6 text-center">
+            <div>
+              <div className="mx-auto grid size-10 place-items-center rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25">
+                <CheckCircle2 className="size-4" />
+              </div>
+              <p className="mt-3 font-medium text-sm">Lead pipeline is clear</p>
+              <p className="mt-1 text-muted-foreground text-xs">New leads and follow-ups will appear here.</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function UpcomingTasks({ tasks }: { tasks: UpcomingTask[] }) {
@@ -140,7 +291,11 @@ function UpcomingTasks({ tasks }: { tasks: UpcomingTask[] }) {
               key={task.id}
               prefetch={false}
               href="/dashboard/calendar"
-              className="grid min-w-0 gap-3 rounded-md border border-border bg-muted/35 p-3 transition-colors hover:bg-muted/60 sm:grid-cols-[1fr_auto]"
+              className={
+                task.priority === "High"
+                  ? "grid min-w-0 gap-3 rounded-md border border-rose-300 bg-rose-50/70 p-3 transition-colors hover:bg-rose-50 sm:grid-cols-[1fr_auto] dark:border-rose-900 dark:bg-rose-950/20 dark:hover:bg-rose-950/30"
+                  : "grid min-w-0 gap-3 rounded-md border border-border bg-muted/35 p-3 transition-colors hover:bg-muted/60 sm:grid-cols-[1fr_auto]"
+              }
             >
               <div className="min-w-0">
                 <div className="truncate font-medium text-sm">{task.title}</div>
@@ -150,10 +305,10 @@ function UpcomingTasks({ tasks }: { tasks: UpcomingTask[] }) {
                 ) : null}
               </div>
               <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-end">
-                <Badge
-                  variant="outline"
-                  className="rounded-md border-amber-300 text-amber-700 dark:border-amber-900 dark:text-amber-400"
-                >
+                <Badge variant="outline" className={taskPriorityClassName(task.priority)}>
+                  {task.priority}
+                </Badge>
+                <Badge variant="outline" className="rounded-md">
                   {format(new Date(task.scheduledFor), "MMM d")}
                 </Badge>
                 <ArrowRight className="size-4 text-muted-foreground" />
@@ -256,9 +411,10 @@ async function getPendingTimeReviews(ownerId: string): Promise<{
 async function getJobAttention(ownerId: string): Promise<{
   items: JobAttentionItem[];
   onHoldCount: number;
+  totalValue: number;
   unscheduledCount: number;
 }> {
-  const [unscheduledJobs, onHoldJobs, unscheduledCount, onHoldCount] = await Promise.all([
+  const [unscheduledJobs, onHoldJobs, unscheduledCount, onHoldCount, attentionJobs] = await Promise.all([
     prisma.job.findMany({
       where: {
         ownerId,
@@ -296,6 +452,19 @@ async function getJobAttention(ownerId: string): Promise<{
         ownerId,
         status: "On Hold",
       },
+    }),
+    prisma.job.findMany({
+      where: {
+        ownerId,
+        status: {
+          in: ["Unscheduled", "On Hold"],
+        },
+      },
+      select: {
+        estimatedCost: true,
+        finalCost: true,
+      },
+      take: 500,
     }),
   ]);
 
@@ -319,6 +488,9 @@ async function getJobAttention(ownerId: string): Promise<{
       })),
     ].slice(0, 6),
     onHoldCount,
+    totalValue: Math.round(
+      attentionJobs.reduce((total, job) => total + Math.max(money(job.finalCost), money(job.estimatedCost)), 0),
+    ),
     unscheduledCount,
   };
 }
@@ -429,129 +601,6 @@ function FocusRow({
   );
 }
 
-const queueSeverityClasses: Record<ManagerActionQueueItem["severity"], string> = {
-  amber: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  cyan: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
-  emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  rose: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-};
-
-function formatQueueValue(value: string | number) {
-  if (typeof value === "number") {
-    return formatCompactCurrency(value);
-  }
-
-  return value;
-}
-
-function ManagerActionQueue({ items }: { items: ManagerActionQueueItem[] }) {
-  const primaryItem = items[0];
-  const secondaryItems = items.slice(1, 6);
-
-  return (
-    <section className="overflow-hidden rounded-lg border border-cyan-500/25 bg-card shadow-sm">
-      <div className="border-cyan-500/20 border-b bg-cyan-500/5 p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <div className="mb-3 flex items-center gap-2 text-cyan-700 text-xs uppercase tracking-[0.14em] dark:text-cyan-300">
-              <ListChecks className="size-4" />
-              Manager action queue
-            </div>
-            <h2 className="font-semibold text-2xl leading-tight">What needs a decision next</h2>
-            <p className="mt-2 max-w-3xl text-muted-foreground text-sm leading-6">
-              Leads, time reviews, estimates, job blockers, invoice prep, and receivables collected into one working
-              list.
-            </p>
-          </div>
-          <Button asChild variant="outline" size="sm" className="shrink-0 bg-background/80">
-            <Link prefetch={false} href="/dashboard/command-center">
-              Command center
-              <ArrowRight />
-            </Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 p-4 sm:p-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.55fr)]">
-        {primaryItem ? (
-          <Link
-            prefetch={false}
-            href={primaryItem.href}
-            className="group grid min-h-52 content-between rounded-lg border border-cyan-500/25 bg-cyan-500/10 p-4 transition-colors hover:bg-cyan-500/15"
-          >
-            <div className="min-w-0">
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className={cn("rounded-md", queueSeverityClasses[primaryItem.severity])}>
-                  {primaryItem.priority}
-                </Badge>
-                <Badge variant="secondary" className="rounded-md">
-                  {primaryItem.type}
-                </Badge>
-              </div>
-              <p className="line-clamp-2 font-semibold text-xl leading-snug">{primaryItem.title}</p>
-              <p className="mt-2 line-clamp-2 text-muted-foreground text-sm">{primaryItem.detail}</p>
-            </div>
-            <div className="mt-6 flex items-center justify-between gap-3">
-              <span className="font-semibold text-2xl tabular-nums">{formatQueueValue(primaryItem.value)}</span>
-              <span className="grid size-9 place-items-center rounded-md bg-background/80 text-muted-foreground transition-colors group-hover:text-foreground">
-                <ArrowRight className="size-4" />
-              </span>
-            </div>
-          </Link>
-        ) : (
-          <div className="grid min-h-52 place-items-center rounded-lg border border-dashed bg-muted/20 p-6 text-center">
-            <div>
-              <div className="mx-auto grid size-10 place-items-center rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25">
-                <CheckCircle2 className="size-4" />
-              </div>
-              <p className="mt-3 font-medium text-sm">No urgent actions</p>
-              <p className="mt-1 text-muted-foreground text-xs">The queue will fill as work needs review.</p>
-            </div>
-          </div>
-        )}
-
-        <div className="grid content-start gap-2">
-          <div className="mb-1 flex items-center justify-between gap-3">
-            <span className="font-medium text-sm">Next in line</span>
-            <Badge variant="outline" className="rounded-md">
-              {items.length} actions
-            </Badge>
-          </div>
-          {secondaryItems.length ? (
-            secondaryItems.map((item) => (
-              <Link
-                key={`${item.type}-${item.id}`}
-                prefetch={false}
-                href={item.href}
-                className="group grid min-w-0 gap-3 rounded-md border bg-muted/25 px-3 py-2.5 transition-colors hover:bg-muted/45 sm:grid-cols-[1fr_auto]"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" className={cn("rounded-md", queueSeverityClasses[item.severity])}>
-                      {item.priority}
-                    </Badge>
-                    <span className="text-muted-foreground text-xs">{item.type}</span>
-                  </div>
-                  <p className="mt-1 truncate font-medium text-sm">{item.title}</p>
-                  <p className="truncate text-muted-foreground text-xs">{item.detail}</p>
-                </div>
-                <div className="flex items-center justify-between gap-2 sm:justify-end">
-                  <span className="font-medium text-xs tabular-nums">{formatQueueValue(item.value)}</span>
-                  <ArrowRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                </div>
-              </Link>
-            ))
-          ) : (
-            <div className="grid min-h-36 place-items-center rounded-md border border-dashed bg-muted/20 p-6 text-center text-muted-foreground text-sm">
-              No additional actions waiting.
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function JobAttention({
   items,
   onHoldCount,
@@ -642,8 +691,9 @@ export default async function Page() {
     );
   }
 
-  const [upcomingJobs, upcomingTasks, outstandingJobs, pendingTimeReviews, jobAttention, actionQueue] =
+  const [leadOverview, upcomingJobs, upcomingTasks, outstandingJobs, pendingTimeReviews, jobAttention, actionQueue] =
     await Promise.all([
+      getLeadOverview(currentUser.id),
       getUpcomingJobs(currentUser.id),
       getUpcomingTasks(currentUser.id),
       getOutstandingJobs(currentUser.id),
@@ -654,20 +704,24 @@ export default async function Page() {
   const displayName = getDisplayName(currentUser).split(" ")[0];
   const outstandingTotal = outstandingJobs.reduce((total, job) => total + job.balanceDue, 0);
   const hasOperationalActivity =
+    leadOverview.openCount > 0 ||
     upcomingJobs.length > 0 ||
     upcomingTasks.length > 0 ||
     outstandingJobs.length > 0 ||
     pendingTimeReviews.pendingCount > 0 ||
     jobAttention.unscheduledCount > 0 ||
     jobAttention.onHoldCount > 0;
+  const timePenalty = Math.min(pendingTimeReviews.pendingCount * 4, 16);
+  const receivablesPenalty = Math.min(outstandingJobs.length * 4, 20);
+  const jobBlockerPenalty = Math.min(jobAttention.unscheduledCount * 7 + jobAttention.onHoldCount * 5, 24);
+  const leadPenalty = Math.min(
+    leadOverview.followUpCount * 4 + leadOverview.newCount * 2 + leadOverview.openCount * 0.5,
+    16,
+  );
+  const schedulePenalty = hasOperationalActivity ? Math.min(Math.max(0, 3 - upcomingJobs.length) * 3, 9) : 0;
   const readinessScore = Math.max(
-    48,
-    100 -
-      pendingTimeReviews.pendingCount * 9 -
-      outstandingJobs.length * 5 -
-      jobAttention.unscheduledCount * 8 -
-      jobAttention.onHoldCount * 6 -
-      (hasOperationalActivity ? Math.max(0, 3 - upcomingJobs.length) * 3 : 0),
+    0,
+    Math.round(100 - timePenalty - receivablesPenalty - jobBlockerPenalty - leadPenalty - schedulePenalty),
   );
   const nextJob = upcomingJobs[0];
   const largestBalance = outstandingJobs[0];
@@ -722,14 +776,18 @@ export default async function Page() {
               <OverviewSignal
                 accent="amber"
                 detail={
-                  pendingTimeReviews.pendingCount
-                    ? "Employee requests are waiting for approval."
-                    : "No employee time edits waiting."
+                  leadOverview.openCount
+                    ? `${leadOverview.newCount} new · ${leadOverview.followUpCount} follow-ups.`
+                    : "No open leads waiting right now."
                 }
-                href="/dashboard/time-tracking"
-                icon={Clock3}
-                label="Time queue"
-                value={`${pendingTimeReviews.pendingCount} pending`}
+                href="/dashboard/leads"
+                icon={MessagesSquare}
+                label="Lead pipeline"
+                value={
+                  leadOverview.openCount
+                    ? `${leadOverview.openCount} open · ${formatCompactCurrency(leadOverview.estimatedValue)}`
+                    : "0 open"
+                }
               />
               <OverviewSignal
                 accent="cyan"
@@ -743,7 +801,11 @@ export default async function Page() {
                 href="/dashboard/jobs"
                 icon={BriefcaseBusiness}
                 label="Job attention"
-                value={`${jobAttention.unscheduledCount + jobAttention.onHoldCount} jobs`}
+                value={
+                  jobAttention.unscheduledCount + jobAttention.onHoldCount
+                    ? `${jobAttention.unscheduledCount + jobAttention.onHoldCount} jobs · ${formatCompactCurrency(jobAttention.totalValue)}`
+                    : "0 jobs"
+                }
               />
               <OverviewSignal
                 accent="emerald"
@@ -784,6 +846,16 @@ export default async function Page() {
             </div>
             <div className="mt-5 grid gap-2">
               <FocusRow
+                href="/dashboard/leads"
+                icon={leadOverview.openCount ? MessagesSquare : CheckCircle2}
+                label={leadOverview.nextLeadName ?? (leadOverview.openCount ? "Lead pipeline" : "Leads clear")}
+                value={
+                  leadOverview.openCount
+                    ? `${leadOverview.followUpCount} follow-ups · ${leadOverview.newCount} new · ${formatCompactCurrency(leadOverview.estimatedValue)}`
+                    : "No open lead pressure"
+                }
+              />
+              <FocusRow
                 href="/dashboard/time-tracking"
                 icon={firstReview ? Clock3 : CheckCircle2}
                 label={firstReview ? `${firstReview.employeeName} time request` : "Time requests clear"}
@@ -819,7 +891,7 @@ export default async function Page() {
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="grid min-w-0 gap-5">
           <div className="grid gap-5 lg:grid-cols-2">
-            <PendingTimeReviews pendingCount={pendingTimeReviews.pendingCount} reviews={pendingTimeReviews.reviews} />
+            <LeadPipelineCard leadOverview={leadOverview} />
             <JobAttention
               items={jobAttention.items}
               onHoldCount={jobAttention.onHoldCount}

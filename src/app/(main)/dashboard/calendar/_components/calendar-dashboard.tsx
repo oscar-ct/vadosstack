@@ -422,16 +422,24 @@ function CreateTaskDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="calendar-task-customer">Customer</Label>
-              <NativeSelect id="calendar-task-customer" name="customerId" className="w-full">
-                <NativeSelectOption value="">No customer</NativeSelectOption>
-                {customers.map((customer) => (
-                  <NativeSelectOption key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </NativeSelectOption>
-                ))}
+              <Label htmlFor="calendar-task-priority">Priority</Label>
+              <NativeSelect id="calendar-task-priority" name="priority" defaultValue="Normal" className="w-full">
+                <NativeSelectOption value="Low">Low</NativeSelectOption>
+                <NativeSelectOption value="Normal">Normal</NativeSelectOption>
+                <NativeSelectOption value="High">High</NativeSelectOption>
               </NativeSelect>
             </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="calendar-task-customer">Customer</Label>
+            <NativeSelect id="calendar-task-customer" name="customerId" className="w-full">
+              <NativeSelectOption value="">No customer</NativeSelectOption>
+              {customers.map((customer) => (
+                <NativeSelectOption key={customer.id} value={customer.id}>
+                  {customer.name}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="calendar-task-location">Location</Label>

@@ -27,8 +27,12 @@ import { NavUser } from "./nav-user";
 
 export function AppSidebar({
   currentUser,
+  dueTodayTaskCount,
+  pendingTimeReviewCount,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
+  dueTodayTaskCount: number;
+  pendingTimeReviewCount: number;
   currentUser: {
     name: string;
     companyName: string;
@@ -120,6 +124,8 @@ export function AppSidebar({
           invoiceDueDays={currentUser?.invoiceDueDays ?? 15}
           logoSrc={logoSrc}
           onCompanySettingsSaved={refreshCompanyLogo}
+          dueTodayTaskCount={dueTodayTaskCount}
+          pendingTimeReviewCount={pendingTimeReviewCount}
         />
       </SidebarContent>
       <SidebarFooter>

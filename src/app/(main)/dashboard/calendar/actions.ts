@@ -22,6 +22,7 @@ const taskSchema = z.object({
   customerId: z.string().trim().optional(),
   location: z.string().trim().optional(),
   notes: z.string().trim().optional(),
+  priority: z.enum(["Low", "Normal", "High"]),
   scheduledFor: z
     .string()
     .trim()
@@ -48,6 +49,7 @@ export async function createCalendarTaskAction(
     customerId: emptyToUndefined(formData.get("customerId")),
     location: emptyToUndefined(formData.get("location")),
     notes: emptyToUndefined(formData.get("notes")),
+    priority: formData.get("priority"),
     scheduledFor: formData.get("scheduledFor"),
     title: formData.get("title"),
   });
@@ -86,6 +88,7 @@ export async function createCalendarTaskAction(
       location: parsed.data.location,
       notes: parsed.data.notes,
       ownerId: currentUser.id,
+      priority: parsed.data.priority,
       scheduledFor: parsed.data.scheduledFor,
       title: parsed.data.title,
     },

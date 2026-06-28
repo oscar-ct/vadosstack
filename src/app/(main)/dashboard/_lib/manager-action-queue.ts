@@ -1,4 +1,4 @@
-import { addMonths, differenceInCalendarDays, format, isAfter, startOfToday, subDays } from "date-fns";
+import { addMonths, differenceInCalendarDays, endOfToday, format, isAfter, startOfToday, subDays } from "date-fns";
 
 import { prisma } from "@/lib/prisma";
 
@@ -70,6 +70,18 @@ type QueueTimeRequest = {
   };
 };
 
+type QueueTask = {
+  id: string;
+  title: string;
+  location: string | null;
+  priority: string;
+  scheduledFor: Date;
+  status: string;
+  customer: {
+    name: string;
+  } | null;
+};
+
 function money(value: MoneyValue) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -107,16 +119,19 @@ export function buildManagerActionQueue({
   estimates,
   jobs,
   leads,
-  limit = 8,
+  limit,
+  tasks = [],
   timeRequests,
 }: {
   estimates: QueueEstimate[];
   jobs: QueueJob[];
   leads: QueueLead[];
   limit?: number;
+  tasks?: QueueTask[];
   timeRequests: QueueTimeRequest[];
 }): ManagerActionQueueItem[] {
   const today = startOfToday();
+  const todayEnd = endOfToday();
   const staleCutoff = subDays(today, 14);
 
   const pendingTimeRequests = timeRequests.filter((request) => request.action && request);
@@ -160,9 +175,13 @@ export function buildManagerActionQueue({
     .filter((lead) => lead.status === "New")
     .filter((lead) => !openLeadFollowUpIds.has(lead.id))
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const tasksDueToday = tasks
+    .filter((task) => task.status !== "Completed")
+    .filter((task) => !isAfter(task.scheduledFor, todayEnd) && !isAfter(today, task.scheduledFor))
+    .sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime());
 
-  return [
-    ...openLeadFollowUps.slice(0, 4).map((lead) => ({
+  const queue = [
+    ...openLeadFollowUps.map((lead) => ({
       id: lead.id,
       type: "Lead",
       title: compactTitle(lead.name, "Lead needs follow-up"),
@@ -174,7 +193,17 @@ export function buildManagerActionQueue({
       severity: "cyan" as const,
       value: lead.estimatedValue ? Math.round(money(lead.estimatedValue)) : "Lead",
     })),
-    ...newLeads.slice(0, 3).map((lead) => ({
+    ...tasksDueToday.map((task) => ({
+      id: task.id,
+      type: "Task",
+      title: compactTitle(task.title, "Task due today"),
+      detail: `${task.customer?.name ?? "Task"} · ${task.location ?? "location not set"}`,
+      href: "/dashboard/calendar",
+      priority: task.priority || "Due today",
+      severity: task.priority === "High" ? ("rose" as const) : ("amber" as const),
+      value: "Today",
+    })),
+    ...newLeads.map((lead) => ({
       id: lead.id,
       type: "Lead",
       title: compactTitle(lead.name, "New lead"),
@@ -184,7 +213,7 @@ export function buildManagerActionQueue({
       severity: "amber" as const,
       value: lead.estimatedValue ? Math.round(money(lead.estimatedValue)) : "New",
     })),
-    ...pendingTimeRequests.slice(0, 4).map((request) => ({
+    ...pendingTimeRequests.map((request) => ({
       id: request.id,
       type: "Time review",
       title: `${request.employee.name} requested ${formatTimeRequestAction(request.action)}`,
@@ -196,7 +225,7 @@ export function buildManagerActionQueue({
       severity: "amber" as const,
       value: request.hours ? `${money(request.hours)}h` : "Pending",
     })),
-    ...unscheduledJobs.slice(0, 4).map((job) => ({
+    ...unscheduledJobs.map((job) => ({
       id: job.id,
       type: "Job",
       title: compactTitle(job.description, "Job needs scheduling"),
@@ -206,7 +235,7 @@ export function buildManagerActionQueue({
       severity: "rose" as const,
       value: "Unscheduled",
     })),
-    ...onHoldJobs.slice(0, 4).map((job) => ({
+    ...onHoldJobs.map((job) => ({
       id: job.id,
       type: "Job",
       title: compactTitle(job.description, "Job is on hold"),
@@ -216,7 +245,7 @@ export function buildManagerActionQueue({
       severity: "amber" as const,
       value: "On hold",
     })),
-    ...jobsMissingFinalPrice.slice(0, 4).map((job) => ({
+    ...jobsMissingFinalPrice.map((job) => ({
       id: job.id,
       type: "Invoice prep",
       title: compactTitle(job.description, "Job needs final price"),
@@ -226,7 +255,7 @@ export function buildManagerActionQueue({
       severity: "amber" as const,
       value: "No total",
     })),
-    ...readyEstimates.slice(0, 4).map((estimate) => ({
+    ...readyEstimates.map((estimate) => ({
       id: estimate.id,
       type: "Estimate",
       title: compactTitle(estimate.description, "Estimate ready to send"),
@@ -236,7 +265,7 @@ export function buildManagerActionQueue({
       severity: "cyan" as const,
       value: Math.round(money(estimate.estimatedTotal)),
     })),
-    ...staleEstimates.slice(0, 4).map((estimate) => ({
+    ...staleEstimates.map((estimate) => ({
       id: estimate.id,
       type: "Estimate",
       title: compactTitle(estimate.description, "Estimate needs follow-up"),
@@ -246,7 +275,7 @@ export function buildManagerActionQueue({
       severity: "cyan" as const,
       value: Math.round(money(estimate.estimatedTotal)),
     })),
-    ...readyToInvoiceJobs.slice(0, 4).map((job) => ({
+    ...readyToInvoiceJobs.map((job) => ({
       id: job.id,
       type: "Invoice prep",
       title: compactTitle(job.description, "Job ready to invoice"),
@@ -256,7 +285,7 @@ export function buildManagerActionQueue({
       severity: "amber" as const,
       value: Math.round(Math.max(0, money(job.finalCost) - money(job.amountPaid))),
     })),
-    ...unpaidInvoicedJobs.slice(0, 4).map((job) => ({
+    ...unpaidInvoicedJobs.map((job) => ({
       id: job.id,
       type: "Receivable",
       title: compactTitle(job.description, "Job has balance"),
@@ -266,11 +295,13 @@ export function buildManagerActionQueue({
       severity: "emerald" as const,
       value: Math.round(Math.max(0, money(job.finalCost) - money(job.amountPaid))),
     })),
-  ].slice(0, limit);
+  ];
+
+  return typeof limit === "number" ? queue.slice(0, limit) : queue;
 }
 
-export async function getManagerActionQueue(ownerId: string, limit = 8) {
-  const [leads, jobs, estimates, timeRequests] = await Promise.all([
+export async function getManagerActionQueue(ownerId: string, limit?: number) {
+  const [leads, jobs, estimates, tasks, timeRequests] = await Promise.all([
     prisma.lead.findMany({
       where: { ownerId },
       orderBy: [{ followUpAt: "asc" }, { createdAt: "desc" }],
@@ -295,6 +326,23 @@ export async function getManagerActionQueue(ownerId: string, limit = 8) {
       orderBy: { createdAt: "desc" },
       take: 500,
     }),
+    prisma.task.findMany({
+      where: {
+        ownerId,
+        scheduledFor: {
+          gte: startOfToday(),
+          lte: endOfToday(),
+        },
+        status: {
+          not: "Completed",
+        },
+      },
+      include: {
+        customer: true,
+      },
+      orderBy: [{ scheduledFor: "asc" }, { updatedAt: "desc" }],
+      take: 100,
+    }),
     prisma.timeEntryRequest.findMany({
       where: {
         ownerId,
@@ -311,6 +359,7 @@ export async function getManagerActionQueue(ownerId: string, limit = 8) {
     jobs,
     leads,
     limit,
+    tasks,
     timeRequests,
   });
 }

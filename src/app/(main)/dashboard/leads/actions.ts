@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { z } from "zod";
 
@@ -124,6 +125,7 @@ function getLeadPayload(formData: FormData) {
 
 function revalidateLeadPaths(leadId?: string) {
   revalidatePath("/dashboard/leads");
+  revalidatePath("/dashboard/overview");
   revalidatePath("/dashboard/command-center");
   if (leadId) {
     revalidatePath(`/dashboard/leads/${leadId}`);
@@ -424,11 +426,7 @@ export async function deleteLeadAction(
 
   revalidateLeadPaths();
 
-  return {
-    success: true,
-    message: "Lead deleted.",
-    redirectTo: "/dashboard/leads",
-  };
+  redirect("/dashboard/leads");
 }
 
 export async function sendLeadEmailAction(_previousState: EmailLeadState, formData: FormData): Promise<EmailLeadState> {
