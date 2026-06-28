@@ -47,8 +47,12 @@ export function CustomerProfileActions({
       <DeleteCustomerDialog
         action={deleteCustomerAction}
         customer={deletingCustomer}
-        onDeleted={() => router.replace("/dashboard/customers")}
+        onDeleted={() => {
+          router.push("/dashboard/customers");
+          router.refresh();
+        }}
         open={!!deletingCustomer}
+        redirectTo="/dashboard/customers"
         onOpenChange={(open) => {
           if (!open) setDeletingCustomer(null);
         }}

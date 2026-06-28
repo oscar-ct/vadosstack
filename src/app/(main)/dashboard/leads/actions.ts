@@ -320,7 +320,6 @@ export async function convertLeadToCustomerAction(
       return {
         success: true,
         message: "Lead is already linked to a customer.",
-        redirectTo: `/dashboard/customers/${lead.customerId}`,
       };
     }
 
@@ -386,7 +385,6 @@ export async function convertLeadToCustomerAction(
     return {
       success: true,
       message: existingCustomer ? "Lead linked to existing customer." : "Lead converted to customer.",
-      redirectTo: `/dashboard/customers/${customer.id}`,
     };
   } catch {
     return { success: false, message: "Lead could not be converted. Please try again." };

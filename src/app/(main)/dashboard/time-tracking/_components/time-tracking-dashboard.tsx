@@ -585,7 +585,7 @@ function DeleteHoursDialog({
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button size="icon-sm" variant="ghost" aria-label={`Delete ${entry.employeeName} hours`}>
+        <Button size="icon-sm" variant="destructive" aria-label={`Delete ${entry.employeeName} hours`}>
           <Trash2 />
         </Button>
       </AlertDialogTrigger>

@@ -148,8 +148,8 @@ export function DeleteJobButton({
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button type="button" variant="outline" size={size} className={className}>
-          <Trash2 className="text-destructive" />
+        <Button type="button" variant="destructive" size={size} className={className}>
+          <Trash2 />
           Delete
         </Button>
       </AlertDialogTrigger>
@@ -390,7 +390,7 @@ export function DeleteDepositButton({
       <AlertDialogTrigger asChild>
         <Button
           type="submit"
-          variant="ghost"
+          variant="destructive"
           size="icon"
           className="size-7"
           disabled={isPending}

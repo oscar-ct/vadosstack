@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { format } from "date-fns";
-import { ArrowLeft, CalendarClock, FileText, Mail, MapPin, Pencil, Phone, ReceiptText, UserRound } from "lucide-react";
+import { CalendarClock, FileText, Mail, MapPin, Pencil, Phone, ReceiptText, UserRound } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
+import { BackButton } from "@/components/back-button";
 import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -136,12 +137,7 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
   return (
     <div className="@container/main mx-auto grid w-full max-w-6xl gap-4 md:gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button asChild variant="outline" size="sm">
-          <Link href="/dashboard/leads">
-            <ArrowLeft />
-            Leads
-          </Link>
-        </Button>
+        <BackButton fallbackHref="/dashboard/leads" />
         <div className="flex flex-wrap items-center gap-2">
           {lead.status !== "New" ? <LeadStatusButton action={updateLeadStatusAction} lead={lead} status="New" /> : null}
           <LeadStatusButton action={updateLeadStatusAction} lead={lead} status="Contacted" />

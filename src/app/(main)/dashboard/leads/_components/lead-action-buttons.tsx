@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { CheckCircle2, RotateCcw, Trash2, UserRound, XCircle } from "lucide-react";
@@ -101,11 +102,22 @@ export function ConvertLeadButton({
     }
   }, [router, state]);
 
+  if (lead.customerId) {
+    return (
+      <Button asChild size="sm" className="w-full sm:w-auto">
+        <Link prefetch={false} href={`/dashboard/customers/${lead.customerId}`}>
+          <UserRound />
+          Open customer
+        </Link>
+      </Button>
+    );
+  }
+
   return (
     <form action={formAction}>
       <input type="hidden" name="id" value={lead.id} />
       <SubmitButton icon={<UserRound />} isPending={isPending} className="w-full sm:w-auto">
-        {lead.customerId ? "Open customer" : "Convert to customer"}
+        Convert to customer
       </SubmitButton>
     </form>
   );

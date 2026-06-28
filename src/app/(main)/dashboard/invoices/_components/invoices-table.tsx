@@ -212,12 +212,12 @@ function DeleteInvoicePaymentDialog({
       <AlertDialogTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant="destructive"
           size="icon-sm"
           disabled={isDeletingPayment}
           aria-label={`Delete ${payment.description} payment`}
         >
-          <Trash2 className="text-destructive" />
+          <Trash2 />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

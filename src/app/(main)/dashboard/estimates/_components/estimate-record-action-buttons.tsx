@@ -196,8 +196,8 @@ export function DeleteEstimateRecordButton({
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button type="button" variant="outline" size={size} className={className}>
-          <Trash2 className="text-destructive" />
+        <Button type="button" variant="destructive" size={size} className={className}>
+          <Trash2 />
           Delete
         </Button>
       </AlertDialogTrigger>
@@ -219,6 +219,7 @@ export function DeleteEstimateRecordButton({
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
           <AlertDialogAction
+            variant="destructive"
             disabled={isPending}
             onClick={(event) => {
               event.preventDefault();

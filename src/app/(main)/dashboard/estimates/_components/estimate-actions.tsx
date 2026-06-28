@@ -220,7 +220,7 @@ export function DeleteEstimateButton({
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
+        <Button type="button" variant="destructive" size="sm">
           <Trash2 />
           Delete
         </Button>

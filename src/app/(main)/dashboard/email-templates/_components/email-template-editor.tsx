@@ -184,8 +184,8 @@ export function DeleteEmailTemplateButton({
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
-          <Trash2 className="text-destructive" />
+        <Button type="button" variant="destructive" size="sm">
+          <Trash2 />
           Delete
         </Button>
       </AlertDialogTrigger>
@@ -203,6 +203,7 @@ export function DeleteEmailTemplateButton({
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
           <AlertDialogAction
+            variant="destructive"
             disabled={isPending}
             onClick={(event) => {
               event.preventDefault();
@@ -428,7 +429,7 @@ export function EmailTemplateEditor({
   return (
     <div className="@container/main mx-auto grid w-full max-w-7xl gap-4 md:gap-6">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <BackButton fallbackHref="/dashboard/email-templates" label="Email templates" />
+        <BackButton fallbackHref="/dashboard/email-templates" />
         {mode === "edit" && template && deleteAction ? (
           <DeleteEmailTemplateButton action={deleteAction} template={template} />
         ) : null}

@@ -29,12 +29,14 @@ export function DeleteCustomerDialog({
   onDeleted,
   open,
   onOpenChange,
+  redirectTo,
 }: {
   action: (state: CustomerMutationState, formData: FormData) => Promise<CustomerMutationState>;
   customer: RecentCustomerRow | null;
   onDeleted?: () => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  redirectTo?: string;
 }) {
   const formRef = React.useRef<HTMLFormElement>(null);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
@@ -59,6 +61,7 @@ export function DeleteCustomerDialog({
 
         <form ref={formRef} action={formAction}>
           <input type="hidden" name="id" value={customer?.id ?? ""} />
+          <input type="hidden" name="redirectTo" value={redirectTo ?? ""} />
         </form>
 
         {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
@@ -66,6 +69,7 @@ export function DeleteCustomerDialog({
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
           <AlertDialogAction
+            variant="destructive"
             disabled={isPending}
             onClick={(event) => {
               event.preventDefault();

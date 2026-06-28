@@ -339,7 +339,7 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
   return (
     <div className="@container/main mx-auto grid w-full max-w-7xl gap-5 md:gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <BackButton fallbackHref="/dashboard/customers" label="Customers" />
+        <BackButton fallbackHref="/dashboard/customers" />
         <div className="flex flex-wrap items-center gap-2">
           <CustomerProfileActions
             customer={customerRow}
@@ -364,9 +364,9 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
               </div>
             </div>
             <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,9.5rem),1fr))]">
-              <SummaryTile label="Outstanding" value={formatCurrency(totalOutstanding)} tone="rose" />
-              <SummaryTile label="Billed" value={formatCurrency(totalBilled)} tone="cyan" />
-              <SummaryTile label="Paid" value={formatCurrency(totalPaid)} tone="emerald" />
+              <SummaryTile label="Outstanding" value={formatCurrency(totalOutstanding)} />
+              <SummaryTile label="Billed" value={formatCurrency(totalBilled)} />
+              <SummaryTile label="Paid" value={formatCurrency(totalPaid)} />
             </div>
           </div>
 
@@ -493,10 +493,10 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
   );
 }
 
-function SummaryTile({ label, tone, value }: { label: string; tone: ActivityTone; value: string }) {
+function SummaryTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className={cn("min-w-0 rounded-lg border p-3", activityToneClassName(tone))}>
-      <div className="text-xs">{label}</div>
+    <div className="min-w-0 rounded-lg border bg-background p-3">
+      <div className="text-muted-foreground text-xs">{label}</div>
       <div className="mt-1 min-w-0 truncate font-semibold text-lg tabular-nums">{value}</div>
     </div>
   );

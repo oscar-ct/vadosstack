@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { z } from "zod";
 
@@ -11,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 export type CreateCustomerState = {
   success: boolean;
   message: string;
+  redirectTo?: string;
 };
 
 export type CustomerMutationState = CreateCustomerState;
@@ -330,6 +332,7 @@ export async function updateCustomerAction(
 
 const deleteCustomerSchema = z.object({
   id: z.string().trim().min(1, "Customer is required."),
+  redirectTo: z.string().trim().optional(),
 });
 
 export async function deleteCustomerAction(
@@ -347,6 +350,7 @@ export async function deleteCustomerAction(
 
   const parsed = deleteCustomerSchema.safeParse({
     id: formData.get("id"),
+    redirectTo: formData.get("redirectTo"),
   });
 
   if (!parsed.success) {
@@ -373,6 +377,10 @@ export async function deleteCustomerAction(
   }
 
   revalidatePath("/dashboard/customers");
+
+  if (parsed.data.redirectTo?.startsWith("/dashboard/")) {
+    redirect(parsed.data.redirectTo);
+  }
 
   return {
     success: true,

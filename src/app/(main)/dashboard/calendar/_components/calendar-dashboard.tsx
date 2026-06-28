@@ -218,13 +218,9 @@ function TaskDeleteButton({
       <AlertDialogTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant="destructive"
           size={iconOnly ? "icon-sm" : "sm"}
-          className={
-            iconOnly
-              ? "size-6 text-muted-foreground hover:text-destructive"
-              : "text-muted-foreground hover:text-destructive"
-          }
+          className={iconOnly ? "size-6" : undefined}
           aria-label={`Delete ${event.title}`}
         >
           <Trash2 className="size-3.5" />

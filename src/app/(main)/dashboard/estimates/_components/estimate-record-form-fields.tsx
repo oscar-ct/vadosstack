@@ -1001,7 +1001,7 @@ export function EstimateRecordFormFields({
       ? estimate.measurementRooms.map((room, index) => createMeasurementRoom(room, index))
       : [createMeasurementRoom()],
   );
-  const [measurementsOpen, setMeasurementsOpen] = React.useState(false);
+  const [measurementsOpen, setMeasurementsOpen] = React.useState(() => Boolean(estimate?.measurementRooms.length));
   const [taxRate, setTaxRate] = React.useState(Number(estimate?.materialTaxRate ?? "8.25"));
   const isCreatingNewCustomer = selectedCustomerId === newCustomerValue;
   const selectedCustomer = isCreatingNewCustomer

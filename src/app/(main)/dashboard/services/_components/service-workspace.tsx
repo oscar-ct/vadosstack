@@ -88,8 +88,8 @@ export function DeleteServiceButton({
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
-          <Trash2 className="text-destructive" />
+        <Button type="button" variant="destructive" size="sm">
+          <Trash2 />
           Delete
         </Button>
       </AlertDialogTrigger>
@@ -111,6 +111,7 @@ export function DeleteServiceButton({
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
           <AlertDialogAction
+            variant="destructive"
             disabled={isPending}
             onClick={(event) => {
               event.preventDefault();
@@ -163,7 +164,7 @@ export function ServiceWorkspace({
   return (
     <div className="@container/main mx-auto grid w-full max-w-7xl gap-4 md:gap-6">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <BackButton fallbackHref="/dashboard/services" label="Services" />
+        <BackButton fallbackHref="/dashboard/services" />
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <div className="flex min-w-0 items-center gap-2 text-muted-foreground text-sm">
             <CheckCircle2 className="size-4 text-emerald-600" />

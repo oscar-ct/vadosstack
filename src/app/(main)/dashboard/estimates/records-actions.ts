@@ -214,19 +214,11 @@ function normalizeMaterials<
     .filter(
       (item) =>
         item.description.trim() ||
-        item.quantity.trim() ||
         item.unit.trim() ||
         item.unitPrice.trim() ||
         (item.price.trim() && Number(item.price) !== 0),
     )
-    .filter(
-      (item) =>
-        item.description.trim() ||
-        item.quantity.trim() ||
-        item.unit.trim() ||
-        item.unitPrice.trim() ||
-        Number(item.price) !== 0,
-    );
+    .filter((item) => item.description.trim() || item.unit.trim() || item.unitPrice.trim() || Number(item.price) !== 0);
 }
 
 function normalizeMeasurement(value: string | undefined) {
