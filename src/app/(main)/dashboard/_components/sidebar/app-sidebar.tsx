@@ -36,6 +36,7 @@ export function AppSidebar({
   currentUser: {
     name: string;
     companyName: string;
+    companyAddress: string | null;
     companyEmail: string | null;
     companyLogoSrc: string;
     companyPhone: string | null;
@@ -114,6 +115,7 @@ export function AppSidebar({
         <NavMain
           items={visibleSidebarItems}
           companyName={companyName}
+          companyAddress={currentUser?.companyAddress ?? null}
           companyEmail={currentUser?.companyEmail ?? null}
           companyPhone={currentUser?.companyPhone ?? null}
           estimateValidDays={currentUser?.estimateValidDays ?? 15}

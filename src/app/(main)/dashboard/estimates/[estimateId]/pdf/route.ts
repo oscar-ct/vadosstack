@@ -5,6 +5,7 @@ import { addDays } from "date-fns";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { formatDocumentNumber } from "@/lib/document-number";
+import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
 import { parseMaterials as parseJobMaterials } from "../../../jobs/_components/materials";
@@ -95,14 +96,15 @@ export async function GET(
         price: item.price,
       }))
     : snapshotMaterials.filter((item) => item.type !== "labor");
+  const taxableItemsLabel = estimate.estimateRecord?.jobType === "Commercial" ? "labor + materials" : "materials";
   const pdfBuffer = await renderEstimatePdfBuffer({
     companyEmail: currentUser.companyEmail ?? currentUser.email,
     companyLogoSrc,
     companyName: currentUser.companyName,
-    companyPhone: currentUser.companyPhone,
+    companyPhone: currentUser.companyPhone ? formatPhoneNumber(currentUser.companyPhone) : null,
     customerEmail: estimate.customerEmail,
     customerName: estimate.customerName,
-    customerPhone: estimate.customerPhone,
+    customerPhone: estimate.customerPhone ? formatPhoneNumber(estimate.customerPhone) : null,
     dateBegin: estimate.dateBegin,
     dateEnd: estimate.dateEnd,
     estimatedTotal: estimate.estimatedTotal,
@@ -117,6 +119,7 @@ export async function GET(
     materialTaxRate: estimate.materialTaxRate,
     materialsSubtotal: estimate.materialsSubtotal,
     serviceLocation: estimate.serviceLocation,
+    taxableItemsLabel,
     validThrough,
   });
   const filename = sanitizePdfFilename(estimateNumber);

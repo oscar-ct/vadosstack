@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
       : await prisma.user.create({
           data: {
             authProviders: ["google"],
+            companyAddress: null,
             companyName: getGoogleWorkspaceName({ email, hd: userInfo.hd, name: userInfo.name }),
             companyEmail: email,
             email,

@@ -18,6 +18,7 @@ import {
   refreshGoogleAccessToken,
   sendGmailMessage,
 } from "@/lib/google-mail";
+import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
 import { calculateSignedMaterialTotal } from "../jobs/_components/materials";
@@ -397,6 +398,7 @@ export async function emailInvoiceAction(
     const laborItems = parsePricingItems(invoice.job.laborItems);
     const materials = parseInvoiceMaterials(invoice.materials);
     const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
+    const taxableItemsLabel = invoice.job.jobType === "Commercial" ? "labor + materials" : "materials";
     const emailContent = createInvoiceEmailContent({
       balanceDue: formatMoney(invoice.balanceDue),
       companyName: currentUser.companyName,
@@ -408,13 +410,14 @@ export async function emailInvoiceAction(
     const pdfBuffer = await renderInvoicePdfBuffer({
       amountPaid: invoice.amountPaid,
       balanceDue: invoice.balanceDue,
+      companyAddress: currentUser.companyAddress,
       companyEmail: currentUser.companyEmail ?? currentUser.email,
       companyLogoSrc,
       companyName: currentUser.companyName,
-      companyPhone: currentUser.companyPhone,
+      companyPhone: currentUser.companyPhone ? formatPhoneNumber(currentUser.companyPhone) : null,
       customerEmail: invoice.customerEmail,
       customerName: invoice.customerName,
-      customerPhone: invoice.customerPhone,
+      customerPhone: invoice.customerPhone ? formatPhoneNumber(invoice.customerPhone) : null,
       dateBegin: invoice.dateBegin,
       dateEnd: invoice.dateEnd,
       depositPaid: invoice.depositPaid,
@@ -432,6 +435,7 @@ export async function emailInvoiceAction(
       materialsSubtotal: invoice.materialsSubtotal,
       payments: invoice.job.payments,
       serviceLocation: invoice.serviceLocation,
+      taxableItemsLabel,
     });
     const pdfFilename = `${invoiceNumber.replace(/[^a-z0-9-]+/gi, "-")}.pdf`;
     subject = submittedEmailContent.subject;

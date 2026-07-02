@@ -55,6 +55,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           context: {
             companyEmail: currentUser.companyEmail ?? currentUser.email,
             companyName: currentUser.companyName,
+            companyAddress: currentUser.companyAddress,
             companyPhone: currentUser.companyPhone,
           },
         }),
@@ -148,6 +149,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
               ? {
                   name: currentUser.name ?? currentUser.email,
                   companyName: currentUser.companyName,
+                  companyAddress: currentUser.companyAddress,
                   companyEmail: currentUser.companyEmail,
                   companyPhone: currentUser.companyPhone,
                   estimateValidDays: currentUser.estimateValidDays,

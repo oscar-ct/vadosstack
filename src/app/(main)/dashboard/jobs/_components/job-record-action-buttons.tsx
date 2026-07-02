@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { CircleDollarSign, ReceiptText, Trash2 } from "lucide-react";
+import { CircleDollarSign, MoreVertical, Pencil, ReceiptText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -27,6 +27,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toDateInputValue } from "@/lib/date-only";
@@ -36,6 +43,8 @@ import type { InvoiceMutationState } from "../../invoices/types";
 import type { JobMutationState } from "../actions";
 import { getJobBillingState } from "./job-billing-state";
 import type { JobRow } from "./jobs-table/schema";
+
+type JobPayment = JobRow["payments"][number];
 
 const initialState: JobMutationState = {
   success: false,
@@ -185,75 +194,124 @@ export function CreateDepositButton({
   job: JobRow;
   size?: React.ComponentProps<typeof Button>["size"];
 }) {
+  return (
+    <DepositDialog action={action} job={job}>
+      <Button type="button" variant="outline" size={size} className={className}>
+        <CircleDollarSign className="size-4" />
+        Create deposit
+      </Button>
+    </DepositDialog>
+  );
+}
+
+function DepositDialog({
+  action,
+  children,
+  job,
+  onOpenChange,
+  open: controlledOpen,
+  payment,
+}: {
+  action: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
+  children?: React.ReactNode;
+  job: JobRow;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+  payment?: JobPayment;
+}) {
+  const isEditing = Boolean(payment);
   const paymentFormRef = React.useRef<HTMLFormElement>(null);
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = React.useCallback(
+    (nextOpen: boolean) => {
+      if (onOpenChange) {
+        onOpenChange(nextOpen);
+        return;
+      }
+      setUncontrolledOpen(nextOpen);
+    },
+    [onOpenChange],
+  );
 
   React.useEffect(() => {
     if (!state.success) return;
-    paymentFormRef.current?.reset();
+    if (!isEditing) {
+      paymentFormRef.current?.reset();
+    }
     setOpen(false);
     router.refresh();
-    toast.success(state.message || "Deposit recorded.");
-  }, [state, router]);
+    toast.success(state.message || (isEditing ? "Deposit updated." : "Deposit recorded."));
+  }, [isEditing, state, router, setOpen]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline" size={size} className={className}>
-          <CircleDollarSign className="size-4" />
-          Create deposit
-        </Button>
-      </DialogTrigger>
+      {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Record deposit</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit deposit" : "Record deposit"}</DialogTitle>
           <DialogDescription>
-            Add a deposit collected before or during the job. Deposits reduce the future invoice balance.
+            {isEditing
+              ? "Update the deposit details. Changes will refresh the job balance."
+              : "Add a deposit collected before or during the job. Deposits reduce the future invoice balance."}
           </DialogDescription>
         </DialogHeader>
         <form ref={paymentFormRef} action={formAction} className="grid gap-4">
+          {payment ? <input type="hidden" name="id" value={payment.id} /> : null}
           <input type="hidden" name="jobId" value={job.id} />
           <input type="hidden" name="paymentType" value="deposit" />
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor={`job-deposit-date-${job.id}`}>Date</Label>
+              <Label htmlFor={`job-deposit-date-${payment?.id ?? job.id}`}>Date</Label>
               <Input
-                id={`job-deposit-date-${job.id}`}
+                id={`job-deposit-date-${payment?.id ?? job.id}`}
                 name="paidOn"
                 type="date"
-                defaultValue={toDateInputValue(new Date())}
+                defaultValue={payment ? toDateInputValue(new Date(payment.paidOn)) : toDateInputValue(new Date())}
                 required
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor={`job-deposit-amount-${job.id}`}>Amount</Label>
+              <Label htmlFor={`job-deposit-amount-${payment?.id ?? job.id}`}>Amount</Label>
               <Input
-                id={`job-deposit-amount-${job.id}`}
+                id={`job-deposit-amount-${payment?.id ?? job.id}`}
                 name="amount"
                 type="number"
                 min="0"
                 step="0.01"
                 placeholder="0.00"
+                defaultValue={payment?.amount}
                 required
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor={`job-deposit-method-${job.id}`}>Method</Label>
-              <Input id={`job-deposit-method-${job.id}`} name="method" placeholder="Zelle, check, card" required />
+              <Label htmlFor={`job-deposit-method-${payment?.id ?? job.id}`}>Method</Label>
+              <Input
+                id={`job-deposit-method-${payment?.id ?? job.id}`}
+                name="method"
+                placeholder="Zelle, check, card"
+                defaultValue={payment?.method}
+                required
+              />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor={`job-deposit-reference-${job.id}`}>Check / Ref #</Label>
-              <Input id={`job-deposit-reference-${job.id}`} name="referenceNumber" placeholder="Optional" />
+              <Label htmlFor={`job-deposit-reference-${payment?.id ?? job.id}`}>Check / Ref #</Label>
+              <Input
+                id={`job-deposit-reference-${payment?.id ?? job.id}`}
+                name="referenceNumber"
+                placeholder="Optional"
+                defaultValue={payment?.referenceNumber ?? ""}
+              />
             </div>
             <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor={`job-deposit-description-${job.id}`}>Description</Label>
+              <Label htmlFor={`job-deposit-description-${payment?.id ?? job.id}`}>Description</Label>
               <Input
-                id={`job-deposit-description-${job.id}`}
+                id={`job-deposit-description-${payment?.id ?? job.id}`}
                 name="description"
                 placeholder="Deposit"
-                defaultValue="Deposit"
+                defaultValue={payment?.description || "Deposit"}
                 required
               />
             </div>
@@ -264,7 +322,7 @@ export function CreateDepositButton({
               Cancel
             </Button>
             <Button type="submit" size="sm" disabled={isPending}>
-              {isPending ? "Recording..." : "Record deposit"}
+              {isPending ? (isEditing ? "Saving..." : "Recording...") : isEditing ? "Save deposit" : "Record deposit"}
             </Button>
           </div>
         </form>
@@ -351,17 +409,23 @@ export function CreateDepositButton({
 
 export function DeleteDepositButton({
   action,
+  onOpenChange,
+  open: controlledOpen,
   paymentId,
 }: {
   action: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
   paymentId: string;
 }) {
   // const formRef = React.useRef<HTMLFormElement>(null);
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   // const [state, formAction, isPending] = React.useActionState(action, initialState);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
 
   function handleDelete() {
     setError(null);
@@ -387,18 +451,20 @@ export function DeleteDepositButton({
   // }, [router, state]);
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button
-          type="submit"
-          variant="destructive"
-          size="icon"
-          className="size-7"
-          disabled={isPending}
-          aria-label="Delete payment"
-        >
-          <Trash2 className="size-3.5 text-destructive" />
-        </Button>
-      </AlertDialogTrigger>
+      {controlledOpen === undefined ? (
+        <AlertDialogTrigger asChild>
+          <Button
+            type="submit"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            disabled={isPending}
+            aria-label="Delete payment"
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </AlertDialogTrigger>
+      ) : null}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete deposit?</AlertDialogTitle>
@@ -426,5 +492,70 @@ export function DeleteDepositButton({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+export function DepositActionsMenu({
+  deleteAction,
+  job,
+  payment,
+  updateAction,
+}: {
+  deleteAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
+  job: JobRow;
+  payment: JobPayment;
+  updateAction: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
+}) {
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+
+  return (
+    <div className="flex items-center">
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Deposit actions"
+          >
+            <MoreVertical className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-36">
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              setMenuOpen(false);
+              setEditOpen(true);
+            }}
+          >
+            <Pencil className="size-4" />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={(event) => {
+              event.preventDefault();
+              setMenuOpen(false);
+              setDeleteOpen(true);
+            }}
+          >
+            <Trash2 className="size-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DepositDialog action={updateAction} job={job} payment={payment} open={editOpen} onOpenChange={setEditOpen} />
+      <DeleteDepositButton
+        action={deleteAction}
+        paymentId={payment.id}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      />
+    </div>
   );
 }

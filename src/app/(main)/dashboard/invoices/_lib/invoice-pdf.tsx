@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Document, Font, Image, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, Font, Image, Page, Path, renderToBuffer, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
 import { format } from "date-fns";
 
 import type { PricingLineItem } from "../../jobs/_components/pricing-items";
@@ -23,11 +23,13 @@ export type InvoicePdfPayment = {
   description: string;
   method: string;
   paidOn: Date;
+  referenceNumber?: string | null;
 };
 
 export type InvoicePdfData = {
   amountPaid: { toString: () => string };
   balanceDue: { toString: () => string };
+  companyAddress?: string | null;
   companyEmail: string;
   companyLogoSrc?: string | null;
   companyName: string;
@@ -52,6 +54,7 @@ export type InvoicePdfData = {
   materialsSubtotal: { toString: () => string };
   payments: InvoicePdfPayment[];
   serviceLocation: string | null;
+  taxableItemsLabel: string;
 };
 
 const interFontFiles = [
@@ -84,9 +87,10 @@ function registerInvoiceFont() {
 
 const invoiceFontFamily = registerInvoiceFont();
 
-const neutralBorder = "#d4d4d4";
-const lightBorder = "#e5e5e5";
-const subtleFill = "#fafafa";
+const neutralBorder = "#dddddd";
+const lightBorder = "#eeeeee";
+const subtleFill = "#ffffff";
+const innerGridBorder = "#e3e3e3";
 const textMuted = "#525252";
 
 const styles = StyleSheet.create({
@@ -94,18 +98,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     color: "#111111",
     fontFamily: invoiceFontFamily,
-    fontSize: 10,
-    lineHeight: 1.28,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    paddingTop: 24,
+    fontSize: 8.0,
+    lineHeight: 1.22,
+    paddingBottom: 20,
+    paddingHorizontal: 22,
+    paddingTop: 22,
   },
   header: {
-    borderBottomColor: neutralBorder,
-    borderBottomWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 9,
     paddingBottom: 8,
   },
   companyBlock: {
@@ -116,7 +118,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     flexDirection: "row",
     gap: 12,
-    marginBottom: 18,
+    marginBottom: 13,
   },
   logoWrap: {
     alignItems: "center",
@@ -132,104 +134,157 @@ const styles = StyleSheet.create({
   companyName: {
     fontSize: 13,
     fontWeight: 700,
-    marginBottom: 2,
+    marginBottom: 5,
   },
   muted: {
     color: textMuted,
   },
+  companyAddress: {
+    color: textMuted,
+    fontSize: 8.8,
+    lineHeight: 1.25,
+    marginBottom: 2.5,
+  },
+  contactRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 0,
+  },
+  contactItem: {
+    alignItems: "center",
+    color: textMuted,
+    flexDirection: "row",
+    fontSize: 8.8,
+    gap: 3,
+  },
+  contactIcon: {
+    color: textMuted,
+    height: 8,
+    width: 8,
+  },
   documentTitle: {
     fontSize: 16,
     fontWeight: 700,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   invoiceMeta: {
     color: textMuted,
-    gap: 3,
+    gap: 2,
+    fontSize: 8.8,
   },
   balancePanel: {
     borderColor: neutralBorder,
     borderRadius: 7,
-    borderWidth: 1,
-    minHeight: 112,
+    borderWidth: 0.8,
+    minHeight: 104,
     paddingHorizontal: 9,
-    paddingVertical: 9,
+    paddingVertical: 8,
     textAlign: "right",
     width: 108,
   },
   balanceLabel: {
     color: "#262626",
     fontSize: 10,
-    marginBottom: 22,
+    marginBottom: 18,
   },
   balanceAmount: {
     color: "#be123c",
     fontSize: 18,
     fontWeight: 700,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   balanceDue: {
     color: "#262626",
     fontSize: 9.5,
   },
   infoGrid: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 10,
-  },
-  infoColumn: {
-    flex: 1,
-    gap: 6,
-  },
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: 700,
-  },
-  infoBox: {
+    backgroundColor: "#ffffff",
     borderColor: neutralBorder,
     borderRadius: 6,
-    borderWidth: 1,
-    minHeight: 55,
-    padding: 8,
+    borderWidth: 0.75,
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  infoGridRow: {
+    flexDirection: "row",
+  },
+  infoCell: {
+    flex: 1,
+    gap: 3,
+    minHeight: 44,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  infoCellRightBorder: {
+    borderRightColor: innerGridBorder,
+    borderRightWidth: 0.55,
+  },
+  infoCellBottomBorder: {
+    borderBottomColor: innerGridBorder,
+    borderBottomWidth: 0.55,
+  },
+  infoLabel: {
+    alignItems: "center",
+    color: textMuted,
+    flexDirection: "row",
+    fontSize: 8.5,
+    fontWeight: 700,
+    gap: 4,
+  },
+  infoIcon: {
+    color: textMuted,
+    height: 9,
+    width: 9,
+  },
+  infoValue: {
+    color: "#111111",
+    fontSize: 8.75,
+    gap: 1,
+  },
+  sectionLabel: {
+    fontSize: 9.25,
+    fontWeight: 700,
   },
   strong: {
     fontWeight: 700,
   },
   section: {
-    gap: 6,
-    marginBottom: 12,
+    gap: 4,
+    marginBottom: 7,
   },
   noteBox: {
     borderColor: neutralBorder,
     borderRadius: 6,
-    borderWidth: 1,
-    padding: 8,
+    borderWidth: 0.75,
+    padding: 7,
   },
   table: {
     borderColor: neutralBorder,
     borderRadius: 6,
-    borderWidth: 1,
+    borderWidth: 0.75,
     overflow: "hidden",
   },
   tableHeader: {
     backgroundColor: subtleFill,
     borderBottomColor: neutralBorder,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.75,
     flexDirection: "row",
     fontWeight: 700,
   },
   tableRow: {
     borderBottomColor: lightBorder,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.7,
     flexDirection: "row",
-    minHeight: 22,
+    minHeight: 19,
   },
   tableRowLast: {
     flexDirection: "row",
-    minHeight: 22,
+    minHeight: 19,
   },
   cell: {
-    paddingHorizontal: 8,
-    paddingVertical: 5.5,
+    paddingHorizontal: 7,
+    paddingVertical: 3.75,
   },
   textRight: {
     textAlign: "right",
@@ -258,16 +313,19 @@ const styles = StyleSheet.create({
   methodCell: {
     width: 64,
   },
+  referenceCell: {
+    width: 58,
+  },
   summary: {
     alignSelf: "flex-end",
     borderColor: neutralBorder,
     borderRadius: 6,
-    borderWidth: 1,
-    marginBottom: 12,
+    borderWidth: 0.75,
+    marginBottom: 7,
     minWidth: 185,
     overflow: "hidden",
     paddingHorizontal: 9,
-    paddingVertical: 7,
+    paddingVertical: 6,
   },
   summaryRow: {
     flexDirection: "row",
@@ -284,6 +342,7 @@ const styles = StyleSheet.create({
     color: "#262626",
   },
   summaryValue: {
+    fontSize: 9.5,
     fontWeight: 700,
     textAlign: "right",
   },
@@ -292,8 +351,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 700,
   },
+  summaryRule: {
+    borderTopColor: lightBorder,
+    borderTopWidth: 1,
+    marginBottom: 5,
+    marginTop: 1,
+  },
   footer: {
-    bottom: 22,
+    bottom: 18,
     color: textMuted,
     fontSize: 8,
     left: 42,
@@ -313,6 +378,10 @@ function dash(value?: string | null) {
 
 function optionalMoney(value?: string) {
   return value ? money(value) : "-";
+}
+
+function negativeOptionalMoney(value?: string) {
+  return value ? `-${money(value)}` : "-";
 }
 
 function shortDate(value: Date) {
@@ -356,11 +425,88 @@ function SectionLabel({ label }: { label: string }) {
   return <Text style={styles.sectionLabel}>{label}</Text>;
 }
 
-function InfoBox({ children, label }: { children: ReactNode; label: string }) {
+function MailIcon() {
   return (
-    <View style={styles.infoColumn} wrap={false}>
-      <SectionLabel label={label} />
-      <View style={styles.infoBox}>{children}</View>
+    <Svg style={styles.contactIcon} viewBox="0 0 24 24">
+      <Path d="M4 6h16v12H4z" fill="none" stroke={textMuted} strokeWidth={2} />
+      <Path d="m4 7 8 6 8-6" fill="none" stroke={textMuted} strokeWidth={2} />
+    </Svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <Svg style={styles.contactIcon} viewBox="0 0 24 24">
+      <Path
+        d="M6 4h4l2 5-3 2c1 2 3 4 5 5l2-3 5 2v4c0 1-1 2-2 2C10 21 3 14 3 6c0-1 1-2 3-2z"
+        fill="none"
+        stroke={textMuted}
+        strokeWidth={2}
+      />
+    </Svg>
+  );
+}
+
+function SmallIcon({ kind }: { kind: "calendar" | "job" | "location" | "user" }) {
+  const path =
+    kind === "user"
+      ? "M12 12c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm-8 9c1-5 5-7 8-7s7 2 8 7"
+      : kind === "job"
+        ? "M8 7V5c0-1 1-2 2-2h4c1 0 2 1 2 2v2M4 7h16v12H4z"
+        : kind === "calendar"
+          ? "M5 4v4M19 4v4M4 8h16M5 6h14v14H5z"
+          : "M12 21s7-5 7-11a7 7 0 0 0-14 0c0 6 7 11 7 11zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z";
+
+  return (
+    <Svg style={styles.infoIcon} viewBox="0 0 24 24">
+      <Path d={path} fill="none" stroke={textMuted} strokeWidth={2} />
+    </Svg>
+  );
+}
+
+function ContactRow({ email, phone }: { email: string; phone: string | null }) {
+  return (
+    <View style={styles.contactRow}>
+      <View style={styles.contactItem}>
+        <MailIcon />
+        <Text>{email}</Text>
+      </View>
+      {phone ? (
+        <View style={styles.contactItem}>
+          <PhoneIcon />
+          <Text>{phone}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function DetailCell({
+  bottom = false,
+  children,
+  icon,
+  label,
+  right = false,
+}: {
+  bottom?: boolean;
+  children: ReactNode;
+  icon: "calendar" | "job" | "location" | "user";
+  label: string;
+  right?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.infoCell,
+        ...(right ? [styles.infoCellRightBorder] : []),
+        ...(bottom ? [styles.infoCellBottomBorder] : []),
+      ]}
+    >
+      <View style={styles.infoLabel}>
+        <SmallIcon kind={icon} />
+        <Text>{label}</Text>
+      </View>
+      <View style={styles.infoValue}>{children}</View>
     </View>
   );
 }
@@ -436,9 +582,8 @@ function LineTable({
   );
 }
 
-function MaterialsTable({ materials }: { materials: InvoicePdfMaterial[] }) {
+function PurchaseMaterialsTable({ materials }: { materials: InvoicePdfMaterial[] }) {
   const keyedMaterials = keyedItems(materials, (material) => [
-    material.type,
     material.description,
     material.purchaseDate,
     material.vendor,
@@ -449,39 +594,74 @@ function MaterialsTable({ materials }: { materials: InvoicePdfMaterial[] }) {
   ]);
 
   return (
-    <View style={styles.section}>
-      <SectionLabel label="Materials" />
-      <View style={styles.table}>
-        <View style={styles.tableHeader} fixed>
-          <Text style={[styles.cell, styles.descriptionCell]}>Description</Text>
-          <Text style={[styles.cell, styles.dateCell]}>Date</Text>
-          <Text style={[styles.cell, styles.vendorCell]}>Vendor</Text>
-          <Text style={[styles.cell, styles.qtyCell, styles.textRight]}>Qty</Text>
-          <Text style={[styles.cell, styles.unitCell, styles.textRight]}>Unit</Text>
-          <Text style={[styles.cell, styles.rateCell, styles.textRight]}>Rate</Text>
-          <Text style={[styles.cell, styles.amountCell, styles.textRight]}>Amount</Text>
-        </View>
-        {keyedMaterials.length ? (
-          keyedMaterials.map(({ item: material, key }, index) => (
-            <View key={key} style={index === keyedMaterials.length - 1 ? styles.tableRowLast : styles.tableRow}>
-              <Text style={[styles.cell, styles.descriptionCell]}>{dash(material.description)}</Text>
-              <Text style={[styles.cell, styles.dateCell]}>{materialDate(material.purchaseDate)}</Text>
-              <Text style={[styles.cell, styles.vendorCell]}>{dash(material.vendor)}</Text>
-              <Text style={[styles.cell, styles.qtyCell, styles.textRight]}>{dash(material.quantity)}</Text>
-              <Text style={[styles.cell, styles.unitCell, styles.textRight]}>{dash(material.unit)}</Text>
-              <Text style={[styles.cell, styles.rateCell, styles.textRight]}>{optionalMoney(material.unitPrice)}</Text>
-              <Text style={[styles.cell, styles.amountCell, styles.textRight]}>
-                {material.type === "return" ? "-" : ""}
-                {optionalMoney(material.price)}
-              </Text>
-            </View>
-          ))
-        ) : (
-          <View style={styles.tableRowLast}>
-            <Text style={[styles.cell, styles.descriptionCell]}>No material line items.</Text>
-          </View>
-        )}
+    <View style={styles.table}>
+      <View style={styles.tableHeader} fixed>
+        <Text style={[styles.cell, styles.descriptionCell]}>Description</Text>
+        <Text style={[styles.cell, styles.dateCell]}>Date</Text>
+        <Text style={[styles.cell, styles.vendorCell]}>Vendor</Text>
+        <Text style={[styles.cell, styles.qtyCell, styles.textRight]}>Qty</Text>
+        <Text style={[styles.cell, styles.unitCell, styles.textRight]}>Unit</Text>
+        <Text style={[styles.cell, styles.rateCell, styles.textRight]}>Rate</Text>
+        <Text style={[styles.cell, styles.amountCell, styles.textRight]}>Amount</Text>
       </View>
+      {keyedMaterials.length ? (
+        keyedMaterials.map(({ item: material, key }, index) => (
+          <View key={key} style={index === keyedMaterials.length - 1 ? styles.tableRowLast : styles.tableRow}>
+            <Text style={[styles.cell, styles.descriptionCell]}>{dash(material.description)}</Text>
+            <Text style={[styles.cell, styles.dateCell]}>{materialDate(material.purchaseDate)}</Text>
+            <Text style={[styles.cell, styles.vendorCell]}>{dash(material.vendor)}</Text>
+            <Text style={[styles.cell, styles.qtyCell, styles.textRight]}>{dash(material.quantity)}</Text>
+            <Text style={[styles.cell, styles.unitCell, styles.textRight]}>{dash(material.unit)}</Text>
+            <Text style={[styles.cell, styles.rateCell, styles.textRight]}>{optionalMoney(material.unitPrice)}</Text>
+            <Text style={[styles.cell, styles.amountCell, styles.textRight]}>{optionalMoney(material.price)}</Text>
+          </View>
+        ))
+      ) : (
+        <View style={styles.tableRowLast}>
+          <Text style={[styles.cell, styles.descriptionCell]}>No material line items.</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function ReturnMaterialsTable({ materials }: { materials: InvoicePdfMaterial[] }) {
+  const keyedMaterials = keyedItems(materials, (material) => [
+    material.description,
+    material.purchaseDate,
+    material.vendor,
+    material.quantity,
+    material.unit,
+    material.unitPrice,
+    material.price,
+  ]);
+
+  if (!keyedMaterials.length) return null;
+
+  return (
+    <View style={styles.table}>
+      <View style={styles.tableHeader} fixed>
+        <Text style={[styles.cell, styles.dateCell]}>Date</Text>
+        <Text style={[styles.cell, styles.vendorCell]}>Vendor</Text>
+        <Text style={[styles.cell, styles.descriptionCell]}>Returns</Text>
+        <Text style={[styles.cell, styles.qtyCell, styles.textRight]}>Qty</Text>
+        <Text style={[styles.cell, styles.unitCell, styles.textRight]}>Unit</Text>
+        <Text style={[styles.cell, styles.rateCell, styles.textRight]}>Rate</Text>
+        <Text style={[styles.cell, styles.amountCell, styles.textRight]}>Amount</Text>
+      </View>
+      {keyedMaterials.map(({ item: material, key }, index) => (
+        <View key={key} style={index === keyedMaterials.length - 1 ? styles.tableRowLast : styles.tableRow}>
+          <Text style={[styles.cell, styles.dateCell]}>{materialDate(material.purchaseDate)}</Text>
+          <Text style={[styles.cell, styles.vendorCell]}>{dash(material.vendor)}</Text>
+          <Text style={[styles.cell, styles.descriptionCell]}>{dash(material.description)}</Text>
+          <Text style={[styles.cell, styles.qtyCell, styles.textRight]}>{dash(material.quantity)}</Text>
+          <Text style={[styles.cell, styles.unitCell, styles.textRight]}>{dash(material.unit)}</Text>
+          <Text style={[styles.cell, styles.rateCell, styles.textRight]}>{optionalMoney(material.unitPrice)}</Text>
+          <Text style={[styles.cell, styles.amountCell, styles.textRight]}>
+            {negativeOptionalMoney(material.price)}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -491,6 +671,7 @@ function PaymentsTable({ payments }: { payments: InvoicePdfPayment[] }) {
     payment.paidOn.toISOString(),
     payment.description,
     payment.method,
+    payment.referenceNumber,
     payment.amount.toString(),
   ]);
 
@@ -502,6 +683,7 @@ function PaymentsTable({ payments }: { payments: InvoicePdfPayment[] }) {
           <Text style={[styles.cell, styles.dateCell]}>Date</Text>
           <Text style={[styles.cell, styles.descriptionCell]}>Description</Text>
           <Text style={[styles.cell, styles.methodCell]}>Method</Text>
+          <Text style={[styles.cell, styles.referenceCell]}>Ref #</Text>
           <Text style={[styles.cell, styles.amountCell, styles.textRight]}>Amount</Text>
         </View>
         {keyedPayments.length ? (
@@ -510,6 +692,7 @@ function PaymentsTable({ payments }: { payments: InvoicePdfPayment[] }) {
               <Text style={[styles.cell, styles.dateCell]}>{shortDate(payment.paidOn)}</Text>
               <Text style={[styles.cell, styles.descriptionCell]}>{payment.description}</Text>
               <Text style={[styles.cell, styles.methodCell]}>{payment.method}</Text>
+              <Text style={[styles.cell, styles.referenceCell]}>{payment.referenceNumber ?? "-"}</Text>
               <Text style={[styles.cell, styles.amountCell, styles.textRight]}>{money(payment.amount)}</Text>
             </View>
           ))
@@ -524,9 +707,10 @@ function PaymentsTable({ payments }: { payments: InvoicePdfPayment[] }) {
 }
 
 function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
-  const returnTotal = data.materials
-    .filter((material) => material.type === "return")
-    .reduce((total, material) => total + Number(material.price || 0), 0);
+  const purchaseMaterials = data.materials.filter((material) => material.type !== "return");
+  const returnMaterials = data.materials.filter((material) => material.type === "return");
+  const returnTotal = returnMaterials.reduce((total, material) => total + Number(material.price || 0), 0);
+  const subtotal = Number(data.laborCost.toString()) + Number(data.materialsSubtotal.toString());
 
   return (
     <Document title={`Invoice ${data.invoiceNumber}`}>
@@ -541,8 +725,8 @@ function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
               ) : null}
               <View>
                 <Text style={styles.companyName}>{data.companyName}</Text>
-                <Text>{data.companyEmail}</Text>
-                {data.companyPhone ? <Text>{data.companyPhone}</Text> : null}
+                {data.companyAddress ? <Text style={styles.companyAddress}>{data.companyAddress}</Text> : null}
+                <ContactRow email={data.companyEmail} phone={data.companyPhone} />
               </View>
             </View>
 
@@ -561,24 +745,25 @@ function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
         </View>
 
         <View style={styles.infoGrid} wrap={false}>
-          <InfoBox label="Bill To">
-            <Text style={styles.strong}>{data.customerName ?? "No customer on file"}</Text>
-            <Text>{data.customerEmail ?? "No email on file"}</Text>
-            <Text>{data.customerPhone ?? "No phone on file"}</Text>
-          </InfoBox>
-          <InfoBox label="Job">
-            <Text style={styles.strong}>{data.jobTitle}</Text>
-          </InfoBox>
-        </View>
-
-        <View style={styles.infoGrid} wrap={false}>
-          <InfoBox label="Schedule">
-            <Text>Start: {maybeDate(data.dateBegin)}</Text>
-            <Text>End: {maybeDate(data.dateEnd)}</Text>
-          </InfoBox>
-          <InfoBox label="Service Location">
-            <Text>{data.serviceLocation ?? "Not on file"}</Text>
-          </InfoBox>
+          <View style={styles.infoGridRow}>
+            <DetailCell bottom icon="user" label="Bill To" right>
+              <Text style={styles.strong}>{data.customerName ?? "No customer on file"}</Text>
+              <Text style={styles.muted}>{data.customerEmail ?? "No email on file"}</Text>
+              <Text style={styles.muted}>{data.customerPhone ?? "No phone on file"}</Text>
+            </DetailCell>
+            <DetailCell bottom icon="job" label="Job">
+              <Text style={styles.strong}>{data.jobTitle}</Text>
+            </DetailCell>
+          </View>
+          <View style={styles.infoGridRow}>
+            <DetailCell icon="calendar" label="Schedule" right>
+              <Text>Start: {maybeDate(data.dateBegin)}</Text>
+              <Text>End: {maybeDate(data.dateEnd)}</Text>
+            </DetailCell>
+            <DetailCell icon="location" label="Service Location">
+              <Text>{data.serviceLocation ?? "Not on file"}</Text>
+            </DetailCell>
+          </View>
         </View>
 
         {data.jobDescription ? (
@@ -589,19 +774,29 @@ function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
         ) : null}
 
         <LineTable fallbackAmount={money(data.laborCost)} items={data.laborItems} title="Labor" />
-        <MaterialsTable materials={data.materials} />
+        <View style={styles.section}>
+          <SectionLabel label="Materials" />
+          <PurchaseMaterialsTable materials={purchaseMaterials} />
+          <ReturnMaterialsTable materials={returnMaterials} />
+        </View>
 
         <View style={styles.summary} wrap={false}>
+          <SummaryRow label="Labor" value={money(data.laborCost)} />
           {returnTotal ? <SummaryRow label="Minus returns" value={`-${money(returnTotal)}`} /> : null}
           <SummaryRow label="Net materials" value={money(data.materialsSubtotal)} />
-          <SummaryRow label={`Tax (${data.materialTaxRate.toString()}%)`} last value={money(data.materialTaxAmount)} />
+          <SummaryRow label="Subtotal" value={money(subtotal)} />
+          <SummaryRow
+            label={`Tax on ${data.taxableItemsLabel} (${data.materialTaxRate.toString()}%)`}
+            value={money(data.materialTaxAmount)}
+          />
+          <View style={styles.summaryRule} />
+          <SummaryRow label="Final cost" last strong value={money(data.finalCost)} />
         </View>
 
         <PaymentsTable payments={data.payments} />
 
         <View style={styles.summary} wrap={false}>
           <SummaryRow label="Final cost" value={money(data.finalCost)} />
-          <SummaryRow label="Deposits paid" value={money(data.depositPaid)} />
           <SummaryRow label="Amount paid" value={money(data.amountPaid)} />
           <SummaryRow label="Balance due" last strong value={money(data.balanceDue)} />
         </View>

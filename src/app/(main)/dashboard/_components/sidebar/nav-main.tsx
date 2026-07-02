@@ -52,6 +52,7 @@ import { EmailComposerDialog } from "./email-composer-dialog";
 interface NavMainProps {
   readonly items: readonly NavGroup[];
   readonly companyName: string;
+  readonly companyAddress: string | null;
   readonly companyEmail: string | null;
   readonly companyPhone: string | null;
   readonly estimateValidDays: number;
@@ -277,6 +278,7 @@ const NavItemCollapsed = ({
 
 function CompanySettingsDialog({
   companyEmail,
+  companyAddress,
   companyName,
   companyPhone,
   estimateValidDays,
@@ -285,6 +287,7 @@ function CompanySettingsDialog({
   onSaved,
 }: {
   readonly companyEmail: string | null;
+  readonly companyAddress: string | null;
   readonly companyName: string;
   readonly companyPhone: string | null;
   readonly estimateValidDays: number;
@@ -358,6 +361,17 @@ function CompanySettingsDialog({
           <div className="grid gap-2">
             <Label htmlFor="company-name">Company name</Label>
             <Input id="company-name" name="companyName" defaultValue={companyName} required />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="company-address">Company address</Label>
+            <Input
+              id="company-address"
+              name="companyAddress"
+              type="text"
+              defaultValue={companyAddress ?? ""}
+              placeholder="123 Main St, San Antonio, TX 78205"
+              autoComplete="street-address"
+            />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="company-email">Company email</Label>
@@ -471,6 +485,7 @@ function CompanySettingsDialog({
 export function NavMain({
   items,
   companyEmail,
+  companyAddress,
   companyName,
   companyPhone,
   estimateValidDays,
@@ -515,6 +530,7 @@ export function NavMain({
             <SidebarMenuItem className="flex items-center gap-2">
               <CompanySettingsDialog
                 companyName={companyName}
+                companyAddress={companyAddress}
                 companyEmail={companyEmail}
                 companyPhone={companyPhone}
                 estimateValidDays={estimateValidDays}

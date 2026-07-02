@@ -33,6 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { UsStateSelect } from "@/components/us-state-select";
+import { useDiscardLocalDraftListener } from "@/lib/drafts.client";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
@@ -247,9 +248,7 @@ function parseJobDraft(value: string): JobRecordDraft | null {
         ? parsed.laborItems.map((item) => createLineItem(item))
         : [createLineItem()],
       materialTaxRate: Number.isFinite(Number(parsed.materialTaxRate)) ? Number(parsed.materialTaxRate) : 8.25,
-      materials: parsed.materials?.length
-        ? parsed.materials.map((item) => createMaterialLineItem(item))
-        : [createMaterialLineItem()],
+      materials: parsed.materials?.length ? parsed.materials.map((item) => createMaterialLineItem(item)) : [],
       measurementRooms: parsed.measurementRooms?.length
         ? parsed.measurementRooms.map((room, index) => createMeasurementRoom(room, index))
         : [createMeasurementRoom()],
@@ -573,7 +572,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
         {items.map((item, index) => (
           <div
             key={item.id}
-            className="grid min-w-0 grid-cols-2 gap-3 border-t p-3 first:border-t-0 odd:bg-emerald-50/50 sm:grid-cols-4 lg:grid-cols-[36px_minmax(0,1fr)] lg:gap-x-3 xl:grid-cols-[36px_minmax(0,1fr)_72px_88px_88px_96px_36px] xl:items-end xl:gap-2 dark:odd:bg-emerald-900"
+            className="grid min-w-0 grid-cols-2 gap-3 border-t p-3 first:border-t-0 odd:bg-emerald-50/50 sm:grid-cols-4 lg:grid-cols-[36px_minmax(0,1fr)] lg:gap-x-3 xl:grid-cols-[36px_minmax(0,1fr)_72px_100px_88px_100px_36px] xl:items-end xl:gap-2 dark:odd:bg-emerald-900"
           >
             <div className="col-span-2 flex items-center justify-between sm:col-span-4 lg:col-span-1 lg:block lg:pt-7 xl:self-end xl:pt-0 xl:pb-1">
               <span className="inline-flex size-7 items-center justify-center rounded-md border border-emerald-600 bg-background font-medium text-emerald-600 text-xs">
@@ -611,7 +610,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                 />
               </div>
 
-              <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-[72px_88px_88px_96px_36px] lg:items-end lg:gap-2 xl:contents">
+              <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5 lg:items-end lg:gap-2 xl:contents">
                 <div className="grid min-w-0 gap-2">
                   <Label>Qty</Label>
                   <Input
@@ -1386,7 +1385,7 @@ function MaterialItemsEditor({
                 </Button>
               </div>
 
-              <div className="col-span-2 grid min-w-0 gap-3 lg:col-span-1 xl:grid-cols-[120px_minmax(0,1fr)_150px_72px_88px_88px_96px_36px] xl:items-end xl:gap-2">
+              <div className="col-span-2 grid min-w-0 gap-3 lg:col-span-1 xl:grid-cols-[120px_minmax(0,1fr)_150px_72px_100px_100px_110px] xl:items-end xl:gap-2">
                 <div className="grid min-w-0 gap-2 xl:col-span-5 xl:col-start-2 xl:row-start-1">
                   <Label>Description</Label>
                   <Textarea
@@ -1405,7 +1404,7 @@ function MaterialItemsEditor({
                   />
                 </div>
 
-                <div className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-[120px_150px_minmax(0,1fr)] lg:items-end lg:gap-2 xl:contents">
+                <div className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-[150px_200px_minmax(0,1fr)] lg:items-end lg:gap-2 xl:contents">
                   <div className="grid min-w-0 gap-2 xl:col-start-1 xl:row-start-1">
                     <Label>Type</Label>
                     <Select
@@ -1469,7 +1468,7 @@ function MaterialItemsEditor({
                   </div>
                 </div>
 
-                <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-[72px_88px_88px_96px_36px] lg:items-end lg:gap-2 xl:contents">
+                <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5 lg:items-end lg:gap-2 xl:contents">
                   <div className="grid min-w-0 gap-2 xl:col-start-4 xl:row-start-2">
                     <Label>Qty</Label>
                     <Input
@@ -1583,7 +1582,7 @@ function MaterialItemsEditor({
                     />
                   </div>
 
-                  <div className="hidden justify-end lg:flex xl:col-start-8 xl:row-start-2">
+                  <div className="hidden justify-end lg:flex xl:col-start-7 xl:row-start-2">
                     <Button
                       type="button"
                       variant="outline"
@@ -1796,7 +1795,7 @@ export function JobRecordFormFields({
     job?.laborItems.length ? job.laborItems.map((item) => createLineItem(item)) : [createLineItem()],
   );
   const [materials, setMaterials] = React.useState<MaterialLineItem[]>(
-    job?.materials.length ? job.materials.map((item) => createMaterialLineItem(item)) : [createMaterialLineItem()],
+    job?.materials.length ? job.materials.map((item) => createMaterialLineItem(item)) : [],
   );
   const [jobType, setJobType] = React.useState<JobType>(job?.jobType ?? "Residential");
   const [measurementRooms, setMeasurementRooms] = React.useState<MeasurementRoom[]>(
@@ -1829,6 +1828,18 @@ export function JobRecordFormFields({
   const [draftSavedAt, setDraftSavedAt] = React.useState<string>();
   const [draftRestoredAt, setDraftRestoredAt] = React.useState<string>();
 
+  const clearLocalDraftState = React.useCallback(() => {
+    if (!draftKey || typeof window === "undefined") return;
+
+    suppressDraftFlushRef.current = true;
+    latestDraftJsonRef.current = undefined;
+    window.localStorage.removeItem(draftKey);
+    setDraftSavedAt(undefined);
+    setDraftRestoredAt(undefined);
+  }, [draftKey]);
+
+  useDiscardLocalDraftListener(draftKey, clearLocalDraftState);
+
   const resetToJob = React.useCallback(() => {
     const nextSelectedCustomerId = job?.customerId ?? selectCustomerValue;
     const nextCustomer = customers.find((customer) => customer.id === nextSelectedCustomerId);
@@ -1840,9 +1851,7 @@ export function JobRecordFormFields({
 
     setSelectedCustomerId(nextSelectedCustomerId);
     setLaborItems(job?.laborItems.length ? job.laborItems.map((item) => createLineItem(item)) : [createLineItem()]);
-    setMaterials(
-      job?.materials.length ? job.materials.map((item) => createMaterialLineItem(item)) : [createMaterialLineItem()],
-    );
+    setMaterials(job?.materials.length ? job.materials.map((item) => createMaterialLineItem(item)) : []);
     setTitle(job?.description ?? "");
     setDescription(job?.scope ?? "");
     setCategory(job?.category ?? "Other");
@@ -1920,14 +1929,10 @@ export function JobRecordFormFields({
   }, [draftKey]);
 
   React.useEffect(() => {
-    if (!clearDraft || !draftKey || typeof window === "undefined") return;
+    if (!clearDraft) return;
 
-    suppressDraftFlushRef.current = true;
-    latestDraftJsonRef.current = undefined;
-    window.localStorage.removeItem(draftKey);
-    setDraftSavedAt(undefined);
-    setDraftRestoredAt(undefined);
-  }, [clearDraft, draftKey]);
+    clearLocalDraftState();
+  }, [clearDraft, clearLocalDraftState]);
 
   React.useEffect(() => {
     if (isCreatingNewCustomer || !addressOptions.length) {
@@ -2035,9 +2040,11 @@ export function JobRecordFormFields({
   }, [customers, isCreatingNewCustomer, selectedCustomerId]);
   const laborSubtotal = laborItems.reduce((total, item) => total + toNumber(item.price), 0);
   const materialsSubtotal = materials.reduce((total, item) => total + toNumber(calculateSignedMaterialTotal(item)), 0);
+  const subtotal = laborSubtotal + materialsSubtotal;
   const taxableSubtotal = materialsSubtotal + (jobType === "Commercial" ? laborSubtotal : 0);
   const tax = taxableSubtotal * (taxRate / 100);
   const total = laborSubtotal + materialsSubtotal + tax;
+  const taxableItemsLabel = jobType === "Commercial" ? "labor + materials" : "materials";
   const measurementTotalSqft = measurementRooms.reduce((sum, room) => sum + calculateRoomArea(room), 0);
   const measuredAreaCount = measurementRooms.filter((room) => calculateRoomArea(room) > 0).length;
 
@@ -2049,11 +2056,7 @@ export function JobRecordFormFields({
     setLaborItems(
       service.laborItems.length ? service.laborItems.map((item) => createLineItem(item)) : [createLineItem()],
     );
-    setMaterials(
-      service.materials.length
-        ? service.materials.map((item) => createMaterialLineItem(item))
-        : [createMaterialLineItem()],
-    );
+    setMaterials(service.materials.length ? service.materials.map((item) => createMaterialLineItem(item)) : []);
   }
 
   function discardDraft() {
@@ -2127,7 +2130,7 @@ export function JobRecordFormFields({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`job-description-${job?.id ?? "new"}`}>Scope of work</Label>
+                <Label htmlFor={`job-description-${job?.id ?? "new"}`}>Job description</Label>
                 <Textarea
                   id={`job-description-${job?.id ?? "new"}`}
                   name="scope"
@@ -2459,7 +2462,7 @@ export function JobRecordFormFields({
 
         <section className="grid gap-4 border-b px-0 py-5 md:gap-5 md:px-1">
           <WorkspaceSectionHeader
-            description="Set the tax basis before pricing labor and materials."
+            description="Choose whether tax applies to materials only or to labor and materials."
             icon={Building2}
             step="4. Job type"
           />
@@ -2580,11 +2583,11 @@ export function JobRecordFormFields({
                   <span className="font-medium tabular-nums">${formatCurrency(materialsSubtotal)}</span>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Tax basis</span>
-                  <span className="font-medium tabular-nums">${formatCurrency(taxableSubtotal)}</span>
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium tabular-nums">${formatCurrency(subtotal)}</span>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Tax</span>
+                  <span className="text-muted-foreground">Tax on {taxableItemsLabel}</span>
                   <span className="font-medium tabular-nums">${formatCurrency(tax)}</span>
                 </div>
                 <div className="mt-2 rounded-lg border border-sky-200 bg-background p-3 dark:border-sky-900/60">

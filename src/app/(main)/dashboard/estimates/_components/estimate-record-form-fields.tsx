@@ -33,6 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { UsStateSelect } from "@/components/us-state-select";
+import { useDiscardLocalDraftListener } from "@/lib/drafts.client";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
@@ -441,7 +442,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                 />
               </div>
 
-              <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-[72px_88px_88px_96px_36px] lg:items-end lg:gap-2 xl:contents">
+              <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5 lg:items-end lg:gap-2 xl:contents">
                 <div className="grid min-w-0 gap-2">
                   <Label>Qty</Label>
                   <Input
@@ -1026,6 +1027,18 @@ export function EstimateRecordFormFields({
   const [draftSavedAt, setDraftSavedAt] = React.useState<string>();
   const [draftRestoredAt, setDraftRestoredAt] = React.useState<string>();
 
+  const clearLocalDraftState = React.useCallback(() => {
+    if (!draftKey || typeof window === "undefined") return;
+
+    suppressDraftFlushRef.current = true;
+    latestDraftJsonRef.current = undefined;
+    window.localStorage.removeItem(draftKey);
+    setDraftSavedAt(undefined);
+    setDraftRestoredAt(undefined);
+  }, [draftKey]);
+
+  useDiscardLocalDraftListener(draftKey, clearLocalDraftState);
+
   const resetToEstimate = React.useCallback(() => {
     const nextSelectedCustomerId =
       estimate?.customerId ?? leadPrefill?.customerId ?? (leadPrefill ? newCustomerValue : selectCustomerValue);
@@ -1124,14 +1137,10 @@ export function EstimateRecordFormFields({
   }, [draftKey]);
 
   React.useEffect(() => {
-    if (!clearDraft || !draftKey || typeof window === "undefined") return;
+    if (!clearDraft) return;
 
-    suppressDraftFlushRef.current = true;
-    latestDraftJsonRef.current = undefined;
-    window.localStorage.removeItem(draftKey);
-    setDraftSavedAt(undefined);
-    setDraftRestoredAt(undefined);
-  }, [clearDraft, draftKey]);
+    clearLocalDraftState();
+  }, [clearDraft, clearLocalDraftState]);
 
   React.useEffect(() => {
     if (isCreatingNewCustomer || !addressOptions.length) {
@@ -1237,9 +1246,11 @@ export function EstimateRecordFormFields({
   }, [customers, isCreatingNewCustomer, selectedCustomerId]);
   const laborSubtotal = laborItems.reduce((total, item) => total + toNumber(item.price), 0);
   const materialsSubtotal = materials.reduce((total, item) => total + toNumber(item.price), 0);
+  const subtotal = laborSubtotal + materialsSubtotal;
   const taxableSubtotal = materialsSubtotal + (jobType === "Commercial" ? laborSubtotal : 0);
   const tax = taxableSubtotal * (taxRate / 100);
   const total = laborSubtotal + materialsSubtotal + tax;
+  const taxableItemsLabel = jobType === "Commercial" ? "labor + materials" : "materials";
   const measurementTotalSqft = measurementRooms.reduce((sum, room) => sum + calculateRoomArea(room), 0);
   const measuredAreaCount = measurementRooms.filter((room) => calculateRoomArea(room) > 0).length;
 
@@ -1330,7 +1341,7 @@ export function EstimateRecordFormFields({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`estimate-description-${estimate?.id ?? "new"}`}>Scope of work</Label>
+                <Label htmlFor={`estimate-description-${estimate?.id ?? "new"}`}>Estimate description</Label>
                 <Textarea
                   id={`estimate-description-${estimate?.id ?? "new"}`}
                   name="scope"
@@ -1659,7 +1670,7 @@ export function EstimateRecordFormFields({
 
         <section className="grid gap-4 border-b px-0 py-5 md:gap-5 md:px-1">
           <WorkspaceSectionHeader
-            description="Set the tax basis before pricing labor and materials."
+            description="Choose whether tax applies to materials only or to labor and materials."
             icon={Building2}
             step="4. Job type"
           />
@@ -1780,11 +1791,11 @@ export function EstimateRecordFormFields({
                   <span className="font-medium tabular-nums">${formatCurrency(materialsSubtotal)}</span>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Tax basis</span>
-                  <span className="font-medium tabular-nums">${formatCurrency(taxableSubtotal)}</span>
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium tabular-nums">${formatCurrency(subtotal)}</span>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Tax</span>
+                  <span className="text-muted-foreground">Tax on {taxableItemsLabel}</span>
                   <span className="font-medium tabular-nums">${formatCurrency(tax)}</span>
                 </div>
                 <div className="mt-2 rounded-lg border border-sky-200 bg-background p-3 dark:border-sky-900/60">

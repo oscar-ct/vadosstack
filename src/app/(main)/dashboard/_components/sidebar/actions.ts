@@ -64,6 +64,7 @@ const generalEmailSchema = z.object({
 
 const companySettingsSchema = z.object({
   companyName: z.string().trim().min(1, "Company name is required.").max(120, "Company name is too long."),
+  companyAddress: z.string().trim().max(300, "Company address is too long.").optional(),
   companyEmail: z
     .string()
     .trim()
@@ -433,6 +434,7 @@ export async function updateCompanySettingsAction(
 
   const parsed = companySettingsSchema.safeParse({
     companyName: formData.get("companyName"),
+    companyAddress: formData.get("companyAddress"),
     companyEmail: formData.get("companyEmail"),
     companyPhone: formData.get("companyPhone"),
     estimateValidDays: formData.get("estimateValidDays"),
@@ -488,6 +490,7 @@ export async function updateCompanySettingsAction(
       },
       data: {
         companyName: parsed.data.companyName,
+        companyAddress: emptyToNull(parsed.data.companyAddress),
         companyEmail: emptyToNull(parsed.data.companyEmail),
         companyPhone: emptyToNull(parsed.data.companyPhone),
         estimateValidDays: parsed.data.estimateValidDays,

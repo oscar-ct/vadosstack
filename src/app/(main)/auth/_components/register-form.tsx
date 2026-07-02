@@ -9,6 +9,7 @@ import { Eye, EyeOff, MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 import type { AuthFormState } from "../actions";
 
@@ -27,6 +28,7 @@ export function RegisterForm({
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [name, setName] = React.useState("");
   const [companyName, setCompanyName] = React.useState("");
+  const [companyAddress, setCompanyAddress] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -49,6 +51,7 @@ export function RegisterForm({
     onConfirmationSent?.(confirmedEmail);
     setName("");
     setCompanyName("");
+    setCompanyAddress("");
     setEmail("");
     setPassword("");
     setConfirmPassword("");
@@ -104,6 +107,19 @@ export function RegisterForm({
             autoComplete="organization"
             disabled={isPending || confirmationSent}
             required
+          />
+        </Field>
+        <Field className="gap-1.5">
+          <FieldLabel htmlFor="register-company-address">Company Address (optional)</FieldLabel>
+          <Input
+            id="register-company-address"
+            name="companyAddress"
+            type="text"
+            value={companyAddress}
+            onChange={(event) => setCompanyAddress(event.target.value)}
+            placeholder="123 Main St, Houston, TX 77005"
+            autoComplete="street-address"
+            disabled={isPending || confirmationSent}
           />
         </Field>
         <Field className="gap-1.5">

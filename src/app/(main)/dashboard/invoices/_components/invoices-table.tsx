@@ -397,10 +397,24 @@ export function InvoiceDetailsDialog({
             </div>
           </section>
 
-          <form ref={paymentFormRef} action={createPaymentFormAction} className="grid gap-3 rounded-lg border p-4">
+          <form
+            ref={paymentFormRef}
+            action={createPaymentFormAction}
+            className="grid gap-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/20"
+          >
             <input type="hidden" name="jobId" value={invoice.jobId} />
             <input type="hidden" name="paymentType" value="invoice_payment" />
-            <div className="font-medium text-sm">Record payment</div>
+            <div className="flex items-start gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
+                <CircleDollarSign className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-semibold text-sm leading-5">Record payment</div>
+                <p className="text-muted-foreground text-xs">
+                  Add a payment received for this invoice and update the balance.
+                </p>
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor={`invoice-payment-date-${invoice.id}`}>Date</Label>
@@ -451,8 +465,9 @@ export function InvoiceDetailsDialog({
               <p className="text-destructive text-sm">{paymentState.message}</p>
             ) : null}
             <div className="flex justify-end">
-              <Button type="submit" size="sm" disabled={isCreatingPayment}>
-                {isCreatingPayment ? "Recording..." : "Add payment"}
+              <Button type="submit" size="sm" disabled={isCreatingPayment} className="shadow-sm">
+                <CircleDollarSign className="size-4" />
+                {isCreatingPayment ? "Recording..." : "Record payment"}
               </Button>
             </div>
           </form>
@@ -460,8 +475,8 @@ export function InvoiceDetailsDialog({
           <section className="grid gap-3">
             <div className="font-medium text-sm">Transaction history</div>
             {invoice.payments.length ? (
-              <div className="grid gap-2 sm:block">
-                <div className="grid gap-2 sm:hidden">
+              <div className="max-h-72 overflow-y-auto rounded-lg border bg-background">
+                <div className="grid gap-2 p-2 sm:hidden">
                   {invoice.payments.map((payment) => (
                     <div key={payment.id} className="rounded-lg border bg-muted/10 p-3">
                       <div className="flex items-start justify-between gap-3">
@@ -503,8 +518,8 @@ export function InvoiceDetailsDialog({
                   ))}
                 </div>
 
-                <div className="hidden overflow-hidden rounded-lg border sm:block">
-                  <div className="grid grid-cols-[120px_minmax(0,1fr)_120px_80px_auto] gap-3 border-b bg-muted/80 px-3 py-2 font-medium text-xs">
+                <div className="hidden sm:block">
+                  <div className="sticky top-0 z-10 grid grid-cols-[120px_minmax(0,1fr)_120px_80px_auto] gap-3 border-b bg-muted/95 px-3 py-2 font-medium text-xs backdrop-blur">
                     <span>Date</span>
                     <span>Description</span>
                     <span>Ref #</span>

@@ -5,6 +5,7 @@ import { addDays } from "date-fns";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { formatDocumentNumber } from "@/lib/document-number";
+import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
 import { parsePricingItems } from "../../../jobs/_components/pricing-items";
@@ -89,16 +90,18 @@ export async function GET(
   const invoiceNumber = formatDocumentNumber("INV", invoiceSequence);
   const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);
   const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
+  const taxableItemsLabel = invoice.job.jobType === "Commercial" ? "labor + materials" : "materials";
   const pdfBuffer = await renderInvoicePdfBuffer({
     amountPaid: invoice.amountPaid,
     balanceDue: invoice.balanceDue,
+    companyAddress: currentUser.companyAddress,
     companyEmail: currentUser.companyEmail ?? currentUser.email,
     companyLogoSrc,
     companyName: currentUser.companyName,
-    companyPhone: currentUser.companyPhone,
+    companyPhone: currentUser.companyPhone ? formatPhoneNumber(currentUser.companyPhone) : null,
     customerEmail: invoice.customerEmail,
     customerName: invoice.customerName,
-    customerPhone: invoice.customerPhone,
+    customerPhone: invoice.customerPhone ? formatPhoneNumber(invoice.customerPhone) : null,
     dateBegin: invoice.dateBegin,
     dateEnd: invoice.dateEnd,
     depositPaid: invoice.depositPaid,
@@ -116,6 +119,7 @@ export async function GET(
     materialsSubtotal: invoice.materialsSubtotal,
     payments: invoice.job.payments,
     serviceLocation: invoice.serviceLocation,
+    taxableItemsLabel,
   });
   const filename = sanitizePdfFilename(invoiceNumber);
 

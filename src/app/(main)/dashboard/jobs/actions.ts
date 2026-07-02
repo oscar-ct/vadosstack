@@ -785,6 +785,10 @@ const deleteJobPaymentSchema = z.object({
   id: z.string().trim().min(1, "Payment is required."),
 });
 
+const updateJobPaymentSchema = jobPaymentSchema.extend({
+  id: z.string().trim().min(1, "Payment is required."),
+});
+
 export async function createJobPaymentAction(
   _previousState: JobMutationState,
   formData: FormData,
@@ -865,6 +869,94 @@ export async function createJobPaymentAction(
   return {
     success: true,
     message: parsed.data.paymentType === "deposit" ? "Deposit recorded." : "Payment recorded.",
+  };
+}
+
+export async function updateJobPaymentAction(
+  _previousState: JobMutationState,
+  formData: FormData,
+): Promise<JobMutationState> {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return {
+      success: false,
+      message: "You must be signed in to update a payment.",
+    };
+  }
+
+  const parsed = updateJobPaymentSchema.safeParse({
+    id: formData.get("id"),
+    jobId: formData.get("jobId"),
+    paymentType: formData.get("paymentType") || "deposit",
+    paidOn: formData.get("paidOn"),
+    amount: formData.get("amount"),
+    method: formData.get("method"),
+    referenceNumber: emptyToUndefined(formData.get("referenceNumber")),
+    description: formData.get("description"),
+    notes: emptyToUndefined(formData.get("notes")),
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message ?? "Check the payment details and try again.",
+    };
+  }
+
+  try {
+    const payment = await prisma.jobPayment.findUnique({
+      where: {
+        id_ownerId: {
+          id: parsed.data.id,
+          ownerId: currentUser.id,
+        },
+      },
+      select: {
+        jobId: true,
+      },
+    });
+
+    if (!payment || payment.jobId !== parsed.data.jobId) {
+      return {
+        success: false,
+        message: "Payment could not be found.",
+      };
+    }
+
+    await prisma.jobPayment.update({
+      where: {
+        id_ownerId: {
+          id: parsed.data.id,
+          ownerId: currentUser.id,
+        },
+      },
+      data: {
+        paidOn: parsed.data.paidOn,
+        amount: Number(parsed.data.amount).toFixed(2),
+        paymentType: parsed.data.paymentType,
+        method: parsed.data.method,
+        referenceNumber: parsed.data.referenceNumber || null,
+        description: parsed.data.description,
+        notes: parsed.data.notes || null,
+      },
+    });
+
+    await syncJobPaymentSummary(parsed.data.jobId, currentUser.id);
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Payment could not be updated. Please try again.",
+    };
+  }
+
+  revalidatePath("/dashboard/jobs");
+  revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/invoices");
+
+  return {
+    success: true,
+    message: parsed.data.paymentType === "deposit" ? "Deposit updated." : "Payment updated.",
   };
 }
 

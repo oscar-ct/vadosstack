@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useDiscardLocalDraftListener } from "@/lib/drafts.client";
 
 import { type JobMaterial, stringifyMaterials } from "../../jobs/_components/materials";
 import { type PricingLineItem, stringifyPricingItems } from "../../jobs/_components/pricing-items";
@@ -525,6 +526,7 @@ export function ServiceFormFields({
   const suppressDraftFlushRef = React.useRef(false);
   const draftSaveTimeoutRef = React.useRef<number | undefined>(undefined);
   const clearedDraftSignatureRef = React.useRef<string | undefined>(undefined);
+  const initializedFromKeyRef = React.useRef(service?.id ?? "new");
   const latestDraftSignatureRef = React.useRef<string | undefined>(undefined);
   const [draftSavedAt, setDraftSavedAt] = React.useState<string>();
   const [draftRestoredAt, setDraftRestoredAt] = React.useState<string>();
@@ -532,6 +534,23 @@ export function ServiceFormFields({
     () => getDraftSignature({ category, description, laborItems, materials, notes, title }),
     [category, description, laborItems, materials, notes, title],
   );
+
+  const clearLocalDraftState = React.useCallback(() => {
+    if (!draftKey || typeof window === "undefined") return;
+
+    suppressDraftFlushRef.current = true;
+    latestDraftJsonRef.current = undefined;
+    clearedDraftSignatureRef.current = latestDraftSignatureRef.current;
+    if (draftSaveTimeoutRef.current) {
+      window.clearTimeout(draftSaveTimeoutRef.current);
+      draftSaveTimeoutRef.current = undefined;
+    }
+    window.localStorage.removeItem(draftKey);
+    setDraftSavedAt(undefined);
+    setDraftRestoredAt(undefined);
+  }, [draftKey]);
+
+  useDiscardLocalDraftListener(draftKey, clearLocalDraftState);
 
   React.useEffect(() => {
     latestDraftSignatureRef.current = draftSignature;
@@ -553,8 +572,14 @@ export function ServiceFormFields({
   }, [service]);
 
   React.useEffect(() => {
+    const initializedFromKey = service?.id ?? "new";
+    if (initializedFromKeyRef.current === initializedFromKey) {
+      return;
+    }
+    initializedFromKeyRef.current = initializedFromKey;
+
     resetToService();
-  }, [resetToService]);
+  }, [resetToService, service?.id]);
 
   React.useEffect(() => {
     draftHydratedRef.current = false;
@@ -591,19 +616,10 @@ export function ServiceFormFields({
   }, [draftKey]);
 
   React.useEffect(() => {
-    if (!clearDraftSignal || !draftKey || typeof window === "undefined") return;
+    if (!clearDraftSignal) return;
 
-    suppressDraftFlushRef.current = true;
-    latestDraftJsonRef.current = undefined;
-    clearedDraftSignatureRef.current = latestDraftSignatureRef.current;
-    if (draftSaveTimeoutRef.current) {
-      window.clearTimeout(draftSaveTimeoutRef.current);
-      draftSaveTimeoutRef.current = undefined;
-    }
-    window.localStorage.removeItem(draftKey);
-    setDraftSavedAt(undefined);
-    setDraftRestoredAt(undefined);
-  }, [clearDraftSignal, draftKey]);
+    clearLocalDraftState();
+  }, [clearDraftSignal, clearLocalDraftState]);
 
   React.useEffect(() => {
     if (!draftKey || typeof window === "undefined" || !draftHydratedRef.current) return;
@@ -673,18 +689,8 @@ export function ServiceFormFields({
   }, [draftKey]);
 
   function discardDraft() {
-    if (!draftKey || typeof window === "undefined") return;
-
-    window.localStorage.removeItem(draftKey);
-    latestDraftJsonRef.current = undefined;
-    clearedDraftSignatureRef.current = latestDraftSignatureRef.current;
-    if (draftSaveTimeoutRef.current) {
-      window.clearTimeout(draftSaveTimeoutRef.current);
-      draftSaveTimeoutRef.current = undefined;
-    }
+    clearLocalDraftState();
     skipNextDraftSaveRef.current = true;
-    setDraftSavedAt(undefined);
-    setDraftRestoredAt(undefined);
     resetToService();
   }
 

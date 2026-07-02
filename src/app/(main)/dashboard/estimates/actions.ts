@@ -17,6 +17,7 @@ import {
   refreshGoogleAccessToken,
   sendGmailMessage,
 } from "@/lib/google-mail";
+import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
 import { parseMaterials as parseJobMaterials } from "../jobs/_components/materials";
@@ -266,6 +267,7 @@ export async function emailEstimateAction(
         }))
       : snapshotMaterials.filter((item) => item.type !== "labor");
     const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
+    const taxableItemsLabel = estimate.estimateRecord?.jobType === "Commercial" ? "labor + materials" : "materials";
     const emailContent = createEstimateAttachmentEmailContent({
       companyName: currentUser.companyName,
       customerName: estimate.customerName,
@@ -278,10 +280,10 @@ export async function emailEstimateAction(
       companyEmail: currentUser.companyEmail ?? currentUser.email,
       companyLogoSrc,
       companyName: currentUser.companyName,
-      companyPhone: currentUser.companyPhone,
+      companyPhone: currentUser.companyPhone ? formatPhoneNumber(currentUser.companyPhone) : null,
       customerEmail: estimate.customerEmail,
       customerName: estimate.customerName,
-      customerPhone: estimate.customerPhone,
+      customerPhone: estimate.customerPhone ? formatPhoneNumber(estimate.customerPhone) : null,
       dateBegin: estimate.dateBegin,
       dateEnd: estimate.dateEnd,
       estimatedTotal: estimate.estimatedTotal,
@@ -296,6 +298,7 @@ export async function emailEstimateAction(
       materialTaxRate: estimate.materialTaxRate,
       materialsSubtotal: estimate.materialsSubtotal,
       serviceLocation: estimate.serviceLocation,
+      taxableItemsLabel,
       validThrough,
     });
     const pdfFilename = `${estimateNumber.replace(/[^a-z0-9-]+/gi, "-")}.pdf`;

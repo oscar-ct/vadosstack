@@ -44,6 +44,7 @@ const registerSchema = z
   .object({
     name: z.string().trim().max(120, "Name is too long.").optional(),
     companyName: z.string().trim().min(1, "Company name is required.").max(120, "Company name is too long."),
+    companyAddress: z.string().trim().max(300, "Company address is too long.").optional(),
     email: z.string().trim().email("Enter a valid email address."),
     password: z.string().min(8, "Password must be at least 8 characters."),
     confirmPassword: z.string().min(8, "Confirm your password."),
@@ -114,6 +115,7 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
   const parsed = registerSchema.safeParse({
     name: formData.get("name"),
     companyName: formData.get("companyName"),
+    companyAddress: formData.get("companyAddress"),
     email: formData.get("email"),
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
@@ -173,6 +175,7 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
     },
     create: {
       companyName: parsed.data.companyName,
+      companyAddress: parsed.data.companyAddress || null,
       email,
       expiresAt,
       name,
@@ -181,6 +184,7 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
     },
     update: {
       companyName: parsed.data.companyName,
+      companyAddress: parsed.data.companyAddress || null,
       expiresAt,
       name,
       passwordHash: hashPassword(parsed.data.password),

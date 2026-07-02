@@ -23,7 +23,7 @@ export function CustomerLink({
     <Link
       prefetch={false}
       href={`/dashboard/customers/${customerId}`}
-      className={cn("underline-offset-4 hover:underline", className)}
+      className={cn(className, "inline-flex w-fit max-w-full align-baseline underline-offset-4 hover:underline")}
     >
       {label}
     </Link>

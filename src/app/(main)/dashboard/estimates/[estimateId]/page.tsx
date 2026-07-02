@@ -2,7 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 
 import { addDays, format } from "date-fns";
-import { BriefcaseBusiness, CalendarDays, MapPin, NotebookText, UserRound } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, Mail, MapPin, NotebookText, Phone, UserRound } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { BackButton } from "@/components/back-button";
@@ -176,6 +176,11 @@ export default async function Page({
       materialKeyCounts,
     ),
   }));
+  const laborSubtotal = Number(estimate.laborCost);
+  const materialsSubtotal = Number(estimate.materialsSubtotal);
+  const subtotal = laborSubtotal + materialsSubtotal;
+  const estimateJobType = estimate.estimateRecord?.jobType === "Commercial" ? "Commercial" : "Residential";
+  const taxableItemsLabel = estimateJobType === "Commercial" ? "labor + materials" : "materials";
   const paymentAmount = Number(estimate.estimatedTotal.toString()) / 2;
   const estimateNumber = formatDocumentNumber("EST", estimateSequence);
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
@@ -214,7 +219,7 @@ export default async function Page({
   });
 
   return (
-    <div className="mx-auto grid h-[calc(100svh-6rem)] max-w-5xl grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden print:h-auto print:max-w-none print:gap-0 print:overflow-visible print:p-0 print:text-[10px]">
+    <div className="mx-auto grid gap-4 md:h-[calc(100svh-6rem)] md:max-w-5xl md:grid-rows-[auto_minmax(0,1fr)] md:overflow-hidden print:h-auto print:max-w-none print:gap-0 print:overflow-visible print:p-0 print:text-[10px]">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <BackButton fallbackHref={backHref} />
         <div className="flex flex-wrap items-center gap-2">
@@ -238,8 +243,8 @@ export default async function Page({
       </div>
 
       <div className="-mx-4 min-h-0 overflow-auto px-4 pb-4 print:contents">
-        <article className="mx-auto grid min-h-[1056px] w-[816px] max-w-none gap-5 rounded-md border bg-card p-5 shadow-sm print:min-h-[9.6in] print:w-auto print:gap-3 print:border-0 print:bg-white print:p-5 print:text-neutral-950 print:shadow-none">
-          <header className="grid grid-cols-[1fr_auto] gap-4 border-b pb-2 print:border-neutral-300 print:pb-2">
+        <article className="mx-auto grid w-full max-w-full gap-4 rounded-md border bg-card p-4 shadow-sm md:min-h-[1056px] md:w-[816px] md:max-w-none md:gap-3 md:p-5 print:min-h-[9.6in] print:w-auto print:gap-3 print:border-0 print:bg-white print:p-5 print:text-neutral-950 print:shadow-none">
+          <header className="grid gap-4 pb-2 md:grid-cols-[1fr_auto] print:pb-2">
             <div className="grid gap-1">
               <div className="mb-2 flex items-start gap-3">
                 <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 print:size-10 print:border-neutral-300 print:bg-neutral-50">
@@ -255,10 +260,18 @@ export default async function Page({
                 </div>
                 <div className="grid gap-0.5">
                   <div className="font-semibold text-lg leading-none print:text-sm">{currentUser.companyName}</div>
-                  <div className="text-muted-foreground text-xs">{companyEmail}</div>
-                  {currentUser.companyPhone ? (
-                    <div className="text-muted-foreground text-xs">{currentUser.companyPhone}</div>
-                  ) : null}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Mail className="size-3" />
+                      <span>{companyEmail}</span>
+                    </span>
+                    {currentUser.companyPhone ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Phone className="size-3" />
+                        <span>{formatPhoneNumber(currentUser.companyPhone)}</span>
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
               <div className="mt-3 flex items-center gap-2 font-semibold text-xl print:mt-2 print:text-base">
@@ -271,7 +284,7 @@ export default async function Page({
                 <span>Valid through {format(validThrough, "MMM d, yyyy")}</span>
               </div>
             </div>
-            <div className="grid gap-1 rounded-md border bg-muted/20 p-3 text-right print:border-neutral-300 print:bg-neutral-50 print:p-2">
+            <div className="grid gap-1 rounded-md border bg-muted/20 p-3 text-left md:text-right print:border-neutral-300 print:bg-neutral-50 print:p-2">
               <span className="text-muted-foreground text-xs">Estimated total</span>
               <span className="font-semibold text-2xl text-sky-700 dark:text-sky-400 print:text-xl">
                 {formatMoney(estimate.estimatedTotal)}
@@ -279,48 +292,43 @@ export default async function Page({
               <span className="text-muted-foreground text-xs">valid through {format(validThrough, "MMM d, yyyy")}</span>
             </div>
           </header>
-          <section className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <div className="flex items-center gap-2 font-medium text-xs">
-                <UserRound className="size-3.5 text-muted-foreground" />
-                Prepared For
-              </div>
-              <div className="h-16 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
-                <div className="font-medium">{estimate.customerName ?? "No customer on file"}</div>
-                <div className="text-muted-foreground">{estimate.customerEmail ?? "No email on file"}</div>
-                <div className="text-muted-foreground">
-                  {estimate.customerPhone ? formatPhoneNumber(estimate.customerPhone) : "No phone on file"}
+          <section className="overflow-hidden rounded-md border bg-muted/20 text-xs print:border-neutral-300 print:bg-neutral-50">
+            <div className="grid md:grid-cols-2">
+              <div className="grid gap-1 border-b p-2 md:border-r">
+                <div className="flex items-center gap-2 font-medium text-muted-foreground">
+                  <UserRound className="size-3.5" />
+                  Prepared For
+                </div>
+                <div>
+                  <div className="font-medium">{estimate.customerName ?? "No customer on file"}</div>
+                  <div className="text-muted-foreground">{estimate.customerEmail ?? "No email on file"}</div>
+                  <div className="text-muted-foreground">
+                    {estimate.customerPhone ? formatPhoneNumber(estimate.customerPhone) : "No phone on file"}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="grid gap-2">
-              <div className="flex items-center gap-2 font-medium text-xs">
-                <BriefcaseBusiness className="size-3.5 text-muted-foreground" />
-                Job
-              </div>
-              <div className="h-16 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
+              <div className="grid gap-1 border-b p-2">
+                <div className="flex items-center gap-2 font-medium text-muted-foreground">
+                  <BriefcaseBusiness className="size-3.5" />
+                  Job
+                </div>
                 <div className="font-medium">{estimate.jobTitle}</div>
               </div>
-            </div>
-          </section>
-
-          <section className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <div className="flex items-center gap-2 font-medium text-xs">
-                <CalendarDays className="size-3.5 text-muted-foreground" />
-                Schedule
+              <div className="grid gap-1 border-b p-2 md:border-r md:border-b-0">
+                <div className="flex items-center gap-2 font-medium text-muted-foreground">
+                  <CalendarDays className="size-3.5" />
+                  Schedule
+                </div>
+                <div className="whitespace-pre-line">
+                  {formatEstimateSchedule(estimate.dateBegin, estimate.dateEnd)}
+                </div>
               </div>
-              <div className="grid h-16 gap-0.5 whitespace-pre-line rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
-                {formatEstimateSchedule(estimate.dateBegin, estimate.dateEnd)}
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <div className="flex items-center gap-2 font-medium text-xs">
-                <MapPin className="size-3.5 text-muted-foreground" />
-                Service Location
-              </div>
-              <div className="h-16 rounded-md border bg-muted/20 p-2 text-xs print:border-neutral-300 print:bg-neutral-50">
-                {estimate.serviceLocation ?? "Not on file"}
+              <div className="grid gap-1 p-2">
+                <div className="flex items-center gap-2 font-medium text-muted-foreground">
+                  <MapPin className="size-3.5" />
+                  Service Location
+                </div>
+                <div>{estimate.serviceLocation ?? "Not on file"}</div>
               </div>
             </div>
           </section>
@@ -336,7 +344,31 @@ export default async function Page({
 
           <section className="grid gap-2">
             <div className="font-medium text-xs">Labor</div>
-            <div className="overflow-hidden rounded-md border print:border-neutral-300">
+            <div className="grid gap-2 md:hidden print:hidden">
+              {keyedLaborItems.length ? (
+                keyedLaborItems.map((item) => (
+                  <div key={item.rowKey} className="rounded-md border bg-muted/20 p-3 text-xs">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium leading-snug">{formatDash(item.description)}</div>
+                        {formatLineMeta(item) ? (
+                          <div className="mt-1 text-muted-foreground">{formatLineMeta(item)}</div>
+                        ) : null}
+                      </div>
+                      <div className="shrink-0 font-semibold tabular-nums">{formatOptionalMoney(item.price)}</div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-md border bg-muted/20 p-3 text-xs">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">Labor</span>
+                    <span className="font-semibold tabular-nums">{formatMoney(estimate.laborCost)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="hidden overflow-hidden rounded-md border md:block print:block print:border-neutral-300">
               <div className="grid grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100">
                 <span>Description</span>
                 <span className="text-right">Qty</span>
@@ -374,7 +406,28 @@ export default async function Page({
 
           <section className="grid gap-2">
             <div className="font-medium text-xs">Materials</div>
-            <div className="overflow-hidden rounded-md border print:border-neutral-300">
+            <div className="grid gap-2 md:hidden print:hidden">
+              {keyedMaterialItems.length ? (
+                keyedMaterialItems.map((material) => (
+                  <div key={material.rowKey} className="rounded-md border bg-muted/20 p-3 text-xs">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium leading-snug">{formatDash(material.description)}</div>
+                        {formatLineMeta(material) ? (
+                          <div className="mt-1 text-muted-foreground">{formatLineMeta(material)}</div>
+                        ) : null}
+                      </div>
+                      <div className="shrink-0 font-semibold tabular-nums">{formatOptionalMoney(material.price)}</div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-md border bg-muted/20 p-3 text-muted-foreground text-xs">
+                  No material line items.
+                </div>
+              )}
+            </div>
+            <div className="hidden overflow-hidden rounded-md border md:block print:block print:border-neutral-300">
               <div className="grid grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_4.75rem_5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100">
                 <span>Description</span>
                 <span className="text-right">Qty</span>
@@ -405,18 +458,29 @@ export default async function Page({
           </section>
 
           <section className="grid justify-end gap-2">
-            <div className="grid min-w-64 gap-1.5 rounded-md border bg-muted/20 p-3 text-xs print:min-w-56 print:border-neutral-300 print:bg-neutral-50 print:p-2">
+            <div className="grid w-full gap-1.5 rounded-md border bg-muted/20 p-3 text-xs md:min-w-72 md:max-w-80 print:min-w-56 print:border-neutral-300 print:bg-neutral-50 print:p-2">
               <div className="flex items-center justify-between gap-6">
-                <span className="text-muted-foreground">Materials subtotal</span>
+                <span className="text-muted-foreground">Labor</span>
+                <span className="font-medium">{formatMoney(estimate.laborCost)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-muted-foreground">Materials</span>
                 <span className="font-medium">{formatMoney(estimate.materialsSubtotal)}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
-                <span className="text-muted-foreground">Tax ({estimate.materialTaxRate.toString()}%)</span>
-                <span className="font-medium">{formatMoney(estimate.materialTaxAmount)}</span>
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-medium">${subtotal.toFixed(2)}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
-                <span className="text-lg text-muted-foreground">Estimated total</span>
-                <span className="font-semibold text-lg text-sky-700 dark:text-sky-400 print:text-base">
+                <span className="text-muted-foreground">
+                  Tax on {taxableItemsLabel} ({estimate.materialTaxRate.toString()}%)
+                </span>
+                <span className="font-medium">{formatMoney(estimate.materialTaxAmount)}</span>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between gap-6">
+                <span className="font-medium">Estimated total</span>
+                <span className="font-semibold text-base text-sky-700 tabular-nums dark:text-sky-400 print:text-base">
                   {formatMoney(estimate.estimatedTotal)}
                 </span>
               </div>

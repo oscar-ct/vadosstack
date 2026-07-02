@@ -29,10 +29,10 @@ import { cn } from "@/lib/utils";
 
 import { createInvoiceAction } from "../../invoices/actions";
 import { JobBackButton } from "../_components/job-back-button";
-import { CreateDepositButton, DeleteDepositButton, JobInvoiceButton } from "../_components/job-record-action-buttons";
+import { CreateDepositButton, DepositActionsMenu, JobInvoiceButton } from "../_components/job-record-action-buttons";
 import { calculateSignedMaterialTotal } from "../_components/materials";
 import { getJob } from "../_lib/job-data";
-import { createJobPaymentAction, deleteJobPaymentAction } from "../actions";
+import { createJobPaymentAction, deleteJobPaymentAction, updateJobPaymentAction } from "../actions";
 
 function formatMoney(value?: string | number) {
   const amount = Number(value ?? 0);
@@ -275,13 +275,14 @@ export default async function Page({
     0,
   );
   const taxRate = Number(job.materialTaxRate ?? 0);
+  const subtotal = laborSubtotal + materialsSubtotal;
   const taxableSubtotal = materialsSubtotal + (job.jobType === "Commercial" ? laborSubtotal : 0);
   const tax = taxableSubtotal * (taxRate / 100);
   const measurementTotal = job.measurementRooms.reduce((total, room) => total + roomArea(room), 0);
   const measuredAreas = job.measurementRooms.filter((room) => roomArea(room) > 0);
   const startDate = job.dateBegin ? format(parseISO(job.dateBegin), "MMM d, yyyy") : "Unscheduled";
   const endDate = job.dateEnd ? format(parseISO(job.dateEnd), "MMM d, yyyy") : undefined;
-  const taxBasis = job.jobType === "Commercial" ? "Labor + materials" : "Materials only";
+  const taxableItemsLabel = job.jobType === "Commercial" ? "labor + materials" : "materials";
   const deposits = (job?.payments ?? []).filter((payment) => payment.paymentType === "deposit");
 
   return (
@@ -319,7 +320,7 @@ export default async function Page({
               Job total
             </div>
             <div className="mt-2 font-semibold text-2xl tabular-nums">{formatMoney(job.finalCost)}</div>
-            <div className="mt-1 text-sky-800/80 text-xs dark:text-sky-200/80">{taxBasis} tax basis</div>
+            <div className="mt-1 text-sky-800/80 text-xs dark:text-sky-200/80">Tax applies to {taxableItemsLabel}</div>
           </div>
         </div>
       </div>
@@ -400,11 +401,13 @@ export default async function Page({
                 <span className="font-medium tabular-nums">{formatMoney(materialsSubtotal)}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Tax basis</span>
-                <span className="font-medium tabular-nums">{formatMoney(taxableSubtotal)}</span>
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-medium tabular-nums">{formatMoney(subtotal)}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Tax ({taxRate.toFixed(2)}%)</span>
+                <span className="text-muted-foreground">
+                  Tax on {taxableItemsLabel} ({taxRate.toFixed(2)}%)
+                </span>
                 <span className="font-medium tabular-nums">{formatMoney(tax)}</span>
               </div>
               <div className="mt-2 flex justify-between gap-3 border-sky-200 border-t pt-3 dark:border-sky-900/60">
@@ -415,46 +418,37 @@ export default async function Page({
           </section>
 
           <section className="w-full rounded-lg border bg-background p-4">
-            <div className={"flex justify-between gap-2"}>
-              <div className="flex items-center gap-2 font-semibold text-sm uppercase tracking-normal">
-                <CircleDollarSign className="size-4" />
-                Deposits
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 font-semibold text-sm uppercase tracking-normal">
+                  <CircleDollarSign className="size-4" />
+                  Deposits
+                  {deposits.length ? (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">
+                      {deposits.length}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-muted-foreground text-xs">Deposits recorded for this job.</p>
               </div>
-              {deposits.length ? (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">
-                  {deposits.length}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="mt-4 grid gap-2 text-sm">
-              {/*<div className="flex justify-between gap-3"><span*/}
-              {/*    className="text-muted-foreground">Payment status</span><span*/}
-              {/*    className="font-medium">{job.paymentStatus}</span></div>*/}
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Deposit paid</span>
-                <span className="font-medium tabular-nums">{formatMoney(job.depositPaid)}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Other payments</span>
-                <span className="font-medium tabular-nums">{formatMoney(job.amountPaid)}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Balance</span>
-                <span className="font-semibold text-red-700 tabular-nums">{formatMoney(job.outstandingBalance)}</span>
+              <div className="shrink-0 text-right">
+                <div className="text-muted-foreground text-xs">Total deposits</div>
+                <div className="mt-0.5 font-semibold text-base tabular-nums">{formatMoney(job.depositPaid)}</div>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2">
+            <div className="mt-4">
               {deposits.length ? (
-                <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                <div className="overflow-hidden rounded-lg border border-sky-200/60 bg-muted/15 dark:border-sky-900/50">
                   {deposits.map((payment) => (
                     <div
                       key={payment.id}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b p-2.5 text-sm transition-colors last:border-b-0 hover:bg-muted/40"
+                      className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-sky-200/60 border-t bg-background/70 px-3 py-3 text-sm transition-colors first:border-t-0 hover:bg-muted/25 dark:border-sky-900/50"
                     >
                       <div className="min-w-0">
-                        <div className="truncate font-medium leading-tight">{payment.description || "Deposit"}</div>
+                        <div className="truncate font-medium text-foreground leading-tight">
+                          {payment.description || "Deposit"}
+                        </div>
                         <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-muted-foreground text-xs leading-snug">
                           <span>{format(parseISO(payment.paidOn), "MMM d, yyyy")}</span>
 
@@ -474,12 +468,15 @@ export default async function Page({
                         </div>
                       </div>
 
-                      <div className="flex shrink-0 items-start gap-1.5">
-                        <span className="rounded-md bg-muted px-2 py-1 text-right font-semibold tabular-nums leading-none">
-                          {formatMoney(payment.amount)}
-                        </span>
-                        <DeleteDepositButton action={deleteJobPaymentAction} paymentId={payment.id} />
+                      <div className="text-right font-semibold tabular-nums leading-tight">
+                        {formatMoney(payment.amount)}
                       </div>
+                      <DepositActionsMenu
+                        deleteAction={deleteJobPaymentAction}
+                        job={job}
+                        payment={payment}
+                        updateAction={updateJobPaymentAction}
+                      />
                     </div>
                   ))}
                 </div>

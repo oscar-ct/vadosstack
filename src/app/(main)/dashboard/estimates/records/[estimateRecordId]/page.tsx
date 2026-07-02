@@ -246,12 +246,13 @@ export default async function Page({
   const laborSubtotal = sum(estimate.laborItems);
   const materialsSubtotal = sum(estimate.materials);
   const taxRate = Number(estimate.materialTaxRate ?? 0);
+  const subtotal = laborSubtotal + materialsSubtotal;
   const taxableSubtotal = materialsSubtotal + (estimate.jobType === "Commercial" ? laborSubtotal : 0);
   const tax = taxableSubtotal * (taxRate / 100);
   const measurementTotal = estimate.measurementRooms.reduce((total, room) => total + roomArea(room), 0);
   const measuredAreas = estimate.measurementRooms.filter((room) => roomArea(room) > 0);
   const scheduledDate = estimate.dateBegin ? format(parseISO(estimate.dateBegin), "MMM d, yyyy") : "Unscheduled";
-  const taxBasis = estimate.jobType === "Commercial" ? "Labor + materials" : "Materials only";
+  const taxableItemsLabel = estimate.jobType === "Commercial" ? "labor + materials" : "materials";
 
   return (
     <div className="@container/main mx-auto grid w-full max-w-7xl gap-5 md:gap-6">
@@ -320,7 +321,7 @@ export default async function Page({
               Estimate total
             </div>
             <div className="mt-2 font-semibold text-2xl tabular-nums">{formatMoney(estimate.estimatedTotal)}</div>
-            <div className="mt-1 text-sky-800/80 text-xs dark:text-sky-200/80">{taxBasis} tax basis</div>
+            <div className="mt-1 text-sky-800/80 text-xs dark:text-sky-200/80">Tax applies to {taxableItemsLabel}</div>
           </div>
         </div>
       </div>
@@ -402,11 +403,13 @@ export default async function Page({
                 <span className="font-medium tabular-nums">{formatMoney(materialsSubtotal)}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Tax basis</span>
-                <span className="font-medium tabular-nums">{formatMoney(taxableSubtotal)}</span>
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-medium tabular-nums">{formatMoney(subtotal)}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Tax ({taxRate.toFixed(2)}%)</span>
+                <span className="text-muted-foreground">
+                  Tax on {taxableItemsLabel} ({taxRate.toFixed(2)}%)
+                </span>
                 <span className="font-medium tabular-nums">{formatMoney(tax)}</span>
               </div>
               <div className="mt-2 flex justify-between gap-3 border-sky-200 border-t pt-3 dark:border-sky-900/60">

@@ -102,6 +102,7 @@ model User {
   id                  String               @id @default(cuid())
   name                String?
   companyName         String
+  companyAddress      String?
   companyEmail        String?
   companyPhone        String?
   companyLogoDataUrl  String?
@@ -379,15 +380,16 @@ model PasswordResetToken {
 }
 
 model PendingAccountConfirmation {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String?
-  companyName  String
-  passwordHash String
-  tokenHash    String   @unique
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String?
+  companyName    String
+  companyAddress String?
+  passwordHash   String
+  tokenHash      String   @unique
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([expiresAt])
   @@map("pending_account_confirmations")
@@ -455,8 +457,8 @@ model Employee {
   phone             String?
   jobTitle          String?
   department        String?
-  employmentType    String            @default("Employee")
-  payType           String            @default("Hourly")
+  employmentType    String             @default("Employee")
+  payType           String             @default("Hourly")
   payRate           Decimal?
   startDate         DateTime?
   endDate           DateTime?

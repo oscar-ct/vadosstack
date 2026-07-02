@@ -82,6 +82,7 @@ async function confirmAccount(token: string): Promise<ConfirmationState> {
     await tx.user.create({
       data: {
         authProviders: ["email"],
+        companyAddress: pendingAccount.companyAddress,
         companyEmail: pendingAccount.email,
         companyName: pendingAccount.companyName,
         email: pendingAccount.email,

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Document, Font, Image, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, Font, Image, Page, Path, renderToBuffer, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
 import { format } from "date-fns";
 
 import type { PricingLineItem } from "../../jobs/_components/pricing-items";
@@ -38,6 +38,7 @@ export type EstimatePdfData = {
   materialTaxRate: { toString: () => string };
   materialsSubtotal: { toString: () => string };
   serviceLocation: string | null;
+  taxableItemsLabel: string;
   validThrough: Date;
 };
 
@@ -70,9 +71,10 @@ function registerEstimateFont() {
 }
 
 const estimateFontFamily = registerEstimateFont();
-const neutralBorder = "#d4d4d4";
-const lightBorder = "#e5e5e5";
-const subtleFill = "#fafafa";
+const neutralBorder = "#dddddd";
+const lightBorder = "#eeeeee";
+const subtleFill = "#ffffff";
+const innerGridBorder = "#e3e3e3";
 const textMuted = "#525252";
 const totalColor = "#0369a1";
 
@@ -81,18 +83,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     color: "#111111",
     fontFamily: estimateFontFamily,
-    fontSize: 10,
-    lineHeight: 1.28,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    paddingTop: 24,
+    fontSize: 8,
+    lineHeight: 1.22,
+    paddingBottom: 20,
+    paddingHorizontal: 22,
+    paddingTop: 22,
   },
   header: {
-    borderBottomColor: neutralBorder,
-    borderBottomWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 9,
     paddingBottom: 8,
   },
   companyBlock: {
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     flexDirection: "row",
     gap: 12,
-    marginBottom: 18,
+    marginBottom: 13,
   },
   logoWrap: {
     alignItems: "center",
@@ -119,101 +119,151 @@ const styles = StyleSheet.create({
   companyName: {
     fontSize: 13,
     fontWeight: 700,
-    marginBottom: 2,
+    marginBottom: 5,
+  },
+  muted: {
+    color: textMuted,
+  },
+  contactRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 0,
+  },
+  contactItem: {
+    alignItems: "center",
+    color: textMuted,
+    flexDirection: "row",
+    fontSize: 8.8,
+    gap: 3,
+  },
+  contactIcon: {
+    color: textMuted,
+    height: 8,
+    width: 8,
   },
   documentTitle: {
     fontSize: 16,
     fontWeight: 700,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   documentMeta: {
     color: textMuted,
-    gap: 3,
+    gap: 2,
+    fontSize: 8.8,
   },
   totalPanel: {
     borderColor: neutralBorder,
     borderRadius: 7,
-    borderWidth: 1,
-    minHeight: 112,
+    borderWidth: 0.8,
+    minHeight: 104,
     paddingHorizontal: 9,
-    paddingVertical: 9,
+    paddingVertical: 8,
     textAlign: "right",
     width: 122,
   },
   totalLabel: {
     color: "#262626",
     fontSize: 10,
-    marginBottom: 22,
+    marginBottom: 18,
   },
   totalAmount: {
     color: totalColor,
     fontSize: 18,
     fontWeight: 700,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   totalMeta: {
     color: "#262626",
     fontSize: 9.5,
   },
   infoGrid: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 10,
-  },
-  infoColumn: {
-    flex: 1,
-    gap: 6,
-  },
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: 700,
-  },
-  infoBox: {
+    backgroundColor: "#ffffff",
     borderColor: neutralBorder,
     borderRadius: 6,
-    borderWidth: 1,
-    minHeight: 55,
-    padding: 8,
+    borderWidth: 0.75,
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  infoGridRow: {
+    flexDirection: "row",
+  },
+  infoCell: {
+    flex: 1,
+    gap: 3,
+    minHeight: 44,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  infoCellRightBorder: {
+    borderRightColor: innerGridBorder,
+    borderRightWidth: 0.55,
+  },
+  infoCellBottomBorder: {
+    borderBottomColor: innerGridBorder,
+    borderBottomWidth: 0.55,
+  },
+  sectionLabel: {
+    fontSize: 9.25,
+    fontWeight: 700,
+  },
+  infoLabel: {
+    alignItems: "center",
+    color: textMuted,
+    flexDirection: "row",
+    fontSize: 8.5,
+    fontWeight: 700,
+    gap: 4,
+  },
+  infoIcon: {
+    color: textMuted,
+    height: 9,
+    width: 9,
+  },
+  infoValue: {
+    color: "#111111",
+    fontSize: 8.75,
+    gap: 1,
   },
   strong: {
     fontWeight: 700,
   },
   section: {
-    gap: 6,
-    marginBottom: 12,
+    gap: 4,
+    marginBottom: 7,
   },
   noteBox: {
     borderColor: neutralBorder,
     borderRadius: 6,
-    borderWidth: 1,
-    padding: 8,
+    borderWidth: 0.75,
+    padding: 7,
   },
   table: {
     borderColor: neutralBorder,
     borderRadius: 6,
-    borderWidth: 1,
+    borderWidth: 0.75,
     overflow: "hidden",
   },
   tableHeader: {
     backgroundColor: subtleFill,
     borderBottomColor: neutralBorder,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.75,
     flexDirection: "row",
     fontWeight: 700,
   },
   tableRow: {
     borderBottomColor: lightBorder,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.7,
     flexDirection: "row",
-    minHeight: 22,
+    minHeight: 19,
   },
   tableRowLast: {
     flexDirection: "row",
-    minHeight: 22,
+    minHeight: 19,
   },
   cell: {
-    paddingHorizontal: 8,
-    paddingVertical: 5.5,
+    paddingHorizontal: 7,
+    paddingVertical: 3.75,
   },
   textRight: {
     textAlign: "right",
@@ -237,12 +287,12 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
     borderColor: neutralBorder,
     borderRadius: 6,
-    borderWidth: 1,
-    marginBottom: 12,
+    borderWidth: 0.75,
+    marginBottom: 7,
     minWidth: 185,
     overflow: "hidden",
     paddingHorizontal: 9,
-    paddingVertical: 7,
+    paddingVertical: 6,
   },
   summaryRow: {
     flexDirection: "row",
@@ -259,6 +309,7 @@ const styles = StyleSheet.create({
     color: "#262626",
   },
   summaryValue: {
+    fontSize: 9.5,
     fontWeight: 700,
     textAlign: "right",
   },
@@ -267,16 +318,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 700,
   },
+  summaryRule: {
+    borderTopColor: lightBorder,
+    borderTopWidth: 1,
+    marginBottom: 5,
+    marginTop: 1,
+  },
   paymentBox: {
     borderColor: neutralBorder,
     borderRadius: 6,
-    borderWidth: 1,
+    borderWidth: 0.75,
     gap: 5,
-    marginBottom: 12,
-    padding: 9,
+    marginBottom: 7,
+    padding: 8,
   },
   footer: {
-    bottom: 22,
+    bottom: 18,
     color: textMuted,
     fontSize: 8,
     left: 24,
@@ -329,11 +386,88 @@ function SectionLabel({ label }: { label: string }) {
   return <Text style={styles.sectionLabel}>{label}</Text>;
 }
 
-function InfoBox({ children, label }: { children: ReactNode; label: string }) {
+function MailIcon() {
   return (
-    <View style={styles.infoColumn} wrap={false}>
-      <SectionLabel label={label} />
-      <View style={styles.infoBox}>{children}</View>
+    <Svg style={styles.contactIcon} viewBox="0 0 24 24">
+      <Path d="M4 6h16v12H4z" fill="none" stroke={textMuted} strokeWidth={2} />
+      <Path d="m4 7 8 6 8-6" fill="none" stroke={textMuted} strokeWidth={2} />
+    </Svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <Svg style={styles.contactIcon} viewBox="0 0 24 24">
+      <Path
+        d="M6 4h4l2 5-3 2c1 2 3 4 5 5l2-3 5 2v4c0 1-1 2-2 2C10 21 3 14 3 6c0-1 1-2 3-2z"
+        fill="none"
+        stroke={textMuted}
+        strokeWidth={2}
+      />
+    </Svg>
+  );
+}
+
+function SmallIcon({ kind }: { kind: "calendar" | "job" | "location" | "user" }) {
+  const path =
+    kind === "user"
+      ? "M12 12c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm-8 9c1-5 5-7 8-7s7 2 8 7"
+      : kind === "job"
+        ? "M8 7V5c0-1 1-2 2-2h4c1 0 2 1 2 2v2M4 7h16v12H4z"
+        : kind === "calendar"
+          ? "M5 4v4M19 4v4M4 8h16M5 6h14v14H5z"
+          : "M12 21s7-5 7-11a7 7 0 0 0-14 0c0 6 7 11 7 11zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z";
+
+  return (
+    <Svg style={styles.infoIcon} viewBox="0 0 24 24">
+      <Path d={path} fill="none" stroke={textMuted} strokeWidth={2} />
+    </Svg>
+  );
+}
+
+function ContactRow({ email, phone }: { email: string; phone: string | null }) {
+  return (
+    <View style={styles.contactRow}>
+      <View style={styles.contactItem}>
+        <MailIcon />
+        <Text>{email}</Text>
+      </View>
+      {phone ? (
+        <View style={styles.contactItem}>
+          <PhoneIcon />
+          <Text>{phone}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function DetailCell({
+  bottom = false,
+  children,
+  icon,
+  label,
+  right = false,
+}: {
+  bottom?: boolean;
+  children: ReactNode;
+  icon: "calendar" | "job" | "location" | "user";
+  label: string;
+  right?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.infoCell,
+        ...(right ? [styles.infoCellRightBorder] : []),
+        ...(bottom ? [styles.infoCellBottomBorder] : []),
+      ]}
+    >
+      <View style={styles.infoLabel}>
+        <SmallIcon kind={icon} />
+        <Text>{label}</Text>
+      </View>
+      <View style={styles.infoValue}>{children}</View>
     </View>
   );
 }
@@ -413,6 +547,7 @@ function LineTable({
 
 function EstimatePdfDocument({ data }: { data: EstimatePdfData }) {
   const paymentAmount = Number(data.estimatedTotal.toString()) / 2;
+  const subtotal = Number(data.laborCost.toString()) + Number(data.materialsSubtotal.toString());
 
   return (
     <Document title={`Estimate ${data.estimateNumber}`}>
@@ -427,8 +562,7 @@ function EstimatePdfDocument({ data }: { data: EstimatePdfData }) {
               ) : null}
               <View>
                 <Text style={styles.companyName}>{data.companyName}</Text>
-                <Text>{data.companyEmail}</Text>
-                {data.companyPhone ? <Text>{data.companyPhone}</Text> : null}
+                <ContactRow email={data.companyEmail} phone={data.companyPhone} />
               </View>
             </View>
 
@@ -448,24 +582,25 @@ function EstimatePdfDocument({ data }: { data: EstimatePdfData }) {
         </View>
 
         <View style={styles.infoGrid} wrap={false}>
-          <InfoBox label="Prepared For">
-            <Text style={styles.strong}>{data.customerName ?? "No customer on file"}</Text>
-            <Text>{data.customerEmail ?? "No email on file"}</Text>
-            <Text>{data.customerPhone ?? "No phone on file"}</Text>
-          </InfoBox>
-          <InfoBox label="Job">
-            <Text style={styles.strong}>{data.jobTitle}</Text>
-          </InfoBox>
-        </View>
-
-        <View style={styles.infoGrid} wrap={false}>
-          <InfoBox label="Schedule">
-            <Text>Start: {maybeDate(data.dateBegin)}</Text>
-            <Text>End: {maybeDate(data.dateEnd)}</Text>
-          </InfoBox>
-          <InfoBox label="Service Location">
-            <Text>{data.serviceLocation ?? "Not on file"}</Text>
-          </InfoBox>
+          <View style={styles.infoGridRow}>
+            <DetailCell bottom icon="user" label="Prepared For" right>
+              <Text style={styles.strong}>{data.customerName ?? "No customer on file"}</Text>
+              <Text style={styles.muted}>{data.customerEmail ?? "No email on file"}</Text>
+              <Text style={styles.muted}>{data.customerPhone ?? "No phone on file"}</Text>
+            </DetailCell>
+            <DetailCell bottom icon="job" label="Job">
+              <Text style={styles.strong}>{data.jobTitle}</Text>
+            </DetailCell>
+          </View>
+          <View style={styles.infoGridRow}>
+            <DetailCell icon="calendar" label="Schedule" right>
+              <Text>Start: {maybeDate(data.dateBegin)}</Text>
+              <Text>End: {maybeDate(data.dateEnd)}</Text>
+            </DetailCell>
+            <DetailCell icon="location" label="Service Location">
+              <Text>{data.serviceLocation ?? "Not on file"}</Text>
+            </DetailCell>
+          </View>
         </View>
 
         {data.jobDescription ? (
@@ -479,8 +614,14 @@ function EstimatePdfDocument({ data }: { data: EstimatePdfData }) {
         <LineTable emptyLabel="No material line items." items={data.materialItems} title="Materials" />
 
         <View style={styles.summary} wrap={false}>
-          <SummaryRow label="Materials subtotal" value={money(data.materialsSubtotal)} />
-          <SummaryRow label={`Tax (${data.materialTaxRate.toString()}%)`} value={money(data.materialTaxAmount)} />
+          <SummaryRow label="Labor" value={money(data.laborCost)} />
+          <SummaryRow label="Materials" value={money(data.materialsSubtotal)} />
+          <SummaryRow label="Subtotal" value={money(subtotal)} />
+          <SummaryRow
+            label={`Tax on ${data.taxableItemsLabel} (${data.materialTaxRate.toString()}%)`}
+            value={money(data.materialTaxAmount)}
+          />
+          <View style={styles.summaryRule} />
           <SummaryRow label="Estimated total" last strong value={money(data.estimatedTotal)} />
         </View>
 

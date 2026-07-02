@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { discardLocalDraft } from "@/lib/drafts.client";
 
 import type { ServiceTemplateMutationState } from "../actions";
 import type { ServiceTemplateRow } from "../types";
@@ -212,7 +213,7 @@ export function ServiceWorkspace({
         <div className="sticky bottom-0 z-10 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button asChild type="button" variant="outline">
-              <Link prefetch={false} href="/dashboard/services">
+              <Link prefetch={false} href="/dashboard/services" onClick={() => discardLocalDraft(draftKey)}>
                 Cancel
               </Link>
             </Button>

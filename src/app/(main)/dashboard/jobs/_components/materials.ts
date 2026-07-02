@@ -80,7 +80,15 @@ export function parseMaterials(value: string | null | undefined): JobMaterial[] 
           price,
         };
       })
-      .filter((item) => item.description || item.vendor || item.quantity || item.unit || item.unitPrice || item.price);
+      .filter(
+        (item) =>
+          item.description ||
+          item.vendor ||
+          item.purchaseDate ||
+          item.unit ||
+          item.unitPrice ||
+          Number(item.price) !== 0,
+      );
   } catch {
     return [];
   }
@@ -103,7 +111,7 @@ export function stringifyMaterials(materials: JobMaterial[]) {
         (material) =>
           material.description ||
           material.vendor ||
-          material.quantity ||
+          material.purchaseDate ||
           material.unit ||
           material.unitPrice ||
           Number(material.price) !== 0,
