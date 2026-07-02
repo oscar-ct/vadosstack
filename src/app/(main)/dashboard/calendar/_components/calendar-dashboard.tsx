@@ -20,6 +20,7 @@ import {
   startOfToday,
   startOfWeek,
 } from "date-fns";
+import { enGB } from "date-fns/locale";
 import {
   ArrowLeft,
   ArrowRight,
@@ -47,6 +48,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
@@ -215,9 +217,55 @@ function getCalendarDisplayName(event: CalendarDashboardEvent) {
 
 type TaskAction = (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
 
-function getTaskDateInputValue(event?: CalendarDashboardEvent) {
-  if (!event?.date) return toDateInputValue();
-  return toDateInputValue(parseISO(event.date));
+function getTaskDateValue(event?: CalendarDashboardEvent) {
+  if (!event?.date) return new Date();
+  return parseISO(event.date);
+}
+
+function TaskDatePicker({ id, value, onChange }: { id: string; value: Date; onChange: (date: Date) => void }) {
+  const [open, setOpen] = React.useState(false);
+  const [currentMonth, setCurrentMonth] = React.useState(() => startOfMonth(value));
+
+  React.useEffect(() => {
+    setCurrentMonth(startOfMonth(value));
+  }, [value]);
+
+  function handleSelect(date: Date | undefined) {
+    if (!date) return;
+
+    onChange(date);
+    setOpen(false);
+  }
+
+  return (
+    <Popover modal open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          id={id}
+          type="button"
+          variant="outline"
+          className="w-full justify-start gap-2 bg-background font-normal"
+        >
+          <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate text-muted-foreground">{format(value, "MMM d, yyyy")}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto overflow-hidden p-0">
+        <div className="p-3">
+          <Calendar
+            mode="single"
+            selected={value}
+            onSelect={handleSelect}
+            month={currentMonth}
+            onMonthChange={setCurrentMonth}
+            fixedWeeks
+            locale={enGB}
+            className="w-full p-0"
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function TaskDeleteDialog({
@@ -305,7 +353,7 @@ function TaskContactPicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover modal open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           id="calendar-task-contact"
@@ -396,31 +444,32 @@ function TaskFormFields({ contacts, event }: { contacts: CalendarDashboardContac
       ? `customer:${event.customerId}`
       : "";
   const [selectedContact, setSelectedContact] = React.useState(initialContactValue);
+  const [scheduledFor, setScheduledFor] = React.useState(() => getTaskDateValue(event));
   const [kind, id] = selectedContact.split(":");
 
   return (
     <>
       <input type="hidden" name="customerId" value={kind === "customer" ? id : ""} />
       <input type="hidden" name="leadId" value={kind === "lead" ? id : ""} />
+      <input type="hidden" name="scheduledFor" value={toDateInputValue(scheduledFor)} />
       <div className="grid gap-2">
         <Label htmlFor={`calendar-task-title-${event?.recordId ?? "new"}`}>Task</Label>
-        <Input
+        <Textarea
           id={`calendar-task-title-${event?.recordId ?? "new"}`}
           name="title"
           placeholder="Meet customer to view job"
           defaultValue={event?.title ?? ""}
+          className="min-h-16 resize-y bg-background"
           required
         />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <div className="grid gap-2">
           <Label htmlFor={`calendar-task-date-${event?.recordId ?? "new"}`}>Date</Label>
-          <Input
+          <TaskDatePicker
             id={`calendar-task-date-${event?.recordId ?? "new"}`}
-            name="scheduledFor"
-            type="date"
-            defaultValue={getTaskDateInputValue(event)}
-            required
+            value={scheduledFor}
+            onChange={setScheduledFor}
           />
         </div>
         <div className="grid gap-2">
