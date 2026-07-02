@@ -4,7 +4,12 @@ import { AuthRequiredState } from "@/components/auth-required-state";
 import { getCurrentUser } from "@/lib/auth";
 
 import { EstimateRecordWorkspace } from "../../../_components/estimate-record-workspace";
-import { getEstimateCustomers, getEstimateRecord, getEstimateServices } from "../../../_lib/estimate-record-data";
+import {
+  getEstimateCustomers,
+  getEstimateLeads,
+  getEstimateRecord,
+  getEstimateServices,
+} from "../../../_lib/estimate-record-data";
 import { deleteEstimateRecordAction, updateEstimateRecordAction } from "../../../records-actions";
 
 export default async function Page({
@@ -26,9 +31,10 @@ export default async function Page({
   }
 
   const { estimateRecordId } = await params;
-  const [customers, estimate, services] = await Promise.all([
+  const [customers, estimate, leads, services] = await Promise.all([
     getEstimateCustomers(currentUser.id),
     getEstimateRecord(currentUser.id, estimateRecordId),
+    getEstimateLeads(currentUser.id),
     getEstimateServices(currentUser.id),
   ]);
 
@@ -42,6 +48,7 @@ export default async function Page({
       customers={customers}
       deleteAction={deleteEstimateRecordAction}
       estimate={estimate}
+      leads={leads}
       mode="edit"
       services={services}
     />

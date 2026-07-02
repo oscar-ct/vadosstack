@@ -13,6 +13,7 @@ import {
   ChevronsUpDown,
   ClipboardList,
   Home,
+  MailWarning,
   MapPin,
   Package,
   Plus,
@@ -24,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -42,11 +44,13 @@ import { type JobMaterial, stringifyMaterials } from "../../jobs/_components/mat
 import { type PricingLineItem, stringifyPricingItems } from "../../jobs/_components/pricing-items";
 import { ServicePicker } from "../../services/_components/service-picker";
 import type { ServiceTemplateRow } from "../../services/types";
+import type { EstimateLeadOption } from "../_lib/estimate-record-data";
 import type { EstimateRecordRow } from "./schema";
 
 const statuses = ["Draft", "Ready to Send", "Waiting on Customer", "Won", "Lost"] as const;
 const categories = ["Repair", "Installation", "Other"] as const;
 const newCustomerValue = "new-customer";
+const newLeadValue = "new-lead";
 const customLocationValue = "custom-location";
 const selectCustomerValue = "";
 const mobileFieldClassName = "text-base md:text-sm bg-background/60";
@@ -91,10 +95,15 @@ type EstimateRecordDraft = {
   newCustomerEmail: string;
   newCustomerName: string;
   newCustomerPhone: string;
+  newLeadEmail: string;
+  newLeadName: string;
+  newLeadPhone: string;
+  newLeadSource: string;
   notes: string;
   savedAt: string;
   scheduledDate: string;
   selectedCustomerId: string;
+  selectedLeadId: string;
   selectedLocation: string;
   status: string;
   title: string;
@@ -164,6 +173,26 @@ function formatCustomLocation(fields: CustomLocationFields) {
     .map((value) => value.trim())
     .filter(Boolean)
     .join(", ");
+}
+
+function formatLeadMeta(lead: EstimateLeadOption) {
+  return [lead.serviceType, lead.serviceLocation, lead.email ?? formatPhoneNumber(lead.phone ?? ""), lead.status]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function handleCommandListWheel(event: React.WheelEvent<HTMLDivElement>) {
+  if (!event.deltaY) return;
+
+  const list = event.currentTarget;
+  const canScrollUp = event.deltaY < 0 && list.scrollTop > 0;
+  const canScrollDown = event.deltaY > 0 && list.scrollTop + list.clientHeight < list.scrollHeight;
+
+  if (!canScrollUp && !canScrollDown) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  list.scrollTop += event.deltaY;
 }
 
 function parseEstimateDate(value?: string) {
@@ -267,10 +296,15 @@ function parseEstimateDraft(value: string): EstimateRecordDraft | null {
       newCustomerEmail: parsed.newCustomerEmail ?? "",
       newCustomerName: parsed.newCustomerName ?? "",
       newCustomerPhone: parsed.newCustomerPhone ?? "",
+      newLeadEmail: parsed.newLeadEmail ?? "",
+      newLeadName: parsed.newLeadName ?? "",
+      newLeadPhone: parsed.newLeadPhone ?? "",
+      newLeadSource: parsed.newLeadSource ?? "",
       notes: parsed.notes ?? "",
       savedAt: parsed.savedAt ?? new Date().toISOString(),
       scheduledDate: parsed.scheduledDate ?? "",
       selectedCustomerId: parsed.selectedCustomerId ?? selectCustomerValue,
+      selectedLeadId: parsed.selectedLeadId ?? "",
       selectedLocation: parsed.selectedLocation ?? customLocationValue,
       status: statuses.includes(parsed.status as (typeof statuses)[number]) ? (parsed.status as string) : "Draft",
       title: parsed.title ?? "",
@@ -944,12 +978,25 @@ function WorkspaceSectionHeader({
   );
 }
 
+function LeadEmailWarning() {
+  return (
+    <Alert className="border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+      <MailWarning className="size-4" />
+      <AlertTitle>No email on this lead</AlertTitle>
+      <AlertDescription className="text-amber-900/80 dark:text-amber-100/80">
+        You can still create the estimate, but sending it by email will need an email address later.
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 export function EstimateRecordFormFields({
   clearDraft = false,
   customers,
   draftKey,
   estimate,
   leadPrefill,
+  leads,
   presentation = "modal",
   resetKey = 0,
   services,
@@ -959,6 +1006,7 @@ export function EstimateRecordFormFields({
   draftKey?: string;
   estimate?: EstimateRecordRow;
   leadPrefill?: LeadEstimatePrefill;
+  leads: EstimateLeadOption[];
   presentation?: "modal" | "workspace";
   resetKey?: number;
   services: ServiceTemplateRow[];
@@ -985,9 +1033,21 @@ export function EstimateRecordFormFields({
   const [newCustomerPhone, setNewCustomerPhone] = React.useState(
     leadPrefill?.customerId ? "" : (leadPrefill?.customerPhone ?? ""),
   );
-  const [selectedCustomerId, setSelectedCustomerId] = React.useState(
-    estimate?.customerId ?? leadPrefill?.customerId ?? (leadPrefill ? newCustomerValue : selectCustomerValue),
+  const [newLeadName, setNewLeadName] = React.useState(
+    leadPrefill?.customerId ? "" : (leadPrefill?.customerName ?? ""),
   );
+  const [newLeadEmail, setNewLeadEmail] = React.useState(
+    leadPrefill?.customerId ? "" : (leadPrefill?.customerEmail ?? ""),
+  );
+  const [newLeadEmailTouched, setNewLeadEmailTouched] = React.useState(false);
+  const [newLeadPhone, setNewLeadPhone] = React.useState(
+    leadPrefill?.customerId ? "" : (leadPrefill?.customerPhone ?? ""),
+  );
+  const [newLeadSource, setNewLeadSource] = React.useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = React.useState(
+    estimate?.customerId ?? leadPrefill?.customerId ?? (leadPrefill ? newLeadValue : selectCustomerValue),
+  );
+  const [selectedLeadId, setSelectedLeadId] = React.useState(estimate?.leadId ?? leadPrefill?.leadId ?? "");
   const [laborItems, setLaborItems] = React.useState<LineItem[]>(
     estimate?.laborItems.length ? estimate.laborItems.map((item) => createLineItem(item)) : [createLineItem()],
   );
@@ -1005,6 +1065,7 @@ export function EstimateRecordFormFields({
   const [measurementsOpen, setMeasurementsOpen] = React.useState(() => Boolean(estimate?.measurementRooms.length));
   const [taxRate, setTaxRate] = React.useState(Number(estimate?.materialTaxRate ?? "8.25"));
   const isCreatingNewCustomer = selectedCustomerId === newCustomerValue;
+  const isCreatingNewLead = selectedCustomerId === newLeadValue;
   const selectedCustomer = isCreatingNewCustomer
     ? undefined
     : customers.find((customer) => customer.id === selectedCustomerId);
@@ -1019,6 +1080,7 @@ export function EstimateRecordFormFields({
   );
   const serviceLocation =
     selectedLocation === customLocationValue ? formatCustomLocation(customLocationFields) : selectedLocation;
+  const submittedCustomerId = isCreatingNewCustomer || isCreatingNewLead ? "" : selectedCustomerId;
   const initializedFromKeyRef = React.useRef(`${resetKey}:${estimate?.id ?? "new"}`);
   const draftHydratedRef = React.useRef(false);
   const skipNextDraftSaveRef = React.useRef(true);
@@ -1041,15 +1103,16 @@ export function EstimateRecordFormFields({
 
   const resetToEstimate = React.useCallback(() => {
     const nextSelectedCustomerId =
-      estimate?.customerId ?? leadPrefill?.customerId ?? (leadPrefill ? newCustomerValue : selectCustomerValue);
+      estimate?.customerId ?? leadPrefill?.customerId ?? (leadPrefill ? newLeadValue : selectCustomerValue);
     const nextCustomer = customers.find((customer) => customer.id === nextSelectedCustomerId);
     const nextAddressOptions = nextCustomer?.addresses ?? [];
-    const nextInitialLocation = estimate?.serviceLocation ?? "";
+    const nextInitialLocation = estimate?.serviceLocation ?? leadPrefill?.serviceLocation ?? "";
     const nextHasSavedInitialLocation = nextAddressOptions.some(
       (address) => formatAddress(address) === nextInitialLocation,
     );
 
     setSelectedCustomerId(nextSelectedCustomerId);
+    setSelectedLeadId(estimate?.leadId ?? leadPrefill?.leadId ?? "");
     setLaborItems(
       estimate?.laborItems.length ? estimate.laborItems.map((item) => createLineItem(item)) : [createLineItem()],
     );
@@ -1071,6 +1134,11 @@ export function EstimateRecordFormFields({
     setNewCustomerName(leadPrefill?.customerId ? "" : (leadPrefill?.customerName ?? ""));
     setNewCustomerEmail(leadPrefill?.customerId ? "" : (leadPrefill?.customerEmail ?? ""));
     setNewCustomerPhone(leadPrefill?.customerId ? "" : (leadPrefill?.customerPhone ?? ""));
+    setNewLeadName(leadPrefill?.customerId ? "" : (leadPrefill?.customerName ?? ""));
+    setNewLeadEmail(leadPrefill?.customerId ? "" : (leadPrefill?.customerEmail ?? ""));
+    setNewLeadEmailTouched(false);
+    setNewLeadPhone(leadPrefill?.customerId ? "" : (leadPrefill?.customerPhone ?? ""));
+    setNewLeadSource("");
     setJobType(estimate?.jobType ?? "Residential");
     setMeasurementRooms(
       estimate?.measurementRooms.length
@@ -1112,6 +1180,7 @@ export function EstimateRecordFormFields({
     }
 
     setSelectedCustomerId(parsed.selectedCustomerId);
+    setSelectedLeadId(parsed.selectedLeadId);
     setLaborItems(parsed.laborItems);
     setMaterials(parsed.materials);
     setTitle(parsed.title);
@@ -1123,6 +1192,11 @@ export function EstimateRecordFormFields({
     setNewCustomerName(parsed.newCustomerName);
     setNewCustomerEmail(parsed.newCustomerEmail);
     setNewCustomerPhone(parsed.newCustomerPhone);
+    setNewLeadName(parsed.newLeadName);
+    setNewLeadEmail(parsed.newLeadEmail);
+    setNewLeadEmailTouched(false);
+    setNewLeadPhone(parsed.newLeadPhone);
+    setNewLeadSource(parsed.newLeadSource);
     setJobType(parsed.jobType);
     setMeasurementRooms(parsed.measurementRooms);
     setMeasurementsOpen(parsed.measurementsOpen);
@@ -1179,10 +1253,15 @@ export function EstimateRecordFormFields({
       newCustomerEmail,
       newCustomerName,
       newCustomerPhone,
+      newLeadEmail,
+      newLeadName,
+      newLeadPhone,
+      newLeadSource,
       notes,
       savedAt,
       scheduledDate: toDateValue(scheduledDate),
       selectedCustomerId,
+      selectedLeadId,
       selectedLocation,
       status,
       title,
@@ -1212,9 +1291,14 @@ export function EstimateRecordFormFields({
     newCustomerEmail,
     newCustomerName,
     newCustomerPhone,
+    newLeadEmail,
+    newLeadName,
+    newLeadPhone,
+    newLeadSource,
     notes,
     scheduledDate,
     selectedCustomerId,
+    selectedLeadId,
     selectedLocation,
     status,
     taxRate,
@@ -1240,10 +1324,21 @@ export function EstimateRecordFormFields({
   }, [draftKey]);
 
   const selectedCustomerLabel = React.useMemo(() => {
+    const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
+    if (selectedLead) return selectedLead.name;
+    if (leadPrefill?.leadId === selectedLeadId) return leadPrefill.customerName;
+    if (isCreatingNewLead) return "New lead";
     if (isCreatingNewCustomer) return "New customer";
 
     return customers.find((customer) => customer.id === selectedCustomerId)?.name ?? "Select customer";
-  }, [customers, isCreatingNewCustomer, selectedCustomerId]);
+  }, [customers, isCreatingNewCustomer, isCreatingNewLead, leadPrefill, leads, selectedCustomerId, selectedLeadId]);
+  const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
+  const selectedLeadEmail =
+    selectedLead?.email ?? (leadPrefill?.leadId === selectedLeadId ? leadPrefill.customerEmail : undefined);
+  const showLeadEmailWarning = Boolean(
+    (isCreatingNewLead && newLeadEmailTouched && !newLeadEmail.trim()) ||
+      (selectedLeadId && !selectedLeadEmail?.trim()),
+  );
   const laborSubtotal = laborItems.reduce((total, item) => total + toNumber(item.price), 0);
   const materialsSubtotal = materials.reduce((total, item) => total + toNumber(item.price), 0);
   const subtotal = laborSubtotal + materialsSubtotal;
@@ -1269,6 +1364,79 @@ export function EstimateRecordFormFields({
     );
   }
 
+  function selectNewCustomer() {
+    setSelectedCustomerId(newCustomerValue);
+    setSelectedLeadId("");
+    setNewLeadName("");
+    setNewLeadEmail("");
+    setNewLeadEmailTouched(false);
+    setNewLeadPhone("");
+    setNewLeadSource("");
+    setSelectedLocation(customLocationValue);
+    setCustomerPickerOpen(false);
+  }
+
+  function selectNewLead() {
+    setSelectedCustomerId(newLeadValue);
+    setSelectedLeadId("");
+    setNewCustomerName("");
+    setNewCustomerEmail("");
+    setNewCustomerPhone("");
+    setSelectedLocation(customLocationValue);
+    setCustomerPickerOpen(false);
+  }
+
+  function selectCustomer(customer: JobCustomer) {
+    setSelectedCustomerId(customer.id);
+    setSelectedLeadId("");
+    setNewCustomerName("");
+    setNewCustomerEmail("");
+    setNewCustomerPhone("");
+    setNewLeadName("");
+    setNewLeadEmail("");
+    setNewLeadEmailTouched(false);
+    setNewLeadPhone("");
+    setNewLeadSource("");
+
+    if (customer.addresses.length) {
+      setSelectedLocation(formatAddress(customer.addresses[0]));
+      setCustomLocationFields(createCustomLocationFields());
+    } else {
+      setSelectedLocation(customLocationValue);
+    }
+
+    setCustomerPickerOpen(false);
+  }
+
+  function selectLead(lead: EstimateLeadOption) {
+    setSelectedLeadId(lead.id);
+    setSelectedCustomerId(lead.customerId ?? selectCustomerValue);
+    setNewCustomerName("");
+    setNewCustomerEmail("");
+    setNewCustomerPhone("");
+    setNewLeadName("");
+    setNewLeadEmail("");
+    setNewLeadEmailTouched(false);
+    setNewLeadPhone("");
+    setNewLeadSource("");
+    setSelectedLocation(customLocationValue);
+    setCustomLocationFields(createCustomLocationFields(lead.serviceLocation ?? ""));
+
+    if (!title.trim()) {
+      setTitle(lead.serviceType ? `${lead.serviceType} estimate for ${lead.name}` : `Estimate for ${lead.name}`);
+    }
+
+    if (
+      lead.serviceType &&
+      category === "Other" &&
+      categories.includes(lead.serviceType as (typeof categories)[number])
+    ) {
+      setCategory(lead.serviceType);
+    }
+
+    setCustomerPickerOpen(false);
+  }
+
   function discardDraft() {
     if (!draftKey || typeof window === "undefined") return;
 
@@ -1283,8 +1451,12 @@ export function EstimateRecordFormFields({
   if (presentation === "workspace") {
     return (
       <div className="grid gap-0 md:gap-2">
-        <input type="hidden" name="customerId" value={isCreatingNewCustomer ? "" : selectedCustomerId} />
-        {leadPrefill ? <input type="hidden" name="leadId" value={leadPrefill.leadId} /> : null}
+        <input type="hidden" name="customerId" value={submittedCustomerId} />
+        <input type="hidden" name="leadId" value={selectedLeadId} />
+        <input type="hidden" name="newLeadName" value={isCreatingNewLead ? newLeadName : ""} />
+        <input type="hidden" name="newLeadEmail" value={isCreatingNewLead ? newLeadEmail : ""} />
+        <input type="hidden" name="newLeadPhone" value={isCreatingNewLead ? newLeadPhone : ""} />
+        <input type="hidden" name="newLeadSource" value={isCreatingNewLead ? newLeadSource : ""} />
         <input type="hidden" name="serviceLocation" value={serviceLocation} />
         <input type="hidden" name="dateBegin" value={toDateValue(scheduledDate)} />
         <input type="hidden" name="dateEnd" value="" />
@@ -1371,52 +1543,84 @@ export function EstimateRecordFormFields({
                     <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+                <PopoverContent
+                  align="start"
+                  className="max-h-[min(24rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
+                >
                   <Command>
-                    <CommandInput placeholder="Search customers..." />
-                    <CommandList>
-                      <CommandEmpty>No customers found.</CommandEmpty>
+                    <CommandInput placeholder="Search customers and leads..." />
+                    <CommandList
+                      className="max-h-[min(18rem,var(--radix-popover-content-available-height))] overscroll-contain pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar]:block [&::-webkit-scrollbar]:w-2"
+                      onWheel={handleCommandListWheel}
+                    >
+                      <CommandEmpty>No customers or leads found.</CommandEmpty>
                       <CommandGroup>
-                        <CommandItem
-                          value="New customer"
-                          onSelect={() => {
-                            setSelectedCustomerId(newCustomerValue);
-                            setSelectedLocation(customLocationValue);
-                            setCustomerPickerOpen(false);
-                          }}
-                        >
+                        <CommandItem value="New lead" onSelect={selectNewLead}>
+                          <Check className={cn("size-4", isCreatingNewLead ? "opacity-100" : "opacity-0")} />
+                          New lead
+                        </CommandItem>
+                        <CommandItem value="New customer" onSelect={selectNewCustomer}>
                           <Check className={cn("size-4", isCreatingNewCustomer ? "opacity-100" : "opacity-0")} />
                           New customer
                         </CommandItem>
-                        {customers.map((customer) => (
-                          <CommandItem
-                            key={customer.id}
-                            value={customer.name}
-                            onSelect={() => {
-                              setSelectedCustomerId(customer.id);
-                              if (customer.addresses.length) {
-                                setSelectedLocation(formatAddress(customer.addresses[0]));
-                                setCustomLocationFields(createCustomLocationFields());
-                              } else {
-                                setSelectedLocation(customLocationValue);
-                              }
-                              setCustomerPickerOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn("size-4", selectedCustomerId === customer.id ? "opacity-100" : "opacity-0")}
-                            />
-                            {customer.name}
-                          </CommandItem>
-                        ))}
                       </CommandGroup>
+                      {customers.length ? (
+                        <CommandGroup heading="Customers">
+                          {customers.map((customer) => (
+                            <CommandItem
+                              key={customer.id}
+                              value={`${customer.name} ${customer.addresses.map(formatAddress).join(" ")} customer`}
+                              onSelect={() => selectCustomer(customer)}
+                            >
+                              <Check
+                                className={cn(
+                                  "size-4",
+                                  selectedCustomerId === customer.id && !selectedLeadId ? "opacity-100" : "opacity-0",
+                                )}
+                              />
+                              <span className="grid min-w-0">
+                                <span className="truncate">{customer.name}</span>
+                                {customer.addresses[0] ? (
+                                  <span className="truncate text-muted-foreground text-xs">
+                                    {formatAddress(customer.addresses[0])}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      ) : null}
+                      {leads.length ? (
+                        <CommandGroup heading="Leads">
+                          {leads.map((lead) => {
+                            const meta = formatLeadMeta(lead);
+
+                            return (
+                              <CommandItem
+                                key={lead.id}
+                                value={`${lead.name} ${meta} lead`}
+                                onSelect={() => selectLead(lead)}
+                              >
+                                <Check
+                                  className={cn("size-4", selectedLeadId === lead.id ? "opacity-100" : "opacity-0")}
+                                />
+                                <span className="grid min-w-0">
+                                  <span className="truncate">{lead.name}</span>
+                                  {meta ? <span className="truncate text-muted-foreground text-xs">{meta}</span> : null}
+                                </span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      ) : null}
                     </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
               <p className="text-muted-foreground text-xs">
-                Choose an existing customer or create one while building the estimate.
+                Choose an existing customer, select a lead, or create a customer while building the estimate.
               </p>
+              {showLeadEmailWarning ? <LeadEmailWarning /> : null}
             </div>
           </div>
 
@@ -1467,6 +1671,74 @@ export function EstimateRecordFormFields({
                   placeholder="(555) 555-1234"
                   className="bg-background"
                   required
+                />
+              </div>
+            </div>
+          ) : null}
+          {isCreatingNewLead ? (
+            <div className="grid gap-4 rounded-lg py-4 sm:grid-cols-4">
+              <div className="grid gap-1 sm:col-span-4">
+                <Label>New lead</Label>
+                <p className="text-muted-foreground text-xs">
+                  The lead is created and linked to this estimate. A customer is created only if the estimate is won or
+                  converted to a job.
+                </p>
+              </div>
+              {showLeadEmailWarning ? (
+                <div className="sm:col-span-4">
+                  <LeadEmailWarning />
+                </div>
+              ) : null}
+              <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor={`estimate-new-lead-name-${estimate?.id ?? "new"}`}>Name</Label>
+                <Input
+                  id={`estimate-new-lead-name-${estimate?.id ?? "new"}`}
+                  value={newLeadName}
+                  onChange={(event) => setNewLeadName(event.target.value)}
+                  placeholder="Jane Smith"
+                  className="bg-background"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor={`estimate-new-lead-email-${estimate?.id ?? "new"}`}>Email</Label>
+                <Input
+                  id={`estimate-new-lead-email-${estimate?.id ?? "new"}`}
+                  type="email"
+                  value={newLeadEmail}
+                  onBlur={() => setNewLeadEmailTouched(true)}
+                  onChange={(event) => {
+                    setNewLeadEmail(event.target.value);
+                    if (event.target.value.trim()) {
+                      setNewLeadEmailTouched(true);
+                    }
+                  }}
+                  placeholder="lead@example.com"
+                  className="bg-background"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor={`estimate-new-lead-phone-${estimate?.id ?? "new"}`}>Phone</Label>
+                <Input
+                  id={`estimate-new-lead-phone-${estimate?.id ?? "new"}`}
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  maxLength={12}
+                  value={formatPhoneNumber(newLeadPhone)}
+                  onChange={(event) => setNewLeadPhone(normalizePhoneNumber(event.target.value).slice(0, 10))}
+                  placeholder="(555) 555-1234"
+                  className="bg-background"
+                />
+              </div>
+              <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor={`estimate-new-lead-source-${estimate?.id ?? "new"}`}>Source</Label>
+                <Input
+                  id={`estimate-new-lead-source-${estimate?.id ?? "new"}`}
+                  value={newLeadSource}
+                  onChange={(event) => setNewLeadSource(event.target.value)}
+                  placeholder="Website, referral, phone"
+                  className="bg-background"
                 />
               </div>
             </div>
@@ -1812,7 +2084,12 @@ export function EstimateRecordFormFields({
 
   return (
     <div className="grid gap-4">
-      <input type="hidden" name="customerId" value={isCreatingNewCustomer ? "" : selectedCustomerId} />
+      <input type="hidden" name="customerId" value={submittedCustomerId} />
+      <input type="hidden" name="leadId" value={selectedLeadId} />
+      <input type="hidden" name="newLeadName" value={isCreatingNewLead ? newLeadName : ""} />
+      <input type="hidden" name="newLeadEmail" value={isCreatingNewLead ? newLeadEmail : ""} />
+      <input type="hidden" name="newLeadPhone" value={isCreatingNewLead ? newLeadPhone : ""} />
+      <input type="hidden" name="newLeadSource" value={isCreatingNewLead ? newLeadSource : ""} />
       <input type="hidden" name="serviceLocation" value={serviceLocation} />
       <input type="hidden" name="dateBegin" value={toDateValue(scheduledDate)} />
       <input type="hidden" name="dateEnd" value="" />
@@ -1866,49 +2143,79 @@ export function EstimateRecordFormFields({
                 <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+            <PopoverContent
+              align="start"
+              className="max-h-[min(24rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
+            >
               <Command>
-                <CommandInput placeholder="Search customers..." />
-                <CommandList>
-                  <CommandEmpty>No customers found.</CommandEmpty>
+                <CommandInput placeholder="Search customers and leads..." />
+                <CommandList
+                  className="max-h-[min(18rem,var(--radix-popover-content-available-height))] overscroll-contain pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar]:block [&::-webkit-scrollbar]:w-2"
+                  onWheel={handleCommandListWheel}
+                >
+                  <CommandEmpty>No customers or leads found.</CommandEmpty>
                   <CommandGroup>
-                    <CommandItem
-                      value="New customer"
-                      onSelect={() => {
-                        setSelectedCustomerId(newCustomerValue);
-                        setSelectedLocation(customLocationValue);
-                        setCustomerPickerOpen(false);
-                      }}
-                    >
+                    <CommandItem value="New lead" onSelect={selectNewLead}>
+                      <Check className={cn("size-4", isCreatingNewLead ? "opacity-100" : "opacity-0")} />
+                      New lead
+                    </CommandItem>
+                    <CommandItem value="New customer" onSelect={selectNewCustomer}>
                       <Check className={cn("size-4", isCreatingNewCustomer ? "opacity-100" : "opacity-0")} />
                       New customer
                     </CommandItem>
-                    {customers.map((customer) => (
-                      <CommandItem
-                        key={customer.id}
-                        value={customer.name}
-                        onSelect={() => {
-                          setSelectedCustomerId(customer.id);
-                          if (customer.addresses.length) {
-                            setSelectedLocation(formatAddress(customer.addresses[0]));
-                            setCustomLocationFields(createCustomLocationFields());
-                          } else {
-                            setSelectedLocation(customLocationValue);
-                          }
-                          setCustomerPickerOpen(false);
-                        }}
-                      >
-                        <Check
-                          className={cn("size-4", selectedCustomerId === customer.id ? "opacity-100" : "opacity-0")}
-                        />
-                        {customer.name}
-                      </CommandItem>
-                    ))}
                   </CommandGroup>
+                  {customers.length ? (
+                    <CommandGroup heading="Customers">
+                      {customers.map((customer) => (
+                        <CommandItem
+                          key={customer.id}
+                          value={`${customer.name} ${customer.addresses.map(formatAddress).join(" ")} customer`}
+                          onSelect={() => selectCustomer(customer)}
+                        >
+                          <Check
+                            className={cn(
+                              "size-4",
+                              selectedCustomerId === customer.id && !selectedLeadId ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                          <span className="grid min-w-0">
+                            <span className="truncate">{customer.name}</span>
+                            {customer.addresses[0] ? (
+                              <span className="truncate text-muted-foreground text-xs">
+                                {formatAddress(customer.addresses[0])}
+                              </span>
+                            ) : null}
+                          </span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  ) : null}
+                  {leads.length ? (
+                    <CommandGroup heading="Leads">
+                      {leads.map((lead) => {
+                        const meta = formatLeadMeta(lead);
+
+                        return (
+                          <CommandItem
+                            key={lead.id}
+                            value={`${lead.name} ${meta} lead`}
+                            onSelect={() => selectLead(lead)}
+                          >
+                            <Check className={cn("size-4", selectedLeadId === lead.id ? "opacity-100" : "opacity-0")} />
+                            <span className="grid min-w-0">
+                              <span className="truncate">{lead.name}</span>
+                              {meta ? <span className="truncate text-muted-foreground text-xs">{meta}</span> : null}
+                            </span>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  ) : null}
                 </CommandList>
               </Command>
             </PopoverContent>
           </Popover>
+          {showLeadEmailWarning ? <LeadEmailWarning /> : null}
         </div>
 
         <div className="grid gap-2">
@@ -2019,6 +2326,73 @@ export function EstimateRecordFormFields({
               placeholder="(555) 555-1234"
               className={mobileFieldClassName}
               required
+            />
+          </div>
+        </div>
+      ) : null}
+      {isCreatingNewLead ? (
+        <div className="grid gap-4 rounded-lg border bg-muted/80 p-4 sm:grid-cols-2">
+          <div className="grid gap-1 sm:col-span-2">
+            <Label>New lead</Label>
+            <p className="text-muted-foreground text-xs">
+              This lead will be created and linked to the estimate. A customer is created only when the work is won.
+            </p>
+          </div>
+          {showLeadEmailWarning ? (
+            <div className="sm:col-span-2">
+              <LeadEmailWarning />
+            </div>
+          ) : null}
+          <div className="grid gap-2">
+            <Label htmlFor={`estimate-new-lead-name-${estimate?.id ?? "new"}`}>Lead name</Label>
+            <Input
+              id={`estimate-new-lead-name-${estimate?.id ?? "new"}`}
+              value={newLeadName}
+              onChange={(event) => setNewLeadName(event.target.value)}
+              placeholder="Jane Smith"
+              className={mobileFieldClassName}
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={`estimate-new-lead-email-${estimate?.id ?? "new"}`}>Lead email</Label>
+            <Input
+              id={`estimate-new-lead-email-${estimate?.id ?? "new"}`}
+              type="email"
+              value={newLeadEmail}
+              onBlur={() => setNewLeadEmailTouched(true)}
+              onChange={(event) => {
+                setNewLeadEmail(event.target.value);
+                if (event.target.value.trim()) {
+                  setNewLeadEmailTouched(true);
+                }
+              }}
+              placeholder="lead@example.com"
+              className={mobileFieldClassName}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={`estimate-new-lead-phone-${estimate?.id ?? "new"}`}>Lead phone</Label>
+            <Input
+              id={`estimate-new-lead-phone-${estimate?.id ?? "new"}`}
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              maxLength={12}
+              value={formatPhoneNumber(newLeadPhone)}
+              onChange={(event) => setNewLeadPhone(normalizePhoneNumber(event.target.value).slice(0, 10))}
+              placeholder="(555) 555-1234"
+              className={mobileFieldClassName}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={`estimate-new-lead-source-${estimate?.id ?? "new"}`}>Lead source</Label>
+            <Input
+              id={`estimate-new-lead-source-${estimate?.id ?? "new"}`}
+              value={newLeadSource}
+              onChange={(event) => setNewLeadSource(event.target.value)}
+              placeholder="Website, referral, phone"
+              className={mobileFieldClassName}
             />
           </div>
         </div>

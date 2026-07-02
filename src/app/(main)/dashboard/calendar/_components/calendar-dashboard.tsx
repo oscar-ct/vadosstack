@@ -25,8 +25,12 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   CalendarDays,
+  Check,
   CheckSquare,
+  ChevronsUpDown,
   MapPin,
+  MoreVertical,
+  Pencil,
   Plus,
   ReceiptText,
   Trash2,
@@ -41,10 +45,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -53,10 +57,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { toDateInputValue } from "@/lib/date-only";
 import { cn } from "@/lib/utils";
@@ -69,17 +81,22 @@ export type CalendarDashboardEvent = {
   type: "job" | "task" | "invoice";
   title: string;
   customerName: string;
+  customerId?: string;
   date: string;
   endDate?: string;
+  leadId?: string;
+  notes?: string;
   status: string;
   amount?: string;
   location?: string;
   href?: string;
 };
 
-export type CalendarDashboardCustomer = {
+export type CalendarDashboardContact = {
   id: string;
-  name: string;
+  kind: "customer" | "lead";
+  label: string;
+  meta?: string;
 };
 
 const eventTypes = [
@@ -196,14 +213,23 @@ function getCalendarDisplayName(event: CalendarDashboardEvent) {
   return event.customerName === "Task" ? event.title : event.customerName;
 }
 
-function TaskDeleteButton({
+type TaskAction = (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
+
+function getTaskDateInputValue(event?: CalendarDashboardEvent) {
+  if (!event?.date) return toDateInputValue();
+  return toDateInputValue(parseISO(event.date));
+}
+
+function TaskDeleteDialog({
   action,
   event,
-  iconOnly = false,
+  onOpenChange,
+  open,
 }: {
-  action: (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
+  action: TaskAction;
   event: CalendarDashboardEvent;
-  iconOnly?: boolean;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
 }) {
   const router = useRouter();
   const [state, formAction, isPending] = React.useActionState(action, initialTaskState);
@@ -214,23 +240,11 @@ function TaskDeleteButton({
   }, [router, state]);
 
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button
-          type="button"
-          variant="destructive"
-          size={iconOnly ? "icon-sm" : "sm"}
-          className={iconOnly ? "size-6" : undefined}
-          aria-label={`Delete ${event.title}`}
-        >
-          <Trash2 className="size-3.5" />
-          {iconOnly ? <span className="sr-only">Delete task</span> : "Delete"}
-        </Button>
-      </AlertDialogTrigger>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete task?</AlertDialogTitle>
-          <AlertDialogDescription>This removes “{event.title}” from your calendar.</AlertDialogDescription>
+          <AlertDialogDescription>This removes "{event.title}" from your calendar.</AlertDialogDescription>
         </AlertDialogHeader>
         <form action={formAction} id={`delete-calendar-task-${event.recordId}`}>
           <input type="hidden" name="id" value={event.recordId} />
@@ -255,22 +269,227 @@ function TaskDeleteButton({
   );
 }
 
+function TaskContactPicker({
+  contacts,
+  selectedValue,
+  onSelect,
+}: {
+  contacts: CalendarDashboardContact[];
+  selectedValue: string;
+  onSelect: (value: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const selectedContact = contacts.find((contact) => `${contact.kind}:${contact.id}` === selectedValue);
+  const customers = contacts.filter((contact) => contact.kind === "customer");
+  const leads = contacts.filter((contact) => contact.kind === "lead");
+  const selectedLabel = selectedContact?.label ?? "No customer or lead";
+
+  function handleSelect(value: string) {
+    onSelect(value);
+    setOpen(false);
+  }
+
+  function handleListWheel(event: React.WheelEvent<HTMLDivElement>) {
+    if (!event.deltaY) return;
+
+    const list = event.currentTarget;
+    const nextScrollTop = list.scrollTop + event.deltaY;
+    const canScrollUp = event.deltaY < 0 && list.scrollTop > 0;
+    const canScrollDown = event.deltaY > 0 && list.scrollTop + list.clientHeight < list.scrollHeight;
+
+    if (!canScrollUp && !canScrollDown) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    list.scrollTop = nextScrollTop;
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          id="calendar-task-contact"
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between bg-background font-normal"
+        >
+          <span className="truncate">{selectedLabel}</span>
+          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="max-h-[min(24rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
+      >
+        <Command>
+          <CommandInput placeholder="Search customers and leads..." />
+          <CommandList
+            className="max-h-[min(18rem,var(--radix-popover-content-available-height))] overscroll-contain pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar]:block [&::-webkit-scrollbar]:w-2"
+            onWheel={handleListWheel}
+          >
+            <CommandEmpty>No customers or leads found.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem value="No customer or lead" onSelect={() => handleSelect("")}>
+                <Check className={cn("size-4", selectedValue ? "opacity-0" : "opacity-100")} />
+                No customer or lead
+              </CommandItem>
+            </CommandGroup>
+            {customers.length ? (
+              <CommandGroup heading="Customers">
+                {customers.map((contact) => {
+                  const value = `customer:${contact.id}`;
+
+                  return (
+                    <CommandItem
+                      key={value}
+                      value={`${contact.label} ${contact.meta ?? ""} customer`}
+                      onSelect={() => handleSelect(value)}
+                    >
+                      <Check className={cn("size-4", selectedValue === value ? "opacity-100" : "opacity-0")} />
+                      <span className="grid min-w-0">
+                        <span className="truncate">{contact.label}</span>
+                        {contact.meta ? (
+                          <span className="truncate text-muted-foreground text-xs">{contact.meta}</span>
+                        ) : null}
+                      </span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ) : null}
+            {leads.length ? (
+              <CommandGroup heading="Leads">
+                {leads.map((contact) => {
+                  const value = `lead:${contact.id}`;
+
+                  return (
+                    <CommandItem
+                      key={value}
+                      value={`${contact.label} ${contact.meta ?? ""} lead`}
+                      onSelect={() => handleSelect(value)}
+                    >
+                      <Check className={cn("size-4", selectedValue === value ? "opacity-100" : "opacity-0")} />
+                      <span className="grid min-w-0">
+                        <span className="truncate">{contact.label}</span>
+                        {contact.meta ? (
+                          <span className="truncate text-muted-foreground text-xs">{contact.meta}</span>
+                        ) : null}
+                      </span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ) : null}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TaskFormFields({ contacts, event }: { contacts: CalendarDashboardContact[]; event?: CalendarDashboardEvent }) {
+  const initialContactValue = event?.leadId
+    ? `lead:${event.leadId}`
+    : event?.customerId
+      ? `customer:${event.customerId}`
+      : "";
+  const [selectedContact, setSelectedContact] = React.useState(initialContactValue);
+  const [kind, id] = selectedContact.split(":");
+
+  return (
+    <>
+      <input type="hidden" name="customerId" value={kind === "customer" ? id : ""} />
+      <input type="hidden" name="leadId" value={kind === "lead" ? id : ""} />
+      <div className="grid gap-2">
+        <Label htmlFor={`calendar-task-title-${event?.recordId ?? "new"}`}>Task</Label>
+        <Input
+          id={`calendar-task-title-${event?.recordId ?? "new"}`}
+          name="title"
+          placeholder="Meet customer to view job"
+          defaultValue={event?.title ?? ""}
+          required
+        />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor={`calendar-task-date-${event?.recordId ?? "new"}`}>Date</Label>
+          <Input
+            id={`calendar-task-date-${event?.recordId ?? "new"}`}
+            name="scheduledFor"
+            type="date"
+            defaultValue={getTaskDateInputValue(event)}
+            required
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`calendar-task-priority-${event?.recordId ?? "new"}`}>Priority</Label>
+          <NativeSelect
+            id={`calendar-task-priority-${event?.recordId ?? "new"}`}
+            name="priority"
+            defaultValue={event?.status ?? "Normal"}
+            className="w-full"
+          >
+            <NativeSelectOption value="Low">Low</NativeSelectOption>
+            <NativeSelectOption value="Normal">Normal</NativeSelectOption>
+            <NativeSelectOption value="High">High</NativeSelectOption>
+          </NativeSelect>
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="calendar-task-contact">Customer or lead</Label>
+        <TaskContactPicker contacts={contacts} selectedValue={selectedContact} onSelect={setSelectedContact} />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor={`calendar-task-location-${event?.recordId ?? "new"}`}>Location</Label>
+        <Input
+          id={`calendar-task-location-${event?.recordId ?? "new"}`}
+          name="location"
+          placeholder="Optional"
+          defaultValue={event?.location ?? ""}
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor={`calendar-task-notes-${event?.recordId ?? "new"}`}>Notes</Label>
+        <Textarea
+          id={`calendar-task-notes-${event?.recordId ?? "new"}`}
+          name="notes"
+          placeholder="Optional details"
+          defaultValue={event?.notes ?? ""}
+        />
+      </div>
+    </>
+  );
+}
+
 function CalendarEventCard({
+  contacts,
   deleteTaskAction,
   event,
+  updateTaskAction,
   compact = false,
   linked = true,
 }: {
-  deleteTaskAction: (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
+  contacts: CalendarDashboardContact[];
+  deleteTaskAction: TaskAction;
   event: CalendarDashboardEvent;
+  updateTaskAction: TaskAction;
   compact?: boolean;
   linked?: boolean;
 }) {
   const Icon = getEventIcon(event.type);
   const amount = formatMoney(event.amount);
   const palette = getEventPalette(event);
-  const taskDeleteAction =
-    event.type === "task" ? <TaskDeleteButton action={deleteTaskAction} event={event} iconOnly /> : null;
+  const taskActions =
+    event.type === "task" ? (
+      <TaskActionsMenu
+        contacts={contacts}
+        deleteAction={deleteTaskAction}
+        event={event}
+        updateAction={updateTaskAction}
+      />
+    ) : null;
   const content = (
     <>
       <div className="flex min-w-0 items-start justify-between gap-3">
@@ -285,7 +504,7 @@ function CalendarEventCard({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {amount ? <span className="font-medium text-xs tabular-nums">{amount}</span> : null}
-          {taskDeleteAction}
+          {taskActions}
         </div>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
@@ -333,11 +552,15 @@ function CalendarEventPill({ event }: { event: CalendarDashboardEvent }) {
 }
 
 function CalendarEventPreviewHoverCard({
+  contacts,
   deleteTaskAction,
   event,
+  updateTaskAction,
 }: {
-  deleteTaskAction: (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
+  contacts: CalendarDashboardContact[];
+  deleteTaskAction: TaskAction;
   event: CalendarDashboardEvent;
+  updateTaskAction: TaskAction;
 }) {
   return (
     <HoverCard closeDelay={120} openDelay={150}>
@@ -351,7 +574,14 @@ function CalendarEventPreviewHoverCard({
       </HoverCardTrigger>
       <HoverCardContent align="start" className="w-[min(22rem,calc(100vw-2rem))] p-2.5">
         <div className="grid gap-2">
-          <CalendarEventCard deleteTaskAction={deleteTaskAction} event={event} compact linked={false} />
+          <CalendarEventCard
+            contacts={contacts}
+            deleteTaskAction={deleteTaskAction}
+            event={event}
+            updateTaskAction={updateTaskAction}
+            compact
+            linked={false}
+          />
           {event.href ? (
             <Button asChild size="sm" className="justify-self-end">
               <Link prefetch={false} href={event.href}>
@@ -370,13 +600,7 @@ const initialTaskState: CalendarTaskMutationState = {
   message: "",
 };
 
-function CreateTaskDialog({
-  action,
-  customers,
-}: {
-  action: (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
-  customers: CalendarDashboardCustomer[];
-}) {
+function CreateTaskDialog({ action, contacts }: { action: TaskAction; contacts: CalendarDashboardContact[] }) {
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
   const [open, setOpen] = React.useState(false);
@@ -402,49 +626,7 @@ function CreateTaskDialog({
           <DialogDescription>Add a site visit, follow-up, reminder, or other scheduled task.</DialogDescription>
         </DialogHeader>
         <form ref={formRef} action={formAction} className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="calendar-task-title">Task</Label>
-            <Input id="calendar-task-title" name="title" placeholder="Meet customer to view job" required />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="calendar-task-date">Date</Label>
-              <Input
-                id="calendar-task-date"
-                name="scheduledFor"
-                type="date"
-                defaultValue={toDateInputValue()}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="calendar-task-priority">Priority</Label>
-              <NativeSelect id="calendar-task-priority" name="priority" defaultValue="Normal" className="w-full">
-                <NativeSelectOption value="Low">Low</NativeSelectOption>
-                <NativeSelectOption value="Normal">Normal</NativeSelectOption>
-                <NativeSelectOption value="High">High</NativeSelectOption>
-              </NativeSelect>
-            </div>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="calendar-task-customer">Customer</Label>
-            <NativeSelect id="calendar-task-customer" name="customerId" className="w-full">
-              <NativeSelectOption value="">No customer</NativeSelectOption>
-              {customers.map((customer) => (
-                <NativeSelectOption key={customer.id} value={customer.id}>
-                  {customer.name}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="calendar-task-location">Location</Label>
-            <Input id="calendar-task-location" name="location" placeholder="Optional" />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="calendar-task-notes">Notes</Label>
-            <Textarea id="calendar-task-notes" name="notes" placeholder="Optional details" />
-          </div>
+          <TaskFormFields contacts={contacts} />
           {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
           <DialogFooter>
             <Button type="button" variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
@@ -457,6 +639,120 @@ function CreateTaskDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function EditTaskDialog({
+  action,
+  contacts,
+  event,
+  onOpenChange,
+  open,
+}: {
+  action: TaskAction;
+  contacts: CalendarDashboardContact[];
+  event: CalendarDashboardEvent;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  const router = useRouter();
+  const [state, formAction, isPending] = React.useActionState(action, initialTaskState);
+
+  React.useEffect(() => {
+    if (!state.success) return;
+
+    onOpenChange(false);
+    router.refresh();
+  }, [onOpenChange, router, state]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit calendar task</DialogTitle>
+          <DialogDescription>Update the task details, schedule, or linked customer or lead.</DialogDescription>
+        </DialogHeader>
+        <form action={formAction} className="grid gap-4">
+          <input type="hidden" name="id" value={event.recordId} />
+          <TaskFormFields contacts={contacts} event={event} />
+          {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={isPending} onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Saving..." : "Save task"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TaskActionsMenu({
+  contacts,
+  deleteAction,
+  event,
+  updateAction,
+}: {
+  contacts: CalendarDashboardContact[];
+  deleteAction: TaskAction;
+  event: CalendarDashboardEvent;
+  updateAction: TaskAction;
+}) {
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [menuOpen, setMenuOpen] = React.useState(false);
+
+  return (
+    <div className="flex items-center">
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label={`Task actions for ${event.title}`}
+          >
+            <MoreVertical className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-36">
+          <DropdownMenuItem
+            onSelect={(selectEvent) => {
+              selectEvent.preventDefault();
+              setMenuOpen(false);
+              setEditOpen(true);
+            }}
+          >
+            <Pencil className="size-4" />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={(selectEvent) => {
+              selectEvent.preventDefault();
+              setMenuOpen(false);
+              setDeleteOpen(true);
+            }}
+          >
+            <Trash2 className="size-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <EditTaskDialog
+        action={updateAction}
+        contacts={contacts}
+        event={event}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+      <TaskDeleteDialog action={deleteAction} event={event} open={deleteOpen} onOpenChange={setDeleteOpen} />
+    </div>
   );
 }
 
@@ -486,16 +782,18 @@ function SummaryCard({
 }
 
 export function CalendarDashboard({
+  contacts,
   createTaskAction,
   deleteTaskAction,
-  customers,
   events,
+  updateTaskAction,
   unscheduledJobCount,
 }: {
-  createTaskAction: (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
-  deleteTaskAction: (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
-  customers: CalendarDashboardCustomer[];
+  contacts: CalendarDashboardContact[];
+  createTaskAction: TaskAction;
+  deleteTaskAction: TaskAction;
   events: CalendarDashboardEvent[];
+  updateTaskAction: TaskAction;
   unscheduledJobCount: number;
 }) {
   const today = startOfToday();
@@ -577,7 +875,7 @@ export function CalendarDashboard({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <CreateTaskDialog action={createTaskAction} customers={customers} />
+            <CreateTaskDialog action={createTaskAction} contacts={contacts} />
             <Button type="button" variant="outline" size="sm" onClick={() => setMonth(addMonths(month, -1))}>
               <ArrowLeft />
               Previous
@@ -686,8 +984,10 @@ export function CalendarDashboard({
                       {dayEvents.slice(0, 3).map((event) => (
                         <CalendarEventPreviewHoverCard
                           key={event.id}
+                          contacts={contacts}
                           deleteTaskAction={deleteTaskAction}
                           event={event}
+                          updateTaskAction={updateTaskAction}
                         />
                       ))}
                       {dayEvents.length > 3 ? (
@@ -717,7 +1017,14 @@ export function CalendarDashboard({
                   </div>
                   <div className="grid gap-2">
                     {group.events.map((event) => (
-                      <CalendarEventCard key={event.id} deleteTaskAction={deleteTaskAction} event={event} compact />
+                      <CalendarEventCard
+                        key={event.id}
+                        contacts={contacts}
+                        deleteTaskAction={deleteTaskAction}
+                        event={event}
+                        updateTaskAction={updateTaskAction}
+                        compact
+                      />
                     ))}
                   </div>
                 </div>
@@ -738,7 +1045,14 @@ export function CalendarDashboard({
             <CardContent className="grid max-h-[760px] gap-2 overflow-y-auto pt-4">
               {monthListEvents.length ? (
                 monthListEvents.map((event) => (
-                  <CalendarEventCard key={event.id} deleteTaskAction={deleteTaskAction} event={event} compact />
+                  <CalendarEventCard
+                    key={event.id}
+                    contacts={contacts}
+                    deleteTaskAction={deleteTaskAction}
+                    event={event}
+                    updateTaskAction={updateTaskAction}
+                    compact
+                  />
                 ))
               ) : (
                 <div className="rounded-lg border bg-muted/20 p-4 text-muted-foreground text-sm">

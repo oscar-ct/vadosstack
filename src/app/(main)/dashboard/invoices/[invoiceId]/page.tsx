@@ -314,7 +314,19 @@ export default async function Page({
             returnTo={currentHref}
             templates={emailTemplates}
           />
-          <DeleteInvoiceButton action={deleteInvoiceAction} invoiceId={invoice.id} redirectTo={backHref} />
+          <DeleteInvoiceButton
+            action={deleteInvoiceAction}
+            invoiceId={invoice.id}
+            redirectTo={backHref}
+            snapshot={{
+              balanceDue: formatMoney(invoice.balanceDue),
+              customerName: invoice.customerName,
+              dueDate: format(dueDate, "MMM d, yyyy"),
+              invoiceNumber,
+              jobTitle: invoice.jobTitle,
+              serviceLocation: invoice.serviceLocation,
+            }}
+          />
         </div>
       </div>
 

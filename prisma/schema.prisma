@@ -196,6 +196,7 @@ model Lead {
   owner            User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   customer         Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
   estimateRecord   EstimateRecord? @relation(fields: [estimateRecordId], references: [id], onDelete: SetNull)
+  tasks            Task[]
 
   @@unique([id, ownerId])
   @@index([ownerId])
@@ -211,6 +212,7 @@ model Task {
   id               String          @id @default(cuid())
   ownerId          String
   customerId       String?
+  leadId           String?
   jobId            String?
   estimateRecordId String?
   title            String
@@ -223,12 +225,14 @@ model Task {
   updatedAt        DateTime        @updatedAt
   owner            User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   customer         Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead             Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
   job              Job?            @relation(fields: [jobId], references: [id], onDelete: SetNull)
   estimateRecord   EstimateRecord? @relation(fields: [estimateRecordId], references: [id], onDelete: SetNull)
 
   @@unique([id, ownerId])
   @@index([ownerId])
   @@index([customerId])
+  @@index([leadId])
   @@index([jobId])
   @@index([estimateRecordId])
   @@index([scheduledFor])

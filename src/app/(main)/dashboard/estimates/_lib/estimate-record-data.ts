@@ -48,6 +48,7 @@ function parseMeasurementRooms(value: string) {
 function toEstimateRecordRow(
   estimate: Awaited<ReturnType<typeof prisma.estimateRecord.findMany>>[number] & {
     customer?: { name: string } | null;
+    lead?: { id: string; name: string } | null;
     printableEstimate?: { id: string } | null;
   },
 ): EstimateRecordRow {
@@ -57,6 +58,8 @@ function toEstimateRecordRow(
     printableEstimateId: estimate.printableEstimate?.id,
     customerId: estimate.customerId ?? undefined,
     customerName: estimate.customer?.name ?? undefined,
+    leadId: estimate.lead?.id,
+    leadName: estimate.lead?.name,
     description: estimate.description,
     serviceLocation: estimate.serviceLocation ?? undefined,
     dateBegin: estimate.dateBegin?.toISOString(),
@@ -105,6 +108,50 @@ export async function getEstimateCustomers(ownerId: string): Promise<JobCustomer
   }));
 }
 
+export type EstimateLeadOption = {
+  id: string;
+  customerId?: string;
+  email?: string;
+  name: string;
+  phone?: string;
+  serviceLocation?: string;
+  serviceType?: string;
+  status: string;
+};
+
+export async function getEstimateLeads(ownerId: string): Promise<EstimateLeadOption[]> {
+  const leads = await prisma.lead.findMany({
+    where: {
+      ownerId,
+      status: {
+        notIn: ["Won", "Lost"],
+      },
+    },
+    orderBy: [{ followUpAt: "asc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      customerId: true,
+      email: true,
+      name: true,
+      phone: true,
+      serviceLocation: true,
+      serviceType: true,
+      status: true,
+    },
+  });
+
+  return leads.map((lead) => ({
+    id: lead.id,
+    customerId: lead.customerId ?? undefined,
+    email: lead.email ?? undefined,
+    name: lead.name,
+    phone: lead.phone ?? undefined,
+    serviceLocation: lead.serviceLocation ?? undefined,
+    serviceType: lead.serviceType ?? undefined,
+    status: lead.status,
+  }));
+}
+
 export async function getEstimateRecords(ownerId: string): Promise<EstimateRecordRow[]> {
   const estimates = await prisma.estimateRecord.findMany({
     where: {
@@ -112,6 +159,7 @@ export async function getEstimateRecords(ownerId: string): Promise<EstimateRecor
     },
     include: {
       customer: true,
+      lead: true,
       printableEstimate: true,
     },
     orderBy: {
@@ -132,6 +180,7 @@ export async function getEstimateRecord(ownerId: string, estimateRecordId: strin
     },
     include: {
       customer: true,
+      lead: true,
       printableEstimate: true,
     },
   });

@@ -114,7 +114,7 @@ function formatExportDate(value?: string) {
 
 const estimateExportColumns: CsvColumn<EstimateRecordRow>[] = [
   { header: "Estimate title", value: (estimate) => estimate.description },
-  { header: "Customer", value: (estimate) => estimate.customerName },
+  { header: "Customer/Lead", value: (estimate) => estimate.customerName ?? estimate.leadName },
   { header: "Status", value: (estimate) => estimate.status },
   { header: "Category", value: (estimate) => estimate.category },
   { header: "Service location", value: (estimate) => estimate.serviceLocation },
@@ -485,7 +485,8 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
                     <div className="truncate text-wrap font-medium text-sm">{estimate.description}</div>
                     <CustomerLink
                       customerId={estimate.customerId}
-                      name={estimate.customerName}
+                      fallback="No customer or lead"
+                      name={estimate.customerName ?? estimate.leadName}
                       className="block truncate text-muted-foreground text-sm"
                     />
                   </div>

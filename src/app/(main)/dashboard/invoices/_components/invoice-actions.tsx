@@ -41,6 +41,24 @@ const deleteInitialState: InvoiceMutationState = {
   message: "",
 };
 
+type DeleteInvoiceSnapshot = {
+  balanceDue?: string;
+  customerName?: string | null;
+  dueDate?: string;
+  invoiceNumber?: string;
+  jobTitle?: string | null;
+  serviceLocation?: string | null;
+};
+
+function DeleteSnapshotRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium text-foreground">{value?.trim() || "-"}</dd>
+    </div>
+  );
+}
+
 function createInvoiceMessageHtml({
   balanceDue,
   companyName,
@@ -232,10 +250,12 @@ export function DeleteInvoiceButton({
   action,
   invoiceId,
   redirectTo,
+  snapshot,
 }: {
   action: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
   invoiceId: string;
   redirectTo?: string;
+  snapshot?: DeleteInvoiceSnapshot;
 }) {
   const formRef = React.useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -270,6 +290,16 @@ export function DeleteInvoiceButton({
             This removes the invoice snapshot. You can create a new invoice from the job after updating the balance.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {snapshot ? (
+          <dl className="grid gap-2 rounded-md border bg-muted/30 p-3">
+            <DeleteSnapshotRow label="Invoice" value={snapshot.invoiceNumber} />
+            <DeleteSnapshotRow label="Customer" value={snapshot.customerName} />
+            <DeleteSnapshotRow label="Job" value={snapshot.jobTitle} />
+            <DeleteSnapshotRow label="Location" value={snapshot.serviceLocation} />
+            <DeleteSnapshotRow label="Due" value={snapshot.dueDate} />
+            <DeleteSnapshotRow label="Balance" value={snapshot.balanceDue} />
+          </dl>
+        ) : null}
 
         <form ref={formRef} action={formAction}>
           <input type="hidden" name="id" value={invoiceId} />

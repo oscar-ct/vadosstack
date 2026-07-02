@@ -333,8 +333,8 @@ export default async function Page({
               <InfoTile
                 customerId={estimate.customerId}
                 icon={UserRound}
-                label="Customer"
-                value={estimate.customerName}
+                label={estimate.customerId ? "Customer" : "Lead"}
+                value={estimate.customerName ?? estimate.leadName}
               />
               <InfoTile icon={MapPin} label="Service location" value={estimate.serviceLocation} />
               <InfoTile icon={CalendarDays} label="Scheduled" value={scheduledDate} />

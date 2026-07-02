@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 import { EstimateRecordWorkspace } from "../_components/estimate-record-workspace";
-import { getEstimateCustomers, getEstimateServices } from "../_lib/estimate-record-data";
+import { getEstimateCustomers, getEstimateLeads, getEstimateServices } from "../_lib/estimate-record-data";
 import { createEstimateRecordAction } from "../records-actions";
 
 type PageProps = {
@@ -27,8 +27,9 @@ export default async function Page({ searchParams }: PageProps) {
   const resolvedSearchParams = await searchParams;
   const leadId = resolvedSearchParams?.leadId;
 
-  const [customers, services, lead] = await Promise.all([
+  const [customers, leads, services, lead] = await Promise.all([
     getEstimateCustomers(currentUser.id),
+    getEstimateLeads(currentUser.id),
     getEstimateServices(currentUser.id),
     leadId
       ? prisma.lead.findUnique({
@@ -60,6 +61,7 @@ export default async function Page({ searchParams }: PageProps) {
       action={createEstimateRecordAction}
       customers={customers}
       leadPrefill={leadPrefill}
+      leads={leads}
       mode="create"
       services={services}
     />

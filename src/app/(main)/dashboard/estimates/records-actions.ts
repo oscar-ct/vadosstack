@@ -122,6 +122,13 @@ const estimateRecordSchema = z.object({
   newCustomerName: z.string().trim().optional(),
   newCustomerEmail: z.string().trim().optional(),
   newCustomerPhone: z.string().trim().optional(),
+  newLeadName: z.string().trim().optional(),
+  newLeadEmail: z.preprocess((value) => {
+    const email = String(value ?? "").trim();
+    return email || undefined;
+  }, z.string().email("Enter a valid lead email.").optional()),
+  newLeadPhone: z.string().trim().optional(),
+  newLeadSource: z.string().trim().optional(),
   description: z.string().trim().min(1, "Title is required."),
   serviceLocation: z.string().trim().optional(),
   dateBegin: optionalDate,
@@ -160,6 +167,10 @@ function getEstimatePayload(formData: FormData) {
     newCustomerName: emptyToUndefined(formData.get("newCustomerName")),
     newCustomerEmail: emptyToUndefined(formData.get("newCustomerEmail")),
     newCustomerPhone: emptyToUndefined(formData.get("newCustomerPhone")),
+    newLeadName: emptyToUndefined(formData.get("newLeadName")),
+    newLeadEmail: emptyToUndefined(formData.get("newLeadEmail")),
+    newLeadPhone: emptyToUndefined(formData.get("newLeadPhone")),
+    newLeadSource: emptyToUndefined(formData.get("newLeadSource")),
     description: formData.get("description"),
     serviceLocation: emptyToUndefined(formData.get("serviceLocation")),
     dateBegin: emptyToUndefined(formData.get("dateBegin")),
@@ -369,6 +380,115 @@ async function createCustomerForEstimate({
   }
 }
 
+async function createLeadForEstimate({
+  customerId,
+  email,
+  estimateRecordId,
+  name,
+  ownerId,
+  phone,
+  serviceLocation,
+  serviceType,
+  source,
+}: {
+  customerId?: string;
+  email?: string;
+  estimateRecordId: string;
+  name?: string;
+  ownerId: string;
+  phone?: string;
+  serviceLocation?: string;
+  serviceType?: string;
+  source?: string;
+}) {
+  if (!name) {
+    throw new Error("Enter a lead name before creating the estimate.");
+  }
+
+  const normalizedPhone = normalizePhoneNumber(phone);
+
+  if (phone && normalizedPhone.length !== 10) {
+    throw new Error("Enter a valid 10-digit lead phone number.");
+  }
+
+  return prisma.lead.create({
+    data: {
+      ownerId,
+      customerId: customerId ?? null,
+      estimateRecordId,
+      name,
+      email: email ?? null,
+      phone: normalizedPhone.length ? normalizedPhone : null,
+      source: source ?? null,
+      serviceType: serviceType ?? null,
+      serviceLocation: serviceLocation ?? null,
+      status: "Estimate Needed",
+      priority: "Normal",
+    },
+    select: {
+      id: true,
+    },
+  });
+}
+
+async function findOrCreateCustomerForLead({
+  lead,
+  ownerId,
+  serviceLocation,
+}: {
+  lead: {
+    email: string | null;
+    name: string;
+    phone: string | null;
+  };
+  ownerId: string;
+  serviceLocation?: string | null;
+}) {
+  const existingCustomer = lead.email
+    ? await prisma.customer.findFirst({
+        where: {
+          email: lead.email,
+          ownerId,
+        },
+        select: {
+          id: true,
+        },
+      })
+    : null;
+
+  if (existingCustomer) {
+    return existingCustomer;
+  }
+
+  return prisma.customer.create({
+    data: {
+      ownerId,
+      name: lead.name,
+      email: lead.email,
+      billingStatus: "No Balance",
+      addresses: serviceLocation
+        ? {
+            create: {
+              label: "Service Location",
+              line1: serviceLocation,
+            },
+          }
+        : undefined,
+      phoneNumbers: lead.phone
+        ? {
+            create: {
+              label: "Primary",
+              value: normalizePhoneNumber(lead.phone),
+            },
+          }
+        : undefined,
+    },
+    select: {
+      id: true,
+    },
+  });
+}
+
 async function syncCustomerBillingStatus(customerId: string | null | undefined, ownerId: string) {
   if (!customerId) return;
 
@@ -423,7 +543,16 @@ export async function createEstimateRecordAction(
   let createdEstimateId = "";
 
   try {
-    const { newCustomerEmail, newCustomerName, newCustomerPhone, ...estimate } = parsed.data;
+    const {
+      newCustomerEmail,
+      newCustomerName,
+      newCustomerPhone,
+      newLeadEmail,
+      newLeadName,
+      newLeadPhone,
+      newLeadSource,
+      ...estimate
+    } = parsed.data;
     const { jobType, leadId, measurementRooms, ...estimateInput } = estimate;
     const laborItems = normalizeItems(estimate.laborItems);
     const materials = normalizeMaterials(estimate.materials);
@@ -431,6 +560,38 @@ export async function createEstimateRecordAction(
     const totals = calculateTotal({ ...estimate, laborItems, materials, jobType });
     const materialTaxRate = estimate.materialTaxRate ?? "8.25";
     let customerId = estimate.customerId;
+    const selectedLead = leadId
+      ? await prisma.lead.findUnique({
+          where: {
+            id_ownerId: {
+              id: leadId,
+              ownerId: currentUser.id,
+            },
+          },
+          select: {
+            customerId: true,
+            estimateRecordId: true,
+            id: true,
+            status: true,
+          },
+        })
+      : null;
+
+    if (leadId && !selectedLead) {
+      return {
+        success: false,
+        message: "Select a lead from your account.",
+      };
+    }
+
+    if (selectedLead?.estimateRecordId) {
+      return {
+        success: false,
+        message: "This lead is already linked to another estimate.",
+      };
+    }
+
+    customerId = customerId ?? selectedLead?.customerId ?? undefined;
 
     if (!customerId && newCustomerName) {
       const customer = await createCustomerForEstimate({
@@ -443,20 +604,22 @@ export async function createEstimateRecordAction(
       customerId = customer.id;
     }
 
-    if (!customerId) {
+    if (!customerId && !leadId && !newLeadName) {
       return {
         success: false,
-        message: "Select an existing customer or create a new customer before saving the estimate.",
+        message: "Select an existing customer or lead, create a lead, or create a customer before saving the estimate.",
       };
     }
 
-    await assertCustomer(currentUser.id, customerId);
+    if (customerId) {
+      await assertCustomer(currentUser.id, customerId);
+    }
 
     const createdEstimate = await prisma.estimateRecord.create({
       data: {
         ...estimateInput,
         ownerId: currentUser.id,
-        customerId,
+        customerId: customerId ?? null,
         dateBegin: estimate.dateBegin ?? null,
         dateEnd: estimate.dateEnd ?? null,
         serviceLocation: estimate.serviceLocation || null,
@@ -474,37 +637,38 @@ export async function createEstimateRecordAction(
     });
     createdEstimateId = createdEstimate.id;
 
-    if (leadId) {
-      const lead = await prisma.lead.findUnique({
-        where: {
-          id_ownerId: {
-            id: leadId,
-            ownerId: currentUser.id,
-          },
-        },
-        select: {
-          id: true,
-          status: true,
-        },
+    if (newLeadName) {
+      await createLeadForEstimate({
+        customerId,
+        email: newLeadEmail,
+        estimateRecordId: createdEstimate.id,
+        name: newLeadName,
+        ownerId: currentUser.id,
+        phone: newLeadPhone,
+        serviceLocation: estimate.serviceLocation,
+        serviceType: estimate.category,
+        source: newLeadSource,
       });
+    }
 
-      if (lead) {
+    if (leadId) {
+      if (selectedLead) {
         await prisma.lead.update({
           where: {
             id_ownerId: {
-              id: lead.id,
+              id: selectedLead.id,
               ownerId: currentUser.id,
             },
           },
           data: {
-            customerId,
+            customerId: customerId ?? selectedLead.customerId ?? null,
             estimateRecordId: createdEstimate.id,
             status:
               estimate.status === "Waiting on Customer" || estimate.status === "Ready to Send"
                 ? "Estimate Sent"
-                : lead.status === "New" || lead.status === "Contacted"
+                : selectedLead.status === "New" || selectedLead.status === "Contacted"
                   ? "Estimate Needed"
-                  : lead.status,
+                  : selectedLead.status,
           },
         });
       }
@@ -543,15 +707,41 @@ export async function updateEstimateRecordAction(
     return { success: false, message: parsed.error.issues[0]?.message ?? "Check the estimate details and try again." };
   }
 
-  const { id, newCustomerEmail, newCustomerName, newCustomerPhone, ...estimate } = parsed.data;
+  const {
+    id,
+    newCustomerEmail,
+    newCustomerName,
+    newCustomerPhone,
+    newLeadEmail,
+    newLeadName,
+    newLeadPhone,
+    newLeadSource,
+    ...estimate
+  } = parsed.data;
 
   try {
-    const { jobType, measurementRooms, ...estimateInput } = estimate;
+    const { jobType, leadId, measurementRooms, ...estimateInput } = estimate;
     const laborItems = normalizeItems(estimate.laborItems);
     const materials = normalizeMaterials(estimate.materials);
     const normalizedMeasurementRooms = normalizeMeasurementRooms(measurementRooms);
     const totals = calculateTotal({ ...estimate, laborItems, materials, jobType });
     let customerId = estimate.customerId;
+    const selectedLead = leadId
+      ? await prisma.lead.findUnique({
+          where: {
+            id_ownerId: {
+              id: leadId,
+              ownerId: currentUser.id,
+            },
+          },
+          select: {
+            customerId: true,
+            estimateRecordId: true,
+            id: true,
+            status: true,
+          },
+        })
+      : null;
 
     if (!customerId && newCustomerName) {
       const customer = await createCustomerForEstimate({
@@ -564,14 +754,32 @@ export async function updateEstimateRecordAction(
       customerId = customer.id;
     }
 
-    if (!customerId) {
+    customerId = customerId ?? selectedLead?.customerId ?? undefined;
+
+    if (!customerId && !leadId && !newLeadName) {
       return {
         success: false,
-        message: "Select an existing customer or create a new customer before saving the estimate.",
+        message: "Select an existing customer or lead, create a lead, or create a customer before saving the estimate.",
       };
     }
 
-    await assertCustomer(currentUser.id, customerId);
+    if (customerId) {
+      await assertCustomer(currentUser.id, customerId);
+    }
+
+    if (leadId && !selectedLead) {
+      return {
+        success: false,
+        message: "Select a lead from your account.",
+      };
+    }
+
+    if (selectedLead?.estimateRecordId && selectedLead.estimateRecordId !== id) {
+      return {
+        success: false,
+        message: "This lead is already linked to another estimate.",
+      };
+    }
 
     await prisma.estimateRecord.update({
       where: {
@@ -582,7 +790,7 @@ export async function updateEstimateRecordAction(
       },
       data: {
         ...estimateInput,
-        customerId,
+        customerId: customerId ?? null,
         dateBegin: estimate.dateBegin ?? null,
         dateEnd: estimate.dateEnd ?? null,
         serviceLocation: estimate.serviceLocation || null,
@@ -597,12 +805,80 @@ export async function updateEstimateRecordAction(
         notes: estimate.notes || null,
       },
     });
+
+    if (newLeadName) {
+      await prisma.lead.updateMany({
+        where: {
+          ownerId: currentUser.id,
+          estimateRecordId: id,
+        },
+        data: {
+          estimateRecordId: null,
+        },
+      });
+
+      await createLeadForEstimate({
+        customerId,
+        email: newLeadEmail,
+        estimateRecordId: id,
+        name: newLeadName,
+        ownerId: currentUser.id,
+        phone: newLeadPhone,
+        serviceLocation: estimate.serviceLocation,
+        serviceType: estimate.category,
+        source: newLeadSource,
+      });
+    }
+
+    if (leadId) {
+      const lead = selectedLead;
+      if (!lead) {
+        return {
+          success: false,
+          message: "Select a lead from your account.",
+        };
+      }
+
+      await prisma.lead.updateMany({
+        where: {
+          ownerId: currentUser.id,
+          estimateRecordId: id,
+          id: {
+            not: lead.id,
+          },
+        },
+        data: {
+          estimateRecordId: null,
+        },
+      });
+
+      await prisma.lead.update({
+        where: {
+          id_ownerId: {
+            id: lead.id,
+            ownerId: currentUser.id,
+          },
+        },
+        data: {
+          customerId: customerId ?? lead.customerId ?? null,
+          estimateRecordId: id,
+          status:
+            estimate.status === "Waiting on Customer" || estimate.status === "Ready to Send"
+              ? "Estimate Sent"
+              : lead.status === "New" || lead.status === "Contacted"
+                ? "Estimate Needed"
+                : lead.status,
+        },
+      });
+    }
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Estimate could not be updated." };
   }
 
   revalidatePath("/dashboard/estimates");
   revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/leads");
+  revalidatePath("/dashboard/command-center");
   return { success: true, message: "Estimate updated." };
 }
 
@@ -668,12 +944,25 @@ export async function updateEstimateStatusAction(
         },
       },
       include: {
+        lead: true,
         printableEstimate: true,
       },
     });
 
     if (!estimate) {
       return { success: false, message: "Estimate not found." };
+    }
+
+    let customerId = estimate.customerId;
+
+    if (parsed.data.status === "Won" && !customerId && estimate.lead) {
+      const customer = await findOrCreateCustomerForLead({
+        lead: estimate.lead,
+        ownerId: currentUser.id,
+        serviceLocation: estimate.serviceLocation,
+      });
+
+      customerId = customer.id;
     }
 
     await prisma.$transaction([
@@ -685,9 +974,27 @@ export async function updateEstimateStatusAction(
           },
         },
         data: {
+          customerId,
           status: parsed.data.status,
         },
       }),
+      ...(estimate.lead
+        ? [
+            prisma.lead.update({
+              where: {
+                id_ownerId: {
+                  id: estimate.lead.id,
+                  ownerId: currentUser.id,
+                },
+              },
+              data: {
+                customerId: customerId ?? estimate.lead.customerId,
+                status: parsed.data.status === "Won" ? "Won" : estimate.lead.status,
+                convertedAt: parsed.data.status === "Won" ? new Date() : estimate.lead.convertedAt,
+              },
+            }),
+          ]
+        : []),
       ...(estimate.printableEstimate
         ? [
             prisma.estimate.update({
@@ -739,6 +1046,9 @@ export async function convertEstimateToJobAction(
           ownerId: currentUser.id,
         },
       },
+      include: {
+        lead: true,
+      },
     });
 
     if (!estimate) {
@@ -749,10 +1059,26 @@ export async function convertEstimateToJobAction(
       return { success: false, message: "This estimate has already been converted to a job." };
     }
 
+    let customerId = estimate.customerId;
+
+    if (!customerId && estimate.lead) {
+      const customer = await findOrCreateCustomerForLead({
+        lead: estimate.lead,
+        ownerId: currentUser.id,
+        serviceLocation: estimate.serviceLocation,
+      });
+
+      customerId = customer.id;
+    }
+
+    if (!customerId) {
+      return { success: false, message: "Add a customer or lead before converting this estimate to a job." };
+    }
+
     const job = await prisma.job.create({
       data: {
         ownerId: currentUser.id,
-        customerId: estimate.customerId,
+        customerId,
         description: estimate.description,
         serviceLocation: estimate.serviceLocation,
         dateBegin: null,
@@ -784,8 +1110,25 @@ export async function convertEstimateToJobAction(
       data: {
         status: "Won",
         convertedJobId: job.id,
+        customerId,
       },
     });
+
+    if (estimate.lead) {
+      await prisma.lead.update({
+        where: {
+          id_ownerId: {
+            id: estimate.lead.id,
+            ownerId: currentUser.id,
+          },
+        },
+        data: {
+          customerId,
+          status: "Won",
+          convertedAt: new Date(),
+        },
+      });
+    }
 
     await syncCustomerBillingStatus(job.customerId, currentUser.id);
   } catch (error) {
@@ -830,6 +1173,7 @@ export async function createPrintableEstimateAction(
             phoneNumbers: true,
           },
         },
+        lead: true,
         printableEstimate: true,
       },
     });
@@ -857,9 +1201,9 @@ export async function createPrintableEstimateAction(
           ownerId: currentUser.id,
           estimateRecordId: estimate.id,
           customerId: estimate.customerId,
-          customerName: estimate.customer?.name,
-          customerEmail: estimate.customer?.email,
-          customerPhone: estimate.customer?.phoneNumbers[0]?.value,
+          customerName: estimate.customer?.name ?? estimate.lead?.name,
+          customerEmail: estimate.customer?.email ?? estimate.lead?.email,
+          customerPhone: estimate.customer?.phoneNumbers[0]?.value ?? estimate.lead?.phone,
           jobTitle: estimate.description,
           jobDescription: estimate.scope,
           serviceLocation: estimate.serviceLocation,

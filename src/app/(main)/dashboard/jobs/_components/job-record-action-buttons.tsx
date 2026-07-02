@@ -56,6 +56,19 @@ const initialInvoiceState: InvoiceMutationState = {
   message: "",
 };
 
+function formatDeleteMoney(value?: string) {
+  return value ? `$${Number(value).toFixed(2)}` : "-";
+}
+
+function DeleteSnapshotRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium text-foreground">{value?.trim() || "-"}</dd>
+    </div>
+  );
+}
+
 export function JobInvoiceButton({
   action,
   className,
@@ -170,6 +183,13 @@ export function DeleteJobButton({
             are kept and returned to the estimate list.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <dl className="grid gap-2 rounded-md border bg-muted/30 p-3">
+          <DeleteSnapshotRow label="Job" value={job.description} />
+          <DeleteSnapshotRow label="Customer" value={job.customerName} />
+          <DeleteSnapshotRow label="Location" value={job.serviceLocation} />
+          <DeleteSnapshotRow label="Status" value={job.status} />
+          <DeleteSnapshotRow label="Value" value={formatDeleteMoney(job.finalCost ?? job.estimatedCost)} />
+        </dl>
         {error ? <p className="text-destructive text-sm">{error}</p> : null}
 
         <AlertDialogFooter>

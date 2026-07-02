@@ -29,6 +29,19 @@ const initialState: EstimateRecordMutationState = {
   message: "",
 };
 
+function formatDeleteMoney(value?: string) {
+  return value ? `$${Number(value).toFixed(2)}` : "-";
+}
+
+function DeleteSnapshotRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium text-foreground">{value?.trim() || "-"}</dd>
+    </div>
+  );
+}
+
 export function ConvertEstimateButton({
   action,
   className = "w-full",
@@ -209,6 +222,16 @@ export function DeleteEstimateRecordButton({
             deleted.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <dl className="grid gap-2 rounded-md border bg-muted/30 p-3">
+          <DeleteSnapshotRow label="Estimate" value={estimate.description} />
+          <DeleteSnapshotRow
+            label={estimate.leadName && !estimate.customerName ? "Lead" : "Customer"}
+            value={estimate.customerName ?? estimate.leadName}
+          />
+          <DeleteSnapshotRow label="Location" value={estimate.serviceLocation} />
+          <DeleteSnapshotRow label="Status" value={estimate.status} />
+          <DeleteSnapshotRow label="Total" value={formatDeleteMoney(estimate.estimatedTotal)} />
+        </dl>
 
         <form ref={formRef} action={formAction}>
           <input type="hidden" name="id" value={estimate.id} />

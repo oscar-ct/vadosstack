@@ -6,10 +6,10 @@ import { prisma } from "@/lib/prisma";
 
 import {
   CalendarDashboard,
-  type CalendarDashboardCustomer,
+  type CalendarDashboardContact,
   type CalendarDashboardEvent,
 } from "./_components/calendar-dashboard";
-import { createCalendarTaskAction, deleteCalendarTaskAction } from "./actions";
+import { createCalendarTaskAction, deleteCalendarTaskAction, updateCalendarTaskAction } from "./actions";
 
 function formatMoney(value: { toString: () => string } | null | undefined) {
   return value ? value.toString() : undefined;
@@ -31,7 +31,7 @@ export default async function Page() {
   const windowStart = startOfYear(today);
   const windowEnd = endOfYear(addDays(today, 365));
 
-  const [jobs, tasks, invoices, customers, unscheduledJobCount] = await Promise.all([
+  const [jobs, tasks, invoices, customers, leads, unscheduledJobCount] = await Promise.all([
     prisma.job.findMany({
       where: {
         ownerId: currentUser.id,
@@ -79,6 +79,7 @@ export default async function Page() {
       },
       include: {
         customer: true,
+        lead: true,
       },
       orderBy: [{ scheduledFor: "asc" }, { createdAt: "desc" }],
     }),
@@ -104,6 +105,37 @@ export default async function Page() {
       select: {
         id: true,
         name: true,
+        email: true,
+        addresses: {
+          orderBy: {
+            createdAt: "asc",
+          },
+          select: {
+            city: true,
+            line1: true,
+            line2: true,
+            postalCode: true,
+            state: true,
+          },
+        },
+      },
+    }),
+    prisma.lead.findMany({
+      where: {
+        ownerId: currentUser.id,
+        status: {
+          notIn: ["Won", "Lost"],
+        },
+      },
+      orderBy: [{ followUpAt: "asc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        serviceLocation: true,
+        serviceType: true,
+        status: true,
       },
     }),
     prisma.job.count({
@@ -133,8 +165,11 @@ export default async function Page() {
       recordId: task.id,
       type: "task" as const,
       title: task.title,
-      customerName: task.customer?.name ?? "Task",
+      customerName: task.customer?.name ?? task.lead?.name ?? "Task",
+      customerId: task.customerId ?? undefined,
       date: task.scheduledFor.toISOString(),
+      leadId: task.leadId ?? undefined,
+      notes: task.notes ?? undefined,
       status: task.priority,
       location: task.location ?? undefined,
     })),
@@ -151,16 +186,42 @@ export default async function Page() {
       href: `/dashboard/invoices?invoice=${invoice.id}`,
     })),
   ];
-  const taskCustomers: CalendarDashboardCustomer[] = customers.map((customer) => ({
-    id: customer.id,
-    name: customer.name,
-  }));
+  const taskContacts: CalendarDashboardContact[] = [
+    ...customers.map((customer) => {
+      const primaryAddress = customer.addresses[0];
+      const addressSummary = primaryAddress
+        ? [
+            primaryAddress.line1,
+            primaryAddress.line2,
+            primaryAddress.city,
+            primaryAddress.state,
+            primaryAddress.postalCode,
+          ]
+            .filter(Boolean)
+            .join(", ")
+        : undefined;
+
+      return {
+        id: customer.id,
+        kind: "customer" as const,
+        label: customer.name,
+        meta: [customer.email, addressSummary].filter(Boolean).join(" - ") || "Customer",
+      };
+    }),
+    ...leads.map((lead) => ({
+      id: lead.id,
+      kind: "lead" as const,
+      label: lead.name,
+      meta: [lead.serviceType, lead.serviceLocation, lead.email ?? lead.phone, lead.status].filter(Boolean).join(" - "),
+    })),
+  ];
 
   return (
     <CalendarDashboard
       createTaskAction={createCalendarTaskAction}
       deleteTaskAction={deleteCalendarTaskAction}
-      customers={taskCustomers}
+      updateTaskAction={updateCalendarTaskAction}
+      contacts={taskContacts}
       events={events}
       unscheduledJobCount={unscheduledJobCount}
     />

@@ -2,11 +2,22 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { format } from "date-fns";
-import { CalendarClock, FileText, Mail, MapPin, Pencil, Phone, ReceiptText, UserRound } from "lucide-react";
+import {
+  CalendarClock,
+  FileText,
+  Mail,
+  MailWarning,
+  MapPin,
+  Pencil,
+  Phone,
+  ReceiptText,
+  UserRound,
+} from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { BackButton } from "@/components/back-button";
 import { CustomerLink } from "@/components/customer-link";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,6 +86,19 @@ function DetailTile({ children, icon, label }: { children: React.ReactNode; icon
       </div>
       <div className="min-w-0 font-medium text-sm">{children}</div>
     </div>
+  );
+}
+
+function LeadEmailWarning() {
+  return (
+    <Alert className="border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+      <MailWarning className="size-4" />
+      <AlertTitle>No email on this lead</AlertTitle>
+      <AlertDescription className="text-amber-900/80 dark:text-amber-100/80">
+        You can still create estimates and convert this lead, but sending estimates or invoices by email will need an
+        email address later.
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -180,6 +204,7 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
+          {!lead.email ? <LeadEmailWarning /> : null}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <DetailTile icon={<Mail className="size-3.5" />} label="Email">
               {lead.email ? (

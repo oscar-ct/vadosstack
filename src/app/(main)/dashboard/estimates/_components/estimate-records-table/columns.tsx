@@ -75,7 +75,8 @@ export function getEstimateRecordsColumns({
       cell: ({ row }) => (
         <CustomerLink
           customerId={row.original.customerId}
-          name={row.original.customerName}
+          fallback="No customer or lead"
+          name={row.original.customerName ?? row.original.leadName}
           className="block truncate"
         />
       ),
@@ -157,7 +158,9 @@ export function getEstimateRecordsColumns({
     {
       id: "search",
       accessorFn: (row) =>
-        [row.description, row.customerName, row.status, row.category, row.estimatedTotal].filter(Boolean).join(" "),
+        [row.description, row.customerName, row.leadName, row.status, row.category, row.estimatedTotal]
+          .filter(Boolean)
+          .join(" "),
       filterFn: "includesString",
       enableHiding: true,
     },

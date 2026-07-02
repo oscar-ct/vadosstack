@@ -14,6 +14,7 @@ import { discardLocalDraft } from "@/lib/drafts.client";
 
 import type { JobCustomer } from "../../jobs/_components/jobs-table/schema";
 import type { ServiceTemplateRow } from "../../services/types";
+import type { EstimateLeadOption } from "../_lib/estimate-record-data";
 import type { EstimateRecordMutationState } from "../records-actions";
 import { EstimateBackButton } from "./estimate-back-button";
 import { DeleteEstimateRecordButton } from "./estimate-record-action-buttons";
@@ -59,6 +60,7 @@ export function EstimateRecordWorkspace({
   deleteAction,
   estimate,
   leadPrefill,
+  leads,
   mode,
   services,
 }: {
@@ -67,6 +69,7 @@ export function EstimateRecordWorkspace({
   deleteAction?: (state: EstimateRecordMutationState, formData: FormData) => Promise<EstimateRecordMutationState>;
   estimate?: EstimateRecordRow;
   leadPrefill?: LeadEstimatePrefill;
+  leads: EstimateLeadOption[];
   mode: "create" | "edit";
   services: ServiceTemplateRow[];
 }) {
@@ -138,6 +141,7 @@ export function EstimateRecordWorkspace({
               draftKey={draftKey}
               estimate={estimate}
               leadPrefill={leadPrefill}
+              leads={leads}
               presentation="workspace"
               services={services}
             />
