@@ -11,7 +11,6 @@ import { BackButton } from "@/components/back-button";
 import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
-import { formatDateOnly } from "@/lib/date-only";
 import {
   getDocumentMessageAlignClass,
   getDocumentMessageLineItems,
@@ -92,15 +91,19 @@ function formatLineMeta(item: { quantity?: string; unit?: string; unitPrice?: st
     .join(" · ");
 }
 
+function formatShortDate(value: Date) {
+  return format(value, "MM/dd/yy");
+}
+
 function formatMaybeDate(value: Date | null) {
-  return value ? format(value, "MMM d, yyyy") : "Not scheduled";
+  return value ? formatShortDate(value) : "Not scheduled";
 }
 
 function formatMaterialDate(value: string) {
   if (!value) return "";
 
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : format(date, "MMM d, yyyy");
+  return Number.isNaN(date.getTime()) ? value : formatShortDate(date);
 }
 
 function createUniqueRowKey(baseKey: string, seenKeys: Map<string, number>) {
@@ -400,7 +403,7 @@ export default async function Page({
               </div>
               <div className={"grid gap-0.5 text-muted-foreground text-xs"}>
                 <span>Invoice #{invoiceNumber}</span>
-                <span>Issued {format(invoice.issuedAt, "MMM d, yyyy")}</span>
+                <span>Issued {formatShortDate(invoice.issuedAt)}</span>
               </div>
             </div>
             <div className="grid gap-1 rounded-md border bg-muted/20 p-3 text-left md:text-right print:border-neutral-300 print:bg-neutral-50 print:p-2">
@@ -408,7 +411,7 @@ export default async function Page({
               <span className="font-semibold text-2xl text-rose-700 dark:text-rose-400 print:text-xl">
                 {formatMoney(invoice.balanceDue)}
               </span>
-              <span className="text-muted-foreground text-xs">by {format(dueDate, "MMM d, yyyy")}</span>
+              <span className="text-muted-foreground text-xs">by {formatShortDate(dueDate)}</span>
             </div>
           </header>
 
@@ -696,7 +699,7 @@ export default async function Page({
                       <div className="min-w-0">
                         <div className="font-medium leading-snug">{payment.description}</div>
                         <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-muted-foreground">
-                          <span>{formatDateOnly(payment.paidOn)}</span>
+                          <span>{formatShortDate(payment.paidOn)}</span>
                           <span>{payment.method}</span>
                           <span>Ref #{payment.referenceNumber ?? "-"}</span>
                         </div>
@@ -725,7 +728,7 @@ export default async function Page({
                     key={payment.id}
                     className="grid grid-cols-[5.5rem_1fr_5rem_5rem_5.5rem] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 print:border-neutral-200"
                   >
-                    <span>{formatDateOnly(payment.paidOn)}</span>
+                    <span>{formatShortDate(payment.paidOn)}</span>
                     <span>{payment.description}</span>
                     <span className="text-muted-foreground">{payment.method}</span>
                     <span className="text-muted-foreground">{payment.referenceNumber ?? "-"}</span>

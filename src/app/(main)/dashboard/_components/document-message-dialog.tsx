@@ -128,12 +128,12 @@ export function DocumentMessageDialog({
       <DialogTrigger asChild>
         <Button type="button" size="sm" variant="outline">
           <FileText />
-          Custom message
+          Footer
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Custom {label} message</DialogTitle>
+          <DialogTitle>{label === "estimate" ? "Estimate" : "Invoice"} footer</DialogTitle>
           <DialogDescription>
             This bottom message appears on every {label} preview and downloaded PDF when enabled.
           </DialogDescription>

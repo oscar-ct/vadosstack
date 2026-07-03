@@ -43,7 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatPhoneNumber } from "@/lib/phone";
+import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 
 import type { EmployeeMutationState } from "../actions";
 import type { EmployeeRow } from "../types";
@@ -93,6 +93,22 @@ function getSearchText(employee: EmployeeRow) {
     .toLowerCase();
 }
 
+function PhoneInput({ defaultValue, id, name }: { defaultValue?: string | null; id: string; name: string }) {
+  const [digits, setDigits] = React.useState(() => normalizePhoneNumber(defaultValue));
+
+  return (
+    <Input
+      id={id}
+      name={name}
+      type="tel"
+      inputMode="tel"
+      autoComplete="tel"
+      value={formatPhoneNumber(digits)}
+      onChange={(event) => setDigits(normalizePhoneNumber(event.target.value))}
+    />
+  );
+}
+
 function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
   return (
     <div className="grid min-w-0 gap-4">
@@ -130,7 +146,7 @@ function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
         </div>
         <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-phone">Phone</Label>
-          <Input id="employee-phone" name="phone" type="tel" defaultValue={employee?.phone ?? ""} />
+          <PhoneInput id="employee-phone" name="phone" defaultValue={employee?.phone} />
         </div>
       </div>
 
@@ -217,12 +233,7 @@ function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
         </div>
         <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-emergency-phone">Emergency phone</Label>
-          <Input
-            id="employee-emergency-phone"
-            name="emergencyPhone"
-            type="tel"
-            defaultValue={employee?.emergencyPhone ?? ""}
-          />
+          <PhoneInput id="employee-emergency-phone" name="emergencyPhone" defaultValue={employee?.emergencyPhone} />
         </div>
         <div className="grid min-w-0 gap-2">
           <Label htmlFor="employee-emergency-relation">Relationship</Label>

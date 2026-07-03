@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import { CheckCircle2, Clock3, MailCheck, MailWarning, Send, UserRound } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
@@ -11,7 +10,14 @@ import { prisma } from "@/lib/prisma";
 import { cn, formatCurrency } from "@/lib/utils";
 
 function formatDate(value: Date) {
-  return format(value, "MMM d, yyyy h:mm a");
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "America/Chicago",
+    year: "numeric",
+  }).format(value);
 }
 
 function formatDocumentType(value: string) {
