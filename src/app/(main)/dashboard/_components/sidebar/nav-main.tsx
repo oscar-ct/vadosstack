@@ -385,7 +385,7 @@ function CompanySettingsDialog({
               type="tel"
               inputMode="numeric"
               autoComplete="tel"
-              maxLength={12}
+              maxLength={14}
               value={formatPhoneNumber(companyPhoneDigits)}
               onChange={(event) => setCompanyPhoneDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
             />

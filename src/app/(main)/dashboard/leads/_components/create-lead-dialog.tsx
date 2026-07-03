@@ -110,7 +110,7 @@ export function CreateLeadDialog({
                 name="phone"
                 type="tel"
                 inputMode="numeric"
-                maxLength={12}
+                maxLength={14}
                 value={formatPhoneNumber(phoneDigits)}
                 onChange={(event) => setPhoneDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
                 placeholder="555-555-1234"

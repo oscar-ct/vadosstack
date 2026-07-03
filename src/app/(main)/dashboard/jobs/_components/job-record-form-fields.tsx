@@ -2250,7 +2250,7 @@ export function JobRecordFormFields({
                   type="tel"
                   inputMode="numeric"
                   autoComplete="tel"
-                  maxLength={12}
+                  maxLength={14}
                   value={formatPhoneNumber(newCustomerPhone)}
                   onChange={(event) => setNewCustomerPhone(normalizePhoneNumber(event.target.value).slice(0, 10))}
                   placeholder="(555) 555-1234"
@@ -2802,7 +2802,7 @@ export function JobRecordFormFields({
               type="tel"
               inputMode="numeric"
               autoComplete="tel"
-              maxLength={12}
+              maxLength={14}
               value={formatPhoneNumber(newCustomerPhone)}
               onChange={(event) => setNewCustomerPhone(normalizePhoneNumber(event.target.value).slice(0, 10))}
               placeholder="(555) 555-1234"
