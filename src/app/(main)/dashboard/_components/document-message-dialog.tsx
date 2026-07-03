@@ -131,7 +131,7 @@ export function DocumentMessageDialog({
           Footer
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{label === "estimate" ? "Estimate" : "Invoice"} footer</DialogTitle>
           <DialogDescription>
@@ -191,7 +191,7 @@ export function DocumentMessageDialog({
               name="messageText"
               value={message}
               onChange={(event) => setMessage(event.target.value)}
-              className="min-h-56 font-mono text-sm"
+              className="min-h-40 font-mono text-sm sm:min-h-56"
               autoResize={false}
             />
             <p className="text-muted-foreground text-xs">Line breaks are preserved in the document.</p>
