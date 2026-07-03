@@ -25,6 +25,8 @@ import { escapeHtml } from "@/lib/email-content";
 import type { DocumentEmailTemplate } from "@/lib/email-templates";
 
 import { DocumentEmailComposerDialog } from "../../_components/document-email-composer-dialog";
+import { DocumentMessageDialog } from "../../_components/document-message-dialog";
+import { updateDocumentMessageAction } from "../../document-messages/actions";
 import type { EstimateMutationState } from "../types";
 
 type EmailEstimateState = {
@@ -75,6 +77,9 @@ export function EstimateActions({
   customerEmail,
   customerName,
   estimateId,
+  estimateMessageAlign,
+  estimateMessageEnabled,
+  estimateMessageText,
   estimateNumber,
   estimatedTotal,
   gmailConnected,
@@ -89,6 +94,9 @@ export function EstimateActions({
   customerEmail?: string | null;
   customerName?: string | null;
   estimateId: string;
+  estimateMessageAlign: "left" | "center" | "right";
+  estimateMessageEnabled: boolean;
+  estimateMessageText: string;
   estimateNumber: string;
   estimatedTotal: string;
   gmailConnected: boolean;
@@ -162,6 +170,14 @@ export function EstimateActions({
             Download PDF
           </Link>
         </Button>
+        <DocumentMessageDialog
+          action={updateDocumentMessageAction}
+          align={estimateMessageAlign}
+          documentType="estimate"
+          enabled={estimateMessageEnabled}
+          messageText={estimateMessageText}
+          returnTo={returnTo}
+        />
         <DocumentEmailComposerDialog
           action={action}
           attachmentName={`${estimateNumber}.pdf`}

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { addDays } from "date-fns";
+import { addDays, format } from "date-fns";
 
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
+import { normalizeDocumentMessageAlign, renderDocumentMessage } from "@/lib/document-messages";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -37,6 +38,13 @@ function parseEstimateMaterials(value: string): EstimatePdfLineItem[] {
 
 function sanitizePdfFilename(value: string) {
   return `${value.replace(/[^a-z0-9-]+/gi, "-")}.pdf`;
+}
+
+function money(value: { toString: () => string } | string | number) {
+  return `$${Number(value.toString()).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
 }
 
 export async function GET(
@@ -83,6 +91,20 @@ export async function GET(
   const estimateNumber = formatDocumentNumber("EST", estimateSequence);
   const validThrough = addDays(estimate.issuedAt, currentUser.estimateValidDays);
   const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
+  const paymentAmount = Number(estimate.estimatedTotal.toString()) / 2;
+  const documentMessageAlign = normalizeDocumentMessageAlign(currentUser.estimateMessageAlign);
+  const documentMessage = currentUser.estimateMessageEnabled
+    ? renderDocumentMessage(currentUser.estimateMessageText, {
+        companyName: currentUser.companyName,
+        customerName: estimate.customerName,
+        estimateHalfTotal: money(paymentAmount),
+        estimateNumber,
+        estimateTotal: money(estimate.estimatedTotal),
+        jobTitle: estimate.jobTitle,
+        serviceLocation: estimate.serviceLocation,
+        validThrough: format(validThrough, "MMM d, yyyy"),
+      })
+    : "";
   const snapshotMaterials = parseEstimateMaterials(estimate.materials);
   const laborItems = estimate.estimateRecord
     ? parsePricingItems(estimate.estimateRecord.laborItems)
@@ -107,6 +129,8 @@ export async function GET(
     customerPhone: estimate.customerPhone ? formatPhoneNumber(estimate.customerPhone) : null,
     dateBegin: estimate.dateBegin,
     dateEnd: estimate.dateEnd,
+    documentMessageAlign,
+    documentMessage,
     estimatedTotal: estimate.estimatedTotal,
     estimateNumber,
     issuedAt: estimate.issuedAt,

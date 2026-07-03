@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { addDays } from "date-fns";
+import { addDays, format } from "date-fns";
 
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
+import { normalizeDocumentMessageAlign, renderDocumentMessage } from "@/lib/document-messages";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -38,6 +39,13 @@ function parseInvoiceMaterials(value: string): InvoicePdfMaterial[] {
 
 function sanitizePdfFilename(value: string) {
   return `${value.replace(/[^a-z0-9-]+/gi, "-")}.pdf`;
+}
+
+function money(value: { toString: () => string } | string | number) {
+  return `$${Number(value.toString()).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
 }
 
 export async function GET(
@@ -91,6 +99,20 @@ export async function GET(
   const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);
   const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
   const taxableItemsLabel = invoice.job.jobType === "Commercial" ? "labor + materials" : "materials";
+  const documentMessageAlign = normalizeDocumentMessageAlign(currentUser.invoiceMessageAlign);
+  const documentMessage = currentUser.invoiceMessageEnabled
+    ? renderDocumentMessage(currentUser.invoiceMessageText, {
+        amountPaid: money(invoice.amountPaid),
+        balanceDue: money(invoice.balanceDue),
+        companyName: currentUser.companyName,
+        customerName: invoice.customerName,
+        dueDate: format(dueDate, "MMM d, yyyy"),
+        finalCost: money(invoice.finalCost),
+        invoiceNumber,
+        jobTitle: invoice.jobTitle,
+        serviceLocation: invoice.serviceLocation,
+      })
+    : "";
   const pdfBuffer = await renderInvoicePdfBuffer({
     amountPaid: invoice.amountPaid,
     balanceDue: invoice.balanceDue,
@@ -105,6 +127,8 @@ export async function GET(
     dateBegin: invoice.dateBegin,
     dateEnd: invoice.dateEnd,
     depositPaid: invoice.depositPaid,
+    documentMessageAlign,
+    documentMessage,
     dueDate,
     finalCost: invoice.finalCost,
     invoiceNumber,

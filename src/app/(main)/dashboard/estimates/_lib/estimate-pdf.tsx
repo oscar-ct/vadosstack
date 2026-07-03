@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { Document, Font, Image, Page, Path, renderToBuffer, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
 import { format } from "date-fns";
 
+import { type DocumentMessageAlign, getDocumentMessageLineItems } from "@/lib/document-messages";
+
 import type { PricingLineItem } from "../../jobs/_components/pricing-items";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -37,6 +39,8 @@ export type EstimatePdfData = {
   materialTaxAmount: { toString: () => string };
   materialTaxRate: { toString: () => string };
   materialsSubtotal: { toString: () => string };
+  documentMessageAlign?: DocumentMessageAlign;
+  documentMessage?: string | null;
   serviceLocation: string | null;
   taxableItemsLabel: string;
   validThrough: Date;
@@ -309,13 +313,13 @@ const styles = StyleSheet.create({
     color: "#262626",
   },
   summaryValue: {
-    fontSize: 9.5,
+    fontSize: 8.75,
     fontWeight: 700,
     textAlign: "right",
   },
   summaryTotal: {
     color: totalColor,
-    fontSize: 12,
+    fontSize: 10.5,
     fontWeight: 700,
   },
   summaryRule: {
@@ -344,7 +348,10 @@ const styles = StyleSheet.create({
 });
 
 function money(value: { toString: () => string } | string | number) {
-  return `$${Number(value.toString()).toFixed(2)}`;
+  return `$${Number(value.toString()).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
 }
 
 function dash(value?: string | null) {
@@ -546,8 +553,9 @@ function LineTable({
 }
 
 function EstimatePdfDocument({ data }: { data: EstimatePdfData }) {
-  const paymentAmount = Number(data.estimatedTotal.toString()) / 2;
   const subtotal = Number(data.laborCost.toString()) + Number(data.materialsSubtotal.toString());
+  const documentMessageLines = getDocumentMessageLineItems(data.documentMessage ?? "");
+  const documentMessageStyle = { textAlign: data.documentMessageAlign ?? "left" } as const;
 
   return (
     <Document title={`Estimate ${data.estimateNumber}`}>
@@ -625,17 +633,22 @@ function EstimatePdfDocument({ data }: { data: EstimatePdfData }) {
           <SummaryRow label="Estimated total" last strong value={money(data.estimatedTotal)} />
         </View>
 
-        <View style={styles.paymentBox} wrap={false}>
-          <Text style={styles.strong}>Payment Schedule</Text>
-          <SummaryRow label="1st payment due before work begins" value={money(paymentAmount)} />
-          <SummaryRow label="2nd payment due when the job is completed" value={money(paymentAmount)} />
-          <Text>
-            Any additional work or materials not included in this estimate will be reviewed with the customer and billed
-            as an extra charge.
-          </Text>
-          <Text style={styles.strong}>Please make all checks payable to: {data.companyName}</Text>
-          <Text style={styles.strong}>Thank you for your business!</Text>
-        </View>
+        {documentMessageLines.length ? (
+          <View style={styles.paymentBox} wrap={false}>
+            {documentMessageLines.map((item, index) => (
+              <Text
+                key={item.id}
+                style={
+                  index === 0 || index === documentMessageLines.length - 1
+                    ? [documentMessageStyle, styles.strong]
+                    : documentMessageStyle
+                }
+              >
+                {item.line}
+              </Text>
+            ))}
+          </View>
+        ) : null}
 
         <Text
           fixed

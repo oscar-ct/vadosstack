@@ -99,40 +99,46 @@ model JobPayment {
 }
 
 model User {
-  id                  String               @id @default(cuid())
-  name                String?
-  companyName         String
-  companyAddress      String?
-  companyEmail        String?
-  companyPhone        String?
-  companyLogoDataUrl  String?
-  companyLogoKey      String?
-  companyLogoType     String?
-  estimateValidDays   Int                  @default(15)
-  invoiceDueDays      Int                  @default(15)
-  authProviders       String[]             @default(["email"])
-  email               String               @unique
-  passwordHash        String
-  admin               Boolean              @default(false)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  customers           Customer[]
-  leads               Lead[]
-  jobs                Job[]
-  jobPayments         JobPayment[]
-  invoices            Invoice[]
-  estimates           Estimate[]
-  estimateRecords     EstimateRecord[]
-  emailRecords        EmailRecord[]
-  emailTemplates      EmailTemplate[]
-  serviceTemplates    ServiceTemplate[]
-  employees           Employee[]
-  timeEntries         TimeEntry[]
-  timeEntryRequests   TimeEntryRequest[]
-  sessions            Session[]
-  passwordResetTokens PasswordResetToken[]
-  googleMailAccount   GoogleMailAccount?
-  tasks               Task[]
+  id                     String               @id @default(cuid())
+  name                   String?
+  companyName            String
+  companyAddress         String?
+  companyEmail           String?
+  companyPhone           String?
+  companyLogoDataUrl     String?
+  companyLogoKey         String?
+  companyLogoType        String?
+  estimateValidDays      Int                  @default(15)
+  estimateMessageEnabled Boolean              @default(true)
+  estimateMessageAlign   String               @default("left")
+  estimateMessageText    String               @default("Payment Schedule\n\n1st payment due before work begins: {{estimateHalfTotal}}\n2nd payment due when the job is completed: {{estimateHalfTotal}}\n\nAny additional work or materials not included in this estimate will be reviewed with the customer and billed as an extra charge.\n\nPlease make all checks payable to: {{companyName}}\nThank you for your business!")
+  invoiceDueDays         Int                  @default(15)
+  invoiceMessageEnabled  Boolean              @default(false)
+  invoiceMessageAlign    String               @default("left")
+  invoiceMessageText     String               @default("Please make all checks payable to: {{companyName}}\n\nBalance due: {{balanceDue}}\nDue date: {{dueDate}}\n\nThank you for your business!")
+  authProviders          String[]             @default(["email"])
+  email                  String               @unique
+  passwordHash           String
+  admin                  Boolean              @default(false)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  customers              Customer[]
+  leads                  Lead[]
+  jobs                   Job[]
+  jobPayments            JobPayment[]
+  invoices               Invoice[]
+  estimates              Estimate[]
+  estimateRecords        EstimateRecord[]
+  emailRecords           EmailRecord[]
+  emailTemplates         EmailTemplate[]
+  serviceTemplates       ServiceTemplate[]
+  employees              Employee[]
+  timeEntries            TimeEntry[]
+  timeEntryRequests      TimeEntryRequest[]
+  sessions               Session[]
+  passwordResetTokens    PasswordResetToken[]
+  googleMailAccount      GoogleMailAccount?
+  tasks                  Task[]
 
   @@map("users")
 }

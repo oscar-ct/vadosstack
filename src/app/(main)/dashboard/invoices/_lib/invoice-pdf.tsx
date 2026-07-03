@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { Document, Font, Image, Page, Path, renderToBuffer, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
 import { format } from "date-fns";
 
+import { type DocumentMessageAlign, getDocumentMessageLineItems } from "@/lib/document-messages";
+
 import type { PricingLineItem } from "../../jobs/_components/pricing-items";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -40,6 +42,8 @@ export type InvoicePdfData = {
   dateBegin: Date | null;
   dateEnd: Date | null;
   depositPaid: { toString: () => string };
+  documentMessageAlign?: DocumentMessageAlign;
+  documentMessage?: string | null;
   dueDate: Date;
   finalCost: { toString: () => string };
   invoiceNumber: string;
@@ -342,13 +346,13 @@ const styles = StyleSheet.create({
     color: "#262626",
   },
   summaryValue: {
-    fontSize: 9.5,
+    fontSize: 8.75,
     fontWeight: 700,
     textAlign: "right",
   },
   summaryTotal: {
     color: "#be123c",
-    fontSize: 12,
+    fontSize: 10.5,
     fontWeight: 700,
   },
   summaryRule: {
@@ -356,6 +360,14 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     marginBottom: 5,
     marginTop: 1,
+  },
+  messageBox: {
+    borderColor: neutralBorder,
+    borderRadius: 6,
+    borderWidth: 0.75,
+    gap: 5,
+    marginBottom: 7,
+    padding: 8,
   },
   footer: {
     bottom: 18,
@@ -369,7 +381,10 @@ const styles = StyleSheet.create({
 });
 
 function money(value: { toString: () => string } | string | number) {
-  return `$${Number(value.toString()).toFixed(2)}`;
+  return `$${Number(value.toString()).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
 }
 
 function dash(value?: string | null) {
@@ -711,6 +726,8 @@ function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
   const returnMaterials = data.materials.filter((material) => material.type === "return");
   const returnTotal = returnMaterials.reduce((total, material) => total + Number(material.price || 0), 0);
   const subtotal = Number(data.laborCost.toString()) + Number(data.materialsSubtotal.toString());
+  const documentMessageLines = getDocumentMessageLineItems(data.documentMessage ?? "");
+  const documentMessageStyle = { textAlign: data.documentMessageAlign ?? "left" } as const;
 
   return (
     <Document title={`Invoice ${data.invoiceNumber}`}>
@@ -800,6 +817,23 @@ function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
           <SummaryRow label="Amount paid" value={money(data.amountPaid)} />
           <SummaryRow label="Balance due" last strong value={money(data.balanceDue)} />
         </View>
+
+        {documentMessageLines.length ? (
+          <View style={styles.messageBox} wrap={false}>
+            {documentMessageLines.map((item, index) => (
+              <Text
+                key={item.id}
+                style={
+                  index === 0 || index === documentMessageLines.length - 1
+                    ? [documentMessageStyle, styles.strong]
+                    : documentMessageStyle
+                }
+              >
+                {item.line}
+              </Text>
+            ))}
+          </View>
+        ) : null}
 
         <Text
           fixed

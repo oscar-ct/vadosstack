@@ -19,8 +19,14 @@ export type CurrentUser = {
   companyEmail: string | null;
   companyPhone: string | null;
   estimateValidDays: number;
+  estimateMessageEnabled: boolean;
+  estimateMessageAlign: string;
+  estimateMessageText: string;
   email: string;
   invoiceDueDays: number;
+  invoiceMessageEnabled: boolean;
+  invoiceMessageAlign: string;
+  invoiceMessageText: string;
   admin: boolean;
 };
 
@@ -46,8 +52,14 @@ function toCurrentUser(user: {
   companyEmail: string | null;
   companyPhone: string | null;
   estimateValidDays: number;
+  estimateMessageEnabled: boolean;
+  estimateMessageAlign: string;
+  estimateMessageText: string;
   email: string;
   invoiceDueDays: number;
+  invoiceMessageEnabled: boolean;
+  invoiceMessageAlign: string;
+  invoiceMessageText: string;
   admin: boolean;
 }): CurrentUser {
   return {
@@ -58,8 +70,14 @@ function toCurrentUser(user: {
     companyEmail: user.companyEmail,
     companyPhone: user.companyPhone,
     estimateValidDays: user.estimateValidDays,
+    estimateMessageEnabled: user.estimateMessageEnabled,
+    estimateMessageAlign: user.estimateMessageAlign,
+    estimateMessageText: user.estimateMessageText,
     email: user.email,
     invoiceDueDays: user.invoiceDueDays,
+    invoiceMessageEnabled: user.invoiceMessageEnabled,
+    invoiceMessageAlign: user.invoiceMessageAlign,
+    invoiceMessageText: user.invoiceMessageText,
     admin: user.admin,
   };
 }
@@ -95,8 +113,14 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
           companyEmail: true,
           companyPhone: true,
           estimateValidDays: true,
+          estimateMessageEnabled: true,
+          estimateMessageAlign: true,
+          estimateMessageText: true,
           email: true,
           invoiceDueDays: true,
+          invoiceMessageEnabled: true,
+          invoiceMessageAlign: true,
+          invoiceMessageText: true,
           admin: true,
         },
       },

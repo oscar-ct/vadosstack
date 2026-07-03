@@ -25,6 +25,8 @@ import { escapeHtml } from "@/lib/email-content";
 import type { DocumentEmailTemplate } from "@/lib/email-templates";
 
 import { DocumentEmailComposerDialog } from "../../_components/document-email-composer-dialog";
+import { DocumentMessageDialog } from "../../_components/document-message-dialog";
+import { updateDocumentMessageAction } from "../../document-messages/actions";
 import type { JobMutationState } from "../../jobs/actions";
 import type { InvoiceMutationState } from "../types";
 import { InvoiceDetailsDialog, type InvoiceTableItem } from "./invoices-table";
@@ -100,6 +102,9 @@ export function InvoiceActions({
   gmailSenderEmail,
   invoiceNumber,
   invoiceId,
+  invoiceMessageAlign,
+  invoiceMessageEnabled,
+  invoiceMessageText,
   notice,
   returnTo,
   templates,
@@ -114,6 +119,9 @@ export function InvoiceActions({
   gmailSenderEmail?: string | null;
   invoiceNumber: string;
   invoiceId: string;
+  invoiceMessageAlign: "left" | "center" | "right";
+  invoiceMessageEnabled: boolean;
+  invoiceMessageText: string;
   notice?: {
     message: string;
     type: "error" | "success";
@@ -182,6 +190,14 @@ export function InvoiceActions({
             Download PDF
           </Link>
         </Button>
+        <DocumentMessageDialog
+          action={updateDocumentMessageAction}
+          align={invoiceMessageAlign}
+          documentType="invoice"
+          enabled={invoiceMessageEnabled}
+          messageText={invoiceMessageText}
+          returnTo={returnTo}
+        />
         <DocumentEmailComposerDialog
           action={action}
           attachmentName={`${invoiceNumber}.pdf`}

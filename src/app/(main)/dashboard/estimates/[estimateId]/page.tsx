@@ -9,6 +9,12 @@ import { BackButton } from "@/components/back-button";
 import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
+import {
+  getDocumentMessageAlignClass,
+  getDocumentMessageLineItems,
+  normalizeDocumentMessageAlign,
+  renderDocumentMessage,
+} from "@/lib/document-messages";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { formatPhoneNumber } from "@/lib/phone";
@@ -49,12 +55,15 @@ function parseMaterials(value: string): EstimateMaterial[] {
   }
 }
 
-function formatMoney(value: { toString: () => string }) {
-  return `$${Number(value.toString()).toFixed(2)}`;
+function formatMoney(value: { toString: () => string } | string | number) {
+  return `$${Number(value.toString()).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
 }
 
 function formatOptionalMoney(value?: string) {
-  return value ? `$${Number(value).toFixed(2)}` : "-";
+  return value ? formatMoney(value) : "-";
 }
 
 function formatDash(value?: string) {
@@ -186,6 +195,21 @@ export default async function Page({
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
   const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
   const validThrough = addDays(estimate.issuedAt, currentUser.estimateValidDays);
+  const estimateMessageContext = {
+    companyName: currentUser.companyName,
+    customerName: estimate.customerName,
+    estimateHalfTotal: formatMoney(paymentAmount),
+    estimateNumber,
+    estimateTotal: formatMoney(estimate.estimatedTotal),
+    jobTitle: estimate.jobTitle,
+    serviceLocation: estimate.serviceLocation,
+    validThrough: format(validThrough, "MMM d, yyyy"),
+  };
+  const estimateMessage = currentUser.estimateMessageEnabled
+    ? renderDocumentMessage(currentUser.estimateMessageText, estimateMessageContext)
+    : "";
+  const estimateMessageLines = getDocumentMessageLineItems(estimateMessage);
+  const estimateMessageAlign = normalizeDocumentMessageAlign(currentUser.estimateMessageAlign);
   const googleMailAccount = await prisma.googleMailAccount.findUnique({
     where: {
       userId: currentUser.id,
@@ -229,6 +253,9 @@ export default async function Page({
             customerEmail={estimate.customerEmail}
             customerName={estimate.customerName}
             estimateId={estimate.id}
+            estimateMessageAlign={estimateMessageAlign}
+            estimateMessageEnabled={currentUser.estimateMessageEnabled}
+            estimateMessageText={currentUser.estimateMessageText}
             estimateNumber={estimateNumber}
             estimatedTotal={formatMoney(estimate.estimatedTotal)}
             gmailConnected={Boolean(googleMailAccount)}
@@ -469,7 +496,7 @@ export default async function Page({
               </div>
               <div className="flex items-center justify-between gap-6">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-medium">${subtotal.toFixed(2)}</span>
+                <span className="font-medium">{formatMoney(subtotal)}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
                 <span className="text-muted-foreground">
@@ -491,26 +518,20 @@ export default async function Page({
             </div>
           </section>
 
-          <section className="grid gap-2 rounded-md border bg-muted/20 p-3 text-xs print:border-neutral-300 print:bg-neutral-50">
-            <div className="font-semibold">Payment Schedule</div>
-            <div className="grid gap-1">
-              <div className="flex items-center justify-between gap-6">
-                <span>1st payment due before work begins (half of estimate amount)</span>
-                <span className="font-medium">{`$${paymentAmount.toFixed(2)}`}</span>
-              </div>
-              <div className="flex items-center justify-between gap-6">
-                <span>2nd payment due when the job is completed</span>
-                <span className="font-medium">{`$${paymentAmount.toFixed(2)}`}</span>
-              </div>
-            </div>
-            <Separator />
-            <p>
-              Any additional work or materials not included in this estimate will be reviewed with the customer and
-              billed as an extra charge.
-            </p>
-            <p className="font-medium">Please make all checks payable to: {currentUser.companyName}</p>
-            <p className="font-semibold">Thank you for your business!</p>
-          </section>
+          {estimateMessageLines.length ? (
+            <section
+              className={`grid gap-2 rounded-md border bg-muted/20 p-3 text-xs print:border-neutral-300 print:bg-neutral-50 ${getDocumentMessageAlignClass(estimateMessageAlign)}`}
+            >
+              {estimateMessageLines.map((item, index) => (
+                <p
+                  key={item.id}
+                  className={index === 0 || index === estimateMessageLines.length - 1 ? "font-semibold" : undefined}
+                >
+                  {item.line}
+                </p>
+              ))}
+            </section>
+          ) : null}
         </article>
       </div>
     </div>

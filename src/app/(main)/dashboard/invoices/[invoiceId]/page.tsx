@@ -12,6 +12,12 @@ import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { formatDateOnly } from "@/lib/date-only";
+import {
+  getDocumentMessageAlignClass,
+  getDocumentMessageLineItems,
+  normalizeDocumentMessageAlign,
+  renderDocumentMessage,
+} from "@/lib/document-messages";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { formatPhoneNumber } from "@/lib/phone";
@@ -57,12 +63,15 @@ function parseMaterials(value: string): InvoiceMaterial[] {
   }
 }
 
-function formatMoney(value: { toString: () => string }) {
-  return `$${Number(value.toString()).toFixed(2)}`;
+function formatMoney(value: { toString: () => string } | string | number) {
+  return `$${Number(value.toString()).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
 }
 
 function formatOptionalMoney(value?: string) {
-  return value ? `$${Number(value).toFixed(2)}` : "-";
+  return value ? formatMoney(value) : "-";
 }
 
 function formatNegativeOptionalMoney(value?: string) {
@@ -225,6 +234,22 @@ export default async function Page({
   const companyAddress = currentUser.companyAddress?.trim();
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
   const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);
+  const invoiceMessageContext = {
+    amountPaid: formatMoney(invoice.amountPaid),
+    balanceDue: formatMoney(invoice.balanceDue),
+    companyName: currentUser.companyName,
+    customerName: invoice.customerName,
+    dueDate: format(dueDate, "MMM d, yyyy"),
+    finalCost: formatMoney(invoice.finalCost),
+    invoiceNumber,
+    jobTitle: invoice.jobTitle,
+    serviceLocation: invoice.serviceLocation,
+  };
+  const invoiceMessage = currentUser.invoiceMessageEnabled
+    ? renderDocumentMessage(currentUser.invoiceMessageText, invoiceMessageContext)
+    : "";
+  const invoiceMessageLines = getDocumentMessageLineItems(invoiceMessage);
+  const invoiceMessageAlign = normalizeDocumentMessageAlign(currentUser.invoiceMessageAlign);
   const googleMailAccount = await prisma.googleMailAccount.findUnique({
     where: {
       userId: currentUser.id,
@@ -309,6 +334,9 @@ export default async function Page({
             gmailConnected={Boolean(googleMailAccount)}
             gmailSenderEmail={googleMailAccount?.email ?? null}
             invoiceId={invoice.id}
+            invoiceMessageAlign={invoiceMessageAlign}
+            invoiceMessageEnabled={currentUser.invoiceMessageEnabled}
+            invoiceMessageText={currentUser.invoiceMessageText}
             invoiceNumber={invoiceNumber}
             notice={gmailNotice}
             returnTo={currentHref}
@@ -633,7 +661,7 @@ export default async function Page({
               {returnMaterials.length ? (
                 <div className="flex items-center justify-between gap-6">
                   <span className="text-muted-foreground">Minus returns</span>
-                  <span className="font-medium">-${returnTotal.toFixed(2)}</span>
+                  <span className="font-medium">-{formatMoney(returnTotal)}</span>
                 </div>
               ) : null}
               <div className="flex items-center justify-between gap-6">
@@ -642,7 +670,7 @@ export default async function Page({
               </div>
               <div className="flex items-center justify-between gap-6">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-medium">${subtotal.toFixed(2)}</span>
+                <span className="font-medium">{formatMoney(subtotal)}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
                 <span>
@@ -729,6 +757,21 @@ export default async function Page({
               </div>
             </div>
           </section>
+
+          {invoiceMessageLines.length ? (
+            <section
+              className={`grid gap-2 rounded-md border bg-muted/20 p-3 text-xs print:border-neutral-300 print:bg-neutral-50 ${getDocumentMessageAlignClass(invoiceMessageAlign)}`}
+            >
+              {invoiceMessageLines.map((item, index) => (
+                <p
+                  key={item.id}
+                  className={index === 0 || index === invoiceMessageLines.length - 1 ? "font-semibold" : undefined}
+                >
+                  {item.line}
+                </p>
+              ))}
+            </section>
+          ) : null}
         </article>
       </div>
     </div>
