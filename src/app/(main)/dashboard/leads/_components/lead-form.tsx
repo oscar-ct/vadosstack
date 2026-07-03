@@ -104,7 +104,7 @@ export function LeadForm({
                 maxLength={14}
                 value={formatPhoneNumber(phoneDigits)}
                 onChange={(event) => setPhoneDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
-                placeholder="555-555-1234"
+                placeholder="(555) 555-1234"
               />
             </div>
             <div className="grid gap-2">

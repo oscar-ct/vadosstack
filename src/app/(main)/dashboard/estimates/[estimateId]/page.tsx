@@ -206,10 +206,10 @@ export default async function Page({
     context: {
       companyEmail,
       companyName: currentUser.companyName,
-      companyPhone: currentUser.companyPhone,
+      companyPhone: currentUser.companyPhone ? formatPhoneNumber(currentUser.companyPhone) : undefined,
       customerEmail: estimate.customerEmail,
       customerName: estimate.customerName,
-      customerPhone: estimate.customerPhone,
+      customerPhone: estimate.customerPhone ? formatPhoneNumber(estimate.customerPhone) : undefined,
       estimatedTotal: formatMoney(estimate.estimatedTotal),
       estimateNumber,
       jobTitle: estimate.jobTitle,
