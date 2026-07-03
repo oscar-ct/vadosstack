@@ -131,11 +131,11 @@ export function InvoiceActions({
 }) {
   const router = useRouter();
   const [result, setResult] = React.useState<EmailDeliveryResultValue | null>(null);
-  const defaultSubject = React.useMemo(
+  const fallbackSubject = React.useMemo(
     () => `Invoice ${invoiceNumber} from ${companyName}`,
     [companyName, invoiceNumber],
   );
-  const defaultMessage = React.useMemo(
+  const fallbackMessage = React.useMemo(
     () =>
       [
         `Hi ${customerName?.trim() || "there"},`,
@@ -151,7 +151,7 @@ export function InvoiceActions({
       ].join("\n"),
     [balanceDue, companyName, customerName, dueDate, invoiceNumber],
   );
-  const defaultHtml = React.useMemo(
+  const fallbackHtml = React.useMemo(
     () =>
       createInvoiceMessageHtml({
         balanceDue,
@@ -162,6 +162,10 @@ export function InvoiceActions({
       }),
     [balanceDue, companyName, customerName, dueDate, invoiceNumber],
   );
+  const defaultTemplate = templates?.[0];
+  const defaultSubject = defaultTemplate?.subject ?? fallbackSubject;
+  const defaultMessage = defaultTemplate?.bodyText ?? fallbackMessage;
+  const defaultHtml = defaultTemplate?.bodyHtml ?? fallbackHtml;
 
   React.useEffect(() => {
     if (!notice?.message) {

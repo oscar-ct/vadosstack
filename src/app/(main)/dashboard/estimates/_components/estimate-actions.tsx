@@ -111,11 +111,11 @@ export function EstimateActions({
 }) {
   const router = useRouter();
   const [result, setResult] = React.useState<EmailDeliveryResultValue | null>(null);
-  const defaultSubject = React.useMemo(
+  const fallbackSubject = React.useMemo(
     () => `Estimate ${estimateNumber} from ${companyName}`,
     [companyName, estimateNumber],
   );
-  const defaultMessage = React.useMemo(
+  const fallbackMessage = React.useMemo(
     () =>
       [
         `Hi ${customerName?.trim() || "there"},`,
@@ -131,7 +131,7 @@ export function EstimateActions({
       ].join("\n"),
     [companyName, customerName, estimateNumber, estimatedTotal, validThrough],
   );
-  const defaultHtml = React.useMemo(
+  const fallbackHtml = React.useMemo(
     () =>
       createEstimateMessageHtml({
         companyName,
@@ -142,6 +142,10 @@ export function EstimateActions({
       }),
     [companyName, customerName, estimateNumber, estimatedTotal, validThrough],
   );
+  const defaultTemplate = templates?.[0];
+  const defaultSubject = defaultTemplate?.subject ?? fallbackSubject;
+  const defaultMessage = defaultTemplate?.bodyText ?? fallbackMessage;
+  const defaultHtml = defaultTemplate?.bodyHtml ?? fallbackHtml;
 
   React.useEffect(() => {
     if (!notice?.message) {
