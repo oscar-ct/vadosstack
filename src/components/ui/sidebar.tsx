@@ -4,7 +4,7 @@ import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
 
-import { useIsMobile } from "@/hooks/use-mobile"
+import { isMobileViewport, useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +30,7 @@ const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+const SIDEBAR_MOBILE_ID = "mobile-sidebar"
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
@@ -50,6 +51,28 @@ function useSidebar() {
   }
 
   return context
+}
+
+function warnIfSidebarMayBeBlocked() {
+  if (process.env.NODE_ENV === "production" || typeof document === "undefined") {
+    return
+  }
+
+  const bodyPointerEvents = document.body.style.pointerEvents
+  const openModal = document.querySelector(
+    '[data-slot="sheet-content"][data-state="open"], [data-slot="dialog-content"][data-state="open"], [data-slot="alert-dialog-content"][data-state="open"]'
+  )
+  const closedOverlay = document.querySelector(
+    '[data-slot="sheet-overlay"][data-state="closed"], [data-slot="dialog-overlay"][data-state="closed"], [data-slot="alert-dialog-overlay"][data-state="closed"]'
+  )
+
+  if ((bodyPointerEvents === "none" && !openModal) || closedOverlay) {
+    console.warn("Sidebar trigger may be blocked by stale modal state.", {
+      bodyPointerEvents,
+      closedOverlay,
+      openModal,
+    })
+  }
 }
 
 function SidebarProvider({
@@ -89,8 +112,9 @@ function SidebarProvider({
 
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
-    return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open)
-  }, [isMobile, setOpen, setOpenMobile])
+    warnIfSidebarMayBeBlocked()
+    return isMobileViewport() ? setOpenMobile((open) => !open) : setOpen((open) => !open)
+  }, [setOpen, setOpenMobile])
 
   // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
@@ -182,6 +206,7 @@ function Sidebar({
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
         <SheetContent
+          id={SIDEBAR_MOBILE_ID}
           dir={dir}
           data-sidebar="sidebar"
           data-slot="sidebar"
@@ -255,7 +280,7 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { isMobile, open, openMobile, toggleSidebar } = useSidebar()
 
   return (
     <Button
@@ -263,9 +288,13 @@ function SidebarTrigger({
       data-slot="sidebar-trigger"
       variant="ghost"
       size="icon-sm"
+      type="button"
+      aria-controls={isMobile ? SIDEBAR_MOBILE_ID : undefined}
+      aria-expanded={isMobile ? openMobile : open}
       className={cn(className)}
       onClick={(event) => {
         onClick?.(event)
+        if (event.defaultPrevented) return
         toggleSidebar()
       }}
       {...props}
