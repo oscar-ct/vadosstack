@@ -153,7 +153,7 @@ export function PrintableEstimateButton({
       >
         <a href={`/dashboard/estimates/${estimate.printableEstimateId}`}>
           <NotebookText />
-          Final Estimate
+          View Estimate
         </a>
       </Button>
     );
@@ -172,8 +172,7 @@ export function PrintableEstimateButton({
         variant="outline"
         disabled={isPending}
       >
-        <NotebookText />
-        {isPending ? "Creating..." : "Finalize Estimate"}
+        {isPending ? "Creating..." : "Ready to Send"}
       </Button>
       {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
     </form>
