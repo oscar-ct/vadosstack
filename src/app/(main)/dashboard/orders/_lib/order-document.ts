@@ -65,6 +65,7 @@ export async function getOrderDocumentData(ownerId: string, orderId: string): Pr
     isPaid,
     items: order.items.map((item) => ({
       category: item.category ?? null,
+      id: item.id,
       lineTotal: money(item.lineTotal),
       product: item.product,
       quantity: item.quantity,

@@ -789,6 +789,7 @@ function OrderItems({ disabled, inventoryItems }: { disabled: boolean; inventory
                   index={index}
                   item={items[index]}
                   inventoryItems={inventoryItems}
+                  orderItems={items}
                   register={register}
                   removeDisabled={fields.length === 1}
                   setValue={setValue}
@@ -810,6 +811,7 @@ function SortableOrderItemRow({
   inventoryItems,
   item,
   onRemove,
+  orderItems,
   register,
   removeDisabled,
   setValue,
@@ -820,6 +822,7 @@ function SortableOrderItemRow({
   inventoryItems: InventoryItem[];
   item?: OrderLineItem;
   onRemove: () => void;
+  orderItems: OrderLineItem[];
   register: UseFormRegister<OrderFormValues>;
   removeDisabled: boolean;
   setValue: UseFormSetValue<OrderFormValues>;
@@ -878,6 +881,7 @@ function SortableOrderItemRow({
               index={index}
               inventoryItems={inventoryItems}
               item={item}
+              orderItems={orderItems}
               register={register}
               setValue={setValue}
             />
@@ -951,6 +955,7 @@ function InventoryProductPicker({
   index,
   inventoryItems,
   item,
+  orderItems,
   register,
   setValue,
 }: {
@@ -958,6 +963,7 @@ function InventoryProductPicker({
   index: number;
   inventoryItems: InventoryItem[];
   item?: OrderLineItem;
+  orderItems: OrderLineItem[];
   register: UseFormRegister<OrderFormValues>;
   setValue: UseFormSetValue<OrderFormValues>;
 }) {
@@ -1050,25 +1056,34 @@ function InventoryProductPicker({
               </CommandItem>
               {inventoryItems.map((inventoryItem) => {
                 const isOutOfStock = inventoryItem.stock <= 0;
+                const isAlreadyAdded = orderItems.some(
+                  (orderItem, orderItemIndex) =>
+                    orderItemIndex !== index && orderItem.inventoryItemId === inventoryItem.id,
+                );
+                const isUnavailable = isOutOfStock || isAlreadyAdded;
 
                 return (
                   <CommandItem
                     key={inventoryItem.id}
                     value={`${inventoryItem.sku} ${inventoryItem.product}`}
-                    disabled={isOutOfStock}
+                    disabled={isUnavailable}
                     onSelect={() => {
-                      if (isOutOfStock) return;
+                      if (isUnavailable) return;
                       selectInventoryItem(inventoryItem);
                     }}
                   >
                     <PackageSearch className="size-4 text-muted-foreground" />
                     <div className="grid min-w-0 flex-1 gap-0.5">
-                      <div className={cn("truncate font-medium", isOutOfStock && "text-muted-foreground")}>
+                      <div className={cn("truncate font-medium", isUnavailable && "text-muted-foreground")}>
                         {inventoryItem.product}
                       </div>
                       <div className="truncate text-muted-foreground text-xs">
                         {inventoryItem.sku} · {inventoryItem.category} ·{" "}
-                        {isOutOfStock ? "Out of stock" : `${inventoryItem.stock} in stock`}
+                        {isAlreadyAdded
+                          ? "Already added"
+                          : isOutOfStock
+                            ? "Out of stock"
+                            : `${inventoryItem.stock} in stock`}
                       </div>
                     </div>
                     <span className="font-medium text-xs tabular-nums">

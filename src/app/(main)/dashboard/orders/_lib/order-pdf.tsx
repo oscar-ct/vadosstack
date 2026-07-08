@@ -2,6 +2,7 @@ import { Document, Image, Page, renderToBuffer, StyleSheet, Text, View } from "@
 
 export type OrderPdfLineItem = {
   category: string | null;
+  id: string;
   lineTotal: string;
   product: string;
   quantity: number;
@@ -263,7 +264,7 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
             </View>
 
             {page.items.map((item) => (
-              <View key={`${page.pageNumber}-${item.product}-${item.sku ?? ""}`} style={styles.item}>
+              <View key={item.id} style={styles.item}>
                 <View style={styles.itemIcon}>
                   <Text style={styles.small}>□</Text>
                 </View>

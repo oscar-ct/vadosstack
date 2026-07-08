@@ -88,6 +88,17 @@ function getOrderValidationError(order: OrderFormValues) {
   }
   if (!order.items.length) return "Add at least one item.";
 
+  const selectedInventoryItemIds = order.items
+    .map((item) => item.inventoryItemId)
+    .filter((inventoryItemId): inventoryItemId is string => Boolean(inventoryItemId));
+  const hasDuplicateInventoryItem = selectedInventoryItemIds.some(
+    (inventoryItemId, index) => selectedInventoryItemIds.indexOf(inventoryItemId) !== index,
+  );
+
+  if (hasDuplicateInventoryItem) {
+    return "Inventory products can only be added once. Increase the quantity instead.";
+  }
+
   const invalidItemIndex = order.items.findIndex((item) => {
     const hasProduct = Boolean(item.product?.trim());
     const hasQuantity = Number.isFinite(item.quantity) && item.quantity > 0;
