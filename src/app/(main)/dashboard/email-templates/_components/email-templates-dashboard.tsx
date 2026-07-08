@@ -4,7 +4,17 @@ import * as React from "react";
 
 import Link from "next/link";
 
-import { ArrowRight, Mail, MailPlus, MessagesSquare, NotebookText, ReceiptText, Search, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  Mail,
+  MailPlus,
+  MessagesSquare,
+  NotebookText,
+  PackageCheck,
+  ReceiptText,
+  Search,
+  Sparkles,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +31,7 @@ function getScopeLabel(scope: EmailTemplateRow["scope"]) {
   if (scope === "invoice") return "Invoice";
   if (scope === "estimate") return "Estimate";
   if (scope === "lead") return "Lead";
+  if (scope === "order") return "Order";
   return "General";
 }
 
@@ -30,9 +41,11 @@ function ScopeIcon({ scope }: { scope: EmailTemplateRow["scope"] }) {
       ? ReceiptText
       : scope === "estimate"
         ? NotebookText
-        : scope === "lead"
-          ? MessagesSquare
-          : MailPlus;
+        : scope === "order"
+          ? PackageCheck
+          : scope === "lead"
+            ? MessagesSquare
+            : MailPlus;
 
   return <Icon className="size-3" />;
 }
@@ -50,6 +63,7 @@ export function EmailTemplatesDashboard({ templates }: { templates: EmailTemplat
   const generalCount = templates.filter((template) => template.scope === "general").length;
   const invoiceCount = templates.filter((template) => template.scope === "invoice").length;
   const leadCount = templates.filter((template) => template.scope === "lead").length;
+  const orderCount = templates.filter((template) => template.scope === "order").length;
 
   return (
     <div className="grid gap-4">
@@ -61,6 +75,7 @@ export function EmailTemplatesDashboard({ templates }: { templates: EmailTemplat
             { count: leadCount, label: "Leads", value: "lead" as const },
             { count: estimateCount, label: "Estimates", value: "estimate" as const },
             { count: invoiceCount, label: "Invoices", value: "invoice" as const },
+            { count: orderCount, label: "Orders", value: "order" as const },
           ].map((scope) => (
             <Button
               key={scope.value}

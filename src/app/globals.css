@@ -157,6 +157,10 @@ These serve as the fallback; there is no separate default.css file. */
   }
 }
 
+[data-print-root] {
+  display: none;
+}
+
 @media print {
   @page {
     size: letter;
@@ -172,6 +176,49 @@ These serve as the fallback; there is no separate default.css file. */
   [data-slot="sidebar-container"],
   [data-slot="sidebar-trigger"] {
     display: none !important;
+  }
+
+  body:has(> [data-print-root]) {
+    width: 8.5in !important;
+    min-height: 11in !important;
+    height: auto !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  body:has(> [data-print-root]) > *:not([data-print-root]) {
+    display: none !important;
+  }
+
+  [data-print-root] {
+    display: grid !important;
+    width: 8.5in !important;
+    min-height: 11in !important;
+    height: auto !important;
+    justify-items: center !important;
+    align-content: start !important;
+    gap: 0.35in !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+    padding-top: 0.35in !important;
+  }
+
+  [data-print-root] [data-print-paper] {
+    break-after: page;
+    box-shadow: none !important;
+    page-break-after: always;
+  }
+
+  [data-print-root] [data-print-paper]:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  [data-print-root] [data-print-paper],
+  [data-print-root] [data-print-paper] * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }
 

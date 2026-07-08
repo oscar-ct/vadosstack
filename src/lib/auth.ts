@@ -27,6 +27,7 @@ export type CurrentUser = {
   invoiceMessageEnabled: boolean;
   invoiceMessageAlign: string;
   invoiceMessageText: string;
+  orderMessageText: string;
   admin: boolean;
 };
 
@@ -60,6 +61,7 @@ function toCurrentUser(user: {
   invoiceMessageEnabled: boolean;
   invoiceMessageAlign: string;
   invoiceMessageText: string;
+  orderMessageText: string;
   admin: boolean;
 }): CurrentUser {
   return {
@@ -78,6 +80,7 @@ function toCurrentUser(user: {
     invoiceMessageEnabled: user.invoiceMessageEnabled,
     invoiceMessageAlign: user.invoiceMessageAlign,
     invoiceMessageText: user.invoiceMessageText,
+    orderMessageText: user.orderMessageText,
     admin: user.admin,
   };
 }
@@ -121,6 +124,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
           invoiceMessageEnabled: true,
           invoiceMessageAlign: true,
           invoiceMessageText: true,
+          orderMessageText: true,
           admin: true,
         },
       },

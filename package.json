@@ -31,7 +31,9 @@
     "setup:estimates": "ts-node -P tsconfig.scripts.json src/scripts/setup-estimates.ts",
     "setup:time-tracking": "ts-node -P tsconfig.scripts.json src/scripts/setup-time-tracking.ts",
     "setup:estimate-records": "ts-node -P tsconfig.scripts.json src/scripts/setup-estimate-records.ts",
-    "setup:services": "ts-node -P tsconfig.scripts.json src/scripts/setup-services.ts"
+    "setup:services": "ts-node -P tsconfig.scripts.json src/scripts/setup-services.ts",
+    "setup:ecommerce": "ts-node -P tsconfig.scripts.json src/scripts/setup-ecommerce.ts",
+    "seed:ecommerce": "ts-node -P tsconfig.scripts.json src/scripts/seed-ecommerce.ts"
   },
   "lint-staged": {
     "*.{js,ts,jsx,tsx}": ["biome check --write --no-errors-on-unmatched"]

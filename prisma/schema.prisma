@@ -23,6 +23,7 @@ model Customer {
   jobs            Job[]
   estimateRecords EstimateRecord[]
   leads           Lead[]
+  orders          Order[]
   tasks           Task[]
 
   @@unique([id, ownerId])
@@ -99,46 +100,54 @@ model JobPayment {
 }
 
 model User {
-  id                     String               @id @default(cuid())
-  name                   String?
-  companyName            String
-  companyAddress         String?
-  companyEmail           String?
-  companyPhone           String?
-  companyLogoDataUrl     String?
-  companyLogoKey         String?
-  companyLogoType        String?
-  estimateValidDays      Int                  @default(15)
-  estimateMessageEnabled Boolean              @default(true)
-  estimateMessageAlign   String               @default("left")
-  estimateMessageText    String               @default("Payment Schedule\n\n1st payment due before work begins: {{estimateHalfTotal}}\n2nd payment due when the job is completed: {{estimateHalfTotal}}\n\nAny additional work or materials not included in this estimate will be reviewed with the customer and billed as an extra charge.\n\nPlease make all checks payable to: {{companyName}}\nThank you for your business!")
-  invoiceDueDays         Int                  @default(15)
-  invoiceMessageEnabled  Boolean              @default(false)
-  invoiceMessageAlign    String               @default("left")
-  invoiceMessageText     String               @default("Please make all checks payable to: {{companyName}}\n\nBalance due: {{balanceDue}}\nDue date: {{dueDate}}\n\nThank you for your business!")
-  authProviders          String[]             @default(["email"])
-  email                  String               @unique
-  passwordHash           String
-  admin                  Boolean              @default(false)
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
-  customers              Customer[]
-  leads                  Lead[]
-  jobs                   Job[]
-  jobPayments            JobPayment[]
-  invoices               Invoice[]
-  estimates              Estimate[]
-  estimateRecords        EstimateRecord[]
-  emailRecords           EmailRecord[]
-  emailTemplates         EmailTemplate[]
-  serviceTemplates       ServiceTemplate[]
-  employees              Employee[]
-  timeEntries            TimeEntry[]
-  timeEntryRequests      TimeEntryRequest[]
-  sessions               Session[]
-  passwordResetTokens    PasswordResetToken[]
-  googleMailAccount      GoogleMailAccount?
-  tasks                  Task[]
+  id                      String                   @id @default(cuid())
+  name                    String?
+  companyName             String
+  companyAddress          String?
+  companyEmail            String?
+  companyPhone            String?
+  companyLogoDataUrl      String?
+  companyLogoKey          String?
+  companyLogoType         String?
+  estimateValidDays       Int                      @default(15)
+  estimateMessageEnabled  Boolean                  @default(true)
+  estimateMessageAlign    String                   @default("left")
+  estimateMessageText     String                   @default("Payment Schedule\n\n1st payment due before work begins: {{estimateHalfTotal}}\n2nd payment due when the job is completed: {{estimateHalfTotal}}\n\nAny additional work or materials not included in this estimate will be reviewed with the customer and billed as an extra charge.\n\nPlease make all checks payable to: {{companyName}}\nThank you for your business!")
+  invoiceDueDays          Int                      @default(15)
+  invoiceMessageEnabled   Boolean                  @default(false)
+  invoiceMessageAlign     String                   @default("left")
+  invoiceMessageText      String                   @default("Please make all checks payable to: {{companyName}}\n\nBalance due: {{balanceDue}}\nDue date: {{dueDate}}\n\nThank you for your business!")
+  orderMessageText        String                   @default("Thank you for your order. We appreciate your business and will keep you updated if anything changes.")
+  authProviders           String[]                 @default(["email"])
+  email                   String                   @unique
+  passwordHash            String
+  admin                   Boolean                  @default(false)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  customers               Customer[]
+  leads                   Lead[]
+  jobs                    Job[]
+  jobPayments             JobPayment[]
+  invoices                Invoice[]
+  estimates               Estimate[]
+  estimateRecords         EstimateRecord[]
+  emailRecords            EmailRecord[]
+  emailTemplates          EmailTemplate[]
+  serviceTemplates        ServiceTemplate[]
+  employees               Employee[]
+  timeEntries             TimeEntry[]
+  timeEntryRequests       TimeEntryRequest[]
+  sessions                Session[]
+  passwordResetTokens     PasswordResetToken[]
+  googleMailAccount       GoogleMailAccount?
+  tasks                   Task[]
+  inventoryCategories     InventoryCategory[]
+  inventorySettings       InventorySettings?
+  inventoryLocations      InventoryLocation[]
+  inventoryItems          InventoryItem[]
+  inventoryStockMovements InventoryStockMovement[]
+  orders                  Order[]
+  orderItems              OrderItem[]
 
   @@map("users")
 }
@@ -339,6 +348,187 @@ model ServiceTemplate {
   @@index([ownerId])
   @@index([category])
   @@map("service_templates")
+}
+
+model InventoryCategory {
+  id        String          @id @default(cuid())
+  ownerId   String
+  name      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  owner     User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  items     InventoryItem[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, name])
+  @@index([ownerId])
+  @@map("inventory_categories")
+}
+
+model InventoryLocation {
+  id        String          @id @default(cuid())
+  ownerId   String
+  name      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  owner     User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  items     InventoryItem[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, name])
+  @@index([ownerId])
+  @@map("inventory_locations")
+}
+
+model InventorySettings {
+  id                     String   @id @default(cuid())
+  ownerId                String   @unique
+  lowStockThreshold      Int      @default(25)
+  criticalStockThreshold Int      @default(8)
+  defaultReorderPoint    Int      @default(20)
+  defaultMaxStock        Int      @default(100)
+  autoRestockAlerts      Boolean  @default(true)
+  includeOutOfStock      Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  owner                  User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("inventory_settings")
+}
+
+model InventoryItem {
+  id             String                   @id @default(cuid())
+  ownerId        String
+  categoryId     String?
+  locationId     String?
+  sku            String
+  product        String
+  description    String?
+  stock          Int                      @default(0)
+  reorderPoint   Int                      @default(0)
+  maxStock       Int                      @default(0)
+  unit           String                   @default("each")
+  cost           Decimal                  @default(0)
+  unitPrice      Decimal                  @default(0)
+  taxable        Boolean                  @default(true)
+  taxRate        Decimal                  @default(0)
+  itemStatus     String                   @default("Active")
+  barcode        String?
+  vendor         String?
+  notes          String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  owner          User                     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  category       InventoryCategory?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  location       InventoryLocation?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  orderItems     OrderItem[]
+  stockMovements InventoryStockMovement[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, sku])
+  @@index([ownerId])
+  @@index([categoryId])
+  @@index([locationId])
+  @@index([itemStatus])
+  @@map("inventory_items")
+}
+
+model Order {
+  id                 String                   @id @default(cuid())
+  ownerId            String
+  customerId         String?
+  orderNumber        String
+  paymentStatus      String                   @default("Paid")
+  fulfillmentStatus  String                   @default("Unfulfilled")
+  orderDate          DateTime                 @default(now())
+  estimatedDelivery  DateTime?
+  shippingService    String?
+  trackingNumber     String?
+  paymentMethod      String?
+  paymentReference   String?
+  customerNotes      String?
+  internalNotes      String?
+  customerName       String?
+  customerEmail      String?
+  customerPhone      String?
+  shippingLine1      String?
+  shippingLine2      String?
+  shippingCity       String?
+  shippingState      String?
+  shippingPostalCode String?
+  subtotal           Decimal                  @default(0)
+  shippingAmount     Decimal                  @default(0)
+  taxRate            Decimal                  @default(0)
+  taxAmount          Decimal                  @default(0)
+  discountAmount     Decimal                  @default(0)
+  total              Decimal                  @default(0)
+  footerMessage      String                   @default("Thank you for your order. We appreciate your business and will keep you updated if anything changes.")
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  owner              User                     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customer           Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items              OrderItem[]
+  stockMovements     InventoryStockMovement[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, orderNumber])
+  @@index([ownerId])
+  @@index([customerId])
+  @@index([paymentStatus])
+  @@index([fulfillmentStatus])
+  @@index([orderDate])
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String                   @id @default(cuid())
+  ownerId         String
+  orderId         String
+  inventoryItemId String?
+  sku             String?
+  product         String
+  category        String?
+  quantity        Int                      @default(1)
+  unitPrice       Decimal                  @default(0)
+  lineTotal       Decimal                  @default(0)
+  taxable         Boolean                  @default(true)
+  taxRate         Decimal                  @default(0)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  owner           User                     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  order           Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem?           @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  stockMovements  InventoryStockMovement[]
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([orderId])
+  @@index([inventoryItemId])
+  @@map("order_items")
+}
+
+model InventoryStockMovement {
+  id              String        @id @default(cuid())
+  ownerId         String
+  inventoryItemId String
+  orderId         String?
+  orderItemId     String?
+  quantityChange  Int
+  reason          String
+  notes           String?
+  createdAt       DateTime      @default(now())
+  owner           User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  order           Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderItem       OrderItem?    @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([inventoryItemId])
+  @@index([orderId])
+  @@index([orderItemId])
+  @@index([createdAt])
+  @@map("inventory_stock_movements")
 }
 
 model EmailTemplate {

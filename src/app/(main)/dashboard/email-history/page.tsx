@@ -89,7 +89,10 @@ export default async function Page() {
   const estimateDocumentIds = records
     .filter((record) => record.documentType === "estimate" && record.documentId)
     .map((record) => record.documentId as string);
-  const [invoiceCustomerLinks, estimateCustomerLinks] = await Promise.all([
+  const orderDocumentIds = records
+    .filter((record) => record.documentType === "order" && record.documentId)
+    .map((record) => record.documentId as string);
+  const [invoiceCustomerLinks, estimateCustomerLinks, orderCustomerLinks] = await Promise.all([
     invoiceDocumentIds.length
       ? prisma.invoice.findMany({
           where: {
@@ -118,6 +121,20 @@ export default async function Page() {
           },
         })
       : [],
+    orderDocumentIds.length
+      ? prisma.order.findMany({
+          where: {
+            ownerId: currentUser.id,
+            id: {
+              in: orderDocumentIds,
+            },
+          },
+          select: {
+            customerId: true,
+            id: true,
+          },
+        })
+      : [],
   ]);
   const invoiceCustomerIdByDocumentId = new Map(
     invoiceCustomerLinks.map((invoice) => [invoice.id, invoice.customerId]),
@@ -125,11 +142,13 @@ export default async function Page() {
   const estimateCustomerIdByDocumentId = new Map(
     estimateCustomerLinks.map((estimate) => [estimate.id, estimate.customerId]),
   );
+  const orderCustomerIdByDocumentId = new Map(orderCustomerLinks.map((order) => [order.id, order.customerId]));
 
   function getRecordCustomerId(record: (typeof records)[number]) {
     if (!record.documentId) return undefined;
     if (record.documentType === "invoice") return invoiceCustomerIdByDocumentId.get(record.documentId) ?? undefined;
     if (record.documentType === "estimate") return estimateCustomerIdByDocumentId.get(record.documentId) ?? undefined;
+    if (record.documentType === "order") return orderCustomerIdByDocumentId.get(record.documentId) ?? undefined;
     return undefined;
   }
 
@@ -167,9 +186,7 @@ export default async function Page() {
               <MailCheck className="size-4 text-muted-foreground" />
             </div>
           </CardTitle>
-          <CardDescription>
-            Recent estimate and invoice email attempts, including successful sends and errors.
-          </CardDescription>
+          <CardDescription>Recent document email attempts, including successful sends and errors.</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           {records.length ? (
@@ -296,7 +313,7 @@ export default async function Page() {
               <MailCheck className="size-10 text-muted-foreground" />
               <h2 className="mt-3 font-semibold text-base">No emailed records yet</h2>
               <p className="mt-1 max-w-md text-muted-foreground text-sm">
-                Sent estimates and invoices will appear here with the delivery result, recipient, and time.
+                Sent estimates, invoices, and orders will appear here with the delivery result, recipient, and time.
               </p>
             </div>
           )}

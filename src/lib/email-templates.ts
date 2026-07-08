@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export type EmailTemplateScope = "estimate" | "general" | "invoice" | "lead";
+export type EmailTemplateScope = "estimate" | "general" | "invoice" | "lead" | "order";
 
 export type DocumentEmailTemplate = {
   bodyHtml: string;
@@ -134,6 +134,32 @@ const defaultDocumentEmailTemplates: Record<
         '<p><span style="color:#be123c;font-size:22px"><strong>{{balanceDue}}</strong></span><br><span style="color:#52525b">Balance due</span></p>',
         "<p><strong>Due:</strong> {{dueDate}}</p>",
         "<p>Please review the attached invoice at your convenience. If you have any questions, reply to this email and we will be happy to help.</p>",
+        "<p>Thank you,<br><strong>{{companyName}}</strong></p>",
+      ].join(""),
+    },
+  ],
+  order: [
+    {
+      title: "Default order",
+      subject: "{{orderTitle}} {{orderNumber}} from {{companyName}}",
+      bodyText: [
+        "Hi {{customerName}},",
+        "",
+        "Your {{orderTitleLower}} {{orderNumber}} from {{companyName}} is attached as a PDF.",
+        "Order total: {{orderTotal}}",
+        "Order date: {{orderDate}}",
+        "",
+        "Please review the attached document at your convenience. If you have any questions, reply to this email and we will be happy to help.",
+        "",
+        "Thank you,",
+        "{{companyName}}",
+      ].join("\n"),
+      bodyHtml: [
+        "<p>Hi {{customerName}},</p>",
+        "<p>Your {{orderTitleLower}} <strong>{{orderNumber}}</strong> from {{companyName}} is attached as a PDF.</p>",
+        '<p><span style="color:#18181b;font-size:22px"><strong>{{orderTotal}}</strong></span><br><span style="color:#52525b">Order total</span></p>',
+        "<p><strong>Order date:</strong> {{orderDate}}</p>",
+        "<p>Please review the attached document at your convenience. If you have any questions, reply to this email and we will be happy to help.</p>",
         "<p>Thank you,<br><strong>{{companyName}}</strong></p>",
       ].join(""),
     },

@@ -8,9 +8,11 @@ import {
   MailPlus,
   MessagesSquare,
   NotebookText,
+  Package,
   PackageCheck,
   ReceiptText,
   ShieldCheck,
+  ShoppingCart,
   Timer,
   UserRoundCog,
   Users,
@@ -128,6 +130,22 @@ export const sidebarItems: NavGroup[] = [
   },
   {
     id: 5,
+    label: "E-commerce",
+    items: [
+      {
+        title: "Orders",
+        url: "/dashboard/orders",
+        icon: ShoppingCart,
+      },
+      {
+        title: "Inventory",
+        url: "/dashboard/inventory",
+        icon: Package,
+      },
+    ],
+  },
+  {
+    id: 6,
     label: "Email",
     items: [
       {
@@ -144,7 +162,7 @@ export const sidebarItems: NavGroup[] = [
     ],
   },
   {
-    id: 6,
+    id: 7,
     label: "Admin",
     items: [
       {

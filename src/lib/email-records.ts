@@ -6,7 +6,7 @@ type EmailRecordStatus = "success" | "error";
 
 type LogEmailRecordInput = {
   ownerId: string;
-  documentType: "estimate" | "general" | "invoice" | "lead";
+  documentType: "estimate" | "general" | "invoice" | "lead" | "order";
   documentId?: string | null;
   documentNumber?: string;
   documentTotal?: { toString: () => string } | number | string | null;
