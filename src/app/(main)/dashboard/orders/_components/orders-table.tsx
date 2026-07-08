@@ -88,22 +88,17 @@ const orderExportColumns: CsvColumn<OrderTableItem>[] = [
   { header: "Fulfillment status", value: (order) => order.fulfillmentStatus },
   { header: "Items", value: (order) => order.itemCount },
   { header: "Total", value: (order) => order.total.toFixed(2) },
-  { header: "Date", value: (order) => order.orderedAt },
+  { header: "Date", value: (order) => formatOrderDate(order.orderedAt) },
 ];
 
 function formatOrderDate(value: string) {
   const date = new Date(value);
-  const time = new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-  const calendarDate = new Intl.DateTimeFormat("en-GB", {
+
+  return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(date);
-
-  return `${time}, ${calendarDate}`;
 }
 
 function getPaymentStatusClassName(status: OrderPaymentStatus) {
@@ -220,31 +215,30 @@ function OrderActions({ order }: { order: OrderTableItem }) {
 function MobileOrderCard({ onOpen, order }: { onOpen: () => void; order: OrderTableItem }) {
   return (
     <div className="relative overflow-hidden rounded-lg border bg-card">
-      <button type="button" className="grid w-full gap-3 p-4 pr-14 text-left hover:bg-muted/35" onClick={onOpen}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="min-w-0">
-              <div className="font-medium text-sm">{order.orderNumber}</div>
-              <div className="text-muted-foreground text-xs">
-                {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
-              </div>
+      <button type="button" className="grid w-full gap-3 p-4 text-left hover:bg-muted/35" onClick={onOpen}>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pr-10">
+          <div className="min-w-0">
+            <div className="font-medium text-sm">{order.orderNumber}</div>
+            <div className="text-muted-foreground text-xs">
+              {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
             </div>
           </div>
+          <div className="grid gap-0.5 text-right">
+            <div className="text-muted-foreground text-xs">Total</div>
+            <div className="font-medium text-sm tabular-nums">{formatCurrency(order.total)}</div>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 text-sm">
           <div>
             <div className="text-muted-foreground text-xs">Customer</div>
-            <div>{order.customerName}</div>
+            <div className="truncate">{order.customerName}</div>
           </div>
-          <div>
-            <div className="text-muted-foreground text-xs">Total</div>
-            <div className="tabular-nums">{formatCurrency(order.total)}</div>
-          </div>
-          <div className="col-span-2 flex flex-wrap gap-2">
+          <div className="text-right text-muted-foreground text-xs">{formatOrderDate(order.orderedAt)}</div>
+          <div className="flex flex-wrap gap-2">
             <OrderStatusBadge status={order.paymentStatus} type="payment" />
             <OrderStatusBadge status={order.fulfillmentStatus} type="fulfillment" />
           </div>
-          <div className="col-span-2 text-muted-foreground">{formatOrderDate(order.orderedAt)}</div>
+          <div className="self-end text-right text-muted-foreground text-sm">Open order</div>
         </div>
       </button>
       <div className="absolute top-3 right-3">

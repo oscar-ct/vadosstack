@@ -92,7 +92,7 @@ export async function saveInventoryItemAction(
 
   try {
     const product = requiredString(formData.get("product"), "Product name");
-    const sku = requiredString(formData.get("sku"), "SKU");
+    const sku = optionalString(formData.get("sku"));
     const categoryName = requiredString(formData.get("category"), "Category");
     const locationName = requiredString(formData.get("location"), "Location");
     const category = categoryName === "Uncategorized" ? null : await getOrCreateCategory(currentUser.id, categoryName);

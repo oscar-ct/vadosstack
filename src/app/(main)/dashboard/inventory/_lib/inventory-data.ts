@@ -36,7 +36,7 @@ export async function getInventoryItems(ownerId: string): Promise<InventoryItem[
 
   return items.map((item) => ({
     id: item.id,
-    sku: item.sku,
+    sku: item.sku ?? "",
     product: item.product,
     category: item.category?.name ?? "Uncategorized",
     description: item.description ?? "",

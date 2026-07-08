@@ -182,7 +182,7 @@ export function OrderWorkspace({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-3">
           <div>
-            <BackButton fallbackHref={"/dashboard/orders"} />
+            <BackButton fallbackHref="/dashboard/orders" preferFallback />
           </div>
           <div className="flex flex-col gap-1">
             <h1 className="flex items-center gap-2 font-medium text-xl leading-none tracking-tight">

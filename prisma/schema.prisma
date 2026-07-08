@@ -447,7 +447,7 @@ model InventoryItem {
   ownerId        String
   categoryId     String?
   locationId     String?
-  sku            String
+  sku            String?
   product        String
   description    String?
   stock          Int                      @default(0)

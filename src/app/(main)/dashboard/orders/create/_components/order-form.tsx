@@ -220,7 +220,12 @@ function OrderDetails({ disabled }: { disabled: boolean }) {
             <FieldLabel className="text-xs" htmlFor="delivery-company">
               Shipping Service
             </FieldLabel>
-            <Input id="delivery-company" disabled={disabled} placeholder="UPS" {...register("deliveryCompany")} />
+            <Input
+              id="delivery-company"
+              disabled={disabled}
+              placeholder="USPS Priority Mail"
+              {...register("deliveryCompany")}
+            />
           </Field>
           <Field className="gap-1">
             <FieldLabel className="text-xs" htmlFor="tracking-number">

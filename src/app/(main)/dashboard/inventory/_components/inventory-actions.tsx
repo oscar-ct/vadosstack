@@ -51,6 +51,26 @@ const initialInventoryActionState: InventoryActionState = {
   success: false,
 };
 
+const commonInventoryUnits = ["each", "box", "case", "pack", "pair", "set", "roll", "ft", "yard", "lb", "oz", "gal"];
+
+function formatMoneyInputValue(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === "") return "";
+
+  const parsedValue = Number(value);
+
+  return Number.isFinite(parsedValue) ? parsedValue.toFixed(2) : "";
+}
+
+function formatMoneyInputOnBlur(event: React.FocusEvent<HTMLInputElement>) {
+  const value = event.currentTarget.value.trim();
+  if (!value) return;
+
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue)) return;
+
+  event.currentTarget.value = parsedValue.toFixed(2);
+}
+
 type InventoryItemDialogProps = {
   categories: string[];
   item?: InventoryItem;
@@ -154,8 +174,17 @@ export function InventoryItemForm({
   const mode = item ? "edit" : "create";
   const router = useRouter();
   const [isTaxable, setIsTaxable] = React.useState(item?.taxable ?? true);
+  const unitOptions = React.useMemo(() => {
+    const currentUnit = item?.unit?.trim();
+
+    if (!currentUnit || commonInventoryUnits.includes(currentUnit)) return commonInventoryUnits;
+
+    return [currentUnit, ...commonInventoryUnits];
+  }, [item?.unit]);
   const action = saveInventoryItemAction.bind(null, item?.id ?? null);
   const [state, formAction, isPending] = React.useActionState(action, initialInventoryActionState);
+  const [isSubmitting, startSubmitTransition] = React.useTransition();
+  const pending = isPending || isSubmitting;
 
   React.useEffect(() => {
     setIsTaxable(item?.taxable ?? true);
@@ -191,7 +220,18 @@ export function InventoryItemForm({
   }, [focusField]);
 
   return (
-    <form className="grid min-w-0 gap-4" action={formAction}>
+    <form
+      className="grid min-w-0 gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+
+        const formData = new FormData(event.currentTarget);
+
+        startSubmitTransition(() => {
+          formAction(formData);
+        });
+      }}
+    >
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
         <div className="grid min-w-0 gap-2" data-inventory-field="product">
           <Label htmlFor={`inventory-${mode}-product`}>Product name</Label>
@@ -219,7 +259,7 @@ export function InventoryItemForm({
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="grid min-w-0 gap-2" data-inventory-field="category">
           <Label htmlFor={`inventory-${mode}-category`}>Category</Label>
           <Select name="category" defaultValue={item?.category ?? categories[0]}>
@@ -256,10 +296,23 @@ export function InventoryItemForm({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <div className="grid min-w-0 gap-2" data-inventory-field="unit">
           <Label htmlFor={`inventory-${mode}-unit`}>Unit</Label>
-          <Input id={`inventory-${mode}-unit`} name="unit" defaultValue={item?.unit ?? "each"} placeholder="each" />
+          <Select name="unit" defaultValue={item?.unit ?? "each"}>
+            <SelectTrigger id={`inventory-${mode}-unit`} className="w-full">
+              <SelectValue placeholder="Select unit" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {unitOptions.map((unit) => (
+                  <SelectItem key={unit} value={unit}>
+                    {unit}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid min-w-0 gap-2" data-inventory-field="itemStatus">
           <Label htmlFor={`inventory-${mode}-status`}>Status</Label>
@@ -301,7 +354,7 @@ export function InventoryItemForm({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <div className="grid min-w-0 gap-2" data-inventory-field="stock">
           <Label htmlFor={`inventory-${mode}-stock`}>Stock</Label>
           <Input
@@ -311,6 +364,59 @@ export function InventoryItemForm({
             min="0"
             step="1"
             defaultValue={item?.stock ?? ""}
+            placeholder="0"
+          />
+        </div>
+        <div className="grid min-w-0 gap-2" data-inventory-field="unitPrice">
+          <Label htmlFor={`inventory-${mode}-unit-price`}>Unit price</Label>
+          <Input
+            id={`inventory-${mode}-unit-price`}
+            name="unitPrice"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={formatMoneyInputValue(item?.unitPrice)}
+            onBlur={formatMoneyInputOnBlur}
+            placeholder="0.00"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="grid min-w-0 gap-2" data-inventory-field="cost">
+          <Label htmlFor={`inventory-${mode}-cost`}>Cost</Label>
+          <Input
+            id={`inventory-${mode}-cost`}
+            name="cost"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={formatMoneyInputValue(item?.cost)}
+            onBlur={formatMoneyInputOnBlur}
+            placeholder="0.00"
+          />
+        </div>
+        <div className="grid min-w-0 gap-2" data-inventory-field="vendor">
+          <Label htmlFor={`inventory-${mode}-vendor`}>Supplier</Label>
+          <Input
+            id={`inventory-${mode}-vendor`}
+            name="vendor"
+            defaultValue={item?.vendor ?? ""}
+            placeholder="Supplier"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="grid min-w-0 gap-2" data-inventory-field="maxStock">
+          <Label htmlFor={`inventory-${mode}-max-stock`}>Max stock</Label>
+          <Input
+            id={`inventory-${mode}-max-stock`}
+            name="maxStock"
+            type="number"
+            min="0"
+            step="1"
+            defaultValue={item?.maxStock ?? stockRules?.defaultMaxStock ?? ""}
             placeholder="0"
           />
         </div>
@@ -326,54 +432,9 @@ export function InventoryItemForm({
             placeholder="0"
           />
         </div>
-        <div className="grid min-w-0 gap-2" data-inventory-field="maxStock">
-          <Label htmlFor={`inventory-${mode}-max-stock`}>Max stock</Label>
-          <Input
-            id={`inventory-${mode}-max-stock`}
-            name="maxStock"
-            type="number"
-            min="0"
-            step="1"
-            defaultValue={item?.maxStock ?? stockRules?.defaultMaxStock ?? ""}
-            placeholder="0"
-          />
-        </div>
-        <div className="grid min-w-0 gap-2" data-inventory-field="unitPrice">
-          <Label htmlFor={`inventory-${mode}-unit-price`}>Unit price</Label>
-          <Input
-            id={`inventory-${mode}-unit-price`}
-            name="unitPrice"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={item?.unitPrice ?? ""}
-            placeholder="0.00"
-          />
-        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="grid min-w-0 gap-2" data-inventory-field="cost">
-          <Label htmlFor={`inventory-${mode}-cost`}>Cost</Label>
-          <Input
-            id={`inventory-${mode}-cost`}
-            name="cost"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={item?.cost ?? ""}
-            placeholder="0.00"
-          />
-        </div>
-        <div className="grid min-w-0 gap-2" data-inventory-field="vendor">
-          <Label htmlFor={`inventory-${mode}-vendor`}>Vendor</Label>
-          <Input
-            id={`inventory-${mode}-vendor`}
-            name="vendor"
-            defaultValue={item?.vendor ?? ""}
-            placeholder="Supplier"
-          />
-        </div>
+      <div className="grid gap-3 sm:gap-4">
         <div className="grid min-w-0 gap-2" data-inventory-field="barcode">
           <Label htmlFor={`inventory-${mode}-barcode`}>Barcode / UPC</Label>
           <Input
@@ -402,11 +463,11 @@ export function InventoryItemForm({
           </div>
         ) : null}
         <div className="flex flex-col-reverse gap-2 sm:flex-row">
-          <Button type="button" variant="outline" disabled={isPending} onClick={onDone}>
+          <Button type="button" variant="outline" disabled={pending} onClick={onDone}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending ? "Saving..." : item ? "Save item" : "Add item"}
+          <Button type="submit" disabled={pending}>
+            {pending ? "Saving..." : item ? "Save item" : "Add item"}
           </Button>
         </div>
       </DialogFooter>

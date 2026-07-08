@@ -389,15 +389,11 @@ function InventoryItemDetailsDialog({
 }
 
 function MobileInventoryCard({
-  checked,
   item,
-  onCheckedChange,
   onView,
   stockRules,
 }: {
-  checked: boolean;
   item: InventoryItem;
-  onCheckedChange: (checked: boolean) => void;
   onView: () => void;
   stockRules: InventoryStockRules;
 }) {
@@ -413,13 +409,6 @@ function MobileInventoryCard({
       />
       <div className="flex items-start justify-between gap-3">
         <div className="relative flex min-w-0 items-start gap-3">
-          <Checkbox
-            checked={checked}
-            className="relative z-10 mt-0.5"
-            aria-label={`Select ${item.product}`}
-            data-row-click-ignore
-            onCheckedChange={(value) => onCheckedChange(value === true)}
-          />
           <div className="pointer-events-none min-w-0">
             <div className="truncate font-medium">{item.product}</div>
             <div className="truncate text-muted-foreground text-xs">
@@ -915,9 +904,7 @@ export function InventoryTable({
             paginatedItems.map((item) => (
               <MobileInventoryCard
                 key={item.id}
-                checked={selectedIds.has(item.id)}
                 item={item}
-                onCheckedChange={(checked) => toggleItem(item.id, checked)}
                 onView={() => openItemDialog(item, "view")}
                 stockRules={stockRules}
               />
