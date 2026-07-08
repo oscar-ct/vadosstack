@@ -30,11 +30,12 @@ export default async function Page() {
         <CardHeader className="border-b bg-muted/20">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="grid max-w-2xl gap-2">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-normal">
-                <PackageCheck className="size-4" />
-                Service library
-              </div>
-              <CardTitle className="text-xl">Services</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                Services
+                <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <PackageCheck className="size-4" />
+                </span>
+              </CardTitle>
               <CardDescription>
                 Keep your repeatable work scopes easy to scan, price, and reuse in jobs or estimates.
               </CardDescription>
