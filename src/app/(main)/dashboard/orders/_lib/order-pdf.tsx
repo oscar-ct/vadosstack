@@ -50,8 +50,16 @@ const styles = StyleSheet.create({
     borderColor: "#d4d4d8",
     borderRadius: 12,
     borderWidth: 1,
+    height: 720,
     overflow: "hidden",
     width: 420,
+  },
+  pageNumber: {
+    color: "#71717a",
+    fontSize: 7,
+    position: "absolute",
+    right: 18,
+    top: 12,
   },
   header: {
     alignItems: "center",
@@ -67,7 +75,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 15,
-    fontWeight: 700,
+    fontWeight: 500,
     marginTop: 8,
   },
   muted: {
@@ -103,11 +111,11 @@ const styles = StyleSheet.create({
   label: {
     color: "#71717a",
     fontSize: 8,
-    fontWeight: 600,
+    fontWeight: 500,
   },
   value: {
     fontSize: 10,
-    fontWeight: 700,
+    fontWeight: 500,
   },
   item: {
     borderColor: "#e4e4e7",
@@ -132,7 +140,7 @@ const styles = StyleSheet.create({
   },
   itemTotal: {
     fontSize: 10,
-    fontWeight: 700,
+    fontWeight: 500,
     minWidth: 58,
     textAlign: "right",
   },
@@ -151,11 +159,11 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 11,
-    fontWeight: 700,
+    fontWeight: 500,
   },
   totalValue: {
-    fontSize: 18,
-    fontWeight: 700,
+    fontSize: 14,
+    fontWeight: 500,
   },
   discount: {
     color: "#059669",
@@ -164,11 +172,59 @@ const styles = StyleSheet.create({
     backgroundColor: "#fafafa",
     borderColor: "#e4e4e7",
     borderTopWidth: 1,
+    minHeight: 54,
     paddingHorizontal: 20,
     paddingVertical: 12,
     textAlign: "center",
   },
+  footerText: {
+    lineHeight: 1.35,
+  },
 });
+
+const PDF_FINAL_PAGE_ITEM_LIMIT = 4;
+const PDF_NON_FINAL_PAGE_ITEM_LIMIT = 10;
+
+type OrderPdfPage = {
+  items: OrderPdfLineItem[];
+  pageNumber: number;
+  showSummary: boolean;
+};
+
+function paginatePdfItems(items: OrderPdfLineItem[]): OrderPdfPage[] {
+  if (items.length <= PDF_FINAL_PAGE_ITEM_LIMIT) {
+    return [
+      {
+        items,
+        pageNumber: 1,
+        showSummary: true,
+      },
+    ];
+  }
+
+  const pages: OrderPdfPage[] = [];
+  let remainingItems = items;
+
+  while (remainingItems.length > PDF_FINAL_PAGE_ITEM_LIMIT) {
+    const takeCount = Math.min(PDF_NON_FINAL_PAGE_ITEM_LIMIT, remainingItems.length - PDF_FINAL_PAGE_ITEM_LIMIT);
+
+    pages.push({
+      items: remainingItems.slice(0, takeCount),
+      pageNumber: pages.length + 1,
+      showSummary: false,
+    });
+
+    remainingItems = remainingItems.slice(takeCount);
+  }
+
+  pages.push({
+    items: remainingItems,
+    pageNumber: pages.length + 1,
+    showSummary: true,
+  });
+
+  return pages;
+}
 
 function DetailPair({ label, value, right = false }: { label: string; right?: boolean; value: string }) {
   return (
@@ -181,117 +237,130 @@ function DetailPair({ label, value, right = false }: { label: string; right?: bo
 
 function OrderPdfDocument({ data }: { data: OrderPdfData }) {
   const title = data.isPaid ? "Order Receipt" : "Order Confirmation";
+  const pages = paginatePdfItems(data.items);
 
   return (
     <Document title={`${title} ${data.orderNumber}`}>
-      <Page size="LETTER" style={styles.page}>
-        <View style={styles.receipt}>
-          <View style={styles.header}>
-            <Image src={data.companyLogoSrc} style={styles.logo} />
-            <Text style={styles.title}>{title}</Text>
-            <Text style={[styles.small, styles.muted]}>
-              {data.isPaid ? "Thank you for your purchase." : "Thank you for your order."}
-            </Text>
-            <Text style={[styles.tiny, styles.muted]}>
-              {[data.companyPhone, data.companyEmail].filter(Boolean).join("   ")}
-            </Text>
-          </View>
-
-          <View style={[styles.section, styles.twoCol]}>
-            <DetailPair label="Order Number" value={data.orderNumber} />
-            <DetailPair label="Order Date" right value={data.orderDate} />
-          </View>
-
-          {data.items.map((item) => (
-            <View key={`${item.product}-${item.sku ?? ""}`} style={styles.item}>
-              <View style={styles.itemIcon}>
-                <Text style={styles.small}>□</Text>
-              </View>
-              <View style={styles.itemBody}>
-                <Text style={styles.value}>{item.product || "Product name"}</Text>
-                <Text style={[styles.tiny, styles.muted]}>{[item.sku, item.category].filter(Boolean).join(" · ")}</Text>
-                <Text style={[styles.tiny, styles.muted]}>
-                  {item.quantity} x {item.unitPrice}
-                </Text>
-              </View>
-              <Text style={styles.itemTotal}>{item.lineTotal}</Text>
+      {pages.map((page) => (
+        <Page key={page.pageNumber} size="LETTER" style={styles.page}>
+          <View style={styles.receipt}>
+            {pages.length > 1 ? (
+              <Text style={styles.pageNumber}>
+                Page {page.pageNumber} of {pages.length}
+              </Text>
+            ) : null}
+            <View style={styles.header}>
+              <Image src={data.companyLogoSrc} style={styles.logo} />
+              <Text style={styles.title}>{title}</Text>
+              <Text style={[styles.small, styles.muted]}>
+                {data.isPaid ? "Thank you for your purchase." : "Thank you for your order."}
+              </Text>
             </View>
-          ))}
 
-          {data.isPaid ? (
             <View style={[styles.section, styles.twoCol]}>
-              <DetailPair label="Estimated Delivery" value={data.estimatedDelivery ?? "Delivery date pending"} />
-              <View style={[styles.col, styles.right]}>
-                <Text style={styles.label}>Tracking</Text>
-                <Text style={styles.value}>{data.shippingService ?? "Shipping service pending"}</Text>
-                <Text style={[styles.tiny, styles.muted]}>{data.trackingNumber ?? "Tracking number pending"}</Text>
-              </View>
+              <DetailPair label="Order Number" value={data.orderNumber} />
+              <DetailPair label="Order Date" right value={data.orderDate} />
             </View>
-          ) : null}
 
-          <View style={[styles.section, styles.twoCol]}>
-            <View style={styles.col}>
-              <Text style={styles.label}>Shipping Address</Text>
-              <Text style={styles.value}>{data.customerName || "Customer name"}</Text>
-              {data.shippingAddressLines.length ? (
-                data.shippingAddressLines.map((line) => (
-                  <Text key={line} style={[styles.tiny, styles.muted]}>
-                    {line}
+            {page.items.map((item) => (
+              <View key={`${page.pageNumber}-${item.product}-${item.sku ?? ""}`} style={styles.item}>
+                <View style={styles.itemIcon}>
+                  <Text style={styles.small}>□</Text>
+                </View>
+                <View style={styles.itemBody}>
+                  <Text style={styles.value}>{item.product || "Product name"}</Text>
+                  <Text style={[styles.tiny, styles.muted]}>
+                    {[item.sku, item.category].filter(Boolean).join(" · ")}
                   </Text>
-                ))
-              ) : (
-                <Text style={[styles.tiny, styles.muted]}>Street address</Text>
-              )}
-              <Text style={[styles.tiny, styles.muted]}>{data.customerPhone ?? "Phone"}</Text>
-            </View>
-            <View style={styles.col}>
-              {data.isPaid ? (
-                <>
-                  <Text style={styles.label}>Payment Method</Text>
-                  <Text style={styles.value}>{data.paymentMethod ?? "Payment method pending"}</Text>
-                  {data.paymentReference ? (
-                    <Text style={[styles.tiny, styles.muted]}>Ref # {data.paymentReference}</Text>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  <Text style={styles.label}>Status</Text>
-                  <Text style={styles.value}>Payment pending</Text>
-                </>
-              )}
-            </View>
-          </View>
+                  <Text style={[styles.tiny, styles.muted]}>
+                    {item.quantity} x {item.unitPrice}
+                  </Text>
+                </View>
+                <Text style={styles.itemTotal}>{item.lineTotal}</Text>
+              </View>
+            ))}
 
-          <View style={[styles.section, styles.totals]}>
-            <View style={styles.totalRow}>
-              <Text style={[styles.text, styles.muted]}>Subtotal</Text>
-              <Text style={styles.text}>{data.subtotal}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={[styles.text, styles.muted]}>Shipping</Text>
-              <Text style={styles.text}>{data.shippingAmount}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={[styles.text, styles.muted]}>Tax ({data.taxRate})</Text>
-              <Text style={styles.text}>{data.taxAmount}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={[styles.text, styles.muted]}>Discount</Text>
-              <Text style={[styles.text, styles.discount]}>-{data.discountAmount}</Text>
-            </View>
-            <View style={[styles.totalRow, styles.totalFinal]}>
-              <Text style={styles.totalLabel}>{data.isPaid ? "Total Paid" : "Order Total"}</Text>
-              <Text style={styles.totalValue}>{data.total}</Text>
-            </View>
-          </View>
+            {page.showSummary ? (
+              <>
+                {data.isPaid ? (
+                  <View style={[styles.section, styles.twoCol]}>
+                    <DetailPair label="Estimated Delivery" value={data.estimatedDelivery ?? "Delivery date pending"} />
+                    <View style={[styles.col, styles.right]}>
+                      <Text style={styles.label}>Tracking</Text>
+                      <Text style={styles.value}>{data.shippingService ?? "Shipping service pending"}</Text>
+                      <Text style={[styles.tiny, styles.muted]}>
+                        {data.trackingNumber ?? "Tracking number pending"}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
 
-          <View style={styles.footer}>
-            <Text style={[styles.tiny, styles.muted]}>
-              {data.footerMessage || "Thank you for your order. We appreciate your business."}
-            </Text>
+                <View style={[styles.section, styles.twoCol]}>
+                  <View style={styles.col}>
+                    <Text style={styles.label}>Shipping Address</Text>
+                    <Text style={styles.value}>{data.customerName || "Customer name"}</Text>
+                    {data.shippingAddressLines.length ? (
+                      data.shippingAddressLines.map((line) => (
+                        <Text key={line} style={[styles.tiny, styles.muted]}>
+                          {line}
+                        </Text>
+                      ))
+                    ) : (
+                      <Text style={[styles.tiny, styles.muted]}>Street address</Text>
+                    )}
+                    <Text style={[styles.tiny, styles.muted]}>{data.customerPhone ?? "Phone"}</Text>
+                  </View>
+                  <View style={[styles.col, styles.right]}>
+                    {data.isPaid ? (
+                      <>
+                        <Text style={styles.label}>Payment Method</Text>
+                        <Text style={styles.value}>{data.paymentMethod ?? "Payment method pending"}</Text>
+                        {data.paymentReference ? (
+                          <Text style={[styles.tiny, styles.muted]}>Ref # {data.paymentReference}</Text>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.label}>Status</Text>
+                        <Text style={styles.value}>Payment pending</Text>
+                      </>
+                    )}
+                  </View>
+                </View>
+
+                <View style={[styles.section, styles.totals]}>
+                  <View style={styles.totalRow}>
+                    <Text style={[styles.text, styles.muted]}>Subtotal</Text>
+                    <Text style={styles.text}>{data.subtotal}</Text>
+                  </View>
+                  <View style={styles.totalRow}>
+                    <Text style={[styles.text, styles.muted]}>Shipping</Text>
+                    <Text style={styles.text}>{data.shippingAmount}</Text>
+                  </View>
+                  <View style={styles.totalRow}>
+                    <Text style={[styles.text, styles.muted]}>Tax ({data.taxRate})</Text>
+                    <Text style={styles.text}>{data.taxAmount}</Text>
+                  </View>
+                  <View style={styles.totalRow}>
+                    <Text style={[styles.text, styles.muted]}>Discount</Text>
+                    <Text style={[styles.text, styles.discount]}>-{data.discountAmount}</Text>
+                  </View>
+                  <View style={[styles.totalRow, styles.totalFinal]}>
+                    <Text style={styles.totalLabel}>{data.isPaid ? "Total Paid" : "Order Total"}</Text>
+                    <Text style={styles.totalValue}>{data.total}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.footer}>
+                  <Text style={[styles.tiny, styles.muted, styles.footerText]}>
+                    {data.footerMessage || "Thank you for your order. We appreciate your business."}
+                  </Text>
+                </View>
+              </>
+            ) : null}
           </View>
-        </View>
-      </Page>
+        </Page>
+      ))}
     </Document>
   );
 }

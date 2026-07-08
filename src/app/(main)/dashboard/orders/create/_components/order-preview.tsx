@@ -3,7 +3,6 @@
 import * as React from "react";
 
 import Image from "next/image";
-import Link from "next/link";
 
 import { Download, Package, Printer, Truck } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -56,6 +55,18 @@ function formatTaxRate(value: number) {
   })}%`;
 }
 
+function downloadOrderPdf(orderId: string) {
+  const link = document.createElement("a");
+
+  link.href = `/dashboard/orders/${orderId}/pdf`;
+  link.rel = "noopener noreferrer";
+  link.target = "_blank";
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function formatCityStateZip(order: OrderFormValues) {
   const cityState = [order.city, order.state].filter(Boolean).join(", ");
   return [cityState, order.zip].filter(Boolean).join(" ");
@@ -70,8 +81,14 @@ function handlePrint() {
 }
 
 const RECEIPT_PAGE_GAP = 16;
-const NON_FINAL_PAGE_ITEM_LIMIT = 7;
-const FINAL_PAGE_ITEM_LIMIT = 2;
+const RECEIPT_HEADER_HEIGHT = 104;
+const RECEIPT_META_HEIGHT = 52;
+const RECEIPT_ITEM_HEIGHT = 68;
+const RECEIPT_DELIVERY_HEIGHT = 64;
+const RECEIPT_ADDRESS_PAYMENT_HEIGHT = 84;
+const RECEIPT_TOTALS_HEIGHT = 118;
+const RECEIPT_FOOTER_HEIGHT = 80;
+const FINAL_PAGE_ITEM_LIMIT = 4;
 
 type ReceiptPage = {
   items: OrderFormValues["items"];
@@ -79,8 +96,27 @@ type ReceiptPage = {
   showSummary: boolean;
 };
 
-function paginateReceiptItems(items: OrderFormValues["items"]): ReceiptPage[] {
-  if (items.length <= FINAL_PAGE_ITEM_LIMIT) {
+function getReceiptItemCapacity({ isPaid, showSummary }: { isPaid: boolean; showSummary: boolean }) {
+  const reservedHeight =
+    RECEIPT_HEADER_HEIGHT +
+    RECEIPT_META_HEIGHT +
+    (showSummary
+      ? (isPaid ? RECEIPT_DELIVERY_HEIGHT : 0) +
+        RECEIPT_ADDRESS_PAYMENT_HEIGHT +
+        RECEIPT_TOTALS_HEIGHT +
+        RECEIPT_FOOTER_HEIGHT
+      : 0);
+
+  const capacity = Math.max(1, Math.floor((ORDER_RECEIPT_PAPER_HEIGHT - reservedHeight) / RECEIPT_ITEM_HEIGHT));
+
+  return showSummary ? Math.min(FINAL_PAGE_ITEM_LIMIT, capacity) : capacity;
+}
+
+function paginateReceiptItems(items: OrderFormValues["items"], isPaid: boolean): ReceiptPage[] {
+  const finalPageItemLimit = getReceiptItemCapacity({ isPaid, showSummary: true });
+  const nonFinalPageItemLimit = getReceiptItemCapacity({ isPaid, showSummary: false });
+
+  if (items.length <= finalPageItemLimit) {
     return [
       {
         items,
@@ -93,18 +129,8 @@ function paginateReceiptItems(items: OrderFormValues["items"]): ReceiptPage[] {
   const pages: ReceiptPage[] = [];
   let remainingItems = items;
 
-  while (remainingItems.length > 0) {
-    if (remainingItems.length <= FINAL_PAGE_ITEM_LIMIT) {
-      pages.push({
-        items: remainingItems,
-        pageNumber: pages.length + 1,
-        showSummary: true,
-      });
-
-      return pages;
-    }
-
-    const takeCount = Math.min(NON_FINAL_PAGE_ITEM_LIMIT, remainingItems.length);
+  while (remainingItems.length > finalPageItemLimit) {
+    const takeCount = Math.min(nonFinalPageItemLimit, remainingItems.length - finalPageItemLimit);
 
     pages.push({
       items: remainingItems.slice(0, takeCount),
@@ -116,7 +142,7 @@ function paginateReceiptItems(items: OrderFormValues["items"]): ReceiptPage[] {
   }
 
   pages.push({
-    items: [],
+    items: remainingItems,
     pageNumber: pages.length + 1,
     showSummary: true,
   });
@@ -137,7 +163,7 @@ function PrintOrderReceipt({ company, order }: { company: OrderCompany; order: O
 
   if (!mounted) return null;
 
-  const pages = paginateReceiptItems(order.items);
+  const pages = paginateReceiptItems(order.items, order.paymentStatus === "Paid");
 
   return createPortal(
     <div data-print-root>
@@ -273,7 +299,7 @@ function OrderReceiptPaper({
 
             {isPaid ? (
               <div className={"text-right"}>
-                <div className="font-medium text-[11px] text-neutral-500 ">Payment Method</div>
+                <div className="font-medium text-[11px] text-neutral-500">Payment Method</div>
                 <div className="mt-1.5 grid gap-0.5">
                   <span className="font-medium text-sm">{order.paymentMethod || "Payment method pending"}</span>
                   {order.paymentReference ? (
@@ -308,11 +334,11 @@ function OrderReceiptPaper({
             </div>
             <div className="mt-0.5 flex items-center justify-between gap-4 border-neutral-200 border-t pt-2">
               <span className="font-medium">{isPaid ? "Total Paid" : "Order Total"}</span>
-              <span className="font-bold text-base tabular-nums">{formatOrderCurrency(total)}</span>
+              <span className="font-medium text-base tabular-nums">{formatOrderCurrency(total)}</span>
             </div>
           </OrderReceiptSection>
 
-          <footer className="grid min-h-[4.375rem] shrink-0 place-items-center border-neutral-200 border-t px-5 py-2">
+          <footer className="grid min-h-20 shrink-0 place-items-center border-neutral-200 border-t px-5 py-2">
             {footerMessage ? (
               <p className="line-clamp-3 whitespace-pre-line text-center text-[11px] text-neutral-500 leading-relaxed">
                 {footerMessage}
@@ -340,7 +366,7 @@ export function OrderPreview({
   order: OrderFormValues;
   orderId?: string;
 }) {
-  const pages = paginateReceiptItems(order.items);
+  const pages = paginateReceiptItems(order.items, order.paymentStatus === "Paid");
   const receiptStackHeight = getReceiptStackHeight(pages.length);
   const previewBodyRef = React.useRef<HTMLDivElement>(null);
   const paperLayout = useVisibleCenterPosition(previewBodyRef, {
@@ -377,11 +403,15 @@ export function OrderPreview({
               </fieldset>
             ) : null}
             {orderId && !actionsDisabled ? (
-              <Button asChild type="button" size="sm" variant="outline" className="h-7 px-2 text-xs">
-                <Link href={`/dashboard/orders/${orderId}/pdf`} prefetch={false}>
-                  <Download data-icon="inline-start" className="size-3.5" />
-                  Download
-                </Link>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs"
+                onClick={() => downloadOrderPdf(orderId)}
+              >
+                <Download data-icon="inline-start" className="size-3.5" />
+                Download
               </Button>
             ) : (
               <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" disabled>

@@ -69,7 +69,7 @@ export const defaultOrderFooterMessage =
 export const orderFooterMaxLength = 180;
 export const orderFooterMaxLines = 3;
 export const ORDER_RECEIPT_PAPER_WIDTH = 560;
-export const ORDER_RECEIPT_PAPER_HEIGHT = 760;
+export const ORDER_RECEIPT_PAPER_HEIGHT = 980;
 export const ORDER_RECEIPT_PAPER_SCALE = 1;
 
 export function clampOrderFooterMessage(value: string) {
