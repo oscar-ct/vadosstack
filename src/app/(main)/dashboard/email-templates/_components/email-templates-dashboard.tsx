@@ -13,7 +13,6 @@ import {
   PackageCheck,
   ReceiptText,
   Search,
-  Sparkles,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -138,7 +137,7 @@ export function EmailTemplatesDashboard({ templates }: { templates: EmailTemplat
         <div className="grid place-items-center rounded-lg border bg-muted/20 p-8 text-center">
           <div className="grid max-w-sm gap-2">
             <div className="mx-auto flex size-10 items-center justify-center rounded-md bg-background text-muted-foreground">
-              {templates.length ? <Sparkles className="size-5" /> : <Mail className="size-5" />}
+              <Mail className="size-5" />
             </div>
             <div className="font-medium text-sm">
               {templates.length ? "No templates match your filters." : "No email templates yet."}

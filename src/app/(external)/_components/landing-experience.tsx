@@ -499,13 +499,6 @@ export function LandingExperience() {
               animate="visible"
               variants={stagger}
             >
-              {/*<motion.div*/}
-              {/*  variants={reveal}*/}
-              {/*  className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#171412]/15 bg-[#f6f1e8]/80 px-3 py-1 text-[#594431] text-sm shadow-sm backdrop-blur"*/}
-              {/*>*/}
-              {/*  <Sparkles className="size-4 text-[#d9443c]" />*/}
-              {/*  Built for businesses that live in the details*/}
-              {/*</motion.div>*/}
               <motion.h1
                 variants={reveal}
                 className="max-w-3xl text-balance font-semibold text-4xl leading-[1.02] tracking-normal md:text-6xl"

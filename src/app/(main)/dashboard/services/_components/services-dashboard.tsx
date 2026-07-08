@@ -4,7 +4,7 @@ import * as React from "react";
 
 import Link from "next/link";
 
-import { ArrowRight, Hammer, Package, Search, Sparkles } from "lucide-react";
+import { ArrowRight, Hammer, Package, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -140,7 +140,7 @@ export function ServicesDashboard({ services }: { services: ServiceTemplateRow[]
         <div className="grid place-items-center rounded-lg border bg-muted/20 p-8 text-center">
           <div className="grid max-w-sm gap-2">
             <div className="mx-auto flex size-10 items-center justify-center rounded-md bg-background text-muted-foreground">
-              <Sparkles className="size-5" />
+              <Package className="size-5" />
             </div>
             <div className="font-medium text-sm">
               {services.length ? "No services match your filters." : "No services yet."}

@@ -824,7 +824,7 @@ function SummaryCard({
         </span>
         {label}
       </div>
-      <div className="mt-3 font-semibold text-2xl leading-none">{value}</div>
+      <div className="mt-3 font-medium text-2xl leading-none">{value}</div>
       <div className="mt-1 text-muted-foreground text-xs">{detail}</div>
     </div>
   );
@@ -918,7 +918,7 @@ export function CalendarDashboard({
                 {format(month, "MMMM yyyy")}
               </span>
             </div>
-            <h1 className="mt-5 font-semibold text-3xl leading-tight">Schedule overview</h1>
+            <h1 className="mt-5 font-medium text-3xl leading-tight">Schedule overview</h1>
             <p className="mt-2 max-w-2xl text-muted-foreground text-sm leading-6">
               Jobs, tasks, and invoice due dates in one calendar view.
             </p>

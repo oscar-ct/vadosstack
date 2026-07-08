@@ -62,7 +62,7 @@ export function OutstandingJobs({ jobs }: { jobs: OutstandingJob[] }) {
                     <div className="truncate font-medium text-sm">{job.title}</div>
                     <div className="truncate text-muted-foreground text-xs">{job.customerName}</div>
                   </div>
-                  <div className="max-w-28 truncate text-right font-semibold text-sm tabular-nums">
+                  <div className="max-w-28 truncate text-right font-medium text-sm tabular-nums">
                     {formatCurrency(job.balanceDue)}
                   </div>
                 </div>

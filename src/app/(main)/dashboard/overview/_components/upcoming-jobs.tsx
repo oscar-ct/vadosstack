@@ -57,7 +57,7 @@ export function UpcomingJobs({ jobs }: { jobs: UpcomingJob[] }) {
                   <div className="grid h-1/3 place-items-center border-b bg-muted font-medium text-[10px] text-muted-foreground uppercase leading-none">
                     {format(jobDate, "MMM")}
                   </div>
-                  <div className="grid h-2/3 place-items-center font-semibold text-lg leading-none">
+                  <div className="grid h-2/3 place-items-center font-medium text-lg leading-none">
                     {format(jobDate, "d")}
                   </div>
                 </div>

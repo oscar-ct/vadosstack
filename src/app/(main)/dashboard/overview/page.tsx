@@ -11,7 +11,6 @@ import {
   Clock3,
   Gauge,
   MessagesSquare,
-  Sparkles,
   WalletCards,
 } from "lucide-react";
 
@@ -562,7 +561,7 @@ function OverviewSignal({
         <ArrowRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
       </div>
       <div className="mt-5 min-w-0">
-        <div className="truncate font-semibold text-2xl text-foreground">{value}</div>
+        <div className="truncate font-medium text-2xl text-foreground">{value}</div>
         <div className="mt-1 truncate font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
           {label}
         </div>
@@ -744,10 +743,10 @@ export default async function Page() {
             <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
               <div className="min-w-0">
                 <div className="mb-3 flex items-center gap-2 text-muted-foreground text-sm">
-                  <Sparkles className="size-4 text-cyan-600 dark:text-cyan-300" />
+                  <Gauge className="size-4 text-cyan-600 dark:text-cyan-300" />
                   {getGreeting()}, {displayName}
                 </div>
-                <h1 className="max-w-3xl text-balance font-semibold text-3xl leading-tight">
+                <h1 className="max-w-3xl text-balance font-medium text-3xl leading-tight">
                   {currentUser.companyName}
                   {/*command brief*/}
                 </h1>
@@ -830,7 +829,7 @@ export default async function Page() {
                   Readiness
                 </div>
                 <div className="mt-3 flex items-end gap-2">
-                  <span className="font-semibold text-5xl leading-none">{readinessScore}</span>
+                  <span className="font-medium text-5xl leading-none">{readinessScore}</span>
                   <span className="pb-1 text-sm text-white/50">/100</span>
                 </div>
               </div>

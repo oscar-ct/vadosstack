@@ -12,7 +12,6 @@ import {
   Clock3,
   Gauge,
   ReceiptText,
-  Sparkles,
   Users,
 } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
@@ -223,7 +222,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
                 </Badge>
                 <span className="text-muted-foreground text-xs">Updated {generatedAt}</span>
               </div>
-              <h1 className="text-balance font-semibold text-3xl leading-tight tracking-normal md:text-4xl">
+              <h1 className="text-balance font-medium text-3xl leading-tight tracking-normal md:text-4xl">
                 {data.companyName}
               </h1>
               <p className="mt-3 max-w-3xl text-muted-foreground text-sm leading-6">
@@ -611,7 +610,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 text-sm shadow-xs">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Sparkles className="size-4" />
+          <Gauge className="size-4" />
           Built from live customers, jobs, estimates, invoices, employees, and time requests.
         </div>
         <Button asChild variant="ghost" size="sm">

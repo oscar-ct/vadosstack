@@ -74,7 +74,7 @@ export function ManagerActionQueue({ items }: { items: ManagerActionQueueItem[] 
               <ListChecks className="size-4" />
               Manager action queue
             </div>
-            <h2 className="font-semibold text-2xl leading-tight">What needs a decision next</h2>
+            <h2 className="font-medium text-2xl leading-tight">What needs a decision next</h2>
             <p className="mt-2 max-w-3xl text-muted-foreground text-sm leading-6">
               Leads, time reviews, estimates, job blockers, invoice prep, and receivables collected into one working
               list.
@@ -106,11 +106,11 @@ export function ManagerActionQueue({ items }: { items: ManagerActionQueueItem[] 
                   {primaryItem.type}
                 </Badge>
               </div>
-              <p className="line-clamp-2 font-semibold text-xl leading-snug">{primaryItem.title}</p>
+              <p className="line-clamp-2 font-medium text-xl leading-snug">{primaryItem.title}</p>
               <p className="mt-2 line-clamp-2 text-muted-foreground text-sm">{primaryItem.detail}</p>
             </div>
             <div className="mt-6 flex items-center justify-between gap-3">
-              <span className="font-semibold text-2xl tabular-nums">{formatQueueValue(primaryItem.value)}</span>
+              <span className="font-medium text-2xl tabular-nums">{formatQueueValue(primaryItem.value)}</span>
               <span className="grid size-9 place-items-center rounded-md bg-background/80 text-muted-foreground transition-colors group-hover:text-foreground">
                 <ArrowRight className="size-4" />
               </span>
