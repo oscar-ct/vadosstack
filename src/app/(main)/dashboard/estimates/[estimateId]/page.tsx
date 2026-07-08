@@ -191,7 +191,7 @@ export default async function Page({
   const estimateJobType = estimate.estimateRecord?.jobType === "Commercial" ? "Commercial" : "Residential";
   const taxableItemsLabel = estimateJobType === "Commercial" ? "labor + materials" : "materials";
   const paymentAmount = Number(estimate.estimatedTotal.toString()) / 2;
-  const estimateNumber = formatDocumentNumber("EST", estimateSequence);
+  const estimateNumber = estimate.estimateNumber ?? formatDocumentNumber("EST", estimateSequence);
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
   const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
   const validThrough = addDays(estimate.issuedAt, currentUser.estimateValidDays);

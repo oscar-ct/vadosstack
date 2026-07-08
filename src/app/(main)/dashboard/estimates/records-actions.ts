@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
 import { deriveCustomerBillingStatus } from "@/lib/customer-billing";
+import { allocateDocumentNumber, attachDocumentNumber } from "@/lib/document-numbering";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
@@ -1196,43 +1197,50 @@ export async function createPrintableEstimateAction(
         estimate.jobType === "Commercial" ? Number(estimate.laborCost ?? 0) + materialsSubtotal : materialsSubtotal;
       const materialTaxAmount = (taxableSubtotal * Number(estimate.materialTaxRate ?? 0)) / 100;
 
-      const printableEstimate = await prisma.estimate.create({
-        data: {
-          ownerId: currentUser.id,
-          estimateRecordId: estimate.id,
-          customerId: estimate.customerId,
-          customerName: estimate.customer?.name ?? estimate.lead?.name,
-          customerEmail: estimate.customer?.email ?? estimate.lead?.email,
-          customerPhone: estimate.customer?.phoneNumbers[0]?.value ?? estimate.lead?.phone,
-          jobTitle: estimate.description,
-          jobDescription: estimate.scope,
-          serviceLocation: estimate.serviceLocation,
-          dateBegin: estimate.dateBegin,
-          dateEnd: estimate.dateEnd,
-          laborCost: estimate.laborCost ?? "0",
-          materialTaxRate: estimate.materialTaxRate ?? "0",
-          materials: JSON.stringify(printableItems),
-          materialsSubtotal: materialsSubtotal.toFixed(2),
-          materialTaxAmount: materialTaxAmount.toFixed(2),
-          estimatedTotal: estimate.estimatedTotal ?? "0",
-          jobStatus: estimate.status === "Draft" ? "Ready to Send" : estimate.status,
-        },
-      });
-      printableEstimateId = printableEstimate.id;
-
-      if (estimate.status === "Draft") {
-        await prisma.estimateRecord.update({
-          where: {
-            id_ownerId: {
-              id: estimate.id,
-              ownerId: currentUser.id,
-            },
-          },
+      const printableEstimate = await prisma.$transaction(async (tx) => {
+        const estimateNumberAssignment = await allocateDocumentNumber(tx, currentUser.id, "estimate");
+        const createdEstimate = await tx.estimate.create({
           data: {
-            status: "Ready to Send",
+            ownerId: currentUser.id,
+            estimateNumber: estimateNumberAssignment.documentNumber,
+            estimateRecordId: estimate.id,
+            customerId: estimate.customerId,
+            customerName: estimate.customer?.name ?? estimate.lead?.name,
+            customerEmail: estimate.customer?.email ?? estimate.lead?.email,
+            customerPhone: estimate.customer?.phoneNumbers[0]?.value ?? estimate.lead?.phone,
+            jobTitle: estimate.description,
+            jobDescription: estimate.scope,
+            serviceLocation: estimate.serviceLocation,
+            dateBegin: estimate.dateBegin,
+            dateEnd: estimate.dateEnd,
+            laborCost: estimate.laborCost ?? "0",
+            materialTaxRate: estimate.materialTaxRate ?? "0",
+            materials: JSON.stringify(printableItems),
+            materialsSubtotal: materialsSubtotal.toFixed(2),
+            materialTaxAmount: materialTaxAmount.toFixed(2),
+            estimatedTotal: estimate.estimatedTotal ?? "0",
+            jobStatus: estimate.status === "Draft" ? "Ready to Send" : estimate.status,
           },
         });
-      }
+        await attachDocumentNumber(tx, estimateNumberAssignment.assignmentId, createdEstimate.id);
+
+        if (estimate.status === "Draft") {
+          await tx.estimateRecord.update({
+            where: {
+              id_ownerId: {
+                id: estimate.id,
+                ownerId: currentUser.id,
+              },
+            },
+            data: {
+              status: "Ready to Send",
+            },
+          });
+        }
+
+        return createdEstimate;
+      });
+      printableEstimateId = printableEstimate.id;
     }
   } catch (error) {
     return {

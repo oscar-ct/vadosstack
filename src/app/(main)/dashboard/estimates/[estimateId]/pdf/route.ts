@@ -88,7 +88,7 @@ export async function GET(
       },
     },
   });
-  const estimateNumber = formatDocumentNumber("EST", estimateSequence);
+  const estimateNumber = estimate.estimateNumber ?? formatDocumentNumber("EST", estimateSequence);
   const validThrough = addDays(estimate.issuedAt, currentUser.estimateValidDays);
   const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
   const paymentAmount = Number(estimate.estimatedTotal.toString()) / 2;

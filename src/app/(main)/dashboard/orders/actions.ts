@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
+import { allocateDocumentNumber, attachDocumentNumber } from "@/lib/document-numbering";
 import { escapeHtml, plainTextToEmailHtml, sanitizeEmailHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
 import {
@@ -221,11 +222,12 @@ function orderData(
   customerId: string | null,
   input: CreateOrderInput,
   totals: ReturnType<typeof getOrderTotals>,
+  orderNumber: string,
 ) {
   return {
     ownerId,
     customerId,
-    orderNumber: input.orderNumber,
+    orderNumber,
     paymentStatus: input.paymentStatus,
     fulfillmentStatus: input.fulfillmentStatus,
     orderDate: input.orderDate,
@@ -264,13 +266,15 @@ export async function createOrderWithInventoryAdjustments(input: CreateOrderInpu
     const customerId = await resolveCustomerId(currentUser.id, input);
     const preparedItems = await prepareOrderItems(tx, currentUser.id, input);
     const totals = getOrderTotals(preparedItems, input);
+    const orderNumberAssignment = await allocateDocumentNumber(tx, currentUser.id, "order");
 
     const order = await tx.order.create({
       data: {
-        ...orderData(currentUser.id, customerId, input, totals),
+        ...orderData(currentUser.id, customerId, input, totals, orderNumberAssignment.documentNumber),
         footerMessage: input.footerMessage ?? currentUser.orderMessageText,
       },
     });
+    await attachDocumentNumber(tx, orderNumberAssignment.assignmentId, order.id);
 
     for (const item of preparedItems) {
       const orderItem = await tx.orderItem.create({
@@ -427,7 +431,7 @@ export async function updateOrderWithInventoryAdjustments(orderId: string, input
       where: {
         id: existingOrder.id,
       },
-      data: orderData(currentUser.id, customerId, input, totals),
+      data: orderData(currentUser.id, customerId, input, totals, existingOrder.orderNumber),
     });
 
     revalidatePath("/dashboard/orders");

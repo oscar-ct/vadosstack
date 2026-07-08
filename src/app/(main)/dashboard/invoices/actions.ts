@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { calculateOutstandingBalance } from "@/lib/customer-billing";
 import { formatDocumentNumber } from "@/lib/document-number";
+import { allocateDocumentNumber, attachDocumentNumber } from "@/lib/document-numbering";
 import { plainTextToEmailHtml, sanitizeEmailHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
 import {
@@ -265,31 +266,37 @@ export async function createInvoiceAction(
     const balanceDue = calculateOutstandingBalance(job.status, job.finalCost?.toString(), job.amountPaid?.toString());
     const depositPaid = job.depositPaid?.toString() ?? "0";
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        ownerId: currentUser.id,
-        jobId: job.id,
-        customerId: job.customerId,
-        customerName: job.customer?.name,
-        customerEmail: job.customer?.email,
-        customerPhone: job.customer?.phoneNumbers[0]?.value,
-        jobTitle: job.description,
-        jobDescription: job.scope,
-        serviceLocation: job.serviceLocation,
-        dateBegin: job.dateBegin,
-        dateEnd: job.dateEnd,
-        laborCost: toMoney(job.laborCost),
-        materialTaxRate: toMoney(job.materialTaxRate),
-        materials: JSON.stringify(materials),
-        materialsSubtotal: materialsSubtotal.toFixed(2),
-        materialTaxAmount: materialTaxAmount.toFixed(2),
-        finalCost: toMoney(job.finalCost),
-        depositPaid,
-        amountPaid: toMoney(job.amountPaid),
-        balanceDue: balanceDue.toFixed(2),
-        paymentStatus: job.paymentStatus,
-        jobStatus: job.status,
-      },
+    const invoice = await prisma.$transaction(async (tx) => {
+      const invoiceNumberAssignment = await allocateDocumentNumber(tx, currentUser.id, "invoice");
+      const createdInvoice = await tx.invoice.create({
+        data: {
+          ownerId: currentUser.id,
+          invoiceNumber: invoiceNumberAssignment.documentNumber,
+          jobId: job.id,
+          customerId: job.customerId,
+          customerName: job.customer?.name,
+          customerEmail: job.customer?.email,
+          customerPhone: job.customer?.phoneNumbers[0]?.value,
+          jobTitle: job.description,
+          jobDescription: job.scope,
+          serviceLocation: job.serviceLocation,
+          dateBegin: job.dateBegin,
+          dateEnd: job.dateEnd,
+          laborCost: toMoney(job.laborCost),
+          materialTaxRate: toMoney(job.materialTaxRate),
+          materials: JSON.stringify(materials),
+          materialsSubtotal: materialsSubtotal.toFixed(2),
+          materialTaxAmount: materialTaxAmount.toFixed(2),
+          finalCost: toMoney(job.finalCost),
+          depositPaid,
+          amountPaid: toMoney(job.amountPaid),
+          balanceDue: balanceDue.toFixed(2),
+          paymentStatus: job.paymentStatus,
+          jobStatus: job.status,
+        },
+      });
+      await attachDocumentNumber(tx, invoiceNumberAssignment.assignmentId, createdInvoice.id);
+      return createdInvoice;
     });
     invoiceId = invoice.id;
   } catch (error) {
@@ -359,7 +366,7 @@ export async function emailInvoiceAction(
       },
     },
   });
-  const invoiceNumber = formatDocumentNumber("INV", invoiceSequence);
+  const invoiceNumber = invoice.invoiceNumber ?? formatDocumentNumber("INV", invoiceSequence);
   const emailRecordBase = {
     ownerId: currentUser.id,
     documentType: "invoice" as const,

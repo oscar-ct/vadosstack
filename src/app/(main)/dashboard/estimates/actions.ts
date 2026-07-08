@@ -217,7 +217,7 @@ export async function emailEstimateAction(
       },
     },
   });
-  const estimateNumber = formatDocumentNumber("EST", estimateSequence);
+  const estimateNumber = estimate.estimateNumber ?? formatDocumentNumber("EST", estimateSequence);
   const emailRecordBase = {
     ownerId: currentUser.id,
     documentType: "estimate" as const,

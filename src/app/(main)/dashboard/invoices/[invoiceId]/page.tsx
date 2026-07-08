@@ -233,7 +233,7 @@ export default async function Page({
   const materialsSubtotal = Number(invoice.materialsSubtotal);
   const subtotal = laborSubtotal + materialsSubtotal;
   const taxableItemsLabel = invoice.job.jobType === "Commercial" ? "labor + materials" : "materials";
-  const invoiceNumber = formatDocumentNumber("INV", invoiceSequence);
+  const invoiceNumber = invoice.invoiceNumber ?? formatDocumentNumber("INV", invoiceSequence);
   const companyAddress = currentUser.companyAddress?.trim();
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
   const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);

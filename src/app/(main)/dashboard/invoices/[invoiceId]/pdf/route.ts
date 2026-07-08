@@ -95,7 +95,7 @@ export async function GET(
       },
     },
   });
-  const invoiceNumber = formatDocumentNumber("INV", invoiceSequence);
+  const invoiceNumber = invoice.invoiceNumber ?? formatDocumentNumber("INV", invoiceSequence);
   const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);
   const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
   const taxableItemsLabel = invoice.job.jobType === "Commercial" ? "labor + materials" : "materials";

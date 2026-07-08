@@ -1,9 +1,10 @@
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
+import { peekNextDocumentNumber } from "@/lib/document-numbering";
 
-import { getOrderCount, getOrderCustomers, getOrderInventoryItems } from "../_lib/order-data";
-import { blankOrderValues, formatOrderNumberFromCount } from "./_components/data";
+import { getOrderCustomers, getOrderInventoryItems } from "../_lib/order-data";
+import { blankOrderValues } from "./_components/data";
 import { OrderWorkspace } from "./_components/order";
 
 export default async function Page() {
@@ -18,10 +19,10 @@ export default async function Page() {
     );
   }
 
-  const [customers, inventoryItems, orderCount] = await Promise.all([
+  const [customers, inventoryItems, nextOrderNumber] = await Promise.all([
     getOrderCustomers(currentUser.id),
     getOrderInventoryItems(currentUser.id),
-    getOrderCount(currentUser.id),
+    peekNextDocumentNumber(currentUser.id, "order"),
   ]);
   const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
   const company = {
@@ -34,7 +35,7 @@ export default async function Page() {
   const defaultValues = {
     ...blankOrderValues,
     footerMessage: currentUser.orderMessageText,
-    orderNumber: formatOrderNumberFromCount(orderCount + 1),
+    orderNumber: nextOrderNumber,
   };
 
   return (
