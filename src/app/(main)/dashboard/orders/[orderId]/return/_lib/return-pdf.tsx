@@ -97,6 +97,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingTop: 8,
   },
+  explanation: {
+    borderTopColor: "#e4e4e7",
+    borderTopWidth: 1,
+    gap: 3,
+    marginTop: 6,
+    paddingTop: 6,
+  },
   note: {
     borderTopColor: "#e4e4e7",
     borderTopWidth: 1,
@@ -171,10 +178,30 @@ function ReturnReceiptPdf({ data }: { data: ReturnRefundDocumentData }) {
         </View>
 
         <View style={styles.totals}>
+          <View style={styles.totalRow}>
+            <Text style={styles.muted}>Resolved item value</Text>
+            <Text>{data.refundSubtotal}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text style={styles.muted}>Refundable tax</Text>
+            <Text>{data.refundTax}</Text>
+          </View>
+          {data.refundDiscount !== "$0.00" ? (
+            <View style={styles.totalRow}>
+              <Text style={styles.muted}>Returned item discount</Text>
+              <Text>-{data.refundDiscount}</Text>
+            </View>
+          ) : null}
           <View style={[styles.totalRow, styles.totalFinal]}>
             <Text>Refund Amount</Text>
             <Text>{data.refundAmount}</Text>
           </View>
+          {data.refundExplanation ? (
+            <View style={styles.explanation}>
+              <Text style={styles.label}>Refund note</Text>
+              <Text style={styles.muted}>{data.refundExplanation}</Text>
+            </View>
+          ) : null}
         </View>
 
         <Text style={styles.note}>

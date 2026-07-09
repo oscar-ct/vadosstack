@@ -20,8 +20,11 @@ import {
 import { useVisibleCenterPosition } from "../../../create/_components/use-visible-center-position";
 import {
   getDefaultRefundAmount,
+  getEffectiveRefundStatus,
   getReturnDispositionLabel,
+  getReturnedItemsDiscount,
   getReturnedItemsSubtotal,
+  getReturnedItemsTax,
   type ReturnRefundFormValues,
 } from "../_lib/return-data";
 
@@ -64,7 +67,10 @@ function getLineRefund(item: ReturnRefundFormValues["items"][number]) {
 function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values: ReturnRefundFormValues }) {
   const returnedItems = values.items.filter((item) => item.returnQuantity > 0);
   const returnedSubtotal = getReturnedItemsSubtotal(values);
+  const returnedTax = getReturnedItemsTax(values);
+  const returnedDiscount = getReturnedItemsDiscount(values);
   const refundAmount = getDefaultRefundAmount(values);
+  const refundStatus = getEffectiveRefundStatus(values);
   const addressLines = values.shippingAddressLines.length ? values.shippingAddressLines : ["Customer address pending"];
 
   return (
@@ -152,7 +158,7 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
         <div className="text-right">
           <div className="font-medium text-[11px] text-neutral-500">Refund</div>
           <div className="mt-1.5 grid gap-0.5">
-            <span className="font-medium text-sm">{values.refundStatus}</span>
+            <span className="font-medium text-sm">{refundStatus}</span>
             <span className="text-[11px] text-neutral-500">{values.refundMethod || "Refund method pending"}</span>
             {values.refundReference ? (
               <span className="break-all text-[11px] text-neutral-500">Ref # {values.refundReference}</span>
@@ -167,6 +173,16 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
           <span className="tabular-nums">{formatCurrency(returnedSubtotal)}</span>
         </div>
         <div className="flex items-center justify-between gap-4 text-xs">
+          <span className="text-neutral-500">Refundable tax</span>
+          <span className="tabular-nums">{formatCurrency(returnedTax)}</span>
+        </div>
+        {returnedDiscount > 0 ? (
+          <div className="flex items-center justify-between gap-4 text-xs">
+            <span className="text-neutral-500">Returned item discount</span>
+            <span className="tabular-nums">-{formatCurrency(returnedDiscount)}</span>
+          </div>
+        ) : null}
+        <div className="flex items-center justify-between gap-4 text-xs">
           <span className="text-neutral-500">Original order total</span>
           <span className="tabular-nums">{formatCurrency(values.originalTotal)}</span>
         </div>
@@ -174,6 +190,12 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
           <span className="font-medium">Refund Amount</span>
           <span className="font-medium text-base tabular-nums">{formatCurrency(refundAmount)}</span>
         </div>
+        {(refundStatus === "No Refund" || refundStatus === "Other") && values.refundExplanation ? (
+          <div className="mt-1.5 border-neutral-200 border-t pt-2 text-[11px] leading-snug">
+            <div className="font-medium text-neutral-500">Refund note</div>
+            <div className="mt-0.5 text-neutral-700">{values.refundExplanation}</div>
+          </div>
+        ) : null}
       </ReceiptSection>
 
       <footer className="mt-auto grid min-h-24 place-items-center border-neutral-200 border-t px-5 py-2">

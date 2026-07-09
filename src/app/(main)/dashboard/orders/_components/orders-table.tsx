@@ -154,8 +154,10 @@ function ReturnBadge({ order }: { order: OrderTableItem }) {
   if (!label) return null;
 
   return (
-    <Badge variant="outline" className="mt-1 border-sky-200 bg-sky-50 text-sky-700">
-      {label} · {order.returnNumber}
+    <Badge variant="outline" className="mt-1 max-w-full border-sky-200 bg-sky-50 text-sky-700">
+      <span className="min-w-0 truncate">
+        {label} · {order.returnNumber}
+      </span>
     </Badge>
   );
 }
@@ -257,7 +259,6 @@ function MobileOrderCard({ onOpen, order }: { onOpen: () => void; order: OrderTa
             <div className="text-muted-foreground text-xs">
               {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
             </div>
-            <ReturnBadge order={order} />
           </div>
           <div className="grid gap-0.5 text-right">
             <div className="text-muted-foreground text-xs">Total</div>
@@ -265,6 +266,7 @@ function MobileOrderCard({ onOpen, order }: { onOpen: () => void; order: OrderTa
             <RefundAmountText order={order} />
           </div>
         </div>
+        <ReturnBadge order={order} />
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 text-sm">
           <div>
             <div className="text-muted-foreground text-xs">Customer</div>

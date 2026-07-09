@@ -18,6 +18,8 @@ import {
 import { prisma } from "@/lib/prisma";
 
 import {
+  getCalculatedRefundAmount,
+  getCalculatedRefundStatus,
   getReturnRefundDocumentData,
   parseReturnDisposition,
   parseReturnRefundStatus,
@@ -46,6 +48,7 @@ type EmailReturnReceiptState = {
 const emailReturnReceiptSchema = z.object({
   orderId: z.string().trim().min(1, "Order is required."),
 });
+const REFUND_EXPLANATION_MAX_LENGTH = 80;
 
 function createEmailReturnReceiptState(
   success: boolean,
@@ -98,8 +101,11 @@ function getValidationError(input: ReturnRefundFormValues) {
   );
 
   if (invalidItem) return `${invalidItem.product} has an invalid return quantity.`;
-  if (input.refundStatus !== "No Refund" && (!Number.isFinite(input.refundAmount) || input.refundAmount <= 0)) {
-    return "Enter a refund amount or choose No Refund.";
+  if (input.refundStatus === "Other" && (!Number.isFinite(input.refundAmount) || input.refundAmount < 0)) {
+    return "Enter a custom refund amount.";
+  }
+  if (input.refundExplanation.length > REFUND_EXPLANATION_MAX_LENGTH) {
+    return `Refund explanation must be ${REFUND_EXPLANATION_MAX_LENGTH} characters or less.`;
   }
 
   return null;
@@ -152,7 +158,42 @@ export async function saveReturnRefundAction(
       const orderItemsById = new Map(order.items.map((item) => [item.id, item]));
       const existingReturn = order.returns[0];
       const existingItemsByOrderItemId = new Map(existingReturn?.items.map((item) => [item.orderItemId, item]) ?? []);
-      const refundStatus = parseReturnRefundStatus(input.refundStatus);
+      const normalizedItems = input.items.map((item) => {
+        const orderItem = orderItemsById.get(item.orderItemId);
+        const returnQuantity = orderItem ? Math.max(0, Math.min(item.returnQuantity, orderItem.quantity)) : 0;
+
+        return {
+          ...item,
+          orderedQuantity: orderItem?.quantity ?? item.orderedQuantity,
+          returnQuantity,
+          taxable: orderItem?.taxable ?? item.taxable,
+          taxRate: Number(orderItem?.taxRate ?? item.taxRate ?? 0),
+          unitPrice: Number(orderItem?.unitPrice ?? item.unitPrice),
+        };
+      });
+      const refundCalculationValues: ReturnRefundFormValues = {
+        ...input,
+        items: normalizedItems,
+        originalDiscountAmount: Number(order.discountAmount),
+        originalSubtotal: Number(order.subtotal),
+        originalTaxAmount: Number(order.taxAmount),
+        originalTotal: Number(order.total),
+      };
+      const requestedRefundStatus = parseReturnRefundStatus(input.refundStatus);
+      const refundStatus =
+        requestedRefundStatus === "No Refund" || requestedRefundStatus === "Other"
+          ? requestedRefundStatus
+          : getCalculatedRefundStatus(refundCalculationValues);
+      const refundAmount =
+        refundStatus === "No Refund"
+          ? 0
+          : refundStatus === "Other"
+            ? input.refundAmount
+            : getCalculatedRefundAmount(refundCalculationValues);
+      const refundExplanation =
+        refundStatus === "No Refund" || refundStatus === "Other"
+          ? optionalString(input.refundExplanation.slice(0, REFUND_EXPLANATION_MAX_LENGTH))
+          : null;
       const returnDate = parseDate(input.returnDate);
       const returnRecord = existingReturn
         ? await tx.orderReturn.update({
@@ -163,7 +204,8 @@ export async function saveReturnRefundAction(
               customerNote: optionalString(input.customerNote),
               internalNotes: optionalString(input.internalNotes),
               reason: optionalString(input.reason),
-              refundAmount: new Prisma.Decimal((refundStatus === "No Refund" ? 0 : input.refundAmount).toFixed(2)),
+              refundAmount: new Prisma.Decimal(refundAmount.toFixed(2)),
+              refundExplanation,
               refundMethod: optionalString(input.refundMethod),
               refundReference: optionalString(input.refundReference),
               refundStatus,
@@ -180,7 +222,8 @@ export async function saveReturnRefundAction(
               orderId: order.id,
               ownerId: currentUser.id,
               reason: optionalString(input.reason),
-              refundAmount: new Prisma.Decimal((refundStatus === "No Refund" ? 0 : input.refundAmount).toFixed(2)),
+              refundAmount: new Prisma.Decimal(refundAmount.toFixed(2)),
+              refundExplanation,
               refundMethod: optionalString(input.refundMethod),
               refundReference: optionalString(input.refundReference),
               refundStatus,

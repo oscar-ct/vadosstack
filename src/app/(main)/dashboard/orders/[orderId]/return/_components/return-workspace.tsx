@@ -22,18 +22,24 @@ import { formatCurrency } from "@/lib/utils";
 
 import type { OrderCompany } from "../../../create/_components/data";
 import {
+  getCalculatedRefundAmount,
+  getCalculatedRefundStatus,
   getDefaultRefundAmount,
   getReturnDispositionLabel,
+  getReturnedItemsDiscount,
   getReturnedItemsSubtotal,
+  getReturnedItemsTax,
   type ReturnDisposition,
   type ReturnRefundFormValues,
+  type ReturnRefundStatus,
 } from "../_lib/return-data";
 import { saveReturnRefundAction } from "../actions";
 import { ReturnRefundPreview } from "./return-preview";
 
 const headerActionButtonClassName = "min-w-32 justify-center";
 const dispositionOptions: ReturnDisposition[] = ["Returned", "Damaged", "Lost", "No physical return"];
-const refundStatusOptions = ["Full Refund", "Partial Refund", "No Refund"] as const;
+const refundExplanationMaxLength = 80;
+const refundStatusOptions: ReturnRefundStatus[] = ["Full Refund", "Partial Refund", "No Refund", "Other"];
 
 type ReturnRefundWorkspaceProps = {
   company: OrderCompany;
@@ -49,8 +55,11 @@ function getValidationError(values: ReturnRefundFormValues) {
   if (values.items.some((item) => item.returnQuantity < 0 || item.returnQuantity > item.orderedQuantity)) {
     return "Returned quantities cannot exceed the original order quantities.";
   }
-  if (values.refundStatus !== "No Refund" && (!Number.isFinite(values.refundAmount) || values.refundAmount <= 0)) {
+  if (values.refundStatus === "Other" && (!Number.isFinite(values.refundAmount) || values.refundAmount < 0)) {
     return "Enter a refund amount or choose No Refund.";
+  }
+  if (values.refundExplanation.length > refundExplanationMaxLength) {
+    return `Refund explanation must be ${refundExplanationMaxLength} characters or less.`;
   }
 
   return null;
@@ -91,7 +100,7 @@ function useReturnForm() {
 }
 
 function ReturnItemsSection({ disabled }: { disabled: boolean }) {
-  const { control, setValue } = useReturnForm();
+  const { control, getValues, setValue } = useReturnForm();
   const items = useWatch({ control, name: "items" }) ?? [];
 
   return (
@@ -135,6 +144,17 @@ function ReturnItemsSection({ disabled }: { disabled: boolean }) {
                       value={String(field.value)}
                       onValueChange={(value) => {
                         const quantity = Number(value);
+                        const currentValues = getValues();
+                        const nextItems = currentValues.items.map((currentItem, currentIndex) =>
+                          currentIndex === index ? { ...currentItem, returnQuantity: quantity } : currentItem,
+                        );
+                        const nextValues = {
+                          ...currentValues,
+                          items: nextItems,
+                        };
+                        const wasAutoNoRefund = currentValues.items.every(
+                          (currentItem) => currentItem.returnQuantity <= 0,
+                        );
 
                         field.onChange(quantity);
                         if (quantity === 0) {
@@ -142,6 +162,16 @@ function ReturnItemsSection({ disabled }: { disabled: boolean }) {
                         } else if (item.disposition === "Returned" && item.inventoryItemId) {
                           setValue(`items.${index}.restock`, true, { shouldDirty: true });
                         }
+
+                        if (currentValues.refundStatus === "Other") return;
+
+                        if (currentValues.refundStatus === "No Refund" && !wasAutoNoRefund) {
+                          setValue("refundAmount", 0, { shouldDirty: true });
+                          return;
+                        }
+
+                        setValue("refundStatus", getCalculatedRefundStatus(nextValues), { shouldDirty: true });
+                        setValue("refundAmount", getCalculatedRefundAmount(nextValues), { shouldDirty: true });
                       }}
                     >
                       <SelectTrigger id={`return-quantity-${index}`} className="w-full text-base md:text-sm">
@@ -228,12 +258,47 @@ function ReturnItemsSection({ disabled }: { disabled: boolean }) {
 function RefundDetailsSection({ disabled }: { disabled: boolean }) {
   const { control, register, setValue } = useReturnForm();
   const values = useWatch({ control }) as ReturnRefundFormValues;
+  const calculatedRefundAmount = getCalculatedRefundAmount(values);
+  const calculatedRefundStatus = getCalculatedRefundStatus(values);
+  const isCustomRefund = values.refundStatus === "Other";
+  const showsRefundExplanation = values.refundStatus === "No Refund" || values.refundStatus === "Other";
+  const refundExplanationLength = values.refundExplanation.length;
+  const refundAmountRegistration = register("refundAmount", { valueAsNumber: true });
 
   React.useEffect(() => {
-    if (values.refundStatus === "No Refund" && values.refundAmount !== 0) {
-      setValue("refundAmount", 0, { shouldDirty: true });
+    if (disabled) return;
+
+    if (!showsRefundExplanation && values.refundExplanation) {
+      setValue("refundExplanation", "", { shouldDirty: true });
     }
-  }, [setValue, values.refundAmount, values.refundStatus]);
+
+    if (values.refundStatus === "Other") return;
+
+    if (values.refundStatus === "No Refund") {
+      if (values.refundAmount !== 0) {
+        setValue("refundAmount", 0, { shouldDirty: true });
+      }
+
+      return;
+    }
+
+    if (values.refundStatus !== calculatedRefundStatus) {
+      setValue("refundStatus", calculatedRefundStatus, { shouldDirty: true });
+    }
+
+    if (values.refundAmount !== calculatedRefundAmount) {
+      setValue("refundAmount", calculatedRefundAmount, { shouldDirty: true });
+    }
+  }, [
+    calculatedRefundAmount,
+    calculatedRefundStatus,
+    disabled,
+    setValue,
+    values.refundAmount,
+    values.refundExplanation,
+    values.refundStatus,
+    showsRefundExplanation,
+  ]);
 
   return (
     <section className="grid gap-4">
@@ -253,7 +318,27 @@ function RefundDetailsSection({ disabled }: { disabled: boolean }) {
                 <FieldLabel className="text-xs" htmlFor="refund-status">
                   Refund Status
                 </FieldLabel>
-                <Select disabled={disabled} value={field.value} onValueChange={field.onChange}>
+                <Select
+                  disabled={disabled}
+                  value={field.value}
+                  onValueChange={(value) => {
+                    const refundStatus = value as ReturnRefundStatus;
+
+                    if (refundStatus === "Other") {
+                      field.onChange(refundStatus);
+                      return;
+                    }
+
+                    if (refundStatus === "No Refund") {
+                      field.onChange(refundStatus);
+                      setValue("refundAmount", 0, { shouldDirty: true });
+                      return;
+                    }
+
+                    field.onChange(calculatedRefundStatus);
+                    setValue("refundAmount", calculatedRefundAmount, { shouldDirty: true });
+                  }}
+                >
                   <SelectTrigger id="refund-status" className="w-full text-base md:text-sm">
                     <SelectValue placeholder="Refund status" />
                   </SelectTrigger>
@@ -280,14 +365,41 @@ function RefundDetailsSection({ disabled }: { disabled: boolean }) {
                 type="number"
                 min="0"
                 step="0.01"
-                disabled={disabled || values.refundStatus === "No Refund"}
-                {...register("refundAmount", { valueAsNumber: true })}
-                onBlur={formatMoneyInputOnBlur}
+                disabled={disabled || !isCustomRefund}
+                {...refundAmountRegistration}
+                onBlur={(event) => {
+                  refundAmountRegistration.onBlur(event);
+                  formatMoneyInputOnBlur(event);
+                }}
               />
               <InputGroupAddon align="inline-end">$</InputGroupAddon>
             </InputGroup>
           </Field>
         </div>
+
+        {showsRefundExplanation ? (
+          <Field className="gap-1">
+            <div className="flex items-center justify-between gap-3">
+              <FieldLabel className="text-xs" htmlFor="refund-explanation">
+                Refund Explanation
+              </FieldLabel>
+              <span className="text-muted-foreground text-xs">
+                {refundExplanationLength}/{refundExplanationMaxLength}
+              </span>
+            </div>
+            <Input
+              id="refund-explanation"
+              disabled={disabled}
+              maxLength={refundExplanationMaxLength}
+              placeholder={
+                isCustomRefund
+                  ? "Includes shipping refund or manual adjustment"
+                  : "Replacement issued, warranty claim, or non-refundable item"
+              }
+              {...register("refundExplanation", { maxLength: refundExplanationMaxLength })}
+            />
+          </Field>
+        ) : null}
 
         <div className="grid grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)] gap-3 sm:grid-cols-2 sm:gap-5">
           <Field className="gap-1">
@@ -310,9 +422,28 @@ function RefundDetailsSection({ disabled }: { disabled: boolean }) {
             <span className="font-medium tabular-nums">{formatCurrency(getReturnedItemsSubtotal(values))}</span>
           </div>
           <div className="mt-1 flex justify-between gap-4">
+            <span className="text-muted-foreground">Refundable tax</span>
+            <span className="font-medium tabular-nums">{formatCurrency(getReturnedItemsTax(values))}</span>
+          </div>
+          {getReturnedItemsDiscount(values) > 0 ? (
+            <div className="mt-1 flex justify-between gap-4">
+              <span className="text-muted-foreground">Returned item discount</span>
+              <span className="font-medium tabular-nums">-{formatCurrency(getReturnedItemsDiscount(values))}</span>
+            </div>
+          ) : null}
+          <div className="mt-1 flex justify-between gap-4">
             <span className="text-muted-foreground">Receipt refund amount</span>
             <span className="font-medium tabular-nums">{formatCurrency(getDefaultRefundAmount(values))}</span>
           </div>
+          {isCustomRefund ? (
+            <p className="mt-2 text-muted-foreground text-xs">
+              Other lets you enter a custom refund for shipping, goodwill, fees, or an adjusted tax decision.
+            </p>
+          ) : (
+            <p className="mt-2 text-muted-foreground text-xs">
+              Calculated from returned item value plus refundable tax. Shipping stays out unless you choose Other.
+            </p>
+          )}
         </div>
       </FieldGroup>
     </section>

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 import type { OrderCompany } from "../../../create/_components/data";
 
-export type ReturnRefundStatus = "Full Refund" | "No Refund" | "Partial Refund";
+export type ReturnRefundStatus = "Full Refund" | "No Refund" | "Other" | "Partial Refund";
 export type ReturnDisposition = "Damaged" | "Lost" | "No physical return" | "Returned";
 export type ReturnStatus = "Draft" | "Returned";
 
@@ -21,6 +21,8 @@ export type ReturnRefundItem = {
   restock: boolean;
   returnQuantity: number;
   sku: string;
+  taxable: boolean;
+  taxRate: number;
   unitPrice: number;
 };
 
@@ -33,9 +35,13 @@ export type ReturnRefundFormValues = {
   items: ReturnRefundItem[];
   orderDate: string;
   orderNumber: string;
+  originalDiscountAmount: number;
+  originalSubtotal: number;
+  originalTaxAmount: number;
   originalTotal: number;
   reason: string;
   refundAmount: number;
+  refundExplanation: string;
   refundMethod: string;
   refundReference: string;
   refundStatus: ReturnRefundStatus;
@@ -66,9 +72,13 @@ export type ReturnRefundDocumentData = {
   orderNumber: string;
   reason: string | null;
   refundAmount: string;
+  refundDiscount: string;
+  refundExplanation: string | null;
   refundMethod: string | null;
   refundReference: string | null;
   refundStatus: string;
+  refundSubtotal: string;
+  refundTax: string;
   returnDate: string;
   returnNumber: string;
   shippingAddressLines: string[];
@@ -86,7 +96,7 @@ export function formatDateInputValue(value?: Date | null) {
 }
 
 export function parseReturnRefundStatus(value: string): ReturnRefundStatus {
-  if (value === "Full Refund" || value === "Partial Refund") return value;
+  if (value === "Full Refund" || value === "Partial Refund" || value === "Other") return value;
   return "No Refund";
 }
 
@@ -117,15 +127,67 @@ function getLineRefund(item: ReturnRefundItem) {
   return quantity * unitPrice;
 }
 
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 export function getReturnedItemsSubtotal(values: ReturnRefundFormValues) {
-  return values.items.reduce((total, item) => total + getLineRefund(item), 0);
+  return roundMoney(values.items.reduce((total, item) => total + getLineRefund(item), 0));
+}
+
+export function getReturnedItemsTax(values: ReturnRefundFormValues) {
+  return roundMoney(
+    values.items.reduce((total, item) => {
+      if (!item.taxable) return total;
+
+      const taxRate = Number.isFinite(item.taxRate) ? item.taxRate : 0;
+
+      return total + getLineRefund(item) * (taxRate / 100);
+    }, 0),
+  );
+}
+
+export function getReturnedItemsDiscount(values: ReturnRefundFormValues) {
+  if (!Number.isFinite(values.originalSubtotal) || values.originalSubtotal <= 0) return 0;
+  if (!Number.isFinite(values.originalDiscountAmount) || values.originalDiscountAmount <= 0) return 0;
+
+  const subtotalRatio = Math.min(getReturnedItemsSubtotal(values) / values.originalSubtotal, 1);
+
+  return roundMoney(values.originalDiscountAmount * subtotalRatio);
+}
+
+export function getCalculatedRefundStatus(values: ReturnRefundFormValues): ReturnRefundStatus {
+  const totalReturnedQuantity = values.items.reduce((total, item) => total + item.returnQuantity, 0);
+  const allItemsReturned = values.items.every((item) => item.returnQuantity >= item.orderedQuantity);
+
+  if (totalReturnedQuantity <= 0) return "No Refund";
+  if (allItemsReturned) return "Full Refund";
+
+  return "Partial Refund";
+}
+
+export function getCalculatedRefundAmount(values: ReturnRefundFormValues) {
+  if (getCalculatedRefundStatus(values) === "No Refund") return 0;
+
+  return roundMoney(
+    Math.max(getReturnedItemsSubtotal(values) + getReturnedItemsTax(values) - getReturnedItemsDiscount(values), 0),
+  );
 }
 
 export function getDefaultRefundAmount(values: ReturnRefundFormValues) {
   if (values.refundStatus === "No Refund") return 0;
-  if (Number.isFinite(values.refundAmount) && values.refundAmount > 0) return values.refundAmount;
 
-  return getReturnedItemsSubtotal(values);
+  if (values.refundStatus === "Other") {
+    return Number.isFinite(values.refundAmount) ? values.refundAmount : 0;
+  }
+
+  return getCalculatedRefundAmount(values);
+}
+
+export function getEffectiveRefundStatus(values: ReturnRefundFormValues) {
+  if (values.refundStatus === "No Refund" || values.refundStatus === "Other") return values.refundStatus;
+
+  return getCalculatedRefundStatus(values);
 }
 
 export async function getReturnRefundWorkspaceData(ownerId: string, orderId: string) {
@@ -168,6 +230,7 @@ export async function getReturnRefundWorkspaceData(ownerId: string, orderId: str
   const cityStateZip = [cityState, order.shippingPostalCode].filter(Boolean).join(" ");
   const streetLine = [order.shippingLine1, order.shippingLine2].filter(Boolean).join(", ");
   const shippingAddressLines = [streetLine, cityStateZip].filter(Boolean);
+  const orderItemsById = new Map(order.items.map((item) => [item.id, item]));
   const company: OrderCompany = {
     address: owner.companyAddress,
     email: owner.companyEmail ?? owner.email,
@@ -193,13 +256,19 @@ export async function getReturnRefundWorkspaceData(ownerId: string, orderId: str
           restock: item.restock,
           returnQuantity: item.returnQuantity,
           sku: item.sku ?? "",
+          taxable: orderItemsById.get(item.orderItemId)?.taxable ?? true,
+          taxRate: Number(orderItemsById.get(item.orderItemId)?.taxRate ?? 0),
           unitPrice: Number(item.unitPrice),
         })),
         orderDate: formatDateInputValue(order.orderDate),
         orderNumber: order.orderNumber,
+        originalDiscountAmount: Number(order.discountAmount),
+        originalSubtotal: Number(order.subtotal),
+        originalTaxAmount: Number(order.taxAmount),
         originalTotal: Number(order.total),
         reason: existingReturn.reason ?? "",
         refundAmount: Number(existingReturn.refundAmount),
+        refundExplanation: existingReturn.refundExplanation ?? "",
         refundMethod: existingReturn.refundMethod ?? "",
         refundReference: existingReturn.refundReference ?? "",
         refundStatus: parseReturnRefundStatus(existingReturn.refundStatus),
@@ -226,13 +295,19 @@ export async function getReturnRefundWorkspaceData(ownerId: string, orderId: str
           restock: Boolean(item.inventoryItemId),
           returnQuantity: item.quantity,
           sku: item.sku ?? "",
+          taxable: item.taxable,
+          taxRate: Number(item.taxRate),
           unitPrice: Number(item.unitPrice),
         })),
         orderDate: formatDateInputValue(order.orderDate),
         orderNumber: order.orderNumber,
+        originalDiscountAmount: Number(order.discountAmount),
+        originalSubtotal: Number(order.subtotal),
+        originalTaxAmount: Number(order.taxAmount),
         originalTotal: Number(order.total),
         reason: "",
-        refundAmount: Number(order.total),
+        refundAmount: 0,
+        refundExplanation: "",
         refundMethod: order.paymentMethod ?? "",
         refundReference: "",
         refundStatus: "Full Refund",
@@ -242,6 +317,11 @@ export async function getReturnRefundWorkspaceData(ownerId: string, orderId: str
         returnStatus: "Draft",
         shippingAddressLines,
       };
+
+  if (values.refundStatus !== "No Refund" && values.refundStatus !== "Other") {
+    values.refundStatus = getCalculatedRefundStatus(values);
+    values.refundAmount = getCalculatedRefundAmount(values);
+  }
 
   return {
     company,
@@ -282,10 +362,15 @@ export async function getReturnRefundDocumentData(
     orderDate: values.orderDate ? formatDisplayDate(new Date(`${values.orderDate}T12:00:00`)) : "",
     orderNumber: values.orderNumber,
     reason: values.reason || null,
-    refundAmount: formatMoney(values.refundAmount),
+    refundAmount: formatMoney(getDefaultRefundAmount(values)),
+    refundDiscount: formatMoney(getReturnedItemsDiscount(values)),
+    refundExplanation:
+      values.refundStatus === "No Refund" || values.refundStatus === "Other" ? values.refundExplanation || null : null,
     refundMethod: values.refundMethod || null,
     refundReference: values.refundReference || null,
-    refundStatus: values.refundStatus,
+    refundStatus: getEffectiveRefundStatus(values),
+    refundSubtotal: formatMoney(getReturnedItemsSubtotal(values)),
+    refundTax: formatMoney(getReturnedItemsTax(values)),
     returnDate: values.returnDate ? formatDisplayDate(new Date(`${values.returnDate}T12:00:00`)) : "",
     returnNumber: values.returnNumber,
     shippingAddressLines: values.shippingAddressLines,
