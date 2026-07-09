@@ -4,6 +4,8 @@ import * as React from "react";
 
 import { usePathname } from "next/navigation";
 
+import { HeartPulse } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 type DashboardNavigationLoaderContextValue = {
@@ -86,8 +88,8 @@ function DashboardNavigationLoader() {
       <div className="absolute inset-x-0 top-[clamp(7rem,28svh,14rem)] flex justify-center px-4">
         <div className="flex items-center gap-3 rounded-full border bg-background/95 px-4 py-2.5 text-sm shadow-xl ring-1 ring-foreground/5">
           <span className="relative flex size-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <HeartPulse className="size-4 animate-pulse" />
             <span className="absolute size-full animate-ping rounded-full bg-primary/15" />
-            <span className="size-2 rounded-full bg-primary" />
           </span>
           <span className="font-medium">Loading page</span>
           <span className="flex items-end gap-1" aria-hidden="true">

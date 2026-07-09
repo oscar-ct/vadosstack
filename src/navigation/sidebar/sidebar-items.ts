@@ -1,4 +1,5 @@
 import {
+  Activity,
   BriefcaseBusiness,
   CalendarDays,
   ChartNoAxesCombined,
@@ -132,6 +133,12 @@ export const sidebarItems: NavGroup[] = [
     id: 5,
     label: "E-commerce",
     items: [
+      {
+        title: "Commerce Pulse",
+        url: "/dashboard/commerce-pulse",
+        icon: Activity,
+        isNew: true,
+      },
       {
         title: "Orders",
         url: "/dashboard/orders",
