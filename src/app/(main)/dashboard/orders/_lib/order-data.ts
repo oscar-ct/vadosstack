@@ -59,28 +59,41 @@ export async function getOrderTableItems(ownerId: string): Promise<OrderTableIte
           items: true,
         },
       },
+      returns: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        select: {
+          refundAmount: true,
+          refundStatus: true,
+          returnNumber: true,
+        },
+        take: 1,
+      },
     },
     orderBy: {
       orderDate: "desc",
     },
   });
 
-  return orders.map((order) => ({
-    id: order.id,
-    orderNumber: order.orderNumber,
-    customerName: order.customerName ?? "Walk-in Customer",
-    paymentStatus:
-      order.paymentStatus === "Pending" ? "Pending" : order.paymentStatus === "Refunded" ? "Refunded" : "Paid",
-    fulfillmentStatus:
-      order.fulfillmentStatus === "Fulfilled"
-        ? "Fulfilled"
-        : order.fulfillmentStatus === "Returned"
-          ? "Returned"
-          : "Unfulfilled",
-    itemCount: order._count.items,
-    total: Number(order.total),
-    orderedAt: order.orderDate.toISOString(),
-  }));
+  return orders.map((order) => {
+    const orderReturn = order.returns[0];
+
+    return {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName ?? "Walk-in Customer",
+      paymentStatus: order.paymentStatus === "Pending" ? "Pending" : "Paid",
+      fulfillmentStatus:
+        order.fulfillmentStatus === "Fulfilled" || order.fulfillmentStatus === "Returned" ? "Fulfilled" : "Unfulfilled",
+      itemCount: order._count.items,
+      total: Number(order.total),
+      orderedAt: order.orderDate.toISOString(),
+      returnNumber: orderReturn?.returnNumber ?? null,
+      returnRefundAmount: orderReturn ? Number(orderReturn.refundAmount) : null,
+      returnRefundStatus: orderReturn?.refundStatus ?? null,
+    };
+  });
 }
 
 export async function getOrderCount(ownerId: string) {
@@ -161,11 +174,7 @@ export async function getOrderFormValues(ownerId: string, orderId: string): Prom
     discount: Number(order.discountAmount),
     footerMessage: order.footerMessage || defaultOrderFooterMessage,
     fulfillmentStatus:
-      order.fulfillmentStatus === "Fulfilled"
-        ? "Fulfilled"
-        : order.fulfillmentStatus === "Returned"
-          ? "Returned"
-          : "Unfulfilled",
+      order.fulfillmentStatus === "Fulfilled" || order.fulfillmentStatus === "Returned" ? "Fulfilled" : "Unfulfilled",
     items: order.items.map((item) => ({
       category: item.category ?? "",
       id: item.id,

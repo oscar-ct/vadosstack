@@ -21,6 +21,8 @@ function formatDate(value: Date) {
 }
 
 function formatDocumentType(value: string) {
+  if (value === "return-receipt") return "Return receipt";
+
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
@@ -90,7 +92,9 @@ export default async function Page() {
     .filter((record) => record.documentType === "estimate" && record.documentId)
     .map((record) => record.documentId as string);
   const orderDocumentIds = records
-    .filter((record) => record.documentType === "order" && record.documentId)
+    .filter(
+      (record) => (record.documentType === "order" || record.documentType === "return-receipt") && record.documentId,
+    )
     .map((record) => record.documentId as string);
   const [invoiceCustomerLinks, estimateCustomerLinks, orderCustomerLinks] = await Promise.all([
     invoiceDocumentIds.length
@@ -148,7 +152,9 @@ export default async function Page() {
     if (!record.documentId) return undefined;
     if (record.documentType === "invoice") return invoiceCustomerIdByDocumentId.get(record.documentId) ?? undefined;
     if (record.documentType === "estimate") return estimateCustomerIdByDocumentId.get(record.documentId) ?? undefined;
-    if (record.documentType === "order") return orderCustomerIdByDocumentId.get(record.documentId) ?? undefined;
+    if (record.documentType === "order" || record.documentType === "return-receipt") {
+      return orderCustomerIdByDocumentId.get(record.documentId) ?? undefined;
+    }
     return undefined;
   }
 

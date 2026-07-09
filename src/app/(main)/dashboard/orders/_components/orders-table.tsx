@@ -49,8 +49,8 @@ import { cn, formatCurrency } from "@/lib/utils";
 
 import { updateOrderStatusesAction } from "../actions";
 
-export type OrderPaymentStatus = "Paid" | "Pending" | "Refunded";
-export type OrderFulfillmentStatus = "Fulfilled" | "Returned" | "Unfulfilled";
+export type OrderPaymentStatus = "Paid" | "Pending";
+export type OrderFulfillmentStatus = "Fulfilled" | "Unfulfilled";
 
 export type OrderTableItem = {
   customerName: string;
@@ -60,6 +60,9 @@ export type OrderTableItem = {
   orderNumber: string;
   orderedAt: string;
   paymentStatus: OrderPaymentStatus;
+  returnRefundAmount?: number | null;
+  returnRefundStatus?: string | null;
+  returnNumber?: string | null;
   total: number;
 };
 
@@ -103,13 +106,11 @@ function formatOrderDate(value: string) {
 
 function getPaymentStatusClassName(status: OrderPaymentStatus) {
   if (status === "Paid") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "Refunded") return "border-red-100 bg-red-50 text-red-600";
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
 function getFulfillmentStatusClassName(status: OrderFulfillmentStatus) {
   if (status === "Fulfilled") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "Returned") return "border-red-100 bg-red-50 text-red-600";
   return "border-red-100 bg-red-50 text-red-600";
 }
 
@@ -139,9 +140,39 @@ function OrderStatusBadge({
   );
 }
 
+function getReturnBadgeLabel(order: OrderTableItem) {
+  if (!order.returnNumber) return null;
+  if (order.returnRefundStatus === "Full Refund") return "Refunded";
+  if (order.returnRefundStatus === "Partial Refund") return "Partial refund";
+  if (order.returnRefundStatus === "No Refund" || order.returnRefundAmount === 0) return "Return on file";
+  return "Return on file";
+}
+
+function ReturnBadge({ order }: { order: OrderTableItem }) {
+  const label = getReturnBadgeLabel(order);
+
+  if (!label) return null;
+
+  return (
+    <Badge variant="outline" className="mt-1 border-sky-200 bg-sky-50 text-sky-700">
+      {label} · {order.returnNumber}
+    </Badge>
+  );
+}
+
+function RefundAmountText({ order }: { order: OrderTableItem }) {
+  if (!order.returnRefundAmount || order.returnRefundAmount <= 0) return null;
+
+  return (
+    <div className="font-normal text-destructive text-xs tabular-nums">
+      Refunded {formatCurrency(order.returnRefundAmount)}
+    </div>
+  );
+}
+
 function matchesFilter(order: OrderTableItem, filter: OrderFilter) {
   if (filter === "needs-action") return order.paymentStatus === "Pending" || order.fulfillmentStatus === "Unfulfilled";
-  if (filter === "returns") return order.paymentStatus === "Refunded" || order.fulfillmentStatus === "Returned";
+  if (filter === "returns") return Boolean(order.returnNumber);
   if (filter === "unfulfilled") return order.fulfillmentStatus === "Unfulfilled";
   if (filter === "unpaid") return order.paymentStatus === "Pending";
   return true;
@@ -153,6 +184,9 @@ function getSearchText(order: OrderTableItem) {
     order.customerName,
     order.paymentStatus,
     order.fulfillmentStatus,
+    order.returnNumber,
+    order.returnRefundStatus,
+    getReturnBadgeLabel(order),
     formatCurrency(order.total),
     formatOrderDate(order.orderedAt),
   ]
@@ -169,6 +203,7 @@ function shouldIgnoreRowClick(target: EventTarget | null) {
 function OrderActions({ order }: { order: OrderTableItem }) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
+  const returnHref = `/dashboard/orders/${order.id}/return`;
 
   function updateStatus(statuses: Parameters<typeof updateOrderStatusesAction>[1], successMessage: string) {
     startTransition(async () => {
@@ -203,9 +238,9 @@ function OrderActions({ order }: { order: OrderTableItem }) {
           <PackageCheck className="size-4" />
           Mark fulfilled
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>
+        <DropdownMenuItem onSelect={() => router.push(returnHref)}>
           <RotateCcw className="size-4" />
-          Start return/refund
+          {order.returnNumber ? "View return/refund" : "Start return/refund"}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -222,10 +257,12 @@ function MobileOrderCard({ onOpen, order }: { onOpen: () => void; order: OrderTa
             <div className="text-muted-foreground text-xs">
               {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
             </div>
+            <ReturnBadge order={order} />
           </div>
           <div className="grid gap-0.5 text-right">
             <div className="text-muted-foreground text-xs">Total</div>
             <div className="font-medium text-sm tabular-nums">{formatCurrency(order.total)}</div>
+            <RefundAmountText order={order} />
           </div>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 text-sm">
@@ -527,6 +564,7 @@ export function OrdersTable({ exportSlotId, orders }: { exportSlotId?: string; o
                       <div className="text-muted-foreground text-xs">
                         {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
                       </div>
+                      <ReturnBadge order={order} />
                     </TableCell>
                     <TableCell>
                       <div>{order.customerName}</div>
@@ -537,7 +575,10 @@ export function OrdersTable({ exportSlotId, orders }: { exportSlotId?: string; o
                         <OrderStatusBadge status={order.fulfillmentStatus} type="fulfillment" />
                       </div>
                     </TableCell>
-                    <TableCell className="font-medium tabular-nums">{formatCurrency(order.total)}</TableCell>
+                    <TableCell>
+                      <div className="font-medium tabular-nums">{formatCurrency(order.total)}</div>
+                      <RefundAmountText order={order} />
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{formatOrderDate(order.orderedAt)}</TableCell>
                     <TableCell className="text-right">
                       <OrderActions order={order} />

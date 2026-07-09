@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { ArrowUpRight, DollarSign, PackageCheck, ReceiptText, ShoppingBag, Truck, WalletCards } from "lucide-react";
+import { ArrowUpRight, DollarSign, PackageCheck, ReceiptText, RotateCcw, ShoppingBag, WalletCards } from "lucide-react";
 import { Area, Bar, CartesianGrid, ComposedChart, XAxis, YAxis } from "recharts";
 
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,13 +12,17 @@ import { cn, formatCurrency } from "@/lib/utils";
 import type { CommercePulseData } from "../_lib/commerce-pulse-data";
 
 const salesOverviewConfig = {
-  profit: {
-    label: "Estimated profit",
+  grossSales: {
+    label: "Gross sales",
     color: "var(--muted-foreground)",
   },
-  revenue: {
-    label: "Revenue",
+  netSales: {
+    label: "Net sales",
     color: "var(--foreground)",
+  },
+  refunds: {
+    label: "Refunds",
+    color: "var(--destructive)",
   },
 } satisfies ChartConfig;
 
@@ -79,6 +83,10 @@ function formatCurrencyTooltipValue(value: unknown) {
   return typeof value === "number" ? formatCurrency(value, { noDecimals: true }) : String(value ?? "");
 }
 
+function formatPercent(value: number) {
+  return `${value.toFixed(value >= 10 ? 0 : 1)}%`;
+}
+
 export function CommerceKpiStrip({ data }: { data: CommercePulseData }) {
   return (
     <div className="h-full overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 xl:col-span-12">
@@ -86,38 +94,38 @@ export function CommerceKpiStrip({ data }: { data: CommercePulseData }) {
         <div className="grid grid-cols-1 md:grid-cols-2 md:grid-rows-3 xl:col-span-5 xl:border-r">
           <KpiCard
             icon={DollarSign}
-            metric={data.kpis.totalSales}
-            title="Total Sales"
-            value={formatCurrency(data.kpis.totalSales.value)}
+            metric={data.kpis.netSales}
+            title="Net Sales"
+            value={formatCurrency(data.kpis.netSales.value)}
           />
           <KpiCard
             icon={ShoppingBag}
+            metric={data.kpis.grossSales}
+            title="Gross Sales"
+            value={formatCurrency(data.kpis.grossSales.value)}
+          />
+          <KpiCard
+            icon={WalletCards}
+            metric={data.kpis.refunds}
+            title="Refunds"
+            value={formatCurrency(data.kpis.refunds.value)}
+          />
+          <KpiCard
+            icon={ReceiptText}
             metric={data.kpis.totalOrders}
             title="Total Orders"
             value={data.kpis.totalOrders.value.toLocaleString()}
           />
           <KpiCard
-            icon={WalletCards}
-            metric={data.kpis.estimatedProfit}
-            title="Estimated Profit"
-            value={formatCurrency(data.kpis.estimatedProfit.value)}
-          />
-          <KpiCard
-            icon={ReceiptText}
-            metric={data.kpis.averageOrder}
-            title="Average Order"
-            value={formatCurrency(data.kpis.averageOrder.value, { noDecimals: true })}
-          />
-          <KpiCard
-            icon={Truck}
-            metric={data.kpis.openFulfillment}
-            title="Open Fulfillment"
-            value={data.kpis.openFulfillment.value.toLocaleString()}
+            icon={RotateCcw}
+            metric={data.kpis.returnRate}
+            title="Return Rate"
+            value={formatPercent(data.kpis.returnRate.value)}
           />
           <KpiCard
             icon={PackageCheck}
             metric={data.kpis.unitsSold}
-            title="Units Sold"
+            title="Net Units Sold"
             value={data.kpis.unitsSold.value.toLocaleString()}
           />
         </div>
@@ -179,9 +187,9 @@ export function CommerceKpiStrip({ data }: { data: CommercePulseData }) {
                 <Bar
                   yAxisId="profit"
                   barSize={4}
-                  dataKey="profit"
-                  fill="var(--color-profit)"
-                  name="Estimated profit"
+                  dataKey="refunds"
+                  fill="var(--color-refunds)"
+                  name="Refunds"
                   opacity={0.18}
                   radius={[6, 6, 0, 0]}
                 />
@@ -190,15 +198,26 @@ export function CommerceKpiStrip({ data }: { data: CommercePulseData }) {
                   activeDot={{
                     fill: "var(--background)",
                     r: 4,
-                    stroke: "var(--color-revenue)",
+                    stroke: "var(--color-netSales)",
                     strokeWidth: 2,
                   }}
-                  dataKey="revenue"
+                  dataKey="netSales"
                   dot={false}
                   fill="none"
-                  name="Revenue"
-                  stroke="var(--color-revenue)"
+                  name="Net sales"
+                  stroke="var(--color-netSales)"
                   strokeWidth={1.8}
+                  type="linear"
+                />
+                <Area
+                  yAxisId="revenue"
+                  dataKey="grossSales"
+                  dot={false}
+                  fill="none"
+                  name="Gross sales"
+                  stroke="var(--color-grossSales)"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.2}
                   type="linear"
                 />
               </ComposedChart>

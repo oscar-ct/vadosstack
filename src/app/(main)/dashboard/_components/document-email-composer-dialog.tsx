@@ -152,7 +152,7 @@ export function DocumentEmailComposerDialog({
   details: DocumentEmailDetail[];
   documentId: string;
   documentIdField: string;
-  documentLabel: "estimate" | "invoice" | "order";
+  documentLabel: "estimate" | "invoice" | "order" | "return receipt";
   gmailConnected: boolean;
   recipientEmail?: string | null;
   returnTo: string;

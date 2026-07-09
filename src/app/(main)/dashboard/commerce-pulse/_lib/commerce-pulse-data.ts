@@ -18,6 +18,7 @@ export type CommercePulseScope = (typeof commercePulseScopeOptions)[number]["val
 export type CommercePulseData = Awaited<ReturnType<typeof getCommercePulseData>>;
 
 type OrderWithItems = Awaited<ReturnType<typeof getOrdersForRange>>[number];
+type ReturnWithItems = Awaited<ReturnType<typeof getReturnsForRange>>[number];
 
 const estimatedFallbackMargin = 0.3;
 const dayInMs = 24 * 60 * 60 * 1000;
@@ -116,13 +117,41 @@ function getOrdersForRange(ownerId: string, start: Date, end: Date) {
   });
 }
 
+function getReturnsForRange(ownerId: string, start: Date, end: Date) {
+  return prisma.orderReturn.findMany({
+    where: {
+      ownerId,
+      returnDate: {
+        gte: start,
+        lt: end,
+      },
+    },
+    include: {
+      items: true,
+    },
+    orderBy: {
+      returnDate: "asc",
+    },
+  });
+}
+
 function getScopedItems(order: OrderWithItems, scope: CommercePulseScope) {
   return scope === "inventory" ? order.items.filter((item) => item.inventoryItemId) : order.items;
+}
+
+function getScopedReturnItems(orderReturn: ReturnWithItems, scope: CommercePulseScope) {
+  return scope === "inventory" ? orderReturn.items.filter((item) => item.inventoryItemId) : orderReturn.items;
 }
 
 function getScopedOrderRevenue(order: OrderWithItems, scope: CommercePulseScope) {
   if (scope === "all") return Number(order.total);
   return getScopedItems(order, scope).reduce((total, item) => total + Number(item.lineTotal), 0);
+}
+
+function getScopedRefundAmount(orderReturn: ReturnWithItems, scope: CommercePulseScope) {
+  if (scope === "all") return Number(orderReturn.refundAmount);
+
+  return getScopedReturnItems(orderReturn, scope).reduce((total, item) => total + Number(item.lineRefund), 0);
 }
 
 function getItemProfit(item: OrderWithItems["items"][number]) {
@@ -133,29 +162,49 @@ function getItemProfit(item: OrderWithItems["items"][number]) {
   return revenue - unitCost * item.quantity;
 }
 
-function summarizeOrders(orders: OrderWithItems[], scope: CommercePulseScope) {
+function summarizeCommerce(orders: OrderWithItems[], orderReturns: ReturnWithItems[], scope: CommercePulseScope) {
   const visibleOrders =
     scope === "inventory" ? orders.filter((order) => getScopedItems(order, scope).length > 0) : orders;
-  const revenue = visibleOrders.reduce((total, order) => total + getScopedOrderRevenue(order, scope), 0);
-  const profit = visibleOrders.reduce(
+  const visibleReturns =
+    scope === "inventory"
+      ? orderReturns.filter((orderReturn) => getScopedReturnItems(orderReturn, scope).length > 0)
+      : orderReturns;
+  const grossRevenue = visibleOrders.reduce((total, order) => total + getScopedOrderRevenue(order, scope), 0);
+  const refunds = visibleReturns.reduce((total, orderReturn) => total + getScopedRefundAmount(orderReturn, scope), 0);
+  const grossProfit = visibleOrders.reduce(
     (total, order) =>
       total + getScopedItems(order, scope).reduce((itemTotal, item) => itemTotal + getItemProfit(item), 0),
     0,
   );
   const orderCount = visibleOrders.length;
-  const unitsSold = visibleOrders.reduce(
+  const grossUnitsSold = visibleOrders.reduce(
     (total, order) => total + getScopedItems(order, scope).reduce((itemTotal, item) => itemTotal + item.quantity, 0),
     0,
   );
+  const returnedUnits = visibleReturns.reduce(
+    (total, orderReturn) =>
+      total + getScopedReturnItems(orderReturn, scope).reduce((itemTotal, item) => itemTotal + item.returnQuantity, 0),
+    0,
+  );
+  const netRevenue = Math.max(grossRevenue - refunds, 0);
+  const netUnitsSold = Math.max(grossUnitsSold - returnedUnits, 0);
 
   return {
-    averageOrder: orderCount ? revenue / orderCount : 0,
+    averageOrder: orderCount ? netRevenue / orderCount : 0,
+    grossProfit,
+    grossRevenue,
+    grossUnitsSold,
+    netProfit: grossProfit - refunds,
+    netRevenue,
+    netUnitsSold,
     orderCount,
-    profit,
-    revenue,
-    unitsSold,
-    unfulfilledCount: visibleOrders.filter((order) => order.fulfillmentStatus !== "Fulfilled").length,
-    unpaidCount: visibleOrders.filter((order) => order.paymentStatus !== "Paid").length,
+    refundCount: visibleReturns.filter((orderReturn) => getScopedRefundAmount(orderReturn, scope) > 0).length,
+    refunds,
+    returnCount: visibleReturns.length,
+    returnRate: orderCount ? (visibleReturns.length / orderCount) * 100 : 0,
+    returnedUnits,
+    unfulfilledCount: visibleOrders.filter((order) => order.fulfillmentStatus === "Unfulfilled").length,
+    unpaidCount: visibleOrders.filter((order) => order.paymentStatus === "Pending").length,
   };
 }
 
@@ -184,48 +233,96 @@ function formatBucketLabel(index: number, bucketCount: number, start: Date, end:
   return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(bucketStart);
 }
 
-function buildSalesOverview(orders: OrderWithItems[], scope: CommercePulseScope, start: Date, end: Date) {
+function buildSalesOverview(
+  orders: OrderWithItems[],
+  orderReturns: ReturnWithItems[],
+  scope: CommercePulseScope,
+  start: Date,
+  end: Date,
+) {
   const bucketCount = 12;
   const buckets = Array.from({ length: bucketCount }, (_, index) => ({
+    grossSales: 0,
+    netSales: 0,
     period: formatBucketLabel(index, bucketCount, start, end),
-    profit: 0,
-    revenue: 0,
+    refunds: 0,
   }));
 
   for (const order of orders) {
     const bucket = buckets[getBucketKey(order.orderDate, bucketCount, start, end)];
-    bucket.revenue += getScopedOrderRevenue(order, scope);
-    bucket.profit += getScopedItems(order, scope).reduce((total, item) => total + getItemProfit(item), 0);
+    bucket.grossSales += getScopedOrderRevenue(order, scope);
+  }
+
+  for (const orderReturn of orderReturns) {
+    const bucket = buckets[getBucketKey(orderReturn.returnDate, bucketCount, start, end)];
+    bucket.refunds += getScopedRefundAmount(orderReturn, scope);
   }
 
   return buckets.map((bucket) => ({
     ...bucket,
-    profit: Math.round(bucket.profit),
-    revenue: Math.round(bucket.revenue),
+    grossSales: Math.round(bucket.grossSales),
+    netSales: Math.round(Math.max(bucket.grossSales - bucket.refunds, 0)),
+    refunds: Math.round(bucket.refunds),
   }));
 }
 
-function buildTopProducts(orders: OrderWithItems[], scope: CommercePulseScope) {
-  const products = new Map<string, { category: string; name: string; quantity: number; revenue: number }>();
-  let totalRevenue = 0;
+function buildTopProducts(orders: OrderWithItems[], orderReturns: ReturnWithItems[], scope: CommercePulseScope) {
+  const products = new Map<
+    string,
+    {
+      category: string;
+      grossQuantity: number;
+      grossRevenue: number;
+      name: string;
+      returnedQuantity: number;
+      returnRevenue: number;
+    }
+  >();
 
   for (const order of orders) {
     for (const item of getScopedItems(order, scope)) {
       const key = item.inventoryItemId ?? item.product;
       const current = products.get(key) ?? {
         category: item.category ?? "Uncategorized",
+        grossQuantity: 0,
+        grossRevenue: 0,
         name: item.product,
-        quantity: 0,
-        revenue: 0,
+        returnedQuantity: 0,
+        returnRevenue: 0,
       };
-      current.quantity += item.quantity;
-      current.revenue += Number(item.lineTotal);
-      totalRevenue += Number(item.lineTotal);
+      current.grossQuantity += item.quantity;
+      current.grossRevenue += Number(item.lineTotal);
       products.set(key, current);
     }
   }
 
+  for (const orderReturn of orderReturns) {
+    for (const item of getScopedReturnItems(orderReturn, scope)) {
+      const key = item.inventoryItemId ?? item.product;
+      const current = products.get(key) ?? {
+        category: item.category ?? "Uncategorized",
+        grossQuantity: 0,
+        grossRevenue: 0,
+        name: item.product,
+        returnedQuantity: 0,
+        returnRevenue: 0,
+      };
+      current.returnedQuantity += item.returnQuantity;
+      current.returnRevenue += Number(item.lineRefund);
+      products.set(key, current);
+    }
+  }
+
+  const totalRevenue = Array.from(products.values()).reduce(
+    (total, product) => total + Math.max(product.grossRevenue - product.returnRevenue, 0),
+    0,
+  );
   const items = Array.from(products.values())
+    .map((product) => ({
+      ...product,
+      quantity: Math.max(product.grossQuantity - product.returnedQuantity, 0),
+      revenue: Math.max(product.grossRevenue - product.returnRevenue, 0),
+    }))
     .sort((left, right) => right.revenue - left.revenue)
     .slice(0, 5)
     .map((product) => ({
@@ -233,9 +330,15 @@ function buildTopProducts(orders: OrderWithItems[], scope: CommercePulseScope) {
       share: totalRevenue ? Math.round((product.revenue / totalRevenue) * 100) : 0,
     }));
 
+  const returnedItems = Array.from(products.values())
+    .filter((product) => product.returnedQuantity > 0)
+    .sort((left, right) => right.returnRevenue - left.returnRevenue)
+    .slice(0, 3);
+
   const categoryRevenue = new Map<string, number>();
   for (const product of products.values()) {
-    categoryRevenue.set(product.category, (categoryRevenue.get(product.category) ?? 0) + product.revenue);
+    const netRevenue = Math.max(product.grossRevenue - product.returnRevenue, 0);
+    categoryRevenue.set(product.category, (categoryRevenue.get(product.category) ?? 0) + netRevenue);
   }
 
   const categories = Array.from(categoryRevenue.entries())
@@ -249,6 +352,7 @@ function buildTopProducts(orders: OrderWithItems[], scope: CommercePulseScope) {
   return {
     categories,
     items,
+    returnedItems,
     topShare: items.reduce((total, item) => total + item.share, 0),
   };
 }
@@ -305,30 +409,38 @@ async function getInventorySummary(ownerId: string) {
 export async function getCommercePulseData(ownerId: string, period: CommercePulsePeriod, scope: CommercePulseScope) {
   const range = getPeriodRange(period);
   const previousRange = getPreviousRange(range.start, range.end);
-  const [currentOrders, previousOrders, inventory] = await Promise.all([
+  const [currentOrders, previousOrders, currentReturns, previousReturns, inventory] = await Promise.all([
     getOrdersForRange(ownerId, range.start, range.end),
     getOrdersForRange(ownerId, previousRange.start, previousRange.end),
+    getReturnsForRange(ownerId, range.start, range.end),
+    getReturnsForRange(ownerId, previousRange.start, previousRange.end),
     getInventorySummary(ownerId),
   ]);
-  const current = summarizeOrders(currentOrders, scope);
-  const previous = summarizeOrders(previousOrders, scope);
+  const current = summarizeCommerce(currentOrders, currentReturns, scope);
+  const previous = summarizeCommerce(previousOrders, previousReturns, scope);
 
   return {
     inventory,
     kpis: {
       averageOrder: { delta: getDelta(current.averageOrder, previous.averageOrder), value: current.averageOrder },
-      estimatedProfit: { delta: getDelta(current.profit, previous.profit), value: current.profit },
+      estimatedProfit: { delta: getDelta(current.netProfit, previous.netProfit), value: current.netProfit },
+      grossSales: { delta: getDelta(current.grossRevenue, previous.grossRevenue), value: current.grossRevenue },
+      netSales: { delta: getDelta(current.netRevenue, previous.netRevenue), value: current.netRevenue },
       openFulfillment: {
         delta: getDelta(current.unfulfilledCount, previous.unfulfilledCount),
         value: current.unfulfilledCount,
       },
+      refundCount: { delta: getDelta(current.refundCount, previous.refundCount), value: current.refundCount },
+      refunds: { delta: getDelta(current.refunds, previous.refunds), value: current.refunds },
+      returnRate: { delta: getDelta(current.returnRate, previous.returnRate), value: current.returnRate },
+      returnedUnits: { delta: getDelta(current.returnedUnits, previous.returnedUnits), value: current.returnedUnits },
       totalOrders: { delta: getDelta(current.orderCount, previous.orderCount), value: current.orderCount },
-      totalSales: { delta: getDelta(current.revenue, previous.revenue), value: current.revenue },
-      unitsSold: { delta: getDelta(current.unitsSold, previous.unitsSold), value: current.unitsSold },
+      totalSales: { delta: getDelta(current.netRevenue, previous.netRevenue), value: current.netRevenue },
+      unitsSold: { delta: getDelta(current.netUnitsSold, previous.netUnitsSold), value: current.netUnitsSold },
       unpaidOrders: { delta: getDelta(current.unpaidCount, previous.unpaidCount), value: current.unpaidCount },
     },
     range,
-    salesOverview: buildSalesOverview(currentOrders, scope, range.start, range.end),
-    topProducts: buildTopProducts(currentOrders, scope),
+    salesOverview: buildSalesOverview(currentOrders, currentReturns, scope, range.start, range.end),
+    topProducts: buildTopProducts(currentOrders, currentReturns, scope),
   };
 }

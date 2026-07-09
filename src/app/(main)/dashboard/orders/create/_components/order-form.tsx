@@ -71,13 +71,25 @@ const customAddressValue = "new-address";
 const newCustomerValue = "new-customer";
 const selectCustomerValue = "";
 const paymentStatusOptions: OrderPaymentStatus[] = ["Pending", "Paid"];
-const fulfillmentStatusOptions: OrderFulfillmentStatus[] = ["Unfulfilled", "Fulfilled", "Returned"];
+const fulfillmentStatusOptions: OrderFulfillmentStatus[] = ["Unfulfilled", "Fulfilled"];
 
 function formatOrderCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
     currency: "USD",
     style: "currency",
   }).format(value);
+}
+
+function formatMoneyInputOnBlur(event: React.FocusEvent<HTMLInputElement>) {
+  const value = event.currentTarget.value.trim();
+
+  if (!value) return;
+
+  const parsedValue = Number(value);
+
+  if (!Number.isFinite(parsedValue)) return;
+
+  event.currentTarget.value = parsedValue.toFixed(2);
 }
 
 export function OrderForm({
@@ -146,7 +158,7 @@ function OrderDetails({ disabled }: { disabled: boolean }) {
                   Payment Status
                 </FieldLabel>
                 <Select disabled={disabled} value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger id="payment-status" className="w-full">
+                  <SelectTrigger id="payment-status" className="w-full text-base md:text-sm">
                     <SelectValue placeholder="Payment status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -171,7 +183,7 @@ function OrderDetails({ disabled }: { disabled: boolean }) {
                   Fulfillment Status
                 </FieldLabel>
                 <Select disabled={disabled} value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger id="fulfillment-status" className="w-full">
+                  <SelectTrigger id="fulfillment-status" className="w-full text-base md:text-sm">
                     <SelectValue placeholder="Fulfillment status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -384,7 +396,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
               role="combobox"
               aria-expanded={customerPickerOpen}
               disabled={disabled}
-              className="h-8 w-full justify-between bg-background font-normal"
+              className="h-8 w-full justify-between bg-background font-normal text-base md:text-sm"
             >
               <span className="truncate">{selectedCustomerLabel}</span>
               <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
@@ -392,7 +404,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
           </PopoverTrigger>
           <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
             <Command>
-              <CommandInput placeholder="Search customers..." />
+              <CommandInput className="text-base md:text-sm" placeholder="Search customers..." />
               <CommandList>
                 <CommandEmpty>No customers found.</CommandEmpty>
                 <CommandGroup>
@@ -473,7 +485,10 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                 Saved Address
               </FieldLabel>
               <Select disabled={disabled} value={selectedAddressId} onValueChange={selectAddress}>
-                <SelectTrigger id="shipping-address-select" className="w-full min-w-0 overflow-hidden">
+                <SelectTrigger
+                  id="shipping-address-select"
+                  className="w-full min-w-0 overflow-hidden text-base md:text-sm"
+                >
                   <SelectValue placeholder="Select shipping address" />
                 </SelectTrigger>
                 <SelectContent className="max-w-[calc(100vw-2rem)]">
@@ -560,7 +575,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
             </FieldLabel>
             <Textarea
               id="customer-notes"
-              className="min-h-24 resize-none text-sm"
+              className="min-h-24 resize-none text-base md:text-sm"
               disabled={disabled}
               placeholder="Delivery instructions, order requests, or notes from the customer"
               {...register("customerNotes")}
@@ -592,6 +607,7 @@ function OrderAdjustments({ disabled }: { disabled: boolean }) {
               step="0.01"
               disabled={disabled}
               {...register("shipping", { valueAsNumber: true })}
+              onBlur={formatMoneyInputOnBlur}
             />
             <InputGroupAddon align="inline-end">$</InputGroupAddon>
           </InputGroup>
@@ -624,6 +640,7 @@ function OrderAdjustments({ disabled }: { disabled: boolean }) {
               step="0.01"
               disabled={disabled}
               {...register("discount", { valueAsNumber: true })}
+              onBlur={formatMoneyInputOnBlur}
             />
             <InputGroupAddon align="inline-end">$</InputGroupAddon>
           </InputGroup>
@@ -661,7 +678,7 @@ function OrderFooterMessage({ disabled }: { disabled: boolean }) {
         </FieldLabel>
         <Textarea
           id="order-footer-message"
-          className="h-[5.25rem] resize-none text-sm"
+          className="h-[5.25rem] resize-none text-base md:text-sm"
           disabled={disabled}
           maxLength={orderFooterMaxLength}
           placeholder="Thank you for your order."
@@ -710,7 +727,7 @@ function DatePicker({
           variant="outline"
           disabled={disabled}
           data-empty={!date}
-          className="w-full justify-start gap-2 text-left font-normal data-[empty=true]:text-muted-foreground"
+          className="w-full justify-start gap-2 text-left font-normal text-base data-[empty=true]:text-muted-foreground md:text-sm"
         >
           <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 truncate">{date ? format(date, "MMM d, yyyy") : "Pick date"}</span>
@@ -768,14 +785,19 @@ function OrderItems({ disabled, inventoryItems }: { disabled: boolean; inventory
   }
 
   function handleAddItem() {
-    append({
-      id: crypto.randomUUID(),
-      category: "",
-      product: "",
-      quantity: 1,
-      sku: "",
-      unitPrice: 0,
-    });
+    append(
+      {
+        id: crypto.randomUUID(),
+        category: "",
+        product: "",
+        quantity: 1,
+        sku: "",
+        unitPrice: 0,
+      },
+      {
+        shouldFocus: false,
+      },
+    );
   }
 
   return (
@@ -886,7 +908,7 @@ function SortableOrderItemRow({
             </FieldLabel>
             <Input
               id={`order-item-sku-${index}`}
-              className="font-mono text-sm"
+              className="font-mono text-base md:text-sm"
               disabled={disabled}
               placeholder="SKU"
               {...register(`items.${index}.sku` as const)}
@@ -912,7 +934,7 @@ function SortableOrderItemRow({
             </FieldLabel>
             <Input
               id={`order-item-category-${index}`}
-              className="min-w-0 text-sm"
+              className="min-w-0 text-base md:text-sm"
               disabled={disabled}
               placeholder="Category"
               {...register(`items.${index}.category` as const)}
@@ -928,7 +950,7 @@ function SortableOrderItemRow({
                 type="number"
                 min="1"
                 step="1"
-                className="min-w-0 text-sm"
+                className="min-w-0 text-base md:text-sm"
                 disabled={disabled}
                 {...register(`items.${index}.quantity` as const, { min: 1, valueAsNumber: true })}
               />
@@ -942,9 +964,10 @@ function SortableOrderItemRow({
                 type="number"
                 min="0"
                 step="0.01"
-                className="min-w-0 text-sm"
+                className="min-w-0 text-base md:text-sm"
                 disabled={disabled}
                 {...register(`items.${index}.unitPrice` as const, { min: 0, valueAsNumber: true })}
+                onBlur={formatMoneyInputOnBlur}
               />
             </Field>
           </div>
@@ -1019,7 +1042,7 @@ function InventoryProductPicker({
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
         <Input
           id={`order-item-product-${index}`}
-          className="min-w-0 text-sm"
+          className="min-w-0 text-base md:text-sm"
           disabled={disabled}
           placeholder="Product"
           {...register(`items.${index}.product` as const)}
@@ -1051,7 +1074,7 @@ function InventoryProductPicker({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className="h-8 min-w-0 max-w-full justify-between overflow-hidden bg-background px-2.5 font-normal"
+          className="h-8 min-w-0 max-w-full justify-between overflow-hidden bg-background px-2.5 font-normal text-base md:text-sm"
         >
           <span className="min-w-0 truncate text-left">
             <span className={cn(!item?.product && "text-muted-foreground")}>{buttonLabel}</span>
@@ -1061,7 +1084,7 @@ function InventoryProductPicker({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command>
-          <CommandInput placeholder="Search SKU or product..." />
+          <CommandInput className="text-base md:text-sm" placeholder="Search SKU or product..." />
           <CommandList>
             <CommandEmpty>No inventory items found.</CommandEmpty>
             <CommandGroup>

@@ -41,7 +41,7 @@ type CreateOrderInput = {
   discountAmount?: number;
   estimatedDelivery?: Date | null;
   footerMessage?: string | null;
-  fulfillmentStatus: "Fulfilled" | "Returned" | "Unfulfilled";
+  fulfillmentStatus: "Fulfilled" | "Unfulfilled";
   items: CreateOrderLineItemInput[];
   orderDate: Date;
   orderNumber: string;
@@ -448,7 +448,7 @@ export async function updateOrderWithInventoryAdjustments(orderId: string, input
 export async function updateOrderStatusesAction(
   orderId: string,
   statuses: Partial<{
-    fulfillmentStatus: "Fulfilled" | "Returned" | "Unfulfilled";
+    fulfillmentStatus: "Fulfilled" | "Unfulfilled";
     paymentStatus: "Paid" | "Pending";
   }>,
 ) {

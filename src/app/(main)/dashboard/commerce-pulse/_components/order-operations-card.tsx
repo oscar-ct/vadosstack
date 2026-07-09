@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ArrowUpRight, CircleDollarSign, PackageOpen, ShoppingCart } from "lucide-react";
+import { ArrowUpRight, CircleDollarSign, PackageOpen, RotateCcw, ShoppingCart } from "lucide-react";
 
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -70,9 +70,15 @@ export function OrderOperationsCard({ data }: { data: CommercePulseData }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-muted-foreground text-sm">
-          <ShoppingCart className="size-4" />
-          {data.kpis.unitsSold.value.toLocaleString()} units moved in this window.
+        <div className="grid gap-2">
+          <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-muted-foreground text-sm">
+            <ShoppingCart className="size-4" />
+            {data.kpis.unitsSold.value.toLocaleString()} net units sold in this window.
+          </div>
+          <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-muted-foreground text-sm">
+            <RotateCcw className="size-4" />
+            {data.kpis.returnedUnits.value.toLocaleString()} units resolved through returns.
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -35,7 +35,7 @@ export interface OrderCompany {
 }
 
 export type OrderPaymentStatus = "Paid" | "Pending";
-export type OrderFulfillmentStatus = "Fulfilled" | "Returned" | "Unfulfilled";
+export type OrderFulfillmentStatus = "Fulfilled" | "Unfulfilled";
 
 export interface OrderFormValues {
   apartment: string;

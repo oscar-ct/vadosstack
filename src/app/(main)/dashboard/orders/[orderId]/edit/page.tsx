@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { RotateCcw } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
@@ -32,7 +34,7 @@ export default async function Page({ params }: PageProps) {
   }
 
   const { orderId } = await params;
-  const [order, customers, inventoryItems, googleMailAccount, documentData] = await Promise.all([
+  const [order, customers, inventoryItems, googleMailAccount, documentData, orderReturn] = await Promise.all([
     getOrderFormValues(currentUser.id, orderId),
     getOrderCustomers(currentUser.id),
     getOrderInventoryItems(currentUser.id),
@@ -42,6 +44,15 @@ export default async function Page({ params }: PageProps) {
       },
     }),
     getOrderDocumentData(currentUser.id, orderId),
+    prisma.orderReturn.findFirst({
+      where: {
+        orderId,
+        ownerId: currentUser.id,
+      },
+      select: {
+        returnNumber: true,
+      },
+    }),
   ]);
 
   if (!order || !documentData) {
@@ -89,9 +100,11 @@ export default async function Page({ params }: PageProps) {
       defaultValues={order}
       description="Review this order in read-only mode. Unlock it when you need to make changes."
       headerActions={
-        <Button type="button" variant="outline" size="sm" className="min-w-32 justify-center" disabled>
-          <RotateCcw />
-          Start return/refund
+        <Button asChild variant={orderReturn ? "default" : "outline"} size="sm" className="min-w-32 justify-center">
+          <Link href={`/dashboard/orders/${orderId}/return`}>
+            <RotateCcw />
+            {orderReturn ? `View ${orderReturn.returnNumber}` : "Start return/refund"}
+          </Link>
         </Button>
       }
       inventoryItems={inventoryItems}

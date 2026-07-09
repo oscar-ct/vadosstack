@@ -150,6 +150,8 @@ model User {
   inventoryStockMovements   InventoryStockMovement[]
   orders                    Order[]
   orderItems                OrderItem[]
+  orderReturns              OrderReturn[]
+  orderReturnItems          OrderReturnItem[]
 
   @@map("users")
 }
@@ -468,6 +470,7 @@ model InventoryItem {
   category       InventoryCategory?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   location       InventoryLocation?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
   orderItems     OrderItem[]
+  returnItems    OrderReturnItem[]
   stockMovements InventoryStockMovement[]
 
   @@unique([id, ownerId])
@@ -514,6 +517,7 @@ model Order {
   owner              User                     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   customer           Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
   items              OrderItem[]
+  returns            OrderReturn[]
   stockMovements     InventoryStockMovement[]
 
   @@unique([id, ownerId])
@@ -544,6 +548,7 @@ model OrderItem {
   owner           User                     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   order           Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   inventoryItem   InventoryItem?           @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  returnItems     OrderReturnItem[]
   stockMovements  InventoryStockMovement[]
 
   @@unique([id, ownerId])
@@ -551,6 +556,68 @@ model OrderItem {
   @@index([orderId])
   @@index([inventoryItemId])
   @@map("order_items")
+}
+
+model OrderReturn {
+  id              String            @id @default(cuid())
+  ownerId         String
+  orderId         String
+  returnNumber    String
+  refundStatus    String            @default("No Refund")
+  returnStatus    String            @default("Draft")
+  returnDate      DateTime          @default(now())
+  refundAmount    Decimal           @default(0)
+  refundMethod    String?
+  refundReference String?
+  reason          String?
+  customerNote    String?
+  internalNotes   String?
+  restockItems    Boolean           @default(true)
+  savedAt         DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  owner           User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  order           Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  items           OrderReturnItem[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, orderId])
+  @@unique([ownerId, returnNumber])
+  @@index([ownerId])
+  @@index([orderId])
+  @@index([returnStatus])
+  @@map("order_returns")
+}
+
+model OrderReturnItem {
+  id              String         @id @default(cuid())
+  ownerId         String
+  orderReturnId   String
+  orderItemId     String
+  inventoryItemId String?
+  sku             String?
+  product         String
+  category        String?
+  orderedQuantity Int            @default(0)
+  returnQuantity  Int            @default(0)
+  disposition     String         @default("Returned")
+  unitPrice       Decimal        @default(0)
+  lineRefund      Decimal        @default(0)
+  restock         Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  owner           User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  orderReturn     OrderReturn    @relation(fields: [orderReturnId], references: [id], onDelete: Cascade)
+  orderItem       OrderItem      @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+
+  @@unique([id, ownerId])
+  @@unique([orderReturnId, orderItemId])
+  @@index([ownerId])
+  @@index([orderReturnId])
+  @@index([orderItemId])
+  @@index([inventoryItemId])
+  @@map("order_return_items")
 }
 
 model InventoryStockMovement {

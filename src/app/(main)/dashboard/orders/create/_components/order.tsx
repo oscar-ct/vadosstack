@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Lock, PackagePlus, Save, Send, Unlock } from "lucide-react";
+import { PackagePlus, Save, Send, Undo, Unlock } from "lucide-react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -234,8 +234,8 @@ export function OrderWorkspace({
                   toast.success("Changes discarded.");
                 }}
               >
-                <Lock />
-                Cancel & Lock
+                <Undo />
+                Discard Changes
               </Button>
               <Button
                 type="button"
