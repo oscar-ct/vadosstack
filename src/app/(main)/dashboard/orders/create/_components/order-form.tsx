@@ -16,7 +16,8 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfMonth } from "date-fns";
+import { enGB } from "date-fns/locale";
 import {
   CalendarIcon,
   Check,
@@ -135,7 +136,7 @@ function OrderDetails({ disabled }: { disabled: boolean }) {
           </InputGroup>
         </Field>
 
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5">
           <Controller
             control={control}
             name="paymentStatus"
@@ -188,7 +189,7 @@ function OrderDetails({ disabled }: { disabled: boolean }) {
           />
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5">
           <Controller
             control={control}
             name="orderDate"
@@ -493,7 +494,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
             </Field>
           ) : null}
 
-          <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(180px,0.45fr)]">
+          <div className="grid gap-5">
             <Field className="gap-1">
               <FieldLabel className="text-xs" htmlFor="shipping-street">
                 Street Address
@@ -505,22 +506,22 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                 {...register("streetAddress")}
               />
             </Field>
+          </div>
+
+          <div className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-3 md:grid-cols-[minmax(180px,0.45fr)_minmax(0,1fr)_150px_140px] md:gap-5">
             <Field className="gap-1">
               <FieldLabel className="text-xs" htmlFor="shipping-apartment">
                 Apt/Suite
               </FieldLabel>
               <Input id="shipping-apartment" disabled={disabled} placeholder="Unit B" {...register("apartment")} />
             </Field>
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_150px_140px]">
             <Field className="gap-1">
               <FieldLabel className="text-xs" htmlFor="shipping-city">
                 City
               </FieldLabel>
               <Input id="shipping-city" disabled={disabled} placeholder="Houston" {...register("city")} />
             </Field>
-            <div className="grid grid-cols-2 gap-5 md:contents">
+            <div className="col-span-2 grid grid-cols-2 gap-5 md:contents">
               <Controller
                 control={control}
                 name="state"
@@ -578,7 +579,7 @@ function OrderAdjustments({ disabled }: { disabled: boolean }) {
     <section className="flex flex-col gap-4">
       <h2 className="font-medium tracking-tight">Adjustments</h2>
 
-      <div className="grid gap-5 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5">
         <Field className="gap-1">
           <FieldLabel className="text-xs" htmlFor="order-shipping">
             Shipping
@@ -611,7 +612,7 @@ function OrderAdjustments({ disabled }: { disabled: boolean }) {
             <InputGroupAddon align="inline-end">%</InputGroupAddon>
           </InputGroup>
         </Field>
-        <Field className="gap-1">
+        <Field className="col-span-2 gap-1 sm:col-span-1">
           <FieldLabel className="text-xs" htmlFor="order-discount">
             Discount
           </FieldLabel>
@@ -684,7 +685,21 @@ function DatePicker({
   value: string;
 }) {
   const [open, setOpen] = React.useState(false);
-  const date = parseDateValue(value);
+  const date = React.useMemo(() => parseDateValue(value), [value]);
+  const [currentMonth, setCurrentMonth] = React.useState(() => startOfMonth(date ?? new Date()));
+
+  React.useEffect(() => {
+    if (date) {
+      setCurrentMonth(startOfMonth(date));
+    }
+  }, [date]);
+
+  function handleSelect(selectedDate: Date | undefined) {
+    if (!selectedDate) return;
+
+    onChange(format(selectedDate, "yyyy-MM-dd"));
+    setOpen(false);
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -695,25 +710,25 @@ function DatePicker({
           variant="outline"
           disabled={disabled}
           data-empty={!date}
-          className="w-full justify-between text-left font-normal data-[empty=true]:text-muted-foreground"
+          className="w-full justify-start gap-2 text-left font-normal data-[empty=true]:text-muted-foreground"
         >
-          {date ? format(date, "PPP") : <span>Pick a date</span>}
-          <CalendarIcon className="text-muted-foreground" />
+          <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 truncate">{date ? format(date, "MMM d, yyyy") : "Pick date"}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
-        <Calendar
-          className="w-full"
-          mode="single"
-          selected={date}
-          onSelect={(selectedDate) => {
-            if (!selectedDate) return;
-
-            onChange(format(selectedDate, "yyyy-MM-dd"));
-            setOpen(false);
-          }}
-          defaultMonth={date}
-        />
+      <PopoverContent align="start" className="w-auto overflow-hidden p-0">
+        <div className="p-3">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={handleSelect}
+            month={currentMonth}
+            onMonthChange={setCurrentMonth}
+            fixedWeeks
+            locale={enGB}
+            className="w-full p-0"
+          />
+        </div>
       </PopoverContent>
     </Popover>
   );
@@ -845,7 +860,7 @@ function SortableOrderItemRow({
         transition,
       }}
       className={cn(
-        "grid min-w-0 grid-cols-[24px_minmax(0,1fr)_28px] gap-2 rounded-lg border bg-muted/10 p-2",
+        "relative grid min-w-0 grid-cols-[24px_minmax(0,1fr)] gap-2 rounded-lg border bg-muted/10 p-2 pb-11 lg:grid-cols-[24px_minmax(0,1fr)_28px] lg:pb-2",
         isDragging && "relative z-10 opacity-50",
       )}
     >
@@ -944,7 +959,7 @@ function SortableOrderItemRow({
         type="button"
         variant="ghost"
         size="icon-sm"
-        className="-mr-2 text-muted-foreground"
+        className="absolute bottom-2 left-2 text-muted-foreground lg:static lg:-mr-2"
         aria-label={`Remove item ${index + 1}`}
         disabled={disabled ? true : removeDisabled}
         onClick={onRemove}

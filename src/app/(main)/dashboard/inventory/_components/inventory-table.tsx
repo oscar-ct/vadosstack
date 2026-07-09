@@ -263,12 +263,12 @@ function InventoryItemViewFields({
         {...fieldProps}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <ReadOnlyField field="category" label="Category" value={item.category} {...fieldProps} />
         <ReadOnlyField field="location" label="Location" value={item.location} {...fieldProps} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <ReadOnlyField field="unit" label="Unit" value={item.unit} {...fieldProps} />
         <ReadOnlyField field="itemStatus" label="Status" value={item.itemStatus} {...fieldProps} />
         <ReadOnlyField field="taxable" label="Taxable" value={item.taxable ? "Yes" : "No"} {...fieldProps} />
@@ -280,23 +280,11 @@ function InventoryItemViewFields({
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <ReadOnlyField
           field="stock"
           label="Stock"
           value={<span className="tabular-nums">{item.stock}</span>}
-          {...fieldProps}
-        />
-        <ReadOnlyField
-          field="reorderPoint"
-          label="Reorder point"
-          value={<span className="tabular-nums">{item.reorderPoint}</span>}
-          {...fieldProps}
-        />
-        <ReadOnlyField
-          field="maxStock"
-          label="Max stock"
-          value={<span className="tabular-nums">{item.maxStock}</span>}
           {...fieldProps}
         />
         <ReadOnlyField
@@ -307,14 +295,32 @@ function InventoryItemViewFields({
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <ReadOnlyField
           field="cost"
           label="Cost"
           value={<span className="tabular-nums">{formatCurrency(item.cost)}</span>}
           {...fieldProps}
         />
-        <ReadOnlyField field="vendor" label="Vendor" value={item.vendor} {...fieldProps} />
+        <ReadOnlyField field="vendor" label="Supplier" value={item.vendor} {...fieldProps} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <ReadOnlyField
+          field="maxStock"
+          label="Max stock"
+          value={<span className="tabular-nums">{item.maxStock}</span>}
+          {...fieldProps}
+        />
+        <ReadOnlyField
+          field="reorderPoint"
+          label="Reorder point"
+          value={<span className="tabular-nums">{item.reorderPoint}</span>}
+          {...fieldProps}
+        />
+      </div>
+
+      <div className="grid gap-3 sm:gap-4">
         <ReadOnlyField field="barcode" label="Barcode / UPC" value={item.barcode} {...fieldProps} />
       </div>
 
@@ -346,6 +352,7 @@ function InventoryItemDetailsDialog({
   mode,
   onEdit,
   onOpenChange,
+  stockRules,
 }: {
   categories: string[];
   focusField?: InventoryFieldKey;
@@ -354,6 +361,7 @@ function InventoryItemDetailsDialog({
   mode: InventoryDialogMode;
   onEdit: (field?: InventoryFieldKey) => void;
   onOpenChange: (open: boolean) => void;
+  stockRules: InventoryStockRules;
 }) {
   const title = mode === "edit" ? "Edit item" : "View item";
 
@@ -379,6 +387,7 @@ function InventoryItemDetailsDialog({
             item={item}
             locations={locations}
             onDone={() => onOpenChange(false)}
+            stockRules={stockRules}
           />
         ) : (
           <InventoryItemViewFields item={item} onEdit={onEdit} />
@@ -614,6 +623,7 @@ export function InventoryTable({
           onOpenChange={(open) => {
             if (!open) closeItemDialog();
           }}
+          stockRules={stockRules}
         />
       ) : null}
       <div className="grid gap-4">
