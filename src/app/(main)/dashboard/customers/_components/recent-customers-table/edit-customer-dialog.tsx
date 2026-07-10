@@ -51,7 +51,7 @@ function AddressFields({ address, idPrefix, index }: { address?: CustomerAddress
       <div className="col-span-2 grid gap-1 sm:col-span-2">
         <Label>{address?.label ?? label}</Label>
         <p className="text-emerald-900/70 text-xs dark:text-emerald-200/70">
-          Saved addresses appear as quick-select locations when creating jobs or estimates.
+          Saved addresses appear as quick-select locations when creating work records or orders.
         </p>
       </div>
       <div className="col-span-2 grid gap-2 sm:col-span-2">
@@ -162,7 +162,7 @@ export function EditCustomerDialog({
       <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit customer</DialogTitle>
-          <DialogDescription>Update the customer details shown in the dashboard.</DialogDescription>
+          <DialogDescription>Update shared contact details for work and order records.</DialogDescription>
         </DialogHeader>
 
         {customer ? (
@@ -195,9 +195,9 @@ export function EditCustomerDialog({
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Billing status</Label>
+                <Label>Shared record</Label>
                 <p className="rounded-lg border bg-muted/20 px-3 py-2 text-muted-foreground text-sm">
-                  {customer.billing}. This is automatically calculated from the customer&apos;s jobs.
+                  Contact details are shared across work, orders, email, and customer history.
                 </p>
               </div>
             </div>

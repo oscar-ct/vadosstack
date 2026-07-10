@@ -73,6 +73,13 @@ const sortOptions = [
   { value: "name-asc", label: "Name A-Z" },
   { value: "name-desc", label: "Name Z-A" },
 ] as const;
+const orderSortOptions = [
+  { value: "newest", label: "Newest order" },
+  { value: "oldest", label: "Oldest order" },
+  { value: "spend-desc", label: "Highest spend" },
+  { value: "name-asc", label: "Name A-Z" },
+  { value: "name-desc", label: "Name Z-A" },
+] as const;
 
 function shouldIgnoreRowClick(target: EventTarget | null) {
   return target instanceof HTMLElement
@@ -106,11 +113,35 @@ const customerExportColumns: CsvColumn<RecentCustomerRow>[] = [
   { header: "Notes", value: (customer) => customer.notes },
 ];
 
-export function RecentCustomersTable({ data, exportSlotId }: { data: RecentCustomerRow[]; exportSlotId?: string }) {
+const orderCustomerExportColumns: CsvColumn<RecentCustomerRow>[] = [
+  { header: "Customer name", value: (customer) => customer.name },
+  { header: "Email", value: (customer) => customer.email },
+  { header: "Phone", value: (customer) => customer.phoneNumbers?.map((phone) => phone.value).join("; ") },
+  { header: "Order count", value: (customer) => customer.orderCount },
+  { header: "Total spent", value: (customer) => customer.totalOrderSpent },
+  { header: "Last order", value: (customer) => formatExportDate(customer.lastOrderDate) },
+  { header: "Returns", value: (customer) => customer.returnedOrderCount },
+  { header: "Refunded", value: (customer) => customer.totalOrderRefunded },
+  { header: "Address", value: formatCustomerAddress },
+  { header: "Notes", value: (customer) => customer.notes },
+];
+
+export function RecentCustomersTable({
+  data,
+  exportSlotId,
+  view,
+}: {
+  data: RecentCustomerRow[];
+  exportSlotId?: string;
+  view: "orders" | "work";
+}) {
   const router = useRouter();
+  const viewQuery = view === "orders" ? "?view=orders" : "?view=work";
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [sorting, setSorting] = React.useState<SortingState>([{ id: "lastScheduledJobDate", desc: true }]);
+  const [sorting, setSorting] = React.useState<SortingState>([
+    { id: view === "orders" ? "lastOrderDate" : "lastScheduledJobDate", desc: true },
+  ]);
   const [columnVisibility] = React.useState<VisibilityState>({
     billingBucket: false,
     search: false,
@@ -123,9 +154,10 @@ export function RecentCustomersTable({ data, exportSlotId }: { data: RecentCusto
   const columns = React.useMemo(
     () =>
       getRecentCustomersColumns({
-        onViewCustomer: (customer) => router.push(`/dashboard/customers/${customer.id}`),
+        onViewCustomer: (customer) => router.push(`/dashboard/customers/${customer.id}${viewQuery}`),
+        view,
       }),
-    [router],
+    [router, view, viewQuery],
   );
 
   const table = useReactTable({
@@ -156,26 +188,53 @@ export function RecentCustomersTable({ data, exportSlotId }: { data: RecentCusto
   const exportMenu = (
     <CsvExportMenu
       allRows={data}
-      columns={customerExportColumns}
+      columns={view === "orders" ? orderCustomerExportColumns : customerExportColumns}
       currentRows={currentExportRows}
       filenamePrefix="customers"
       selectedRows={selectedExportRows}
       triggerClassName={exportSlotId ? "hidden w-7 px-0 sm:w-auto sm:px-2.5 md:flex" : undefined}
     />
   );
-  const billingFilter = (table.getColumn("billingBucket")?.getFilterValue() as string) ?? "all";
-  const lastScheduledFilter = (table.getColumn("lastScheduledWindow")?.getFilterValue() as string) ?? "all";
+  const billingFilter =
+    view === "work" ? ((table.getColumn("billingBucket")?.getFilterValue() as string) ?? "all") : "all";
+  const lastScheduledFilter =
+    view === "work" ? ((table.getColumn("lastScheduledWindow")?.getFilterValue() as string) ?? "all") : "all";
   const sortValue = React.useMemo(() => {
     const currentSort = sorting[0];
 
     if (!currentSort) return "newest";
+    if (view === "orders") {
+      if (currentSort.id === "lastOrderDate" && currentSort.desc) return "newest";
+      if (currentSort.id === "lastOrderDate" && !currentSort.desc) return "oldest";
+      if (currentSort.id === "totalOrderSpentValue") return "spend-desc";
+      if (currentSort.id === "name" && !currentSort.desc) return "name-asc";
+      if (currentSort.id === "name" && currentSort.desc) return "name-desc";
+
+      return "newest";
+    }
     if (currentSort.id === "lastScheduledJobDate" && currentSort.desc) return "newest";
     if (currentSort.id === "lastScheduledJobDate" && !currentSort.desc) return "oldest";
     if (currentSort.id === "name" && !currentSort.desc) return "name-asc";
     if (currentSort.id === "name" && currentSort.desc) return "name-desc";
 
     return "newest";
-  }, [sorting]);
+  }, [sorting, view]);
+
+  function handleSortChange(value: string) {
+    const nextSorting: SortingState =
+      value === "oldest"
+        ? [{ id: view === "orders" ? "lastOrderDate" : "lastScheduledJobDate", desc: false }]
+        : value === "spend-desc"
+          ? [{ id: "totalOrderSpentValue", desc: true }]
+          : value === "name-asc"
+            ? [{ id: "name", desc: false }]
+            : value === "name-desc"
+              ? [{ id: "name", desc: true }]
+              : [{ id: view === "orders" ? "lastOrderDate" : "lastScheduledJobDate", desc: true }];
+
+    table.setSorting(nextSorting);
+    table.setPageIndex(0);
+  }
 
   return (
     <>
@@ -209,76 +268,67 @@ export function RecentCustomersTable({ data, exportSlotId }: { data: RecentCusto
                     <DrawerDescription>Filter and sort the customer list on mobile.</DrawerDescription>
                   </DrawerHeader>
                   <div className="grid gap-4 px-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="customers-mobile-last-scheduled">Last scheduled job</Label>
-                      <Select
-                        value={lastScheduledFilter}
-                        onValueChange={(value) => {
-                          table.getColumn("lastScheduledWindow")?.setFilterValue(value === "all" ? undefined : value);
-                          table.setPageIndex(0);
-                        }}
-                      >
-                        <SelectTrigger id="customers-mobile-last-scheduled" className="w-full">
-                          <SelectValue placeholder="Last scheduled job" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {lastScheduledOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="customers-mobile-billing">Billing</Label>
-                      <Select
-                        value={billingFilter}
-                        onValueChange={(value) => {
-                          table.getColumn("billingBucket")?.setFilterValue(value === "all" ? undefined : value);
-                          table.setPageIndex(0);
-                        }}
-                      >
-                        <SelectTrigger id="customers-mobile-billing" className="w-full">
-                          <SelectValue placeholder="Billing" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {billingOptions.map((billing) => (
-                              <SelectItem key={billing.value} value={billing.value}>
-                                {billing.label}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {view === "work" ? (
+                      <>
+                        <div className="grid gap-2">
+                          <Label htmlFor="customers-mobile-last-scheduled">Last scheduled job</Label>
+                          <Select
+                            value={lastScheduledFilter}
+                            onValueChange={(value) => {
+                              table
+                                .getColumn("lastScheduledWindow")
+                                ?.setFilterValue(value === "all" ? undefined : value);
+                              table.setPageIndex(0);
+                            }}
+                          >
+                            <SelectTrigger id="customers-mobile-last-scheduled" className="w-full">
+                              <SelectValue placeholder="Last scheduled job" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                {lastScheduledOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="customers-mobile-billing">Billing</Label>
+                          <Select
+                            value={billingFilter}
+                            onValueChange={(value) => {
+                              table.getColumn("billingBucket")?.setFilterValue(value === "all" ? undefined : value);
+                              table.setPageIndex(0);
+                            }}
+                          >
+                            <SelectTrigger id="customers-mobile-billing" className="w-full">
+                              <SelectValue placeholder="Billing" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                {billingOptions.map((billing) => (
+                                  <SelectItem key={billing.value} value={billing.value}>
+                                    {billing.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </>
+                    ) : null}
                     <div className="grid gap-2">
                       <Label htmlFor="customers-mobile-sort">Sort</Label>
-                      <Select
-                        value={sortValue}
-                        onValueChange={(value) => {
-                          const nextSorting: SortingState =
-                            value === "oldest"
-                              ? [{ id: "lastScheduledJobDate", desc: false }]
-                              : value === "name-asc"
-                                ? [{ id: "name", desc: false }]
-                                : value === "name-desc"
-                                  ? [{ id: "name", desc: true }]
-                                  : [{ id: "lastScheduledJobDate", desc: true }];
-
-                          table.setSorting(nextSorting);
-                          table.setPageIndex(0);
-                        }}
-                      >
+                      <Select value={sortValue} onValueChange={handleSortChange}>
                         <SelectTrigger id="customers-mobile-sort" className="w-full">
                           <SelectValue placeholder="Sort" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            {sortOptions.map((option) => (
+                            {(view === "orders" ? orderSortOptions : sortOptions).map((option) => (
                               <SelectItem key={option.value} value={option.value}>
                                 {option.label}
                               </SelectItem>
@@ -297,52 +347,56 @@ export function RecentCustomersTable({ data, exportSlotId }: { data: RecentCusto
               </Drawer>
             </div>
             <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <CalendarDays />
-                    Last scheduled
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-40" align="start">
-                  <DropdownMenuRadioGroup
-                    value={lastScheduledFilter}
-                    onValueChange={(value) => {
-                      table.getColumn("lastScheduledWindow")?.setFilterValue(value === "all" ? undefined : value);
-                      table.setPageIndex(0);
-                    }}
-                  >
-                    {lastScheduledOptions.map((option) => (
-                      <DropdownMenuRadioItem key={option.value} value={option.value}>
-                        {option.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <CreditCard />
-                    Billing
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup
-                    value={billingFilter}
-                    onValueChange={(value) => {
-                      table.getColumn("billingBucket")?.setFilterValue(value === "all" ? undefined : value);
-                      table.setPageIndex(0);
-                    }}
-                  >
-                    {billingOptions.map((billing) => (
-                      <DropdownMenuRadioItem key={billing.value} value={billing.value}>
-                        {billing.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {view === "work" ? (
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <CalendarDays />
+                        Last scheduled
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-40" align="start">
+                      <DropdownMenuRadioGroup
+                        value={lastScheduledFilter}
+                        onValueChange={(value) => {
+                          table.getColumn("lastScheduledWindow")?.setFilterValue(value === "all" ? undefined : value);
+                          table.setPageIndex(0);
+                        }}
+                      >
+                        {lastScheduledOptions.map((option) => (
+                          <DropdownMenuRadioItem key={option.value} value={option.value}>
+                            {option.label}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <CreditCard />
+                        Billing
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuRadioGroup
+                        value={billingFilter}
+                        onValueChange={(value) => {
+                          table.getColumn("billingBucket")?.setFilterValue(value === "all" ? undefined : value);
+                          table.setPageIndex(0);
+                        }}
+                      >
+                        {billingOptions.map((billing) => (
+                          <DropdownMenuRadioItem key={billing.value} value={billing.value}>
+                            {billing.label}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -351,23 +405,8 @@ export function RecentCustomersTable({ data, exportSlotId }: { data: RecentCusto
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup
-                    value={sortValue}
-                    onValueChange={(value) => {
-                      const nextSorting: SortingState =
-                        value === "oldest"
-                          ? [{ id: "lastScheduledJobDate", desc: false }]
-                          : value === "name-asc"
-                            ? [{ id: "name", desc: false }]
-                            : value === "name-desc"
-                              ? [{ id: "name", desc: true }]
-                              : [{ id: "lastScheduledJobDate", desc: true }];
-
-                      table.setSorting(nextSorting);
-                      table.setPageIndex(0);
-                    }}
-                  >
-                    {sortOptions.map((option) => (
+                  <DropdownMenuRadioGroup value={sortValue} onValueChange={handleSortChange}>
+                    {(view === "orders" ? orderSortOptions : sortOptions).map((option) => (
                       <DropdownMenuRadioItem key={option.value} value={option.value}>
                         {option.label}
                       </DropdownMenuRadioItem>
@@ -393,12 +432,12 @@ export function RecentCustomersTable({ data, exportSlotId }: { data: RecentCusto
                   tabIndex={0}
                   onClick={(event) => {
                     if (shouldIgnoreRowClick(event.target)) return;
-                    router.push(`/dashboard/customers/${row.original.id}`);
+                    router.push(`/dashboard/customers/${row.original.id}${viewQuery}`);
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== "Enter" && event.key !== " ") return;
                     event.preventDefault();
-                    router.push(`/dashboard/customers/${row.original.id}`);
+                    router.push(`/dashboard/customers/${row.original.id}${viewQuery}`);
                   }}
                 >
                   <CardContent className="grid gap-4">
@@ -414,32 +453,59 @@ export function RecentCustomersTable({ data, exportSlotId }: { data: RecentCusto
                             : "shrink-0 font-medium text-rose-700 text-sm dark:text-rose-400"
                         }
                       >
-                        {billingDisplay.amountLabel}
+                        {view === "orders" ? (row.original.totalOrderSpent ?? "$0.00") : billingDisplay.amountLabel}
                       </span>
                     </div>
                     <div className="grid gap-1 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground text-xs">Billing</span>
-                        <span className="text-right">{billingDisplay.detail}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground text-xs">Last scheduled</span>
-                        <span>
-                          {row.original.lastScheduledJobDate
-                            ? new Date(row.original.lastScheduledJobDate).toLocaleDateString()
-                            : "No jobs yet"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground text-xs">Jobs</span>
-                        <span>{row.original.jobCount === 1 ? "1 job" : `${row.original.jobCount} jobs`}</span>
-                      </div>
+                      {view === "orders" ? (
+                        <>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground text-xs">Last order</span>
+                            <span>
+                              {row.original.lastOrderDate
+                                ? new Date(row.original.lastOrderDate).toLocaleDateString()
+                                : "No orders yet"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground text-xs">Orders</span>
+                            <span>
+                              {(row.original.orderCount ?? 0) === 1
+                                ? "1 order"
+                                : `${row.original.orderCount ?? 0} orders`}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground text-xs">Refunded</span>
+                            <span>{row.original.totalOrderRefunded ?? "$0.00"}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground text-xs">Billing</span>
+                            <span className="text-right">{billingDisplay.detail}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground text-xs">Last scheduled</span>
+                            <span>
+                              {row.original.lastScheduledJobDate
+                                ? new Date(row.original.lastScheduledJobDate).toLocaleDateString()
+                                : "No jobs yet"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground text-xs">Jobs</span>
+                            <span>{row.original.jobCount === 1 ? "1 job" : `${row.original.jobCount} jobs`}</span>
+                          </div>
+                        </>
+                      )}
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-muted-foreground text-xs">Phone</span>
                         <span className="truncate">{row.original.phoneNumbers?.[0]?.value ?? "Not on file"}</span>
                       </div>
                     </div>
-                    {row.original.unpaidJobs?.length ? (
+                    {view === "work" && row.original.unpaidJobs?.length ? (
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <CustomerDueJobsPopover customer={row.original} />
                       </div>
@@ -481,14 +547,14 @@ export function RecentCustomersTable({ data, exportSlotId }: { data: RecentCusto
                     aria-label={`View ${row.original.name} details`}
                     onClick={(event) => {
                       if (shouldIgnoreRowClick(event.target)) return;
-                      router.push(`/dashboard/customers/${row.original.id}`);
+                      router.push(`/dashboard/customers/${row.original.id}${viewQuery}`);
                     }}
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
                       if (shouldIgnoreRowClick(event.target)) return;
 
                       event.preventDefault();
-                      router.push(`/dashboard/customers/${row.original.id}`);
+                      router.push(`/dashboard/customers/${row.original.id}${viewQuery}`);
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (

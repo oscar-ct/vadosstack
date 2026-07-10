@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { differenceInCalendarDays, endOfToday, format, parseISO } from "date-fns";
-import { UserRound, WalletCards } from "lucide-react";
+import { PackageCheck, RotateCcw, ShoppingCart, UserRound, WalletCards } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -52,6 +52,10 @@ export function getCustomerBillingDisplay(customer: RecentCustomerRow) {
 
 function formatDate(value?: string) {
   return value ? format(parseISO(value), "MMM d, yyyy") : "No jobs yet";
+}
+
+function formatOrderDate(value?: string) {
+  return value ? format(parseISO(value), "MMM d, yyyy") : "No orders yet";
 }
 
 export function CustomerDueJobsPopover({ customer }: { customer: RecentCustomerRow }) {
@@ -115,10 +119,12 @@ export function CustomerDueJobsPopover({ customer }: { customer: RecentCustomerR
 
 export function getRecentCustomersColumns({
   onViewCustomer,
+  view = "work",
 }: {
   onViewCustomer: (customer: RecentCustomerRow) => void;
+  view?: "orders" | "work";
 }): ColumnDef<RecentCustomerRow>[] {
-  return [
+  const baseColumns: ColumnDef<RecentCustomerRow>[] = [
     {
       id: "select",
       header: ({ table }) => (
@@ -177,7 +183,12 @@ export function getRecentCustomersColumns({
           row.id,
           row.billing,
           row.outstandingAmount,
+          row.totalOrderSpent,
+          row.totalOrderRefunded,
           ...(row.unpaidJobs?.map((job) => [job.title, job.paymentStatus, job.balance].join(" ")) ?? []),
+          ...(row.orderHistory?.map((order) =>
+            [order.orderNumber, order.paymentStatus, order.fulfillmentStatus].join(" "),
+          ) ?? []),
         ].join(" "),
       filterFn: "includesString",
       enableHiding: true,
@@ -196,6 +207,9 @@ export function getRecentCustomersColumns({
       filterFn: "arrIncludes",
       enableHiding: true,
     },
+  ];
+
+  const workColumns: ColumnDef<RecentCustomerRow>[] = [
     {
       accessorKey: "billing",
       header: "Billing",
@@ -255,4 +269,61 @@ export function getRecentCustomersColumns({
       ),
     },
   ];
+
+  const orderColumns: ColumnDef<RecentCustomerRow>[] = [
+    {
+      accessorKey: "totalOrderSpentValue",
+      header: "Order spend",
+      cell: ({ row }) => (
+        <div className="grid gap-0.5">
+          <span className="font-medium text-sm tabular-nums">{row.original.totalOrderSpent ?? "$0.00"}</span>
+          <span className="text-muted-foreground text-xs">
+            {(row.original.orderCount ?? 0) === 1 ? "1 order" : `${row.original.orderCount ?? 0} orders`}
+          </span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "lastOrderDate",
+      header: "Last order",
+      sortUndefined: "last",
+      cell: ({ row }) => <span className="text-sm">{formatOrderDate(row.original.lastOrderDate)}</span>,
+    },
+    {
+      accessorKey: "returnedOrderCount",
+      header: "Returns",
+      cell: ({ row }) => {
+        const returnCount = row.original.returnedOrderCount ?? 0;
+        const refundedValue = row.original.totalOrderRefundedValue ?? 0;
+
+        return (
+          <div className="grid gap-0.5">
+            <div className="flex items-center gap-1.5 text-sm">
+              {returnCount ? (
+                <RotateCcw className="size-3.5 text-muted-foreground" />
+              ) : (
+                <PackageCheck className="size-3.5 text-muted-foreground" />
+              )}
+              <span>{returnCount === 1 ? "1 return" : `${returnCount} returns`}</span>
+            </div>
+            <span className="text-muted-foreground text-xs">
+              {refundedValue > 0 ? `${row.original.totalOrderRefunded} refunded` : "No refunds"}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "orderCount",
+      header: "Orders",
+      cell: ({ row }) => (
+        <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => onViewCustomer(row.original)}>
+          <ShoppingCart className="size-3.5" />
+          <span className="font-medium text-sm">{row.original.orderCount ?? 0}</span>
+        </Button>
+      ),
+    },
+  ];
+
+  return view === "orders" ? [...baseColumns, ...orderColumns] : [...baseColumns, ...workColumns];
 }

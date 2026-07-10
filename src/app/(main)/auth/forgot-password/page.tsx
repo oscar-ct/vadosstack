@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
+import { getWorkspaceHomePath } from "@/lib/workspace-mode";
 
 import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 import { ForgotPasswordForm } from "../_components/forgot-password-form";
@@ -12,7 +13,7 @@ export default async function ForgotPasswordPage() {
   const user = await getCurrentUser();
 
   if (user) {
-    redirect("/dashboard/overview");
+    redirect(getWorkspaceHomePath(user.workspaceMode));
   }
 
   return (

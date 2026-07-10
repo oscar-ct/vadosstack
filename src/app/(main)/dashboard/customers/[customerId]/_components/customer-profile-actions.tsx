@@ -28,7 +28,7 @@ export function CustomerProfileActions({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={() => setEditingCustomer(customer)}>
+      <Button type="button" size="sm" onClick={() => setEditingCustomer(customer)}>
         <Pencil />
         Edit customer
       </Button>

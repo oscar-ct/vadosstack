@@ -18,6 +18,13 @@ export const recentCustomersSchema = z.object({
   joined: z.string(),
   lastScheduledJobDate: z.string().optional(),
   jobCount: z.number(),
+  lastOrderDate: z.string().optional(),
+  orderCount: z.number().optional(),
+  returnedOrderCount: z.number().optional(),
+  totalOrderRefunded: z.string().optional(),
+  totalOrderRefundedValue: z.number().optional(),
+  totalOrderSpent: z.string().optional(),
+  totalOrderSpentValue: z.number().optional(),
   outstandingAmount: z.string().optional(),
   address: customerAddressSchema.optional(),
   addresses: z.array(customerAddressSchema).optional(),
@@ -67,6 +74,24 @@ export const recentCustomersSchema = z.object({
         dueAt: z.string().optional(),
         total: z.string(),
         balance: z.string().optional(),
+      }),
+    )
+    .optional(),
+  orderHistory: z
+    .array(
+      z.object({
+        id: z.string(),
+        orderNumber: z.string(),
+        paymentStatus: z.string(),
+        fulfillmentStatus: z.string(),
+        orderedAt: z.string(),
+        total: z.string(),
+        totalValue: z.number(),
+        itemCount: z.number(),
+        returnNumber: z.string().optional(),
+        refundAmount: z.string().optional(),
+        refundAmountValue: z.number().optional(),
+        refundStatus: z.string().optional(),
       }),
     )
     .optional(),

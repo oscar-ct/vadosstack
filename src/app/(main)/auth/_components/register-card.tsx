@@ -20,7 +20,7 @@ export function RegisterCard({ action }: RegisterCardProps) {
 
   if (confirmedEmail) {
     return (
-      <div className="w-full max-w-md py-24 lg:py-32">
+      <div className="w-full max-w-md py-10 lg:py-12">
         <div className="grid gap-6 text-center">
           <div className="mx-auto flex size-16 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
             <MailCheck className="size-8" />
@@ -42,7 +42,7 @@ export function RegisterCard({ action }: RegisterCardProps) {
   }
 
   return (
-    <div className="w-full max-w-md space-y-10 py-24 lg:py-32">
+    <div className="w-full max-w-md space-y-8 py-10 lg:py-12">
       <div className="space-y-4 text-center">
         <div className="font-semibold text-2xl tracking-tight">Register</div>
         <div className="mx-auto max-w-xl text-muted-foreground">

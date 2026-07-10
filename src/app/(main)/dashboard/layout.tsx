@@ -22,6 +22,7 @@ import {
 import { SessionKeepalive } from "./_components/session-keepalive";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
+import { WorkspaceModeGuard } from "./_components/workspace-mode-guard";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
@@ -126,7 +127,6 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         }),
       ])
     : ["/dashboard/company-logo?fallback=1", null, [], [], 0, 0];
-
   return (
     <SidebarProvider
       defaultOpen={defaultOpen}
@@ -138,6 +138,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     >
       <DashboardNavigationLoaderProvider>
         <SessionKeepalive />
+        {currentUser ? <WorkspaceModeGuard mode={currentUser.workspaceMode} /> : null}
         <AppSidebar
           className="print:hidden"
           variant={variant}
@@ -156,6 +157,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
                   email: currentUser.email,
                   companyLogoSrc,
                   invoiceDueDays: currentUser.invoiceDueDays,
+                  workspaceMode: currentUser.workspaceMode,
                   admin: currentUser.admin,
                   gmailConnected: Boolean(googleMailAccount),
                   gmailSenderEmail: googleMailAccount?.email ?? null,

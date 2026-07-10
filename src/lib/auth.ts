@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { parseWorkspaceMode, type WorkspaceMode } from "@/lib/workspace-mode";
 
 import { createHash, randomBytes } from "node:crypto";
 
@@ -28,6 +29,7 @@ export type CurrentUser = {
   invoiceMessageAlign: string;
   invoiceMessageText: string;
   orderMessageText: string;
+  workspaceMode: WorkspaceMode;
   admin: boolean;
 };
 
@@ -62,6 +64,7 @@ function toCurrentUser(user: {
   invoiceMessageAlign: string;
   invoiceMessageText: string;
   orderMessageText: string;
+  workspaceMode: string;
   admin: boolean;
 }): CurrentUser {
   return {
@@ -81,6 +84,7 @@ function toCurrentUser(user: {
     invoiceMessageAlign: user.invoiceMessageAlign,
     invoiceMessageText: user.invoiceMessageText,
     orderMessageText: user.orderMessageText,
+    workspaceMode: parseWorkspaceMode(user.workspaceMode),
     admin: user.admin,
   };
 }
@@ -125,6 +129,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
           invoiceMessageAlign: true,
           invoiceMessageText: true,
           orderMessageText: true,
+          workspaceMode: true,
           admin: true,
         },
       },

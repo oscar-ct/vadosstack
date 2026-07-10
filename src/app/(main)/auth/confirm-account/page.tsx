@@ -7,6 +7,7 @@ import { hashAccountConfirmationToken } from "@/lib/account-confirmation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
+import { getWorkspaceHomePath } from "@/lib/workspace-mode";
 
 import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 
@@ -88,6 +89,7 @@ async function confirmAccount(token: string): Promise<ConfirmationState> {
         email: pendingAccount.email,
         name: pendingAccount.name,
         passwordHash: pendingAccount.passwordHash,
+        workspaceMode: pendingAccount.workspaceMode,
       },
     });
 
@@ -101,7 +103,7 @@ export default async function ConfirmAccountPage({ searchParams }: ConfirmAccoun
   const user = await getCurrentUser();
 
   if (user) {
-    redirect("/dashboard/overview");
+    redirect(getWorkspaceHomePath(user.workspaceMode));
   }
 
   const params = await searchParams;

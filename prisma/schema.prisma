@@ -118,6 +118,7 @@ model User {
   invoiceMessageAlign       String                     @default("left")
   invoiceMessageText        String                     @default("Please make all checks payable to: {{companyName}}\n\nBalance due: {{balanceDue}}\nDue date: {{dueDate}}\n\nThank you for your business!")
   orderMessageText          String                     @default("Thank you for your order. We appreciate your business and will keep you updated if anything changes.")
+  workspaceMode             String                     @default("both")
   authProviders             String[]                   @default(["email"])
   email                     String                     @unique
   passwordHash              String
@@ -699,6 +700,7 @@ model PendingAccountConfirmation {
   name           String?
   companyName    String
   companyAddress String?
+  workspaceMode  String   @default("both")
   passwordHash   String
   tokenHash      String   @unique
   expiresAt      DateTime

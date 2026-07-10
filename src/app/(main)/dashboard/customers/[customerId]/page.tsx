@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { addDays, format, formatDistanceToNowStrict } from "date-fns";
+import { addDays, format, formatDistanceToNowStrict, parseISO } from "date-fns";
 import {
   ArrowRight,
   BadgeDollarSign,
@@ -15,7 +15,9 @@ import {
   Mail,
   MapPin,
   ReceiptText,
+  RotateCcw,
   Send,
+  ShoppingCart,
   UserRound,
 } from "lucide-react";
 
@@ -26,6 +28,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { cn, formatCurrency } from "@/lib/utils";
+import { parseWorkspaceMode, type WorkspaceMode } from "@/lib/workspace-mode";
 
 import type { RecentCustomerRow } from "../_components/recent-customers-table/schema";
 import { deleteCustomerAction, updateCustomerAction } from "../actions";
@@ -34,6 +37,9 @@ import { CustomerProfileActions } from "./_components/customer-profile-actions";
 type CustomerPageProps = {
   params: Promise<{
     customerId: string;
+  }>;
+  searchParams?: Promise<{
+    view?: string;
   }>;
 };
 
@@ -85,6 +91,8 @@ function activityIcon(type: string) {
   if (type === "Invoice") return <ReceiptText className="size-4" />;
   if (type === "Payment") return <BadgeDollarSign className="size-4" />;
   if (type === "Email") return <Send className="size-4" />;
+  if (type === "Return") return <RotateCcw className="size-4" />;
+  if (type === "Order") return <ShoppingCart className="size-4" />;
   return <CalendarDays className="size-4" />;
 }
 
@@ -97,7 +105,13 @@ function DetailItem({ label, value }: { label: string; value?: string | null }) 
   );
 }
 
-export default async function CustomerPage({ params }: CustomerPageProps) {
+function getCustomerView(mode: WorkspaceMode, requestedView?: string) {
+  if (mode === "commerce") return "orders";
+  if (mode === "service") return "work";
+  return requestedView === "orders" ? "orders" : "work";
+}
+
+export default async function CustomerPage({ params, searchParams }: CustomerPageProps) {
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
@@ -110,6 +124,9 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
   }
 
   const { customerId } = await params;
+  const resolvedSearchParams = await searchParams;
+  const workspaceMode = parseWorkspaceMode(currentUser.workspaceMode);
+  const customerView = getCustomerView(workspaceMode, resolvedSearchParams?.view);
 
   const customer = await prisma.customer.findUnique({
     where: {
@@ -137,6 +154,22 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
         },
         orderBy: {
           createdAt: "desc",
+        },
+      },
+      orders: {
+        include: {
+          items: true,
+          returns: {
+            include: {
+              items: true,
+            },
+            orderBy: {
+              returnDate: "desc",
+            },
+          },
+        },
+        orderBy: {
+          orderDate: "desc",
         },
       },
       phoneNumbers: true,
@@ -193,6 +226,28 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
   const totalOutstanding = invoices.reduce((total, invoice) => total + Number(invoice.balanceDue), 0);
   const totalBilled = invoices.reduce((total, invoice) => total + Number(invoice.finalCost), 0);
   const totalPaid = payments.reduce((total, payment) => total + Number(payment.amount), 0);
+  const orderHistory = customer.orders.map((order) => {
+    const orderReturn = order.returns[0];
+    const refundAmount = orderReturn ? Number(orderReturn.refundAmount) : 0;
+
+    return {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      paymentStatus: order.paymentStatus,
+      fulfillmentStatus: order.fulfillmentStatus,
+      orderedAt: order.orderDate.toISOString(),
+      total: formatCurrency(Number(order.total)),
+      totalValue: Number(order.total),
+      itemCount: order.items.reduce((total, item) => total + item.quantity, 0),
+      returnNumber: orderReturn?.returnNumber ?? undefined,
+      refundAmount: orderReturn ? formatCurrency(refundAmount) : undefined,
+      refundAmountValue: orderReturn ? refundAmount : undefined,
+      refundStatus: orderReturn?.refundStatus ?? undefined,
+    };
+  });
+  const totalOrderSpent = orderHistory.reduce((total, order) => total + order.totalValue, 0);
+  const totalOrderRefunded = orderHistory.reduce((total, order) => total + (order.refundAmountValue ?? 0), 0);
+  const returnedOrderCount = orderHistory.filter((order) => order.returnNumber).length;
   const customerRow: RecentCustomerRow = {
     id: customer.id,
     name: customer.name,
@@ -204,6 +259,13 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
       .sort((left, right) => right.getTime() - left.getTime())[0]
       ?.toISOString(),
     jobCount: customer.jobs.length,
+    lastOrderDate: orderHistory[0]?.orderedAt,
+    orderCount: orderHistory.length,
+    returnedOrderCount,
+    totalOrderRefunded: formatCurrency(totalOrderRefunded),
+    totalOrderRefundedValue: totalOrderRefunded,
+    totalOrderSpent: formatCurrency(totalOrderSpent),
+    totalOrderSpentValue: totalOrderSpent,
     outstandingAmount: totalOutstanding > 0 ? formatCurrency(totalOutstanding) : undefined,
     addresses: customer.addresses.map((address) => ({
       label: address.label ?? undefined,
@@ -247,6 +309,7 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
       total: formatMoney(invoice.finalCost) ?? "$0.00",
       balance: formatMoney(invoice.balanceDue),
     })),
+    orderHistory,
     notes: customer.notes ?? undefined,
   };
   const lastActivityDate =
@@ -255,6 +318,8 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
       ...customer.estimateRecords.map((estimate) => estimate.updatedAt),
       ...invoices.map((invoice) => invoice.updatedAt),
       ...payments.map((payment) => payment.createdAt),
+      ...customer.orders.map((order) => order.updatedAt),
+      ...customer.orders.flatMap((order) => order.returns.map((orderReturn) => orderReturn.updatedAt)),
       ...emailRecords.map((record) => record.sentAt),
     ].sort((left, right) => right.getTime() - left.getTime())[0] ?? customer.updatedAt;
 
@@ -335,12 +400,47 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
       type: "Email",
     })),
   ].sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime());
+  const orderActivity: ActivityItem[] = [
+    ...customer.orders.map((order) => ({
+      id: `order-${order.id}`,
+      amount: formatMoney(order.total),
+      description: `${order.paymentStatus} - ${order.fulfillmentStatus} - ${order.items.length} line item${
+        order.items.length === 1 ? "" : "s"
+      }`,
+      href: `/dashboard/orders/${order.id}/edit`,
+      occurredAt: order.orderDate,
+      title: order.orderNumber,
+      tone: "cyan" as const,
+      type: "Order",
+    })),
+    ...customer.orders.flatMap((order) =>
+      order.returns.map((orderReturn) => ({
+        id: `return-${orderReturn.id}`,
+        amount: formatMoney(orderReturn.refundAmount),
+        description: `${orderReturn.refundStatus} - ${orderReturn.returnStatus}`,
+        href: `/dashboard/orders/${order.id}/return`,
+        occurredAt: orderReturn.returnDate,
+        title: `${orderReturn.returnNumber} for ${order.orderNumber}`,
+        tone: Number(orderReturn.refundAmount) > 0 ? ("rose" as const) : ("slate" as const),
+        type: "Return",
+      })),
+    ),
+  ].sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime());
 
   return (
     <div className="@container/main mx-auto grid w-full max-w-7xl gap-5 md:gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <BackButton fallbackHref="/dashboard/customers" />
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+        <div className="flex justify-start">
+          <BackButton fallbackHref="/dashboard/customers" />
+        </div>
+        {workspaceMode === "both" ? (
+          <div className="flex justify-center">
+            <CustomerViewSwitcher customerId={customer.id} view={customerView} />
+          </div>
+        ) : (
+          <div />
+        )}
+        <div className="flex justify-start sm:justify-end">
           <CustomerProfileActions
             customer={customerRow}
             deleteCustomerAction={deleteCustomerAction}
@@ -364,9 +464,19 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
               </div>
             </div>
             <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,9.5rem),1fr))]">
-              <SummaryTile label="Outstanding" value={formatCurrency(totalOutstanding)} />
-              <SummaryTile label="Billed" value={formatCurrency(totalBilled)} />
-              <SummaryTile label="Paid" value={formatCurrency(totalPaid)} />
+              {customerView === "orders" ? (
+                <>
+                  <SummaryTile label="Order spend" value={formatCurrency(totalOrderSpent)} />
+                  <SummaryTile label="Refunded" value={formatCurrency(totalOrderRefunded)} />
+                  <SummaryTile label="Orders" value={orderHistory.length.toLocaleString()} />
+                </>
+              ) : (
+                <>
+                  <SummaryTile label="Outstanding" value={formatCurrency(totalOutstanding)} />
+                  <SummaryTile label="Billed" value={formatCurrency(totalBilled)} />
+                  <SummaryTile label="Paid" value={formatCurrency(totalPaid)} />
+                </>
+              )}
             </div>
           </div>
 
@@ -377,9 +487,24 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
             </div>
             <div className="mt-4 grid gap-3">
               <DetailItem label="Last activity" value={`${formatDistanceToNowStrict(lastActivityDate)} ago`} />
-              <DetailItem label="Jobs" value={`${customer.jobs.length} recorded`} />
-              <DetailItem label="Estimates" value={`${customer.estimateRecords.length} recorded`} />
-              <DetailItem label="Invoices" value={`${invoices.length} issued`} />
+              {customerView === "orders" ? (
+                <>
+                  <DetailItem label="Orders" value={`${orderHistory.length} recorded`} />
+                  <DetailItem label="Returns" value={`${returnedOrderCount} recorded`} />
+                  <DetailItem
+                    label="Last order"
+                    value={
+                      orderHistory[0] ? format(parseISO(orderHistory[0].orderedAt), "MMM d, yyyy") : "No orders yet"
+                    }
+                  />
+                </>
+              ) : (
+                <>
+                  <DetailItem label="Jobs" value={`${customer.jobs.length} recorded`} />
+                  <DetailItem label="Estimates" value={`${customer.estimateRecords.length} recorded`} />
+                  <DetailItem label="Invoices" value={`${invoices.length} issued`} />
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -424,69 +549,90 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
 
           <section className="rounded-lg border bg-card p-4">
             <div className="flex items-center gap-2 font-medium text-sm">
-              <CreditCard className="size-4 text-muted-foreground" />
-              Billing
+              {customerView === "orders" ? (
+                <ShoppingCart className="size-4 text-muted-foreground" />
+              ) : (
+                <CreditCard className="size-4 text-muted-foreground" />
+              )}
+              {customerView === "orders" ? "Orders" : "Billing"}
             </div>
             <div className="mt-4 grid gap-3">
-              <DetailItem label="Status" value={totalOutstanding > 0 ? "Outstanding balance" : "No balance"} />
-              <DetailItem label="Outstanding amount" value={formatCurrency(totalOutstanding)} />
-              <DetailItem label="Payment records" value={`${payments.length} recorded`} />
+              {customerView === "orders" ? (
+                <>
+                  <DetailItem label="Total spent" value={formatCurrency(totalOrderSpent)} />
+                  <DetailItem label="Refunded" value={formatCurrency(totalOrderRefunded)} />
+                  <DetailItem label="Returns" value={`${returnedOrderCount} recorded`} />
+                </>
+              ) : (
+                <>
+                  <DetailItem label="Status" value={totalOutstanding > 0 ? "Outstanding balance" : "No balance"} />
+                  <DetailItem label="Outstanding amount" value={formatCurrency(totalOutstanding)} />
+                  <DetailItem label="Payment records" value={`${payments.length} recorded`} />
+                </>
+              )}
             </div>
           </section>
         </aside>
 
         <main className="grid min-w-0 gap-5">
-          <section className="rounded-lg border bg-card">
-            <div className="border-b p-4">
-              <div className="flex items-center gap-2 font-medium text-sm">
-                <CalendarDays className="size-4 text-muted-foreground" />
-                Activity timeline
-              </div>
-              <p className="mt-1 text-muted-foreground text-xs">
-                Estimates, jobs, invoices, payments, and email attempts for this customer.
-              </p>
-            </div>
-            <div className="grid gap-0 p-4">
-              {activity.length ? (
-                activity.map((item) => <ActivityRow key={item.id} item={item} />)
-              ) : (
-                <div className="rounded-md border border-dashed bg-muted/20 p-6 text-center">
-                  <CheckCircle2 className="mx-auto size-8 text-muted-foreground" />
-                  <p className="mt-3 font-medium text-sm">No activity yet</p>
-                  <p className="mt-1 text-muted-foreground text-xs">
-                    Estimate, job, invoice, payment, and email activity will appear here.
-                  </p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="grid gap-5 lg:grid-cols-2">
-            <DocumentList
-              emptyLabel="No estimates yet."
-              icon={<FileText className="size-4 text-muted-foreground" />}
-              items={customer.estimateRecords.map((estimate) => ({
-                amount: formatMoney(estimate.estimatedTotal),
-                href: estimate.printableEstimate
-                  ? `/dashboard/estimates/${estimate.printableEstimate.id}`
-                  : `/dashboard/estimates/records/${estimate.id}`,
-                meta: `${estimate.status} - ${format(estimate.createdAt, "MMM d, yyyy")}`,
-                title: estimate.description,
-              }))}
-              title="Estimates"
-            />
-            <DocumentList
-              emptyLabel="No invoices yet."
-              icon={<ReceiptText className="size-4 text-muted-foreground" />}
-              items={invoices.map((invoice) => ({
-                amount: formatMoney(invoice.finalCost),
-                href: `/dashboard/invoices/${invoice.id}`,
-                meta: `${invoice.paymentStatus} - ${format(invoice.issuedAt, "MMM d, yyyy")}`,
-                title: invoice.jobTitle,
-              }))}
-              title="Invoices"
-            />
-          </section>
+          {customerView === "orders" ? (
+            <>
+              <ActivityPanel
+                description="Orders, returns, refunds, and receipt activity for this customer."
+                emptyDescription="Order and return activity will appear here."
+                items={orderActivity}
+                title="Order timeline"
+              />
+              <DocumentList
+                emptyLabel="No orders yet."
+                icon={<ShoppingCart className="size-4 text-muted-foreground" />}
+                items={orderHistory.map((order) => ({
+                  amount: order.total,
+                  href: `/dashboard/orders/${order.id}/edit`,
+                  meta: `${order.paymentStatus} - ${order.fulfillmentStatus} - ${format(parseISO(order.orderedAt), "MMM d, yyyy")}`,
+                  title: order.returnNumber
+                    ? `${order.orderNumber} - ${order.refundAmount ?? "$0.00"} refunded`
+                    : order.orderNumber,
+                }))}
+                title="Orders"
+              />
+            </>
+          ) : (
+            <>
+              <ActivityPanel
+                description="Estimates, jobs, invoices, payments, and email attempts for this customer."
+                emptyDescription="Estimate, job, invoice, payment, and email activity will appear here."
+                items={activity}
+                title="Activity timeline"
+              />
+              <section className="grid gap-5 lg:grid-cols-2">
+                <DocumentList
+                  emptyLabel="No estimates yet."
+                  icon={<FileText className="size-4 text-muted-foreground" />}
+                  items={customer.estimateRecords.map((estimate) => ({
+                    amount: formatMoney(estimate.estimatedTotal),
+                    href: estimate.printableEstimate
+                      ? `/dashboard/estimates/${estimate.printableEstimate.id}`
+                      : `/dashboard/estimates/records/${estimate.id}`,
+                    meta: `${estimate.status} - ${format(estimate.createdAt, "MMM d, yyyy")}`,
+                    title: estimate.description,
+                  }))}
+                  title="Estimates"
+                />
+                <DocumentList
+                  emptyLabel="No invoices yet."
+                  icon={<ReceiptText className="size-4 text-muted-foreground" />}
+                  items={invoices.map((invoice) => ({
+                    amount: formatMoney(invoice.finalCost),
+                    href: `/dashboard/invoices/${invoice.id}`,
+                    meta: `${invoice.paymentStatus} - ${format(invoice.issuedAt, "MMM d, yyyy")}`,
+                    title: invoice.jobTitle,
+                  }))}
+                  title="Invoices"
+                />
+              </section>
+            </>
+          )}
         </main>
       </div>
     </div>
@@ -499,6 +645,60 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
       <div className="text-muted-foreground text-xs">{label}</div>
       <div className="mt-1 min-w-0 truncate font-semibold text-lg tabular-nums">{value}</div>
     </div>
+  );
+}
+
+function CustomerViewSwitcher({ customerId, view }: { customerId: string; view: "orders" | "work" }) {
+  return (
+    <div className="inline-grid h-8 grid-cols-2 rounded-lg bg-muted p-1 text-sm">
+      {(["work", "orders"] as const).map((option) => (
+        <Link
+          key={option}
+          href={`/dashboard/customers/${customerId}?view=${option}`}
+          className={cn(
+            "grid min-w-20 place-items-center rounded-md px-3 font-medium transition-colors",
+            view === option ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {option === "work" ? "Work" : "Orders"}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function ActivityPanel({
+  description,
+  emptyDescription,
+  items,
+  title,
+}: {
+  description: string;
+  emptyDescription: string;
+  items: ActivityItem[];
+  title: string;
+}) {
+  return (
+    <section className="rounded-lg border bg-card">
+      <div className="border-b p-4">
+        <div className="flex items-center gap-2 font-medium text-sm">
+          <CalendarDays className="size-4 text-muted-foreground" />
+          {title}
+        </div>
+        <p className="mt-1 text-muted-foreground text-xs">{description}</p>
+      </div>
+      <div className="grid gap-0 p-4">
+        {items.length ? (
+          items.map((item) => <ActivityRow key={item.id} item={item} />)
+        ) : (
+          <div className="rounded-md border border-dashed bg-muted/20 p-6 text-center">
+            <CheckCircle2 className="mx-auto size-8 text-muted-foreground" />
+            <p className="mt-3 font-medium text-sm">No activity yet</p>
+            <p className="mt-1 text-muted-foreground text-xs">{emptyDescription}</p>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

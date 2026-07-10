@@ -4,11 +4,13 @@ import * as React from "react";
 
 import Link from "next/link";
 
-import { Eye, EyeOff, MailCheck } from "lucide-react";
+import { BriefcaseBusiness, Check, Eye, EyeOff, MailCheck, PanelsTopLeft, ShoppingCart } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { getWorkspaceModeLabel, type WorkspaceMode } from "@/lib/workspace-mode";
 
 import type { AuthFormState } from "../actions";
 
@@ -16,6 +18,32 @@ const initialState: AuthFormState = {
   success: false,
   message: "",
 };
+
+const workspaceModeOptions: Array<{
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  summary: string;
+  value: WorkspaceMode;
+}> = [
+  {
+    value: "both",
+    icon: PanelsTopLeft,
+    summary: "Use service business and e-commerce tools",
+    description: "",
+  },
+  {
+    value: "service",
+    icon: BriefcaseBusiness,
+    summary: "Jobs and service work",
+    description: "Leads, estimates, jobs, invoices, calendar, and team workflows.",
+  },
+  {
+    value: "commerce",
+    icon: ShoppingCart,
+    summary: "Orders and inventory",
+    description: "Commerce reports, orders, inventory, receipts, and refunds.",
+  },
+];
 
 export function RegisterForm({
   action,
@@ -28,6 +56,7 @@ export function RegisterForm({
   const [name, setName] = React.useState("");
   const [companyName, setCompanyName] = React.useState("");
   const [companyAddress, setCompanyAddress] = React.useState("");
+  const [workspaceMode, setWorkspaceMode] = React.useState<WorkspaceMode>("both");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -51,6 +80,7 @@ export function RegisterForm({
     setName("");
     setCompanyName("");
     setCompanyAddress("");
+    setWorkspaceMode("both");
     setEmail("");
     setPassword("");
     setConfirmPassword("");
@@ -120,6 +150,64 @@ export function RegisterForm({
             autoComplete="street-address"
             disabled={isPending || confirmationSent}
           />
+        </Field>
+        <Field className="gap-1.5">
+          <FieldLabel id="register-workspace-mode-label" htmlFor="register-workspace-mode-both">
+            What will you use VadosStack for?
+          </FieldLabel>
+          <div className="grid gap-2" role="radiogroup" aria-labelledby="register-workspace-mode-label">
+            {workspaceModeOptions.map((option) => {
+              const Icon = option.icon;
+              const selected = workspaceMode === option.value;
+
+              return (
+                <label
+                  key={option.value}
+                  htmlFor={`register-workspace-mode-${option.value}`}
+                  className={cn(
+                    "grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] gap-3 rounded-lg border bg-background p-3 text-left transition-colors has-disabled:cursor-not-allowed has-focus-visible:border-ring has-disabled:opacity-60 has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50",
+                    selected ? "border-primary bg-primary/5" : "border-input hover:bg-muted/50",
+                  )}
+                >
+                  <input
+                    id={`register-workspace-mode-${option.value}`}
+                    type="radio"
+                    name="workspaceMode"
+                    value={option.value}
+                    checked={selected}
+                    disabled={isPending || confirmationSent}
+                    onChange={() => setWorkspaceMode(option.value)}
+                    className="sr-only"
+                  />
+                  <span
+                    className={cn(
+                      "mt-0.5 grid size-8 place-items-center rounded-md border",
+                      selected
+                        ? "border-primary/20 bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-medium text-sm">{getWorkspaceModeLabel(option.value)}</span>
+                    <span className="mt-0.5 block text-muted-foreground text-xs">{option.summary}</span>
+                    <span className="mt-1 block text-muted-foreground text-xs leading-relaxed">
+                      {option.description}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-1 grid size-5 place-items-center rounded-full border",
+                      selected ? "border-primary bg-primary text-primary-foreground" : "border-input text-transparent",
+                    )}
+                  >
+                    <Check className="size-3" />
+                  </span>
+                </label>
+              );
+            })}
+          </div>
         </Field>
         <Field className="gap-1.5">
           <FieldLabel htmlFor="register-email">Email Address</FieldLabel>

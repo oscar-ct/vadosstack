@@ -4,7 +4,7 @@ import * as React from "react";
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { Building2, ChevronRight, Command, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/sidebar";
 import type { DocumentEmailTemplate } from "@/lib/email-templates";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
+import { getWorkspaceModeDescription, getWorkspaceModeLabel, type WorkspaceMode } from "@/lib/workspace-mode";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
 import { useDashboardNavigationLoader } from "../dashboard-navigation-loader";
@@ -57,6 +58,7 @@ interface NavMainProps {
   readonly companyPhone: string | null;
   readonly estimateValidDays: number;
   readonly invoiceDueDays: number;
+  readonly workspaceMode: WorkspaceMode;
   readonly gmailConnected: boolean;
   readonly gmailSenderEmail: string | null;
   readonly emailTemplates: DocumentEmailTemplate[];
@@ -283,6 +285,7 @@ function CompanySettingsDialog({
   companyPhone,
   estimateValidDays,
   invoiceDueDays,
+  workspaceMode,
   logoSrc,
   onSaved,
 }: {
@@ -292,12 +295,15 @@ function CompanySettingsDialog({
   readonly companyPhone: string | null;
   readonly estimateValidDays: number;
   readonly invoiceDueDays: number;
+  readonly workspaceMode: WorkspaceMode;
   readonly logoSrc: string;
   readonly onSaved: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
+  const router = useRouter();
   const [deleteLogo, setDeleteLogo] = React.useState(false);
   const [logoError, setLogoError] = React.useState("");
+  const [selectedWorkspaceMode, setSelectedWorkspaceMode] = React.useState<WorkspaceMode>(workspaceMode);
   const [companyPhoneDigits, setCompanyPhoneDigits] = React.useState(() =>
     normalizePhoneNumber(companyPhone).slice(0, 10),
   );
@@ -306,20 +312,22 @@ function CompanySettingsDialog({
   React.useEffect(() => {
     if (open) {
       setCompanyPhoneDigits(normalizePhoneNumber(companyPhone).slice(0, 10));
+      setSelectedWorkspaceMode(workspaceMode);
     }
-  }, [companyPhone, open]);
+  }, [companyPhone, open, workspaceMode]);
 
   React.useEffect(() => {
     if (state.success) {
       setDeleteLogo(false);
       setLogoError("");
       onSaved();
+      router.refresh();
       toast.success(state.message || "Company settings saved.");
       const timeout = window.setTimeout(() => setOpen(false), 1600);
 
       return () => window.clearTimeout(timeout);
     }
-  }, [state, onSaved]);
+  }, [router, state, onSaved]);
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -390,34 +398,69 @@ function CompanySettingsDialog({
               onChange={(event) => setCompanyPhoneDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
             />
           </div>
-          <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="estimate-valid-days">Estimate valid days</Label>
-              <Input
-                id="estimate-valid-days"
-                name="estimateValidDays"
-                type="number"
-                min={1}
-                max={365}
-                step={1}
-                defaultValue={estimateValidDays}
-                required
-              />
-              <p className="text-muted-foreground text-xs">Used for estimate valid-through dates.</p>
+          {selectedWorkspaceMode === "commerce" ? (
+            <>
+              <input type="hidden" name="estimateValidDays" value={estimateValidDays} />
+              <input type="hidden" name="invoiceDueDays" value={invoiceDueDays} />
+            </>
+          ) : (
+            <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="estimate-valid-days">Estimate valid days</Label>
+                <Input
+                  id="estimate-valid-days"
+                  name="estimateValidDays"
+                  type="number"
+                  min={1}
+                  max={365}
+                  step={1}
+                  defaultValue={estimateValidDays}
+                  required
+                />
+                <p className="text-muted-foreground text-xs">Used for estimate valid-through dates.</p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="invoice-due-days">Invoice due days</Label>
+                <Input
+                  id="invoice-due-days"
+                  name="invoiceDueDays"
+                  type="number"
+                  min={1}
+                  max={365}
+                  step={1}
+                  defaultValue={invoiceDueDays}
+                  required
+                />
+                <p className="text-muted-foreground text-xs">Used for invoice due-by dates.</p>
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="invoice-due-days">Invoice due days</Label>
-              <Input
-                id="invoice-due-days"
-                name="invoiceDueDays"
-                type="number"
-                min={1}
-                max={365}
-                step={1}
-                defaultValue={invoiceDueDays}
-                required
-              />
-              <p className="text-muted-foreground text-xs">Used for invoice due-by dates.</p>
+          )}
+          <div className="grid gap-2 rounded-lg border bg-muted/20 p-3">
+            <Label htmlFor="workspace-mode">Business focus</Label>
+            <select
+              id="workspace-mode"
+              name="workspaceMode"
+              value={selectedWorkspaceMode}
+              onChange={(event) => setSelectedWorkspaceMode(event.currentTarget.value as WorkspaceMode)}
+              className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <option value="both">{getWorkspaceModeLabel("both")}</option>
+              <option value="service">{getWorkspaceModeLabel("service")}</option>
+              <option value="commerce">{getWorkspaceModeLabel("commerce")}</option>
+            </select>
+            <p className="text-muted-foreground text-xs">
+              Choose which modules are shown in the sidebar. You can change this anytime.
+            </p>
+            <div className="grid gap-1 text-muted-foreground text-xs">
+              <span>
+                {getWorkspaceModeLabel("both")}: {getWorkspaceModeDescription("both")}
+              </span>
+              <span>
+                {getWorkspaceModeLabel("service")}: {getWorkspaceModeDescription("service")}
+              </span>
+              <span>
+                {getWorkspaceModeLabel("commerce")}: {getWorkspaceModeDescription("commerce")}
+              </span>
             </div>
           </div>
           <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
@@ -495,6 +538,7 @@ export function NavMain({
   emailRecipients,
   dueTodayTaskCount,
   invoiceDueDays,
+  workspaceMode,
   logoSrc,
   onCompanySettingsSaved,
   pendingTimeReviewCount,
@@ -535,6 +579,7 @@ export function NavMain({
                 companyPhone={companyPhone}
                 estimateValidDays={estimateValidDays}
                 invoiceDueDays={invoiceDueDays}
+                workspaceMode={workspaceMode}
                 logoSrc={logoSrc}
                 onSaved={onCompanySettingsSaved}
               />

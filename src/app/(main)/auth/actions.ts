@@ -21,6 +21,7 @@ import { createPasswordResetToken, createPasswordResetUrl, hashPasswordResetToke
 import { prisma } from "@/lib/prisma";
 import { AUTH_RATE_LIMIT_MESSAGE, consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
 import { resend } from "@/lib/resend";
+import { getWorkspaceHomePath, parseWorkspaceMode, workspaceModes } from "@/lib/workspace-mode";
 
 const PASSWORD_RESET_SUCCESS_MESSAGE =
   "If a password account exists for that email, we sent a reset link with instructions.";
@@ -45,6 +46,7 @@ const registerSchema = z
     name: z.string().trim().max(120, "Name is too long.").optional(),
     companyName: z.string().trim().min(1, "Company name is required.").max(120, "Company name is too long."),
     companyAddress: z.string().trim().max(300, "Company address is too long.").optional(),
+    workspaceMode: z.enum(workspaceModes),
     email: z.string().trim().email("Enter a valid email address."),
     password: z.string().min(8, "Password must be at least 8 characters."),
     confirmPassword: z.string().min(8, "Confirm your password."),
@@ -108,7 +110,7 @@ export async function loginAction(_previousState: AuthFormState, formData: FormD
   }
 
   await createUserSession(user.id, parsed.data.remember);
-  redirect("/dashboard/overview");
+  redirect(getWorkspaceHomePath(parseWorkspaceMode(user.workspaceMode)));
 }
 
 export async function registerAction(_previousState: AuthFormState, formData: FormData): Promise<AuthFormState> {
@@ -116,6 +118,7 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
     name: formData.get("name"),
     companyName: formData.get("companyName"),
     companyAddress: formData.get("companyAddress"),
+    workspaceMode: formData.get("workspaceMode"),
     email: formData.get("email"),
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
@@ -176,6 +179,7 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
     create: {
       companyName: parsed.data.companyName,
       companyAddress: parsed.data.companyAddress || null,
+      workspaceMode: parsed.data.workspaceMode,
       email,
       expiresAt,
       name,
@@ -185,6 +189,7 @@ export async function registerAction(_previousState: AuthFormState, formData: Fo
     update: {
       companyName: parsed.data.companyName,
       companyAddress: parsed.data.companyAddress || null,
+      workspaceMode: parsed.data.workspaceMode,
       expiresAt,
       name,
       passwordHash: hashPassword(parsed.data.password),

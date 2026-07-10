@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { Separator } from "@/components/ui/separator";
 import { getCurrentUser } from "@/lib/auth";
+import { getWorkspaceHomePath } from "@/lib/workspace-mode";
 
 import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 import { AuthDatabaseWarmup } from "../_components/auth-database-warmup";
@@ -40,7 +41,7 @@ export default async function LoginV1({ searchParams }: LoginPageProps) {
   const user = await getCurrentUser();
 
   if (user) {
-    redirect("/dashboard/overview");
+    redirect(getWorkspaceHomePath(user.workspaceMode));
   }
 
   const params = await searchParams;

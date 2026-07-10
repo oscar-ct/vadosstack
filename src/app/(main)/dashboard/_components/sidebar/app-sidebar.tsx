@@ -18,6 +18,12 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import type { DocumentEmailTemplate } from "@/lib/email-templates";
+import {
+  filterSidebarGroups,
+  getWorkspaceHomePath,
+  parseWorkspaceMode,
+  type WorkspaceMode,
+} from "@/lib/workspace-mode";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
@@ -43,6 +49,7 @@ export function AppSidebar({
     estimateValidDays: number;
     email: string;
     invoiceDueDays: number;
+    workspaceMode: WorkspaceMode;
     admin: boolean;
     gmailConnected: boolean;
     gmailSenderEmail: string | null;
@@ -66,29 +73,27 @@ export function AppSidebar({
   const variant = isSynced ? sidebarVariant : props.variant;
   const collapsible = isSynced ? sidebarCollapsible : props.collapsible;
   const companyName = currentUser?.companyName ?? "Company Dashboard";
+  const workspaceMode = parseWorkspaceMode(currentUser?.workspaceMode);
+  const homePath = getWorkspaceHomePath(workspaceMode);
   const visibleSidebarItems = React.useMemo(
-    () =>
-      sidebarItems
-        .map((group) => ({
-          ...group,
-          items: group.items.filter((item) => !item.adminOnly || currentUser?.admin),
-        }))
-        .filter((group) => group.items.length > 0),
-    [currentUser?.admin],
+    () => filterSidebarGroups(sidebarItems, workspaceMode, currentUser?.admin ?? false),
+    [currentUser?.admin, workspaceMode],
   );
   const { isMobile, setOpenMobile } = useSidebar();
   const { startNavigation } = useDashboardNavigationLoader();
   const [logoVersion, setLogoVersion] = React.useState(0);
-  const logoSrc = logoVersion
-    ? `/dashboard/company-logo?v=${logoVersion}`
-    : (currentUser?.companyLogoSrc ?? "/dashboard/company-logo?fallback=1");
+  const baseLogoSrc = currentUser?.companyLogoSrc ?? "/dashboard/company-logo?fallback=1";
+  const logoSrc =
+    logoVersion && !baseLogoSrc.startsWith("data:")
+      ? `${baseLogoSrc}${baseLogoSrc.includes("?") ? "&" : "?"}v=${logoVersion}`
+      : baseLogoSrc;
   const refreshCompanyLogo = React.useCallback(() => {
     setLogoVersion(Date.now());
   }, []);
   const handleNavigate = React.useCallback(() => {
-    startNavigation("/dashboard/overview");
+    startNavigation(homePath);
     if (isMobile) setOpenMobile(false);
-  }, [isMobile, setOpenMobile, startNavigation]);
+  }, [homePath, isMobile, setOpenMobile, startNavigation]);
 
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>
@@ -96,7 +101,7 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link prefetch={false} href="/dashboard/overview" onClick={handleNavigate}>
+              <Link prefetch={false} href={homePath} onClick={handleNavigate}>
                 <Image
                   src={logoSrc}
                   alt=""
@@ -124,6 +129,7 @@ export function AppSidebar({
           emailTemplates={currentUser?.emailTemplates ?? []}
           emailRecipients={currentUser?.emailRecipients ?? []}
           invoiceDueDays={currentUser?.invoiceDueDays ?? 15}
+          workspaceMode={workspaceMode}
           logoSrc={logoSrc}
           onCompanySettingsSaved={refreshCompanyLogo}
           dueTodayTaskCount={dueTodayTaskCount}

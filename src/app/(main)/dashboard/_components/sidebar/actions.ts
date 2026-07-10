@@ -16,6 +16,7 @@ import {
 import { isValidOptionalPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { deleteR2Object, uploadR2Object } from "@/lib/r2";
+import { workspaceModes } from "@/lib/workspace-mode";
 
 import { randomUUID } from "node:crypto";
 
@@ -86,6 +87,7 @@ const companySettingsSchema = z.object({
     .int("Invoice due days must be a whole number.")
     .min(1, "Invoice due days must be at least 1.")
     .max(365, "Invoice due days must be 365 or less."),
+  workspaceMode: z.enum(workspaceModes),
   deleteLogo: z.coerce.boolean().optional(),
 });
 
@@ -439,6 +441,7 @@ export async function updateCompanySettingsAction(
     companyPhone: formData.get("companyPhone"),
     estimateValidDays: formData.get("estimateValidDays"),
     invoiceDueDays: formData.get("invoiceDueDays"),
+    workspaceMode: formData.get("workspaceMode"),
     deleteLogo: formData.get("deleteLogo"),
   });
 
@@ -495,6 +498,7 @@ export async function updateCompanySettingsAction(
         companyPhone: emptyToNull(parsed.data.companyPhone),
         estimateValidDays: parsed.data.estimateValidDays,
         invoiceDueDays: parsed.data.invoiceDueDays,
+        workspaceMode: parsed.data.workspaceMode,
         ...(parsed.data.deleteLogo
           ? { companyLogoDataUrl: null, companyLogoKey: null, companyLogoType: null }
           : logoUpload

@@ -9,6 +9,7 @@ import {
 } from "@/lib/google-auth";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+import { getWorkspaceHomePath, parseWorkspaceMode } from "@/lib/workspace-mode";
 
 import { randomBytes } from "node:crypto";
 
@@ -96,7 +97,9 @@ export async function GET(request: NextRequest) {
           },
         });
 
-    const response = NextResponse.redirect(new URL("/dashboard/overview", request.nextUrl.origin));
+    const response = NextResponse.redirect(
+      new URL(getWorkspaceHomePath(parseWorkspaceMode(user.workspaceMode)), request.nextUrl.origin),
+    );
     await createUserSessionResponse(user.id, response, true);
 
     return clearOAuthState(response);
