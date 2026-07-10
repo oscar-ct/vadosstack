@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 
 import { APP_CONFIG } from "@/config/app-config";
 
-export const alt = "VadosStack management software for service businesses";
+export const alt = "VadosStack field service management software with built-in e-commerce tools";
 export const size = {
   width: 1200,
   height: 630,
@@ -14,7 +14,7 @@ export default function Image() {
     <div
       style={{
         alignItems: "center",
-        background: "#f6f1e8",
+        background: "linear-gradient(135deg, #f7f5ff 0%, #eef0ff 100%)",
         color: "#171412",
         display: "flex",
         height: "100%",
@@ -28,9 +28,9 @@ export default function Image() {
           <div
             style={{
               alignItems: "center",
-              background: "#171412",
+              background: "linear-gradient(135deg, #9564f4 0%, #6877ef 100%)",
               borderRadius: 18,
-              color: "#f6f1e8",
+              color: "#ffffff",
               display: "flex",
               fontSize: 38,
               height: 72,
@@ -43,10 +43,10 @@ export default function Image() {
           <div style={{ fontSize: 34, fontWeight: 700 }}>{APP_CONFIG.name}</div>
         </div>
         <div style={{ fontSize: 76, fontWeight: 800, letterSpacing: 0, lineHeight: 0.96, maxWidth: 900 }}>
-          Management software for service businesses.
+          Field Service. Commerce Ready.
         </div>
-        <div style={{ color: "#594431", fontSize: 30, lineHeight: 1.35, maxWidth: 940 }}>
-          Customers, jobs, estimates, invoices, services, and employee time tracking in one polished workspace.
+        <div style={{ color: "#514c68", fontSize: 30, lineHeight: 1.35, maxWidth: 940 }}>
+          Customers, estimates, jobs, invoices, employee time, orders, inventory, and reporting in one workspace.
         </div>
       </div>
     </div>,

@@ -1,24 +1,28 @@
 import { hashPassword } from "../lib/password";
 import { prisma } from "../lib/prisma";
 
-const email = "oscar.a.castro818@gmail.com";
-const password = "CodexIsAwesome123";
-const companyName = "Castro Home Services";
+const email = process.env.SEED_AUTH_EMAIL?.trim().toLowerCase();
+const password = process.env.SEED_AUTH_PASSWORD;
+const companyName = process.env.SEED_COMPANY_NAME?.trim() || "BluePeak Service & Supply";
+const ownerName = process.env.SEED_OWNER_NAME?.trim() || "Demo Workspace Owner";
 
 async function main() {
+  if (!email || !password) {
+    throw new Error("Set SEED_AUTH_EMAIL and SEED_AUTH_PASSWORD before seeding an auth user.");
+  }
   await prisma.user.upsert({
     where: {
       email,
     },
     update: {
-      name: "Oscar Castro",
+      name: ownerName,
       companyName,
       companyEmail: email,
       admin: true,
       passwordHash: hashPassword(password),
     },
     create: {
-      name: "Oscar Castro",
+      name: ownerName,
       companyName,
       companyEmail: email,
       email,

@@ -1,275 +1,201 @@
 import { prisma } from "../lib/prisma";
 
-type DemoMaterial = {
-  description: string;
-  price: string;
-};
+type DemoMaterial = { description: string; price: string };
 
-type DemoJobTemplate = {
-  description: string;
-  scope: string;
+type DemoJob = {
+  amountPaid: string;
   category: string;
-  status: string;
-  paymentStatus: string;
+  dateBegin: string | null;
+  dateEnd: string | null;
+  description: string;
   estimatedCost: string;
   laborCost: string;
-  materialTaxRate: string;
-  amountPaid: string;
   materials: DemoMaterial[];
-  dateBegin: string;
-  dateEnd: string;
   notes: string;
+  paymentStatus: string;
+  scope: string;
+  status: string;
 };
 
-const ownerEmail = "oscar.a.castro818@gmail.com";
+const ownerEmail = process.env.SEED_OWNER_EMAIL?.trim().toLowerCase();
 
-const jobTemplates: DemoJobTemplate[] = [
+const jobs: DemoJob[] = [
   {
-    description: "Demo Water Heater Replacement",
-    scope:
-      "Remove the failed water heater, install a new 50-gallon unit, reconnect gas and water lines, and test the system.",
+    description: "Smart thermostat installation",
+    scope: "Install, configure, connect to Wi-Fi, and test heating and cooling cycles.",
     category: "Installation",
     status: "Scheduled",
     paymentStatus: "Pending Payment",
-    estimatedCost: "1850.00",
-    laborCost: "650.00",
-    materialTaxRate: "8.25",
-    amountPaid: "0.00",
-    materials: [
-      { description: "50-gallon water heater", price: "925.00" },
-      { description: "Expansion tank", price: "85.00" },
-      { description: "Shutoff valve and fittings", price: "92.00" },
-    ],
-    dateBegin: "2026-05-19T09:00:00.000Z",
-    dateEnd: "2026-05-19T13:30:00.000Z",
-    notes: "Customer requested disposal of old unit and a 30-minute walkthrough after install.",
-  },
-  {
-    description: "Demo Kitchen Faucet Repair",
-    scope:
-      "Diagnose leak under sink, replace supply lines, install new faucet cartridge, and verify pressure and seal.",
-    category: "Repair",
-    status: "Scheduled",
-    paymentStatus: "Partial Payment",
-    estimatedCost: "420.00",
-    laborCost: "180.00",
-    materialTaxRate: "8.25",
-    amountPaid: "120.00",
-    materials: [
-      { description: "Faucet cartridge", price: "46.00" },
-      { description: "Braided supply lines", price: "34.00" },
-    ],
-    dateBegin: "2026-05-15T14:00:00.000Z",
-    dateEnd: "2026-05-15T16:00:00.000Z",
-    notes: "Leave removed parts on-site for customer approval before disposal.",
-  },
-  {
-    description: "Demo Exterior Lighting Upgrade",
-    scope: "Swap out front porch and garage fixtures for LED units and verify timer settings.",
-    category: "Installation",
-    status: "Completed",
-    paymentStatus: "Paid in Full",
-    estimatedCost: "980.00",
-    laborCost: "360.00",
-    materialTaxRate: "8.25",
-    amountPaid: "678.72",
-    materials: [
-      { description: "LED coach lights", price: "210.00" },
-      { description: "Exterior-rated wire and connectors", price: "54.00" },
-      { description: "Weatherproof junction box covers", price: "29.00" },
-    ],
-    dateBegin: "2026-05-10T10:00:00.000Z",
-    dateEnd: "2026-05-10T14:30:00.000Z",
-    notes: "Photos uploaded after completion for before/after reference.",
-  },
-  {
-    description: "Demo Drywall Patch and Paint",
-    scope:
-      "Patch hallway drywall damage, sand smooth, prime, and apply two finish coats to blend with existing wall color.",
-    category: "Other",
-    status: "On Hold",
-    paymentStatus: "Pending Payment",
-    estimatedCost: "760.00",
-    laborCost: "420.00",
-    materialTaxRate: "8.25",
-    amountPaid: "0.00",
-    materials: [
-      { description: "Drywall patch kit", price: "38.00" },
-      { description: "Primer and paint", price: "112.00" },
-      { description: "Sanding and masking supplies", price: "24.00" },
-    ],
-    dateBegin: "2026-05-22T08:30:00.000Z",
-    dateEnd: "2026-05-22T15:00:00.000Z",
-    notes: "Waiting on customer to confirm final paint sheen.",
-  },
-  {
-    description: "Demo HVAC Thermostat Swap",
-    scope:
-      "Install smart thermostat, connect to existing HVAC wiring, program schedule, and test heating/cooling cycles.",
-    category: "Installation",
-    status: "Scheduled",
-    paymentStatus: "Pending Payment",
-    estimatedCost: "540.00",
-    laborCost: "210.00",
-    materialTaxRate: "8.25",
+    estimatedCost: "495.00",
+    laborCost: "245.00",
     amountPaid: "0.00",
     materials: [
       { description: "Smart thermostat", price: "189.00" },
-      { description: "Mounting plate and anchors", price: "14.00" },
+      { description: "Mounting plate and wiring kit", price: "36.00" },
     ],
-    dateBegin: "2026-05-20T11:00:00.000Z",
-    dateEnd: "2026-05-20T13:00:00.000Z",
-    notes: "Need homeowner present for app setup and Wi-Fi pairing.",
+    dateBegin: "2026-07-10T14:00:00-05:00",
+    dateEnd: "2026-07-10T16:00:00-05:00",
+    notes: "Fictional demo job. Confirm the preferred mobile app before setup.",
   },
   {
-    description: "Demo Bathroom Regrout",
-    scope:
-      "Remove failing grout in shower surround, apply mildew-resistant grout, seal after cure, and clean the work area.",
+    description: "Seasonal HVAC tune-up",
+    scope: "Inspect, clean, test, and document the residential HVAC system.",
+    category: "Maintenance",
+    status: "Completed",
+    paymentStatus: "Paid in Full",
+    estimatedCost: "223.00",
+    laborCost: "189.00",
+    amountPaid: "225.81",
+    materials: [{ description: "MERV 11 filter", price: "34.00" }],
+    dateBegin: "2026-07-08T09:00:00-05:00",
+    dateEnd: "2026-07-08T11:00:00-05:00",
+    notes: "System performance was documented in the fictional customer record.",
+  },
+  {
+    description: "Water heater diagnostic",
+    scope: "Diagnose temperature, ignition, pressure, and leak concerns before quoting repairs.",
     category: "Repair",
-    status: "Cancelled",
+    status: "Unscheduled",
     paymentStatus: "Pending Payment",
-    estimatedCost: "690.00",
-    laborCost: "390.00",
-    materialTaxRate: "8.25",
+    estimatedCost: "165.00",
+    laborCost: "165.00",
     amountPaid: "0.00",
+    materials: [],
+    dateBegin: null,
+    dateEnd: null,
+    notes: "Awaiting scheduling confirmation from the fictional demo customer.",
+  },
+  {
+    description: "Retail display lighting upgrade",
+    scope: "Replace track fixtures, add dimmers, and verify the display lighting plan.",
+    category: "Electrical",
+    status: "On Hold",
+    paymentStatus: "Partial Payment",
+    estimatedCost: "1292.00",
+    laborCost: "640.00",
+    amountPaid: "300.00",
     materials: [
-      { description: "Mildew-resistant grout", price: "58.00" },
-      { description: "Grout sealant", price: "21.00" },
-      { description: "Removal blades and sponges", price: "27.00" },
+      { description: "LED track fixtures", price: "485.00" },
+      { description: "Dimmers and connectors", price: "118.00" },
     ],
-    dateBegin: "2026-05-12T09:30:00.000Z",
-    dateEnd: "2026-05-12T15:00:00.000Z",
-    notes: "Cancelled by customer due to remodeling schedule changes.",
+    dateBegin: "2026-07-14T08:30:00-05:00",
+    dateEnd: "2026-07-14T15:30:00-05:00",
+    notes: "Fictional job is on hold while the demo customer reviews fixture placement.",
+  },
+  {
+    description: "Whole-home filter replacement",
+    scope: "Replace the filtration cartridge, flush the system, and check pressure.",
+    category: "Maintenance",
+    status: "Scheduled",
+    paymentStatus: "Pending Payment",
+    estimatedCost: "237.00",
+    laborCost: "145.00",
+    amountPaid: "0.00",
+    materials: [{ description: "Filter cartridge", price: "92.00" }],
+    dateBegin: "2026-07-11T10:00:00-05:00",
+    dateEnd: "2026-07-11T11:30:00-05:00",
+    notes: "Load the replacement cartridge before leaving the warehouse.",
+  },
+  {
+    description: "Kitchen faucet and supply-line refresh",
+    scope: "Replace the faucet and braided supply lines, then test for leaks.",
+    category: "Plumbing",
+    status: "Completed",
+    paymentStatus: "Partial Payment",
+    estimatedCost: "565.00",
+    laborCost: "285.00",
+    amountPaid: "300.00",
+    materials: [
+      { description: "Pull-down faucet", price: "238.00" },
+      { description: "Braided supply lines", price: "42.00" },
+    ],
+    dateBegin: "2026-07-07T13:00:00-05:00",
+    dateEnd: "2026-07-07T16:00:00-05:00",
+    notes: "Final balance remains visible for the fictional demo customer.",
+  },
+  {
+    description: "Garage outlet troubleshooting",
+    scope: "Trace the affected circuit, replace the GFCI outlet, and test protection.",
+    category: "Electrical",
+    status: "Scheduled",
+    paymentStatus: "Pending Payment",
+    estimatedCost: "256.00",
+    laborCost: "210.00",
+    amountPaid: "0.00",
+    materials: [{ description: "Weatherproof GFCI outlet and cover", price: "46.00" }],
+    dateBegin: "2026-07-12T09:30:00-05:00",
+    dateEnd: "2026-07-12T11:30:00-05:00",
+    notes: "Fictional demo record with no real customer information.",
+  },
+  {
+    description: "Outdoor hose bib replacement",
+    scope: "Replace the outdoor faucet, reconnect the supply, and test for leaks.",
+    category: "Plumbing",
+    status: "Completed",
+    paymentStatus: "Paid in Full",
+    estimatedCost: "309.00",
+    laborCost: "195.00",
+    amountPaid: "318.41",
+    materials: [
+      { description: "Frost-free hose bib", price: "86.00" },
+      { description: "Copper fittings", price: "28.00" },
+    ],
+    dateBegin: "2026-07-03T08:00:00-05:00",
+    dateEnd: "2026-07-03T10:00:00-05:00",
+    notes: "Paid fictional job included for dashboard and reporting screenshots.",
   },
 ];
 
-function calculateFinalCost(laborCost: string, materialTaxRate: string, materials: DemoMaterial[]) {
-  const labor = Number(laborCost);
-  const subtotal = materials.reduce((sum, material) => sum + Number(material.price), 0);
-  const tax = subtotal * (Number(materialTaxRate) / 100);
-
-  return (labor + subtotal + tax).toFixed(2);
-}
-
-function formatAddress(customer: {
-  addresses: Array<{
-    line1: string;
-    line2: string | null;
-    city: string | null;
-    state: string | null;
-    postalCode: string | null;
-    country: string | null;
-  }>;
-}) {
-  const address = customer.addresses[0];
-
-  if (!address) {
-    return null;
-  }
-
-  const cityLine = [address.city, address.state, address.postalCode].filter(Boolean).join(", ");
-  return [address.line1, address.line2, cityLine, address.country].filter(Boolean).join(", ");
+function calculateFinalCost(job: DemoJob) {
+  const materialsSubtotal = job.materials.reduce((sum, item) => sum + Number(item.price), 0);
+  return (Number(job.laborCost) + materialsSubtotal * 1.0825).toFixed(2);
 }
 
 async function main() {
-  const owner = await prisma.user.findUnique({
-    where: {
-      email: ownerEmail,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (!owner) {
-    throw new Error("Run the auth setup before seeding jobs.");
-  }
+  if (!ownerEmail) throw new Error("Set SEED_OWNER_EMAIL before seeding jobs.");
+  const owner = await prisma.user.findUnique({ where: { email: ownerEmail }, select: { id: true } });
+  if (!owner) throw new Error("No account matches SEED_OWNER_EMAIL.");
 
   const customers = await prisma.customer.findMany({
-    where: {
-      ownerId: owner.id,
-    },
-    include: {
-      addresses: true,
-    },
-    orderBy: {
-      name: "asc",
-    },
+    where: { ownerId: owner.id },
+    include: { addresses: true },
+    orderBy: { joinedAt: "asc" },
   });
+  if (!customers.length) throw new Error("Seed customers before seeding jobs.");
 
-  if (!customers.length) {
-    throw new Error("Seed customers before seeding jobs.");
-  }
-
-  let created = 0;
-  let updated = 0;
-
-  for (const [index, template] of jobTemplates.entries()) {
+  for (const [index, job] of jobs.entries()) {
     const customer = customers[index % customers.length];
+    const address = customer.addresses[0];
+    const serviceLocation = address
+      ? `${address.line1}, ${address.city}, ${address.state} ${address.postalCode}`
+      : null;
     const existing = await prisma.job.findFirst({
-      where: {
-        ownerId: owner.id,
-        description: template.description,
-      },
-      select: {
-        id: true,
-      },
+      where: { ownerId: owner.id, description: job.description },
+      select: { id: true },
     });
+    const data = {
+      customerId: customer.id,
+      scope: job.scope,
+      category: job.category,
+      status: job.status,
+      estimatedCost: job.estimatedCost,
+      laborCost: job.laborCost,
+      materialTaxRate: "8.25",
+      materials: JSON.stringify(job.materials),
+      paymentStatus: job.paymentStatus,
+      amountPaid: job.amountPaid,
+      finalCost: calculateFinalCost(job),
+      serviceLocation,
+      dateBegin: job.dateBegin ? new Date(job.dateBegin) : null,
+      dateEnd: job.dateEnd ? new Date(job.dateEnd) : null,
+      notes: job.notes,
+    };
 
-    if (existing) {
-      await prisma.job.update({
-        where: {
-          id: existing.id,
-        },
-        data: {
-          customerId: customer.id,
-          scope: template.scope,
-          category: template.category,
-          status: template.status,
-          estimatedCost: template.estimatedCost,
-          laborCost: template.laborCost,
-          materialTaxRate: template.materialTaxRate,
-          materials: JSON.stringify(template.materials),
-          paymentStatus: template.paymentStatus,
-          amountPaid: template.amountPaid,
-          finalCost: calculateFinalCost(template.laborCost, template.materialTaxRate, template.materials),
-          serviceLocation: formatAddress(customer),
-          dateBegin: new Date(template.dateBegin),
-          dateEnd: new Date(template.dateEnd),
-          notes: template.notes,
-        },
-      });
-
-      updated += 1;
-      continue;
-    }
-
-    await prisma.job.create({
-      data: {
-        ownerId: owner.id,
-        customerId: customer.id,
-        description: template.description,
-        scope: template.scope,
-        category: template.category,
-        status: template.status,
-        estimatedCost: template.estimatedCost,
-        laborCost: template.laborCost,
-        materialTaxRate: template.materialTaxRate,
-        materials: JSON.stringify(template.materials),
-        paymentStatus: template.paymentStatus,
-        amountPaid: template.amountPaid,
-        finalCost: calculateFinalCost(template.laborCost, template.materialTaxRate, template.materials),
-        serviceLocation: formatAddress(customer),
-        dateBegin: new Date(template.dateBegin),
-        dateEnd: new Date(template.dateEnd),
-        notes: template.notes,
-      },
-    });
-
-    created += 1;
+    if (existing) await prisma.job.update({ where: { id: existing.id }, data });
+    else await prisma.job.create({ data: { ownerId: owner.id, description: job.description, ...data } });
   }
 
-  console.info(`Seeded ${created} jobs. Updated ${updated} existing demo jobs.`);
+  console.info(`Seeded ${jobs.length} fictional jobs.`);
 }
 
 main()
@@ -277,6 +203,4 @@ main()
     console.error(error);
     process.exitCode = 1;
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(async () => prisma.$disconnect());

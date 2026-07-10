@@ -7,8 +7,8 @@ export const APP_CONFIG = {
   version: packageJson.version,
   copyright: `© ${currentYear}, VadosStack.`,
   meta: {
-    title: "VadosStack | Management Software for Service Businesses",
+    title: "VadosStack | Field Service Management Software",
     description:
-      "Save time with focused management software built for service businesses and contractors. Manage leads, customers, jobs, estimates, invoices, service templates, rich email templates, and employee time history in one dashboard.",
+      "Run your service business in one focused workspace. Manage customers, jobs, estimates, invoices, employee time, orders, inventory, email, and reporting.",
   },
 };

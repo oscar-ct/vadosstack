@@ -1,156 +1,146 @@
 [
   {
-    "id": "18425",
-    "name": "Sarah Parker",
-    "email": "sarah.parker@northstar.io",
+    "id": "demo-customer-001",
+    "name": "Avery Stone",
+    "email": "avery.stone@example.com",
+    "phone": "(512) 555-0101",
+    "line1": "112 Demo Ridge",
+    "city": "Austin",
+    "state": "TX",
+    "postalCode": "78701",
     "billing": "Paid",
-    "joined": "2026-04-30"
+    "joined": "2026-06-03"
   },
   {
-    "id": "18424",
-    "name": "Michael Brown",
-    "email": "michael.brown@cedarpoint.co",
+    "id": "demo-customer-002",
+    "name": "Riley Chen",
+    "email": "riley.chen@example.com",
+    "phone": "(512) 555-0102",
+    "line1": "284 Sample Creek Dr",
+    "city": "Round Rock",
+    "state": "TX",
+    "postalCode": "78664",
+    "billing": "Paid",
+    "joined": "2026-06-08"
+  },
+  {
+    "id": "demo-customer-003",
+    "name": "Jordan Brooks",
+    "email": "jordan.brooks@example.com",
+    "phone": "(512) 555-0103",
+    "line1": "930 Mockingbird Ln",
+    "city": "Cedar Park",
+    "state": "TX",
+    "postalCode": "78613",
     "billing": "Pending",
-    "joined": "2026-04-29"
+    "joined": "2026-06-12"
   },
   {
-    "id": "18423",
-    "name": "Linda Chen",
-    "email": "linda.chen@brightpath.app",
-    "billing": "Overdue",
-    "joined": "2026-04-28"
-  },
-  {
-    "id": "18422",
-    "name": "David Lee",
-    "email": "david.lee@bluepeak.app",
-    "billing": "Trial",
-    "joined": "2026-04-27"
-  },
-  {
-    "id": "18421",
-    "name": "Emily White",
-    "email": "emily.white@ridgefield.io",
+    "id": "demo-customer-004",
+    "name": "Morgan Patel",
+    "email": "morgan.patel@example.com",
+    "phone": "(512) 555-0104",
+    "line1": "415 Preview Ave",
+    "city": "Pflugerville",
+    "state": "TX",
+    "postalCode": "78660",
     "billing": "Paid",
-    "joined": "2026-04-26"
+    "joined": "2026-06-17"
   },
   {
-    "id": "18420",
-    "name": "Jessica Wong",
-    "email": "jessica.wong@pulselabs.ai",
+    "id": "demo-customer-005",
+    "name": "Taylor Reed",
+    "email": "taylor.reed@example.com",
+    "phone": "(512) 555-0105",
+    "line1": "76 Prototype Way",
+    "city": "Georgetown",
+    "state": "TX",
+    "postalCode": "78626",
     "billing": "Pending",
-    "joined": "2026-04-25"
+    "joined": "2026-06-21"
   },
   {
-    "id": "18419",
-    "name": "Kevin Harris",
-    "email": "kevin.harris@oakline.co",
-    "billing": "Overdue",
-    "joined": "2026-04-24"
-  },
-  {
-    "id": "18418",
-    "name": "Priya Shah",
-    "email": "priya.shah@holloway.io",
-    "billing": "Trial",
-    "joined": "2026-04-23"
-  },
-  {
-    "id": "18417",
-    "name": "Daniel Hall",
-    "email": "daniel.hall@quantix.dev",
+    "id": "demo-customer-006",
+    "name": "Casey Nguyen",
+    "email": "casey.nguyen@example.com",
+    "phone": "(512) 555-0106",
+    "line1": "640 Fictional Oaks",
+    "city": "Leander",
+    "state": "TX",
+    "postalCode": "78641",
     "billing": "Paid",
-    "joined": "2026-04-22"
+    "joined": "2026-06-26"
   },
   {
-    "id": "18416",
-    "name": "Ava Mitchell",
-    "email": "ava.mitchell@clearledger.co",
+    "id": "demo-customer-007",
+    "name": "Parker Ellis",
+    "email": "parker.ellis@example.com",
+    "phone": "(512) 555-0107",
+    "line1": "208 Scenario St",
+    "city": "Austin",
+    "state": "TX",
+    "postalCode": "78704",
+    "billing": "Paid",
+    "joined": "2026-07-01"
+  },
+  {
+    "id": "demo-customer-008",
+    "name": "Emerson James",
+    "email": "emerson.james@example.com",
+    "phone": "(512) 555-0108",
+    "line1": "511 Placeholder Pkwy",
+    "city": "Buda",
+    "state": "TX",
+    "postalCode": "78610",
     "billing": "Pending",
-    "joined": "2026-04-21"
+    "joined": "2026-07-02"
   },
   {
-    "id": "18415",
-    "name": "Noah Carter",
-    "email": "noah.carter@streamline.app",
-    "billing": "Overdue",
-    "joined": "2026-04-20"
-  },
-  {
-    "id": "18414",
-    "name": "Sophia Turner",
-    "email": "sophia.turner@westgate.io",
+    "id": "demo-customer-009",
+    "name": "Quinn Foster",
+    "email": "quinn.foster@example.com",
+    "phone": "(512) 555-0109",
+    "line1": "89 Canvas Ct",
+    "city": "Kyle",
+    "state": "TX",
+    "postalCode": "78640",
     "billing": "Paid",
-    "joined": "2026-04-19"
+    "joined": "2026-07-04"
   },
   {
-    "id": "18413",
-    "name": "Liam Collins",
-    "email": "liam.collins@firstharbor.co",
+    "id": "demo-customer-010",
+    "name": "Rowan Blake",
+    "email": "rowan.blake@example.com",
+    "phone": "(512) 555-0110",
+    "line1": "302 Sampleview Rd",
+    "city": "Lakeway",
+    "state": "TX",
+    "postalCode": "78734",
+    "billing": "Paid",
+    "joined": "2026-07-06"
+  },
+  {
+    "id": "demo-customer-011",
+    "name": "Sage Monroe",
+    "email": "sage.monroe@example.com",
+    "phone": "(512) 555-0111",
+    "line1": "144 Fiction Ave",
+    "city": "Austin",
+    "state": "TX",
+    "postalCode": "78745",
     "billing": "Pending",
-    "joined": "2026-04-18"
+    "joined": "2026-07-08"
   },
   {
-    "id": "18412",
-    "name": "Mia Roberts",
-    "email": "mia.roberts@northline.app",
+    "id": "demo-customer-012",
+    "name": "Reese Harper",
+    "email": "reese.harper@example.com",
+    "phone": "(512) 555-0112",
+    "line1": "725 Example Bend",
+    "city": "Dripping Springs",
+    "state": "TX",
+    "postalCode": "78620",
     "billing": "Paid",
-    "joined": "2026-04-17"
-  },
-  {
-    "id": "18411",
-    "name": "Ethan Brooks",
-    "email": "ethan.brooks@wildelm.co",
-    "billing": "Trial",
-    "joined": "2026-04-16"
-  },
-  {
-    "id": "18410",
-    "name": "Grace Murphy",
-    "email": "grace.murphy@bridgepoint.io",
-    "billing": "Overdue",
-    "joined": "2026-04-15"
-  },
-  {
-    "id": "18409",
-    "name": "Lucas Bennett",
-    "email": "lucas.bennett@cedarpoint.co",
-    "billing": "Paid",
-    "joined": "2026-04-14"
-  },
-  {
-    "id": "18408",
-    "name": "Zoe Kelly",
-    "email": "zoe.kelly@vervegrid.app",
-    "billing": "Pending",
-    "joined": "2026-04-13"
-  },
-  {
-    "id": "18407",
-    "name": "Ryan Cooper",
-    "email": "ryan.cooper@pulseforge.io",
-    "billing": "Paid",
-    "joined": "2026-04-12"
-  },
-  {
-    "id": "18406",
-    "name": "Chloe Adams",
-    "email": "chloe.adams@brightpath.app",
-    "billing": "Trial",
-    "joined": "2026-04-11"
-  },
-  {
-    "id": "18405",
-    "name": "Nathan Reed",
-    "email": "nathan.reed@northstar.io",
-    "billing": "Overdue",
-    "joined": "2026-04-10"
-  },
-  {
-    "id": "18404",
-    "name": "Isla Foster",
-    "email": "isla.foster@ridgefield.io",
-    "billing": "Paid",
-    "joined": "2026-04-09"
+    "joined": "2026-07-09"
   }
 ]

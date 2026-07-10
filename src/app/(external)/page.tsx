@@ -5,9 +5,9 @@ import { APP_CONFIG } from "@/config/app-config";
 import { LandingExperience } from "./_components/landing-experience";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vadosstack.com";
-const title = "Field Service Management Software for Service Businesses";
+const title = "Field Service Management Software with E-Commerce Tools";
 const description =
-  "VadosStack field service management software helps service businesses manage leads, customers, jobs, estimates, invoices, service templates, email templates, and employee time history in one dashboard.";
+  "Run your service business in one workspace. VadosStack connects customers, leads, jobs, estimates, invoices, employee time, orders, inventory, and reporting.";
 
 export const metadata: Metadata = {
   title,
@@ -26,6 +26,15 @@ export const metadata: Metadata = {
     "lead management software",
     "customer management",
     "field service dashboard",
+    "service business command center",
+    "ecommerce management software",
+    "e-commerce operations software",
+    "order management software",
+    "inventory management software",
+    "small business inventory software",
+    "order and inventory management",
+    "commerce analytics dashboard",
+    "returns management software",
   ],
   alternates: {
     canonical: siteUrl,
@@ -35,7 +44,7 @@ export const metadata: Metadata = {
     description,
     images: [
       {
-        alt: "VadosStack management software for service businesses",
+        alt: "VadosStack field service management software with built-in e-commerce tools",
         height: 630,
         url: "/opengraph-image",
         width: 1200,
@@ -64,7 +73,7 @@ export const metadata: Metadata = {
   },
 };
 
-const jsonLd = {
+const softwareJsonLd = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   name: APP_CONFIG.name,
@@ -72,14 +81,10 @@ const jsonLd = {
   operatingSystem: "Web",
   url: siteUrl,
   description,
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "USD",
-  },
   featureList: [
     "Customer management",
     "Lead management",
+    "Service business command center",
     "Job scheduling",
     "Estimate creation",
     "Invoice generation",
@@ -88,6 +93,49 @@ const jsonLd = {
     "Email history",
     "Employee records",
     "Employee time tracking",
+    "E-commerce order management",
+    "Inventory and stock movement tracking",
+    "Order returns and refunds",
+    "Commerce sales and inventory analytics",
+  ],
+};
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "What is VadosStack?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "VadosStack is web-based field service business software with built-in commerce tools. It connects customers, leads, jobs, estimates, invoices, employee time, orders, inventory, and reporting in one dashboard.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Who is VadosStack built for?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "VadosStack is built primarily for service businesses such as HVAC, plumbing, electrical, repair, contractors, and product-plus-service teams that need customer work, billing, and operations in one place.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Does VadosStack support estimates, jobs, and invoices?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes. Teams can manage estimate records, job records, invoice records, customer documents, email history, and service workflow status from the dashboard.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can service businesses also manage orders and inventory?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes. VadosStack includes e-commerce tools for orders, fulfillment, inventory, returns, refunds, stock movement, and Commerce Pulse reporting when the business also sells products or parts.",
+      },
+    },
   ],
 };
 
@@ -97,7 +145,12 @@ export default function Home() {
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: Static JSON-LD for SEO.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: Static JSON-LD for SEO.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
       <LandingExperience />
     </>

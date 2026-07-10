@@ -33,7 +33,9 @@
     "setup:estimate-records": "ts-node -P tsconfig.scripts.json src/scripts/setup-estimate-records.ts",
     "setup:services": "ts-node -P tsconfig.scripts.json src/scripts/setup-services.ts",
     "setup:ecommerce": "ts-node -P tsconfig.scripts.json src/scripts/setup-ecommerce.ts",
-    "seed:ecommerce": "ts-node -P tsconfig.scripts.json src/scripts/seed-ecommerce.ts"
+    "seed:ecommerce": "ts-node -P tsconfig.scripts.json src/scripts/seed-ecommerce.ts",
+    "seed:demo-extras": "ts-node -P tsconfig.scripts.json src/scripts/seed-demo-extras.ts",
+    "seed:demo": "npm run seed:customers && npm run seed:jobs && npm run seed:ecommerce && npm run seed:demo-extras"
   },
   "lint-staged": {
     "*.{js,ts,jsx,tsx}": ["biome check --write --no-errors-on-unmatched"]

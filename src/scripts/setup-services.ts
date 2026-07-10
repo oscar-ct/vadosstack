@@ -2,40 +2,28 @@ import { prisma } from "../lib/prisma";
 
 const examples = [
   {
-    title: "Water Heater Replacement",
-    description: "Remove existing water heater, install replacement unit, connect supply lines, and test operation.",
-    category: "Installation",
-    notes: "Confirm unit size, venting, and access before scheduling.",
-    laborItems: [
-      { description: "Remove and dispose existing water heater", price: "225.00" },
-      { description: "Install new water heater and reconnect plumbing", price: "650.00" },
-    ],
-    materials: [
-      { description: "Water heater installation kit", price: "85.00" },
-      { description: "Supply lines and fittings", price: "65.00" },
-    ],
+    title: "Seasonal HVAC Tune-Up",
+    description: "Inspect, clean, and test a residential heating and cooling system.",
+    category: "Maintenance",
+    notes: "Includes filter inspection and a customer-ready system summary.",
+    laborItems: [{ description: "HVAC inspection and tune-up", price: "189.00" }],
+    materials: [{ description: "Standard replacement filter allowance", price: "28.00" }],
   },
   {
-    title: "Garbage Disposal Installation",
-    description: "Install customer-selected garbage disposal, connect drain assembly, and test for leaks.",
+    title: "Smart Thermostat Installation",
+    description: "Install, configure, and test a customer-selected smart thermostat.",
     category: "Installation",
-    notes: "Verify electrical outlet/switch is present before work begins.",
-    laborItems: [{ description: "Install disposal and test operation", price: "225.00" }],
-    materials: [
-      { description: "Plumber putty and drain fittings", price: "28.00" },
-      { description: "Disposal mounting hardware", price: "35.00" },
-    ],
+    notes: "Confirm compatible HVAC wiring before arrival.",
+    laborItems: [{ description: "Installation and configuration", price: "245.00" }],
+    materials: [{ description: "Mounting plate and wiring kit", price: "36.00" }],
   },
   {
-    title: "Faucet Repair",
-    description: "Diagnose faucet issue, replace common wear parts, and test fixture.",
+    title: "Fixture and Supply-Line Refresh",
+    description: "Replace fixture hardware and braided supply lines, then test for leaks.",
     category: "Repair",
-    notes: "Final parts may vary by fixture brand and model.",
-    laborItems: [{ description: "Diagnose and repair faucet", price: "165.00" }],
-    materials: [
-      { description: "Cartridge or repair kit allowance", price: "55.00" },
-      { description: "Supply line allowance", price: "24.00" },
-    ],
+    notes: "Fixture pricing varies by the fictional demo customer selection.",
+    laborItems: [{ description: "Fixture installation labor", price: "285.00" }],
+    materials: [{ description: "Supply line and shutoff kit", price: "74.00" }],
   },
 ];
 
