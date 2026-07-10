@@ -15,7 +15,7 @@ export type EmailTemplateMutationState = {
   redirectTo?: string;
 };
 
-const emailTemplateScopes = ["estimate", "general", "invoice", "lead", "order"] as const;
+const emailTemplateScopes = ["estimate", "general", "invoice", "lead", "order", "return-receipt"] as const;
 
 const emailTemplateSchema = z.object({
   title: z.string().trim().min(1, "Template name is required.").max(120, "Template name is too long."),

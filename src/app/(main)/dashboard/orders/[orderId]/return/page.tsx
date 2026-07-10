@@ -1,5 +1,6 @@
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getCurrentUser } from "@/lib/auth";
+import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { prisma } from "@/lib/prisma";
 
 import { ReturnReceiptActions } from "./_components/return-actions";
@@ -51,6 +52,22 @@ export default async function Page({ params }: PageProps) {
         year: "numeric",
       }).format(new Date(`${workspaceData.values.returnDate}T12:00:00`))
     : "Return date pending";
+  const templates = await getRenderedDocumentEmailTemplates({
+    context: {
+      companyEmail: workspaceData.company.email,
+      companyName: workspaceData.company.name,
+      customerEmail: workspaceData.values.customerEmail,
+      customerName: workspaceData.values.customerName,
+      orderNumber: workspaceData.values.orderNumber,
+      refundAmount: formatMoney(workspaceData.values.refundAmount),
+      refundMethod: workspaceData.values.refundMethod,
+      refundStatus: workspaceData.values.refundStatus,
+      returnDate,
+      returnNumber: workspaceData.values.returnNumber,
+    },
+    ownerId: currentUser.id,
+    scope: "return-receipt",
+  });
 
   return (
     <ReturnRefundWorkspace
@@ -70,6 +87,7 @@ export default async function Page({ params }: PageProps) {
             returnDate={returnDate}
             returnNumber={workspaceData.values.returnNumber}
             returnTo={`/dashboard/orders/${orderId}/return`}
+            templates={templates}
           />
         ) : null
       }

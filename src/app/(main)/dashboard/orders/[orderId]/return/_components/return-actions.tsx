@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { escapeHtml } from "@/lib/email-content";
+import type { DocumentEmailTemplate } from "@/lib/email-templates";
 
 import { DocumentEmailComposerDialog } from "../../../../_components/document-email-composer-dialog";
 
@@ -50,6 +51,7 @@ export function ReturnReceiptActions({
   returnDate,
   returnNumber,
   returnTo,
+  templates = [],
 }: {
   action: (state: EmailReturnReceiptState, formData: FormData) => Promise<EmailReturnReceiptState>;
   companyName: string;
@@ -62,6 +64,7 @@ export function ReturnReceiptActions({
   returnDate: string;
   returnNumber: string;
   returnTo: string;
+  templates?: DocumentEmailTemplate[];
 }) {
   const defaultSubject = `Return Receipt ${returnNumber} from ${companyName}`;
   const defaultText = [
@@ -109,6 +112,7 @@ export function ReturnReceiptActions({
       recipientEmail={customerEmail}
       returnTo={returnTo}
       senderEmail={gmailSenderEmail}
+      templates={templates}
     />
   );
 }

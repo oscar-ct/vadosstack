@@ -154,6 +154,18 @@ const variableGroups = {
     { label: "Estimated delivery", value: "estimatedDelivery" },
     { label: "Tracking number", value: "trackingNumber" },
   ],
+  "return-receipt": [
+    { label: "Customer name", value: "customerName" },
+    { label: "Customer email", value: "customerEmail" },
+    { label: "Company name", value: "companyName" },
+    { label: "Company email", value: "companyEmail" },
+    { label: "Order number", value: "orderNumber" },
+    { label: "Return receipt", value: "returnNumber" },
+    { label: "Refund amount", value: "refundAmount" },
+    { label: "Refund status", value: "refundStatus" },
+    { label: "Refund method", value: "refundMethod" },
+    { label: "Return date", value: "returnDate" },
+  ],
 };
 
 function escapeEditorHtml(value: string) {
@@ -489,6 +501,7 @@ export function EmailTemplateEditor({
                     else if (event.target.value === "estimate") setScope("estimate");
                     else if (event.target.value === "lead") setScope("lead");
                     else if (event.target.value === "order") setScope("order");
+                    else if (event.target.value === "return-receipt") setScope("return-receipt");
                     else setScope("general");
                   }}
                   className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -498,6 +511,7 @@ export function EmailTemplateEditor({
                   <option value="estimate">Estimate</option>
                   <option value="invoice">Invoice</option>
                   <option value="order">Order</option>
+                  <option value="return-receipt">Return receipt</option>
                 </select>
               </div>
             </div>
@@ -516,9 +530,11 @@ export function EmailTemplateEditor({
                         ? "Estimate {{estimateNumber}} from {{companyName}}"
                         : scope === "order"
                           ? "{{orderTitle}} {{orderNumber}} from {{companyName}}"
-                          : scope === "lead"
-                            ? "Thanks for reaching out about your {{serviceType}}"
-                            : "Following up from {{companyName}}"
+                          : scope === "return-receipt"
+                            ? "Return Receipt {{returnNumber}} from {{companyName}}"
+                            : scope === "lead"
+                              ? "Thanks for reaching out about your {{serviceType}}"
+                              : "Following up from {{companyName}}"
                   }
                   required
                 />

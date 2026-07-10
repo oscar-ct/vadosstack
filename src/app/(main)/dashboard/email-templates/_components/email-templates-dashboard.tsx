@@ -12,6 +12,7 @@ import {
   NotebookText,
   PackageCheck,
   ReceiptText,
+  RotateCcw,
   Search,
 } from "lucide-react";
 
@@ -31,6 +32,7 @@ function getScopeLabel(scope: EmailTemplateRow["scope"]) {
   if (scope === "estimate") return "Estimate";
   if (scope === "lead") return "Lead";
   if (scope === "order") return "Order";
+  if (scope === "return-receipt") return "Return receipt";
   return "General";
 }
 
@@ -42,9 +44,11 @@ function ScopeIcon({ scope }: { scope: EmailTemplateRow["scope"] }) {
         ? NotebookText
         : scope === "order"
           ? PackageCheck
-          : scope === "lead"
-            ? MessagesSquare
-            : MailPlus;
+          : scope === "return-receipt"
+            ? RotateCcw
+            : scope === "lead"
+              ? MessagesSquare
+              : MailPlus;
 
   return <Icon className="size-3" />;
 }
@@ -63,6 +67,7 @@ export function EmailTemplatesDashboard({ templates }: { templates: EmailTemplat
   const invoiceCount = templates.filter((template) => template.scope === "invoice").length;
   const leadCount = templates.filter((template) => template.scope === "lead").length;
   const orderCount = templates.filter((template) => template.scope === "order").length;
+  const returnReceiptCount = templates.filter((template) => template.scope === "return-receipt").length;
 
   return (
     <div className="grid gap-4">
@@ -75,6 +80,7 @@ export function EmailTemplatesDashboard({ templates }: { templates: EmailTemplat
             { count: estimateCount, label: "Estimates", value: "estimate" as const },
             { count: invoiceCount, label: "Invoices", value: "invoice" as const },
             { count: orderCount, label: "Orders", value: "order" as const },
+            { count: returnReceiptCount, label: "Returns", value: "return-receipt" as const },
           ].map((scope) => (
             <Button
               key={scope.value}

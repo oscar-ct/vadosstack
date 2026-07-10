@@ -101,6 +101,11 @@ export const sidebarItems: NavGroup[] = [
         icon: BriefcaseBusiness,
       },
       {
+        title: "Invoices",
+        url: "/dashboard/invoices",
+        icon: ReceiptText,
+      },
+      {
         title: "Services",
         url: "/dashboard/services",
         icon: PackageCheck,
@@ -115,17 +120,6 @@ export const sidebarItems: NavGroup[] = [
         url: "/dashboard/employees",
         icon: UserRoundCog,
         isNew: true,
-      },
-    ],
-  },
-  {
-    id: 4,
-    label: "Money",
-    items: [
-      {
-        title: "Invoices",
-        url: "/dashboard/invoices",
-        icon: ReceiptText,
       },
     ],
   },

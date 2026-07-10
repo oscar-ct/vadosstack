@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export type EmailTemplateScope = "estimate" | "general" | "invoice" | "lead" | "order";
+export type EmailTemplateScope = "estimate" | "general" | "invoice" | "lead" | "order" | "return-receipt";
 
 export type DocumentEmailTemplate = {
   bodyHtml: string;
@@ -160,6 +160,32 @@ const defaultDocumentEmailTemplates: Record<
         '<p><span style="color:#18181b;font-size:22px"><strong>{{orderTotal}}</strong></span><br><span style="color:#52525b">Order total</span></p>',
         "<p><strong>Order date:</strong> {{orderDate}}</p>",
         "<p>Please review the attached document at your convenience. If you have any questions, reply to this email and we will be happy to help.</p>",
+        "<p>Thank you,<br><strong>{{companyName}}</strong></p>",
+      ].join(""),
+    },
+  ],
+  "return-receipt": [
+    {
+      title: "Default return receipt",
+      subject: "Return Receipt {{returnNumber}} from {{companyName}}",
+      bodyText: [
+        "Hi {{customerName}},",
+        "",
+        "Your return receipt {{returnNumber}} from {{companyName}} is attached as a PDF.",
+        "Refund amount: {{refundAmount}}",
+        "Return date: {{returnDate}}",
+        "",
+        "Please keep this for your records. If you have any questions, reply to this email and we will be happy to help.",
+        "",
+        "Thank you,",
+        "{{companyName}}",
+      ].join("\n"),
+      bodyHtml: [
+        "<p>Hi {{customerName}},</p>",
+        "<p>Your return receipt <strong>{{returnNumber}}</strong> from {{companyName}} is attached as a PDF.</p>",
+        '<p><span style="color:#18181b;font-size:22px"><strong>{{refundAmount}}</strong></span><br><span style="color:#52525b">Refund amount</span></p>',
+        "<p><strong>Return date:</strong> {{returnDate}}</p>",
+        "<p>Please keep this for your records. If you have any questions, reply to this email and we will be happy to help.</p>",
         "<p>Thank you,<br><strong>{{companyName}}</strong></p>",
       ].join(""),
     },
