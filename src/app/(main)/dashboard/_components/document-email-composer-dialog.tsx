@@ -139,6 +139,9 @@ export function DocumentEmailComposerDialog({
   documentIdField,
   documentLabel,
   gmailConnected,
+  hideTrigger = false,
+  onOpenChange,
+  open: controlledOpen,
   recipientEmail,
   returnTo,
   senderEmail,
@@ -154,6 +157,9 @@ export function DocumentEmailComposerDialog({
   documentIdField: string;
   documentLabel: "estimate" | "invoice" | "order" | "return receipt";
   gmailConnected: boolean;
+  hideTrigger?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
   recipientEmail?: string | null;
   returnTo: string;
   senderEmail?: string | null;
@@ -164,7 +170,7 @@ export function DocumentEmailComposerDialog({
   const messageHtmlInputRef = React.useRef<HTMLInputElement>(null);
   const [, refreshEditorState] = React.useReducer((value: number) => value + 1, 0);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
-  const [open, setOpen] = React.useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
   const [subject, setSubject] = React.useState(defaultSubject);
   const [messageText, setMessageText] = React.useState(defaultText);
   const [messageHtml, setMessageHtml] = React.useState(defaultHtml);
@@ -173,6 +179,7 @@ export function DocumentEmailComposerDialog({
   const [result, setResult] = React.useState<EmailDeliveryResultValue | null>(null);
   const submitLabel = `Send ${documentLabel}`;
   const needsReconnect = state.reconnectRequired;
+  const open = controlledOpen ?? uncontrolledOpen;
 
   const setEditorDraft = React.useCallback((text: string, html: string) => {
     if (messageTextInputRef.current) messageTextInputRef.current.value = text;
@@ -227,6 +234,17 @@ export function DocumentEmailComposerDialog({
       setBodyError("");
     },
   });
+
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen && editor) setEditorDraft(editor.getText(), editor.getHTML());
+      onOpenChange?.(nextOpen);
+      if (controlledOpen === undefined) {
+        setUncontrolledOpen(nextOpen);
+      }
+    },
+    [controlledOpen, editor, onOpenChange, setEditorDraft],
+  );
 
   const resetDraft = React.useCallback(() => {
     setSubject(defaultSubject);
@@ -376,19 +394,15 @@ export function DocumentEmailComposerDialog({
   );
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && editor) setEditorDraft(editor.getText(), editor.getHTML());
-        setOpen(nextOpen);
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" disabled={!recipientEmail}>
-          <Mail />
-          Email
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {hideTrigger ? null : (
+        <DialogTrigger asChild>
+          <Button type="button" variant="outline" size="sm" disabled={!recipientEmail}>
+            <Mail />
+            Email
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="grid h-[calc(100svh-1rem)] w-[min(calc(100vw-2rem),72rem)] translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 max-sm:top-2 sm:top-1/2 sm:h-[min(56rem,calc(100svh-1rem))] sm:max-w-none sm:-translate-y-1/2">
         <DialogHeader className="border-b px-5 pt-5 pr-14 pb-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
@@ -874,7 +888,7 @@ export function DocumentEmailComposerDialog({
               result={result}
               onDone={() => {
                 if (result?.type === "success") {
-                  setOpen(false);
+                  handleOpenChange(false);
                 }
                 setResult(null);
               }}
@@ -890,7 +904,7 @@ export function DocumentEmailComposerDialog({
               type="button"
               variant="outline"
               className="sm:w-auto"
-              onClick={() => setOpen(false)}
+              onClick={() => handleOpenChange(false)}
               disabled={isPending}
             >
               <X />

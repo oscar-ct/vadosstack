@@ -421,7 +421,7 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
           </div>
         </div>
         <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
-          <Table>
+          <Table className="min-w-[1120px]">
             <TableHeader className="bg-muted/15">
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>

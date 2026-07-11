@@ -22,7 +22,7 @@ import { prisma } from "@/lib/prisma";
 
 import { parseMaterials as parseJobMaterials } from "../../jobs/_components/materials";
 import { parsePricingItems } from "../../jobs/_components/pricing-items";
-import { DeleteEstimateButton, EstimateActions } from "../_components/estimate-actions";
+import { EstimateActions } from "../_components/estimate-actions";
 import { deleteEstimateAction, emailEstimateAction } from "../actions";
 
 type EstimateMaterial = {
@@ -218,6 +218,12 @@ export default async function Page({
   const currentHref = resolvedSearchParams?.from
     ? `/dashboard/estimates/${estimate.id}?from=${resolvedSearchParams.from}`
     : `/dashboard/estimates/${estimate.id}`;
+  const editHref = estimate.estimateRecordId
+    ? `/dashboard/estimates/records/${estimate.estimateRecordId}/edit`
+    : estimate.jobId
+      ? `/dashboard/jobs/${estimate.jobId}/edit`
+      : null;
+  const editLabel = estimate.estimateRecordId ? "Edit estimate" : "Edit job/estimate";
   const gmailError = resolvedSearchParams?.gmail_error;
   const gmailNotice = resolvedSearchParams?.gmail_connected
     ? { message: "Gmail is connected. You can email estimates from this account.", type: "success" as const }
@@ -252,6 +258,18 @@ export default async function Page({
             companyName={currentUser.companyName}
             customerEmail={estimate.customerEmail}
             customerName={estimate.customerName}
+            deleteAction={deleteEstimateAction}
+            deleteRedirectTo={backHref}
+            deleteSnapshot={{
+              customerName: estimate.customerName,
+              estimatedTotal: formatMoney(estimate.estimatedTotal),
+              estimateNumber,
+              jobTitle: estimate.jobTitle,
+              serviceLocation: estimate.serviceLocation,
+              validThrough: format(validThrough, "MMM d, yyyy"),
+            }}
+            editHref={editHref}
+            editLabel={editLabel}
             estimateId={estimate.id}
             estimateMessageAlign={estimateMessageAlign}
             estimateMessageEnabled={currentUser.estimateMessageEnabled}
@@ -265,7 +283,6 @@ export default async function Page({
             templates={emailTemplates}
             validThrough={format(validThrough, "MMM d, yyyy")}
           />
-          <DeleteEstimateButton action={deleteEstimateAction} estimateId={estimate.id} redirectTo={backHref} />
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { CircleDollarSign, Download, Trash2 } from "lucide-react";
+import { CircleDollarSign, Download, FilePenLine, Mail, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { EmailDeliveryResult, type EmailDeliveryResultValue } from "@/components/email-delivery-result";
@@ -21,6 +21,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { escapeHtml } from "@/lib/email-content";
 import type { DocumentEmailTemplate } from "@/lib/email-templates";
 
@@ -97,6 +105,9 @@ export function InvoiceActions({
   companyName,
   customerEmail,
   customerName,
+  deleteAction,
+  deleteRedirectTo,
+  deleteSnapshot,
   dueDate,
   gmailConnected,
   gmailSenderEmail,
@@ -105,6 +116,7 @@ export function InvoiceActions({
   invoiceMessageAlign,
   invoiceMessageEnabled,
   invoiceMessageText,
+  jobId,
   notice,
   returnTo,
   templates,
@@ -114,6 +126,9 @@ export function InvoiceActions({
   companyName: string;
   customerEmail?: string | null;
   customerName?: string | null;
+  deleteAction: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
+  deleteRedirectTo?: string;
+  deleteSnapshot?: DeleteInvoiceSnapshot;
   dueDate: string;
   gmailConnected: boolean;
   gmailSenderEmail?: string | null;
@@ -122,6 +137,7 @@ export function InvoiceActions({
   invoiceMessageAlign: "left" | "center" | "right";
   invoiceMessageEnabled: boolean;
   invoiceMessageText: string;
+  jobId: string;
   notice?: {
     message: string;
     type: "error" | "success";
@@ -131,6 +147,9 @@ export function InvoiceActions({
 }) {
   const router = useRouter();
   const [result, setResult] = React.useState<EmailDeliveryResultValue | null>(null);
+  const [emailOpen, setEmailOpen] = React.useState(false);
+  const [invoiceNoteOpen, setInvoiceNoteOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
   const fallbackSubject = React.useMemo(
     () => `Invoice ${invoiceNumber} from ${companyName}`,
     [companyName, invoiceNumber],
@@ -187,19 +206,69 @@ export function InvoiceActions({
 
   return (
     <div className="grid gap-2 print:hidden">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button asChild size="sm">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!customerEmail}
+          className="hidden sm:inline-flex"
+          onClick={() => setEmailOpen(true)}
+        >
+          <Mail />
+          Email
+        </Button>
+        <Button asChild size="sm" className="hidden sm:inline-flex">
           <Link href={`/dashboard/invoices/${invoiceId}/pdf`} prefetch={false}>
             <Download />
-            Download PDF
+            Download
           </Link>
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5">
+              <MoreHorizontal />
+              <span>More</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Invoice actions</DropdownMenuLabel>
+            <DropdownMenuItem className="sm:hidden" disabled={!customerEmail} onSelect={() => setEmailOpen(true)}>
+              <Mail />
+              Email invoice
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="sm:hidden">
+              <Link href={`/dashboard/invoices/${invoiceId}/pdf`} prefetch={false}>
+                <Download />
+                Download
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={`/dashboard/jobs/${jobId}/edit`}>
+                <Pencil />
+                Edit job/invoice
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setInvoiceNoteOpen(true)}>
+              <FilePenLine />
+              Invoice note
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+              <Trash2 />
+              Delete invoice
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <DocumentMessageDialog
           action={updateDocumentMessageAction}
           align={invoiceMessageAlign}
           documentType="invoice"
           enabled={invoiceMessageEnabled}
+          hideTrigger
           messageText={invoiceMessageText}
+          open={invoiceNoteOpen}
+          onOpenChange={setInvoiceNoteOpen}
           returnTo={returnTo}
         />
         <DocumentEmailComposerDialog
@@ -219,10 +288,22 @@ export function InvoiceActions({
           documentIdField="invoiceId"
           documentLabel="invoice"
           gmailConnected={gmailConnected}
+          hideTrigger
+          open={emailOpen}
+          onOpenChange={setEmailOpen}
           recipientEmail={customerEmail}
           returnTo={returnTo}
           senderEmail={gmailSenderEmail}
           templates={templates}
+        />
+        <DeleteInvoiceButton
+          action={deleteAction}
+          hideTrigger
+          invoiceId={invoiceId}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          redirectTo={deleteRedirectTo}
+          snapshot={deleteSnapshot}
         />
       </div>
       <EmailDeliveryResult result={result} onDone={() => setResult(null)} />
@@ -268,24 +349,41 @@ export function ManageInvoiceDialogButton({
 
 export function DeleteInvoiceButton({
   action,
+  hideTrigger = false,
   invoiceId,
+  onOpenChange,
+  open: controlledOpen,
   redirectTo,
   snapshot,
 }: {
   action: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
+  hideTrigger?: boolean;
   invoiceId: string;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
   redirectTo?: string;
   snapshot?: DeleteInvoiceSnapshot;
 }) {
   const formRef = React.useRef<HTMLFormElement>(null);
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
   const [state, formAction, isPending] = React.useActionState(action, deleteInitialState);
+  const open = controlledOpen ?? uncontrolledOpen;
+
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      onOpenChange?.(nextOpen);
+      if (controlledOpen === undefined) {
+        setUncontrolledOpen(nextOpen);
+      }
+    },
+    [controlledOpen, onOpenChange],
+  );
 
   React.useEffect(() => {
     if (!state.success) return;
 
-    setOpen(false);
+    handleOpenChange(false);
     toast.success(state.message || "Invoice deleted.");
     if (redirectTo) {
       router.replace(redirectTo);
@@ -293,16 +391,18 @@ export function DeleteInvoiceButton({
     }
 
     router.refresh();
-  }, [redirectTo, router, state]);
+  }, [handleOpenChange, redirectTo, router, state]);
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button type="button" variant="destructive" size="sm">
-          <Trash2 />
-          Delete
-        </Button>
-      </AlertDialogTrigger>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
+      {hideTrigger ? null : (
+        <AlertDialogTrigger asChild>
+          <Button type="button" variant="destructive" size="sm">
+            <Trash2 />
+            Delete
+          </Button>
+        </AlertDialogTrigger>
+      )}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete invoice?</AlertDialogTitle>

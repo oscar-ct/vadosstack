@@ -24,7 +24,7 @@ import { prisma } from "@/lib/prisma";
 
 import { parsePricingItems } from "../../jobs/_components/pricing-items";
 import { createJobPaymentAction, deleteJobPaymentAction } from "../../jobs/actions";
-import { DeleteInvoiceButton, InvoiceActions, ManageInvoiceDialogButton } from "../_components/invoice-actions";
+import { InvoiceActions, ManageInvoiceDialogButton } from "../_components/invoice-actions";
 import type { InvoiceTableItem } from "../_components/invoices-table";
 import { deleteInvoiceAction, emailInvoiceAction } from "../actions";
 
@@ -333,6 +333,16 @@ export default async function Page({
             companyName={currentUser.companyName}
             customerEmail={invoice.customerEmail}
             customerName={invoice.customerName}
+            deleteAction={deleteInvoiceAction}
+            deleteRedirectTo={backHref}
+            deleteSnapshot={{
+              balanceDue: formatMoney(invoice.balanceDue),
+              customerName: invoice.customerName,
+              dueDate: format(dueDate, "MMM d, yyyy"),
+              invoiceNumber,
+              jobTitle: invoice.jobTitle,
+              serviceLocation: invoice.serviceLocation,
+            }}
             dueDate={format(dueDate, "MMM d, yyyy")}
             gmailConnected={Boolean(googleMailAccount)}
             gmailSenderEmail={googleMailAccount?.email ?? null}
@@ -341,22 +351,10 @@ export default async function Page({
             invoiceMessageEnabled={currentUser.invoiceMessageEnabled}
             invoiceMessageText={currentUser.invoiceMessageText}
             invoiceNumber={invoiceNumber}
+            jobId={invoice.jobId}
             notice={gmailNotice}
             returnTo={currentHref}
             templates={emailTemplates}
-          />
-          <DeleteInvoiceButton
-            action={deleteInvoiceAction}
-            invoiceId={invoice.id}
-            redirectTo={backHref}
-            snapshot={{
-              balanceDue: formatMoney(invoice.balanceDue),
-              customerName: invoice.customerName,
-              dueDate: format(dueDate, "MMM d, yyyy"),
-              invoiceNumber,
-              jobTitle: invoice.jobTitle,
-              serviceLocation: invoice.serviceLocation,
-            }}
           />
         </div>
       </div>

@@ -103,11 +103,16 @@ export function getEstimateRecordsColumns({
       header: "Status",
       filterFn: "equalsString",
       cell: ({ row }) => (
-        <div className="grid gap-1">
-          <Badge variant="outline" className={estimateStatusClassName(row.original.status)}>
+        <div className="grid min-w-[9rem] gap-1 pr-4">
+          <Badge
+            variant="outline"
+            className={`${estimateStatusClassName(row.original.status)} w-fit whitespace-nowrap`}
+          >
             {row.original.status}
           </Badge>
-          <span className="px-1 text-muted-foreground text-xs">{nextActionLabel(row.original.status)}</span>
+          <span className="whitespace-nowrap px-1 text-muted-foreground text-xs">
+            {nextActionLabel(row.original.status)}
+          </span>
         </div>
       ),
     },
@@ -115,13 +120,13 @@ export function getEstimateRecordsColumns({
       id: "documents",
       header: "",
       cell: ({ row }) => (
-        <div className={"w-min"}>
+        <div className="flex min-w-[8.5rem] items-center">
           {row.original.printableEstimateId ? (
             <Button
               asChild
               variant="outline"
               size="xs"
-              className="flex h-7 justify-center border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
+              className="flex h-7 justify-center whitespace-nowrap border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
             >
               <Link prefetch={false} href={`/dashboard/estimates/${row.original.printableEstimateId}`}>
                 <NotebookText className="size-3.5" />
@@ -138,7 +143,7 @@ export function getEstimateRecordsColumns({
       id: "actions",
       header: () => <div className="sr-only">Actions</div>,
       cell: ({ row }) => (
-        <div className="text-right">
+        <div className="min-w-10 text-right">
           <Button
             type="button"
             variant="ghost"

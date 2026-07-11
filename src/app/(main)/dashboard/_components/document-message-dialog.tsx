@@ -44,17 +44,25 @@ export function DocumentMessageDialog({
   align,
   documentType,
   enabled,
+  hideTrigger = false,
   messageText,
+  onOpenChange,
+  open: controlledOpen,
   returnTo,
+  triggerLabel,
 }: {
   action: (state: DocumentMessageMutationState, formData: FormData) => Promise<DocumentMessageMutationState>;
   align: DocumentMessageAlign;
   documentType: DocumentMessageType;
   enabled: boolean;
+  hideTrigger?: boolean;
   messageText: string;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
   returnTo: string;
+  triggerLabel?: string;
 }) {
-  const [open, setOpen] = React.useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
   const [message, setMessage] = React.useState(messageText);
   const [messageAlign, setMessageAlign] = React.useState<DocumentMessageAlign>(align);
   const [isEnabled, setIsEnabled] = React.useState(enabled);
@@ -62,6 +70,7 @@ export function DocumentMessageDialog({
   const [state, setState] = React.useState<DocumentMessageMutationState>(initialState);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const label = documentType === "estimate" ? "estimate" : "invoice";
+  const open = controlledOpen ?? uncontrolledOpen;
 
   React.useEffect(() => {
     setMessage(messageText);
@@ -70,7 +79,10 @@ export function DocumentMessageDialog({
   }, [align, enabled, messageText]);
 
   function handleOpenChange(nextOpen: boolean) {
-    setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+    if (controlledOpen === undefined) {
+      setUncontrolledOpen(nextOpen);
+    }
 
     if (!nextOpen) {
       setIsSaving(false);
@@ -111,7 +123,7 @@ export function DocumentMessageDialog({
 
       if (nextState.success) {
         toast.success(nextState.message || "Custom message saved.");
-        setOpen(false);
+        handleOpenChange(false);
       }
     } catch {
       setState({
@@ -125,15 +137,17 @@ export function DocumentMessageDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="outline">
-          <FileText />
-          Footer
-        </Button>
-      </DialogTrigger>
+      {hideTrigger ? null : (
+        <DialogTrigger asChild>
+          <Button type="button" size="sm" variant="outline">
+            <FileText />
+            {triggerLabel ?? `${label === "estimate" ? "Estimate" : "Invoice"} note`}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{label === "estimate" ? "Estimate" : "Invoice"} footer</DialogTitle>
+          <DialogTitle>{label === "estimate" ? "Estimate" : "Invoice"} note</DialogTitle>
           <DialogDescription>
             This bottom message appears on every {label} preview and downloaded PDF when enabled.
           </DialogDescription>
@@ -218,7 +232,7 @@ export function DocumentMessageDialog({
           {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSaving}>

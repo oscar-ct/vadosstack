@@ -525,6 +525,71 @@ async function syncCustomerBillingStatus(customerId: string | null | undefined, 
   });
 }
 
+async function syncPrintableEstimateSnapshotFromRecord(estimateRecordId: string, ownerId: string) {
+  const estimate = await prisma.estimateRecord.findUnique({
+    where: {
+      id_ownerId: {
+        id: estimateRecordId,
+        ownerId,
+      },
+    },
+    include: {
+      customer: {
+        include: {
+          phoneNumbers: true,
+        },
+      },
+      lead: true,
+      printableEstimate: true,
+    },
+  });
+
+  if (!estimate?.printableEstimate) {
+    return undefined;
+  }
+
+  const laborItems = normalizeItems(parsePricingItems(estimate.laborItems));
+  const materials = normalizeMaterials(parseMaterials(estimate.materials));
+  const printableItems = [
+    ...laborItems.map((item) => ({ ...item, type: "labor" })),
+    ...materials.map((item) => ({ ...item, type: "material" })),
+  ];
+  const materialsSubtotal = calculateSubtotal(materials);
+  const laborCost = Number(estimate.laborCost ?? 0);
+  const materialTaxRate = Number(estimate.materialTaxRate ?? 0);
+  const taxableSubtotal = estimate.jobType === "Commercial" ? laborCost + materialsSubtotal : materialsSubtotal;
+  const materialTaxAmount = taxableSubtotal * (materialTaxRate / 100);
+
+  await prisma.estimate.update({
+    where: {
+      id_ownerId: {
+        id: estimate.printableEstimate.id,
+        ownerId,
+      },
+    },
+    data: {
+      customerId: estimate.customerId,
+      customerName: estimate.customer?.name ?? estimate.lead?.name ?? null,
+      customerEmail: estimate.customer?.email ?? estimate.lead?.email ?? null,
+      customerPhone: estimate.customer?.phoneNumbers[0]?.value ?? estimate.lead?.phone ?? null,
+      jobTitle: estimate.description,
+      jobDescription: estimate.scope,
+      serviceLocation: estimate.serviceLocation,
+      dateBegin: estimate.dateBegin,
+      dateEnd: estimate.dateEnd,
+      laborCost: estimate.laborCost ?? "0",
+      materialTaxRate: estimate.materialTaxRate ?? "0",
+      materials: JSON.stringify(printableItems),
+      materialsSubtotal: materialsSubtotal.toFixed(2),
+      materialTaxAmount: materialTaxAmount.toFixed(2),
+      estimatedTotal: estimate.estimatedTotal ?? "0",
+      jobStatus: estimate.status,
+    },
+  });
+
+  return estimate.printableEstimate.id;
+}
+
 export async function createEstimateRecordAction(
   _previousState: EstimateRecordMutationState,
   formData: FormData,
@@ -694,6 +759,7 @@ export async function updateEstimateRecordAction(
   formData: FormData,
 ): Promise<EstimateRecordMutationState> {
   const currentUser = await getCurrentUser();
+  const syncExistingEstimate = formData.get("syncExistingEstimate") === "true";
 
   if (!currentUser) {
     return { success: false, message: "You must be signed in to update an estimate." };
@@ -719,6 +785,7 @@ export async function updateEstimateRecordAction(
     newLeadSource,
     ...estimate
   } = parsed.data;
+  let syncedPrintableEstimateId: string | undefined;
 
   try {
     const { jobType, leadId, measurementRooms, ...estimateInput } = estimate;
@@ -727,6 +794,38 @@ export async function updateEstimateRecordAction(
     const normalizedMeasurementRooms = normalizeMeasurementRooms(measurementRooms);
     const totals = calculateTotal({ ...estimate, laborItems, materials, jobType });
     let customerId = estimate.customerId;
+    const existingEstimate = await prisma.estimateRecord.findUnique({
+      where: {
+        id_ownerId: {
+          id,
+          ownerId: currentUser.id,
+        },
+      },
+      select: {
+        customerId: true,
+        printableEstimate: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    if (!existingEstimate) {
+      return {
+        success: false,
+        message: "Estimate not found.",
+      };
+    }
+
+    if (existingEstimate.printableEstimate && !syncExistingEstimate) {
+      return {
+        success: false,
+        message:
+          "This estimate already has a printable snapshot. Confirm that you want to update the existing estimate snapshot before saving.",
+      };
+    }
+
     const selectedLead = leadId
       ? await prisma.lead.findUnique({
           where: {
@@ -872,6 +971,10 @@ export async function updateEstimateRecordAction(
         },
       });
     }
+
+    if (existingEstimate.printableEstimate && syncExistingEstimate) {
+      syncedPrintableEstimateId = await syncPrintableEstimateSnapshotFromRecord(id, currentUser.id);
+    }
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Estimate could not be updated." };
   }
@@ -880,7 +983,14 @@ export async function updateEstimateRecordAction(
   revalidatePath("/dashboard/customers");
   revalidatePath("/dashboard/leads");
   revalidatePath("/dashboard/command-center");
-  return { success: true, message: "Estimate updated." };
+  if (syncedPrintableEstimateId) {
+    revalidatePath(`/dashboard/estimates/${syncedPrintableEstimateId}`);
+  }
+
+  return {
+    success: true,
+    message: syncedPrintableEstimateId ? "Estimate and snapshot updated." : "Estimate updated.",
+  };
 }
 
 export async function deleteEstimateRecordAction(

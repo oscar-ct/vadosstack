@@ -8,6 +8,16 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, NotebookText, Save } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { discardLocalDraft } from "@/lib/drafts.client";
@@ -75,12 +85,15 @@ export function EstimateRecordWorkspace({
 }) {
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
+  const syncExistingEstimateRef = React.useRef<HTMLInputElement>(null);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
+  const [estimateSnapshotConfirmOpen, setEstimateSnapshotConfirmOpen] = React.useState(false);
   const copy = getWorkspaceCopy(mode);
   const draftKey = React.useMemo(
     () => getEstimateDraftKey(mode, estimate?.id, leadPrefill?.leadId),
     [estimate?.id, leadPrefill?.leadId, mode],
   );
+  const requiresEstimateSnapshotSyncConfirmation = mode === "edit" && Boolean(estimate?.printableEstimateId);
 
   React.useEffect(() => {
     if (!state.success) return;
@@ -115,8 +128,21 @@ export function EstimateRecordWorkspace({
         </div>
       </div>
 
-      <form ref={formRef} action={formAction} className="grid gap-4">
+      <form
+        ref={formRef}
+        action={formAction}
+        className="grid gap-4"
+        onSubmit={(event) => {
+          if (!requiresEstimateSnapshotSyncConfirmation || syncExistingEstimateRef.current?.value === "true") {
+            return;
+          }
+
+          event.preventDefault();
+          setEstimateSnapshotConfirmOpen(true);
+        }}
+      >
         {estimate ? <input type="hidden" name="id" value={estimate.id} /> : null}
+        <input ref={syncExistingEstimateRef} type="hidden" name="syncExistingEstimate" defaultValue="false" />
         <Card className="overflow-visible rounded-lg">
           <CardHeader className="border-b">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -167,6 +193,34 @@ export function EstimateRecordWorkspace({
           </div>
         </div>
       </form>
+
+      <AlertDialog open={estimateSnapshotConfirmOpen} onOpenChange={setEstimateSnapshotConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Update existing estimate snapshot?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This estimate already has a printable customer-facing snapshot. Saving these changes will update that
+              snapshot, including customer details, scope, schedule, labor, materials, taxes, status, and total.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-lg border bg-muted/40 p-3 text-muted-foreground text-sm leading-6">
+            If the customer already received this estimate, you may need to resend the updated estimate after saving.
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (syncExistingEstimateRef.current) {
+                  syncExistingEstimateRef.current.value = "true";
+                }
+                formRef.current?.requestSubmit();
+              }}
+            >
+              Save estimate and update snapshot
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

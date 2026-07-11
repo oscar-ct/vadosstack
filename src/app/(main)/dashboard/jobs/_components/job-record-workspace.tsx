@@ -8,6 +8,16 @@ import { useRouter } from "next/navigation";
 import { BriefcaseBusiness, CheckCircle2, Save } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { discardLocalDraft } from "@/lib/drafts.client";
@@ -69,9 +79,12 @@ export function JobRecordWorkspace({
 }) {
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
+  const syncExistingInvoiceRef = React.useRef<HTMLInputElement>(null);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
+  const [invoiceConfirmOpen, setInvoiceConfirmOpen] = React.useState(false);
   const copy = getWorkspaceCopy(mode);
   const draftKey = React.useMemo(() => getJobDraftKey(mode, job?.id), [job?.id, mode]);
+  const requiresInvoiceSyncConfirmation = mode === "edit" && Boolean(job?.invoiceId);
 
   React.useEffect(() => {
     if (!state.success) return;
@@ -104,8 +117,21 @@ export function JobRecordWorkspace({
         </div>
       </div>
 
-      <form ref={formRef} action={formAction} className="grid gap-4">
+      <form
+        ref={formRef}
+        action={formAction}
+        className="grid gap-4"
+        onSubmit={(event) => {
+          if (!requiresInvoiceSyncConfirmation || syncExistingInvoiceRef.current?.value === "true") {
+            return;
+          }
+
+          event.preventDefault();
+          setInvoiceConfirmOpen(true);
+        }}
+      >
         {job ? <input type="hidden" name="id" value={job.id} /> : null}
+        <input ref={syncExistingInvoiceRef} type="hidden" name="syncExistingInvoice" defaultValue="false" />
         <Card className="overflow-visible rounded-lg">
           <CardHeader className="border-b">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -154,6 +180,34 @@ export function JobRecordWorkspace({
           </div>
         </div>
       </form>
+
+      <AlertDialog open={invoiceConfirmOpen} onOpenChange={setInvoiceConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Update existing invoice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This job already has an invoice. Saving these changes will update the existing invoice snapshot, including
+              the customer details, scope, dates, labor, materials, taxes, total, payment status, and balance due.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-lg border bg-muted/40 p-3 text-muted-foreground text-sm leading-6">
+            If the customer has already received this invoice, you may need to resend the updated invoice after saving.
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (syncExistingInvoiceRef.current) {
+                  syncExistingInvoiceRef.current.value = "true";
+                }
+                formRef.current?.requestSubmit();
+              }}
+            >
+              Save job and update invoice
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

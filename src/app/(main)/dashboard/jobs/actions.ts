@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
-import { deriveCustomerBillingStatus, deriveJobPaymentStatus } from "@/lib/customer-billing";
+import {
+  calculateOutstandingBalance,
+  deriveCustomerBillingStatus,
+  deriveJobPaymentStatus,
+} from "@/lib/customer-billing";
 import { parseDateInput } from "@/lib/date-only";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -512,6 +516,74 @@ async function syncJobPaymentSummary(jobId: string, ownerId: string) {
   await syncCustomerBillingStatus(job.customerId, ownerId);
 }
 
+async function syncExistingInvoiceSnapshotFromJob(jobId: string, ownerId: string) {
+  const job = await prisma.job.findUnique({
+    where: {
+      id_ownerId: {
+        id: jobId,
+        ownerId,
+      },
+    },
+    include: {
+      customer: {
+        include: {
+          phoneNumbers: true,
+        },
+      },
+      invoice: true,
+    },
+  });
+
+  if (!job?.invoice) {
+    return;
+  }
+
+  const materials = parseMaterials(job.materials);
+  const materialsSubtotal = materials.reduce(
+    (total, material) => total + Number(calculateSignedMaterialTotal(material)),
+    0,
+  );
+  const laborCost = Number(job.laborCost ?? 0);
+  const materialTaxRate = Number(job.materialTaxRate ?? 0);
+  const taxableSubtotal = materialsSubtotal + (job.jobType === "Commercial" ? laborCost : 0);
+  const materialTaxAmount = taxableSubtotal * (materialTaxRate / 100);
+  const amountPaid = await getJobPaidTotal(job.id);
+  const depositPaid = await getJobDepositTotal(job.id);
+  const paymentStatus = deriveJobPaymentStatus(job.status, job.finalCost?.toString(), amountPaid);
+  const balanceDue = calculateOutstandingBalance(job.status, job.finalCost?.toString(), amountPaid);
+
+  await prisma.invoice.update({
+    where: {
+      id_ownerId: {
+        id: job.invoice.id,
+        ownerId,
+      },
+    },
+    data: {
+      customerId: job.customerId,
+      customerName: job.customer?.name ?? null,
+      customerEmail: job.customer?.email ?? null,
+      customerPhone: job.customer?.phoneNumbers[0]?.value ?? null,
+      jobTitle: job.description,
+      jobDescription: job.scope,
+      serviceLocation: job.serviceLocation,
+      dateBegin: job.dateBegin,
+      dateEnd: job.dateEnd,
+      laborCost: laborCost.toFixed(2),
+      materialTaxRate: materialTaxRate.toFixed(2),
+      materials: JSON.stringify(materials),
+      materialsSubtotal: materialsSubtotal.toFixed(2),
+      materialTaxAmount: materialTaxAmount.toFixed(2),
+      finalCost: (Number(job.finalCost ?? 0) || 0).toFixed(2),
+      depositPaid,
+      amountPaid,
+      balanceDue: balanceDue.toFixed(2),
+      paymentStatus,
+      jobStatus: job.status,
+    },
+  });
+}
+
 export async function createJobAction(_previousState: JobMutationState, formData: FormData): Promise<JobMutationState> {
   const currentUser = await getCurrentUser();
 
@@ -626,6 +698,7 @@ export async function createJobAction(_previousState: JobMutationState, formData
 
 export async function updateJobAction(_previousState: JobMutationState, formData: FormData): Promise<JobMutationState> {
   const currentUser = await getCurrentUser();
+  const syncExistingInvoice = formData.get("syncExistingInvoice") === "true";
 
   if (!currentUser) {
     return {
@@ -648,6 +721,7 @@ export async function updateJobAction(_previousState: JobMutationState, formData
   }
 
   const { id, newCustomerEmail, newCustomerName, newCustomerPhone, ...job } = parsed.data;
+  let syncedInvoiceId: string | undefined;
 
   try {
     const materials = normalizeMaterials(job.materials);
@@ -666,8 +740,20 @@ export async function updateJobAction(_previousState: JobMutationState, formData
       select: {
         customerId: true,
         id: true,
+        invoice: {
+          select: {
+            id: true,
+          },
+        },
       },
     });
+
+    if (existingJob?.invoice && !syncExistingInvoice) {
+      return {
+        success: false,
+        message: "This job already has an invoice. Confirm that you want to update the existing invoice before saving.",
+      };
+    }
 
     let customerId = job.customerId;
 
@@ -739,6 +825,10 @@ export async function updateJobAction(_previousState: JobMutationState, formData
     });
 
     await syncJobPaymentSummary(updatedJob.id, currentUser.id);
+    if (existingJob?.invoice && syncExistingInvoice) {
+      await syncExistingInvoiceSnapshotFromJob(updatedJob.id, currentUser.id);
+      syncedInvoiceId = existingJob.invoice.id;
+    }
 
     await syncCustomerBillingStatus(existingJob?.customerId, currentUser.id);
     if (updatedJob.customerId !== existingJob?.customerId) {
@@ -752,11 +842,16 @@ export async function updateJobAction(_previousState: JobMutationState, formData
   }
 
   revalidatePath("/dashboard/jobs");
+  revalidatePath(`/dashboard/jobs/${id}`);
   revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/invoices");
+  if (syncedInvoiceId) {
+    revalidatePath(`/dashboard/invoices/${syncedInvoiceId}`);
+  }
 
   return {
     success: true,
-    message: "Job updated.",
+    message: syncExistingInvoice ? "Job and invoice updated." : "Job updated.",
     redirectTo: `/dashboard/jobs/${id}`,
   };
 }
