@@ -179,8 +179,9 @@ export function DeleteJobButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete job?</AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently removes the job, payment records, invoice link, and schedule details. Converted estimates
-            are kept and returned to the estimate list.
+            {job.invoiceId
+              ? "This job cannot be deleted while it has an invoice. Delete the invoice first so its number can be released or permanently voided."
+              : "This permanently removes the job, payment records, and schedule details. Converted estimates are kept and returned to the estimate list."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <dl className="grid gap-2 rounded-md border bg-muted/30 p-3">
@@ -194,9 +195,18 @@ export function DeleteJobButton({
 
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-          <Button type="button" variant="destructive" disabled={isPending} onClick={handleDelete}>
-            {isPending ? "Deleting..." : "Delete job"}
-          </Button>
+          {job.invoiceId ? (
+            <Button asChild>
+              <Link prefetch={false} href={`/dashboard/invoices/${job.invoiceId}`}>
+                <ReceiptText />
+                Open invoice
+              </Link>
+            </Button>
+          ) : (
+            <Button type="button" variant="destructive" disabled={isPending} onClick={handleDelete}>
+              {isPending ? "Deleting..." : "Delete job"}
+            </Button>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

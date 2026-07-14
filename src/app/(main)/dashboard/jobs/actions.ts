@@ -1161,11 +1161,30 @@ export async function deleteJobAction(_previousState: JobMutationState, formData
       },
       select: {
         customerId: true,
+        invoice: {
+          select: {
+            id: true,
+          },
+        },
       },
     });
 
-    await prisma.$transaction([
-      prisma.estimateRecord.updateMany({
+    if (!job) {
+      return {
+        success: false,
+        message: "Job could not be found.",
+      };
+    }
+
+    if (job.invoice) {
+      return {
+        success: false,
+        message: "Delete the invoice first so its number can be released or permanently voided.",
+      };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.estimateRecord.updateMany({
         where: {
           ownerId: currentUser.id,
           convertedJobId: parsed.data.id,
@@ -1174,22 +1193,28 @@ export async function deleteJobAction(_previousState: JobMutationState, formData
           convertedJobId: null,
           status: "Estimate Provided",
         },
-      }),
-      prisma.job.delete({
+      });
+      const deletedJob = await tx.job.deleteMany({
         where: {
-          id_ownerId: {
-            id: parsed.data.id,
-            ownerId: currentUser.id,
-          },
+          id: parsed.data.id,
+          invoice: { is: null },
+          ownerId: currentUser.id,
         },
-      }),
-    ]);
+      });
+
+      if (deletedJob.count !== 1) {
+        throw new Error("Delete the invoice first so its number can be released or permanently voided.");
+      }
+    });
 
     await syncCustomerBillingStatus(job?.customerId, currentUser.id);
-  } catch {
+  } catch (error) {
     return {
       success: false,
-      message: "Job could not be deleted. Please try again.",
+      message:
+        error instanceof Error && error.message.startsWith("Delete the invoice first")
+          ? error.message
+          : "Job could not be deleted. Please try again.",
     };
   }
 
