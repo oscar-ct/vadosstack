@@ -545,7 +545,7 @@ export function DeleteInvoiceButton({
           </Button>
         </AlertDialogTrigger>
       )}
-      <AlertDialogContent>
+      <AlertDialogContent className="max-h-[calc(100svh-1rem)] w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain sm:max-h-none sm:w-full sm:overflow-visible">
         <AlertDialogHeader>
           <AlertDialogTitle>Delete invoice?</AlertDialogTitle>
           <AlertDialogDescription>
