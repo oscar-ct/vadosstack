@@ -19,3 +19,24 @@ export function formatTrackedDocumentNumber(type: NumberedDocumentType, sequence
 export function getDocumentNumberConfig(type: NumberedDocumentType) {
   return documentNumberConfigs[type];
 }
+
+export function parseTrackedDocumentNumber(type: NumberedDocumentType, value: string) {
+  const config = documentNumberConfigs[type];
+  const normalizedValue = value.trim().toUpperCase();
+  const prefix = `${config.prefix}${config.separator}`;
+
+  if (!normalizedValue.startsWith(prefix)) return null;
+
+  const digits = normalizedValue.slice(prefix.length);
+
+  if (!/^\d+$/.test(digits)) return null;
+
+  const sequenceNumber = Number.parseInt(digits, 10);
+
+  if (!Number.isSafeInteger(sequenceNumber) || sequenceNumber < 1) return null;
+
+  return {
+    documentNumber: formatTrackedDocumentNumber(type, sequenceNumber),
+    sequenceNumber,
+  };
+}

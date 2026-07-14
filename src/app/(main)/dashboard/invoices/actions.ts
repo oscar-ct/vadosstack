@@ -9,8 +9,13 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { calculateOutstandingBalance } from "@/lib/customer-billing";
-import { formatDocumentNumber } from "@/lib/document-number";
-import { allocateDocumentNumber, attachDocumentNumber } from "@/lib/document-numbering";
+import { formatDocumentNumber, parseTrackedDocumentNumber } from "@/lib/document-number";
+import {
+  allocateDocumentNumber,
+  attachDocumentNumber,
+  recalculateNextDocumentNumber,
+  recordDocumentNumberEvent,
+} from "@/lib/document-numbering";
 import { plainTextToEmailHtml, sanitizeEmailHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
 import {
@@ -33,7 +38,14 @@ const invoiceJobSchema = z.object({
 
 const deleteInvoiceSchema = z.object({
   id: z.string().trim().min(1, "Invoice is required."),
+  releaseNumber: z.string().optional(),
   redirectTo: z.string().trim().optional(),
+});
+
+const updateInvoiceNumberSchema = z.object({
+  id: z.string().trim().min(1, "Invoice is required."),
+  invoiceNumber: z.string().trim().min(1, "Enter an invoice number."),
+  neverShared: z.literal("true", { error: "Confirm that this invoice has never been shared." }),
 });
 
 const emailInvoiceSchema = z.object({
@@ -514,6 +526,7 @@ export async function deleteInvoiceAction(
 
   const parsed = deleteInvoiceSchema.safeParse({
     id: formData.get("id"),
+    releaseNumber: formData.get("releaseNumber"),
     redirectTo: formData.get("redirectTo"),
   });
 
@@ -525,18 +538,81 @@ export async function deleteInvoiceAction(
   }
 
   try {
-    await prisma.invoice.delete({
-      where: {
-        id_ownerId: {
-          id: parsed.data.id,
-          ownerId: currentUser.id,
+    await prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findUnique({
+        where: {
+          id_ownerId: {
+            id: parsed.data.id,
+            ownerId: currentUser.id,
+          },
         },
-      },
+        select: {
+          amountPaid: true,
+          id: true,
+          invoiceNumber: true,
+        },
+      });
+
+      if (!invoice) throw new Error("Invoice could not be found.");
+
+      const [successfulEmailCount, assignment] = await Promise.all([
+        tx.emailRecord.count({
+          where: {
+            documentId: invoice.id,
+            documentType: "invoice",
+            ownerId: currentUser.id,
+            status: "success",
+          },
+        }),
+        tx.documentNumberAssignment.findFirst({
+          where: {
+            documentId: invoice.id,
+            ownerId: currentUser.id,
+            status: "assigned",
+            type: "invoice",
+          },
+        }),
+      ]);
+      const canRelease =
+        parsed.data.releaseNumber === "true" && successfulEmailCount === 0 && Number(invoice.amountPaid) <= 0;
+      const now = new Date();
+
+      if (assignment) {
+        await tx.documentNumberAssignment.update({
+          where: { id: assignment.id },
+          data: {
+            deletedAt: now,
+            status: canRelease ? "released" : "voided",
+            voidedAt: canRelease ? null : now,
+          },
+        });
+        await recordDocumentNumberEvent(tx, {
+          action: canRelease ? "released" : "voided",
+          detail: canRelease
+            ? "Unissued invoice deleted and its number released."
+            : "Invoice deleted without releasing its number.",
+          documentId: invoice.id,
+          documentNumber: assignment.documentNumber,
+          ownerId: currentUser.id,
+          sequenceNumber: assignment.sequenceNumber,
+          type: "invoice",
+        });
+      }
+
+      await tx.invoice.delete({
+        where: {
+          id_ownerId: {
+            id: invoice.id,
+            ownerId: currentUser.id,
+          },
+        },
+      });
+      await recalculateNextDocumentNumber(tx, currentUser.id, "invoice");
     });
-  } catch {
+  } catch (error) {
     return {
       success: false,
-      message: "Invoice could not be deleted. Please try again.",
+      message: error instanceof Error ? error.message : "Invoice could not be deleted. Please try again.",
     };
   }
 
@@ -550,5 +626,201 @@ export async function deleteInvoiceAction(
   return {
     success: true,
     message: "Invoice deleted.",
+  };
+}
+
+export async function updateInvoiceNumberAction(
+  _previousState: InvoiceMutationState,
+  formData: FormData,
+): Promise<InvoiceMutationState> {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return {
+      success: false,
+      message: "You must be signed in to edit an invoice number.",
+    };
+  }
+
+  const parsed = updateInvoiceNumberSchema.safeParse({
+    id: formData.get("id"),
+    invoiceNumber: formData.get("invoiceNumber"),
+    neverShared: formData.get("neverShared"),
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message ?? "Check the invoice number and try again.",
+    };
+  }
+
+  const requestedNumber = parseTrackedDocumentNumber("invoice", parsed.data.invoiceNumber);
+
+  if (!requestedNumber) {
+    return {
+      success: false,
+      message: "Use the invoice format INV followed by a number, such as INV0010.",
+    };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findUnique({
+        where: {
+          id_ownerId: {
+            id: parsed.data.id,
+            ownerId: currentUser.id,
+          },
+        },
+        select: {
+          amountPaid: true,
+          id: true,
+          invoiceNumber: true,
+        },
+      });
+
+      if (!invoice?.invoiceNumber) throw new Error("Invoice could not be found.");
+
+      const currentNumber = parseTrackedDocumentNumber("invoice", invoice.invoiceNumber);
+
+      if (!currentNumber) throw new Error("This invoice does not use the managed invoice number format.");
+      if (requestedNumber.sequenceNumber === currentNumber.sequenceNumber) {
+        throw new Error("Enter a different released invoice number.");
+      }
+      if (requestedNumber.sequenceNumber > currentNumber.sequenceNumber) {
+        throw new Error("Choose a previously released invoice number below the current number.");
+      }
+
+      const successfulEmailCount = await tx.emailRecord.count({
+        where: {
+          documentId: invoice.id,
+          documentType: "invoice",
+          ownerId: currentUser.id,
+          status: "success",
+        },
+      });
+
+      if (successfulEmailCount > 0) {
+        throw new Error("This invoice number is locked because the invoice was emailed successfully.");
+      }
+
+      if (Number(invoice.amountPaid) > 0) {
+        throw new Error("This invoice number is locked because a payment or deposit has been recorded.");
+      }
+
+      const [currentAssignment, requestedAssignment, blockingAssignment] = await Promise.all([
+        tx.documentNumberAssignment.findUnique({
+          where: {
+            ownerId_type_sequenceNumber: {
+              ownerId: currentUser.id,
+              sequenceNumber: currentNumber.sequenceNumber,
+              type: "invoice",
+            },
+          },
+        }),
+        tx.documentNumberAssignment.findUnique({
+          where: {
+            ownerId_type_sequenceNumber: {
+              ownerId: currentUser.id,
+              sequenceNumber: requestedNumber.sequenceNumber,
+              type: "invoice",
+            },
+          },
+        }),
+        tx.documentNumberAssignment.findFirst({
+          where: {
+            ownerId: currentUser.id,
+            sequenceNumber: {
+              gt: requestedNumber.sequenceNumber,
+              lt: currentNumber.sequenceNumber,
+            },
+            status: { not: "released" },
+            type: "invoice",
+          },
+          orderBy: { sequenceNumber: "asc" },
+        }),
+      ]);
+
+      if (
+        !currentAssignment ||
+        currentAssignment.documentId !== invoice.id ||
+        currentAssignment.status !== "assigned"
+      ) {
+        throw new Error("The current invoice number assignment could not be verified.");
+      }
+
+      if (!requestedAssignment || requestedAssignment.status !== "released") {
+        throw new Error("That invoice number is not available for reuse.");
+      }
+
+      if (blockingAssignment) {
+        throw new Error(
+          `${blockingAssignment.documentNumber} is still reserved. Only the released end of the invoice sequence can be reclaimed.`,
+        );
+      }
+
+      const now = new Date();
+
+      await tx.invoice.update({
+        where: {
+          id_ownerId: {
+            id: invoice.id,
+            ownerId: currentUser.id,
+          },
+        },
+        data: { invoiceNumber: requestedNumber.documentNumber },
+      });
+      await tx.documentNumberAssignment.update({
+        where: { id: currentAssignment.id },
+        data: {
+          deletedAt: now,
+          status: "released",
+          voidedAt: null,
+        },
+      });
+      await tx.documentNumberAssignment.update({
+        where: { id: requestedAssignment.id },
+        data: {
+          assignedAt: now,
+          deletedAt: null,
+          documentId: invoice.id,
+          status: "assigned",
+          voidedAt: null,
+        },
+      });
+      await recordDocumentNumberEvent(tx, {
+        action: "released",
+        detail: `Invoice reassigned to ${requestedNumber.documentNumber}.`,
+        documentId: invoice.id,
+        documentNumber: currentAssignment.documentNumber,
+        ownerId: currentUser.id,
+        sequenceNumber: currentAssignment.sequenceNumber,
+        type: "invoice",
+      });
+      await recordDocumentNumberEvent(tx, {
+        action: "reassigned",
+        detail: `Invoice reassigned from ${currentAssignment.documentNumber}.`,
+        documentId: invoice.id,
+        documentNumber: requestedAssignment.documentNumber,
+        ownerId: currentUser.id,
+        sequenceNumber: requestedAssignment.sequenceNumber,
+        type: "invoice",
+      });
+      await recalculateNextDocumentNumber(tx, currentUser.id, "invoice");
+    });
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Invoice number could not be changed. Please try again.",
+    };
+  }
+
+  revalidatePath("/dashboard/invoices");
+  revalidatePath(`/dashboard/invoices/${parsed.data.id}`);
+
+  return {
+    success: true,
+    message: `Invoice number changed to ${requestedNumber.documentNumber}.`,
   };
 }

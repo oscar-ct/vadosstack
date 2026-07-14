@@ -17,19 +17,17 @@ function parseSequenceNumber(documentNumber: string | null | undefined) {
 
 async function getCurrentMaxSequence(tx: DocumentNumberTransaction, ownerId: string, type: NumberedDocumentType) {
   if (type === "invoice") {
-    const invoices = await tx.invoice.findMany({
+    const assignment = await tx.documentNumberAssignment.findFirst({
       where: {
         ownerId,
-        invoiceNumber: {
-          not: null,
-        },
+        type,
+        status: { not: "released" },
       },
-      select: {
-        invoiceNumber: true,
-      },
+      orderBy: { sequenceNumber: "desc" },
+      select: { sequenceNumber: true },
     });
 
-    return Math.max(0, ...invoices.map((invoice) => parseSequenceNumber(invoice.invoiceNumber)));
+    return assignment?.sequenceNumber ?? 0;
   }
 
   if (type === "estimate") {
@@ -73,7 +71,8 @@ async function ensureSequence(tx: DocumentNumberTransaction, ownerId: string, ty
 
   if (existingSequence) {
     const currentMaxSequence = await getCurrentMaxSequence(tx, ownerId, type);
-    const nextNumber = Math.max(existingSequence.nextNumber, currentMaxSequence + 1);
+    const nextNumber =
+      type === "invoice" ? currentMaxSequence + 1 : Math.max(existingSequence.nextNumber, currentMaxSequence + 1);
 
     if (
       existingSequence.prefix === config.prefix &&
@@ -166,6 +165,52 @@ export async function allocateDocumentNumber(
 
     if (updated.count !== 1) continue;
 
+    const existingAssignment = await tx.documentNumberAssignment.findUnique({
+      where: {
+        ownerId_type_sequenceNumber: {
+          ownerId,
+          type,
+          sequenceNumber,
+        },
+      },
+    });
+
+    if (existingAssignment) {
+      if (existingAssignment.status !== "released") continue;
+
+      const reclaimed = await tx.documentNumberAssignment.updateMany({
+        where: {
+          id: existingAssignment.id,
+          status: "released",
+        },
+        data: {
+          assignedAt: new Date(),
+          deletedAt: null,
+          documentId,
+          status: "assigned",
+          voidedAt: null,
+        },
+      });
+
+      if (reclaimed.count !== 1) continue;
+
+      await recordDocumentNumberEvent(tx, {
+        action: "reclaimed",
+        detail: "Released document number assigned again.",
+        documentId,
+        documentNumber,
+        ownerId,
+        sequenceNumber,
+        type,
+      });
+
+      return {
+        assignmentId: existingAssignment.id,
+        documentNumber,
+        sequenceNumber,
+      };
+    }
+
     try {
       const assignment = await tx.documentNumberAssignment.create({
         data: {
@@ -176,6 +221,15 @@ export async function allocateDocumentNumber(
           documentNumber,
           documentId,
         },
+      });
+
+      await recordDocumentNumberEvent(tx, {
+        action: "assigned",
+        documentId,
+        documentNumber,
+        ownerId,
+        sequenceNumber,
+        type,
       });
 
       return {
@@ -192,7 +246,7 @@ export async function allocateDocumentNumber(
 }
 
 export async function attachDocumentNumber(tx: DocumentNumberTransaction, assignmentId: string, documentId: string) {
-  await tx.documentNumberAssignment.update({
+  const assignment = await tx.documentNumberAssignment.update({
     where: {
       id: assignmentId,
     },
@@ -200,6 +254,56 @@ export async function attachDocumentNumber(tx: DocumentNumberTransaction, assign
       documentId,
     },
   });
+
+  await recordDocumentNumberEvent(tx, {
+    action: "attached",
+    documentId,
+    documentNumber: assignment.documentNumber,
+    ownerId: assignment.ownerId,
+    sequenceNumber: assignment.sequenceNumber,
+    type: assignment.type as NumberedDocumentType,
+  });
+}
+
+export async function recordDocumentNumberEvent(
+  tx: DocumentNumberTransaction,
+  input: {
+    action: string;
+    detail?: string;
+    documentId?: string | null;
+    documentNumber: string;
+    ownerId: string;
+    sequenceNumber: number;
+    type: NumberedDocumentType;
+  },
+) {
+  await tx.documentNumberEvent.create({
+    data: {
+      action: input.action,
+      detail: input.detail,
+      documentId: input.documentId,
+      documentNumber: input.documentNumber,
+      ownerId: input.ownerId,
+      sequenceNumber: input.sequenceNumber,
+      type: input.type,
+    },
+  });
+}
+
+export async function recalculateNextDocumentNumber(
+  tx: DocumentNumberTransaction,
+  ownerId: string,
+  type: NumberedDocumentType,
+) {
+  const currentMaxSequence = await getCurrentMaxSequence(tx, ownerId, type);
+  const nextNumber = currentMaxSequence + 1;
+
+  await tx.documentSequence.updateMany({
+    where: { ownerId, type },
+    data: { nextNumber },
+  });
+
+  return nextNumber;
 }
 
 export async function peekNextDocumentNumber(ownerId: string, type: NumberedDocumentType) {

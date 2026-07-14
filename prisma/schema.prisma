@@ -134,6 +134,7 @@ model User {
   estimateRecords           EstimateRecord[]
   documentSequences         DocumentSequence[]
   documentNumberAssignments DocumentNumberAssignment[]
+  documentNumberEvents      DocumentNumberEvent[]
   emailRecords              EmailRecord[]
   emailTemplates            EmailTemplate[]
   serviceTemplates          ServiceTemplate[]
@@ -377,6 +378,25 @@ model DocumentNumberAssignment {
   @@index([documentId])
   @@index([type])
   @@map("document_number_assignments")
+}
+
+model DocumentNumberEvent {
+  id             String   @id @default(cuid())
+  ownerId        String
+  type           String
+  sequenceNumber Int
+  documentNumber String
+  documentId     String?
+  action         String
+  detail         String?
+  createdAt      DateTime @default(now())
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([type, sequenceNumber])
+  @@index([documentId])
+  @@index([createdAt])
+  @@map("document_number_events")
 }
 
 model ServiceTemplate {

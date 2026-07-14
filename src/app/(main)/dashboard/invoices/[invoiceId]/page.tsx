@@ -26,7 +26,7 @@ import { parsePricingItems } from "../../jobs/_components/pricing-items";
 import { createJobPaymentAction, deleteJobPaymentAction } from "../../jobs/actions";
 import { InvoiceActions, ManageInvoiceDialogButton } from "../_components/invoice-actions";
 import type { InvoiceTableItem } from "../_components/invoices-table";
-import { deleteInvoiceAction, emailInvoiceAction } from "../actions";
+import { deleteInvoiceAction, emailInvoiceAction, updateInvoiceNumberAction } from "../actions";
 
 type InvoiceMaterial = {
   description: string;
@@ -177,7 +177,27 @@ export default async function Page({
     notFound();
   }
 
-  const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
+  const [companyLogoSrc, successfulEmailCount] = await Promise.all([
+    getCompanyLogoSrc(currentUser.id),
+    prisma.emailRecord.count({
+      where: {
+        documentId: invoice.id,
+        documentType: "invoice",
+        ownerId: currentUser.id,
+        status: "success",
+      },
+    }),
+  ]);
+  const invoiceHasPayment = Number(invoice.amountPaid) > 0;
+  const invoiceNumberMutable = successfulEmailCount === 0 && !invoiceHasPayment;
+  const invoiceNumberLockReason =
+    successfulEmailCount > 0 && invoiceHasPayment
+      ? "This invoice was emailed successfully and has a recorded payment. Its number will remain permanently reserved."
+      : successfulEmailCount > 0
+        ? "This invoice was emailed successfully. Its number will remain permanently reserved."
+        : invoiceHasPayment
+          ? "This invoice has a recorded payment or deposit. Its number will remain permanently reserved."
+          : undefined;
 
   const invoiceSequence = await prisma.invoice.count({
     where: {
@@ -351,10 +371,13 @@ export default async function Page({
             invoiceMessageEnabled={currentUser.invoiceMessageEnabled}
             invoiceMessageText={currentUser.invoiceMessageText}
             invoiceNumber={invoiceNumber}
+            invoiceNumberLockReason={invoiceNumberLockReason}
+            invoiceNumberMutable={invoiceNumberMutable}
             jobId={invoice.jobId}
             notice={gmailNotice}
             returnTo={currentHref}
             templates={emailTemplates}
+            updateNumberAction={updateInvoiceNumberAction}
           />
         </div>
       </div>

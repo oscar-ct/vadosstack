@@ -21,6 +21,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +38,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { escapeHtml } from "@/lib/email-content";
 import type { DocumentEmailTemplate } from "@/lib/email-templates";
 
@@ -112,6 +123,8 @@ export function InvoiceActions({
   gmailConnected,
   gmailSenderEmail,
   invoiceNumber,
+  invoiceNumberLockReason,
+  invoiceNumberMutable,
   invoiceId,
   invoiceMessageAlign,
   invoiceMessageEnabled,
@@ -120,6 +133,7 @@ export function InvoiceActions({
   notice,
   returnTo,
   templates,
+  updateNumberAction,
 }: {
   action: (state: EmailInvoiceState, formData: FormData) => Promise<EmailInvoiceState>;
   balanceDue: string;
@@ -133,6 +147,8 @@ export function InvoiceActions({
   gmailConnected: boolean;
   gmailSenderEmail?: string | null;
   invoiceNumber: string;
+  invoiceNumberLockReason?: string;
+  invoiceNumberMutable: boolean;
   invoiceId: string;
   invoiceMessageAlign: "left" | "center" | "right";
   invoiceMessageEnabled: boolean;
@@ -144,11 +160,13 @@ export function InvoiceActions({
   } | null;
   returnTo: string;
   templates?: DocumentEmailTemplate[];
+  updateNumberAction: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
 }) {
   const router = useRouter();
   const [result, setResult] = React.useState<EmailDeliveryResultValue | null>(null);
   const [emailOpen, setEmailOpen] = React.useState(false);
   const [invoiceNoteOpen, setInvoiceNoteOpen] = React.useState(false);
+  const [numberOpen, setNumberOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const fallbackSubject = React.useMemo(
     () => `Invoice ${invoiceNumber} from ${companyName}`,
@@ -249,6 +267,10 @@ export function InvoiceActions({
                 Edit job/invoice
               </Link>
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setNumberOpen(true)}>
+              <Pencil />
+              Edit invoice number
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setInvoiceNoteOpen(true)}>
               <FilePenLine />
               Invoice note
@@ -271,6 +293,17 @@ export function InvoiceActions({
           onOpenChange={setInvoiceNoteOpen}
           returnTo={returnTo}
         />
+        {numberOpen ? (
+          <EditInvoiceNumberDialog
+            action={updateNumberAction}
+            invoiceId={invoiceId}
+            invoiceNumber={invoiceNumber}
+            lockReason={invoiceNumberLockReason}
+            mutable={invoiceNumberMutable}
+            open={numberOpen}
+            onOpenChange={setNumberOpen}
+          />
+        ) : null}
         <DocumentEmailComposerDialog
           action={action}
           attachmentName={`${invoiceNumber}.pdf`}
@@ -304,10 +337,112 @@ export function InvoiceActions({
           onOpenChange={setDeleteOpen}
           redirectTo={deleteRedirectTo}
           snapshot={deleteSnapshot}
+          numberLockReason={invoiceNumberLockReason}
+          numberReleasable={invoiceNumberMutable}
         />
       </div>
       <EmailDeliveryResult result={result} onDone={() => setResult(null)} />
     </div>
+  );
+}
+
+function EditInvoiceNumberDialog({
+  action,
+  invoiceId,
+  invoiceNumber,
+  lockReason,
+  mutable,
+  onOpenChange,
+  open,
+}: {
+  action: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
+  invoiceId: string;
+  invoiceNumber: string;
+  lockReason?: string;
+  mutable: boolean;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  const router = useRouter();
+  const [confirmed, setConfirmed] = React.useState(false);
+  const [state, formAction, isPending] = React.useActionState(action, deleteInitialState);
+
+  React.useEffect(() => {
+    if (!state.success) return;
+
+    onOpenChange(false);
+    toast.success(state.message);
+    router.refresh();
+  }, [onOpenChange, router, state]);
+
+  React.useEffect(() => {
+    if (!open) setConfirmed(false);
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit invoice number</DialogTitle>
+          <DialogDescription>
+            Reclaim a previously released number from the end of the draft invoice sequence.
+          </DialogDescription>
+        </DialogHeader>
+
+        {mutable ? (
+          <form action={formAction} className="grid gap-4">
+            <input type="hidden" name="id" value={invoiceId} />
+            <input type="hidden" name="neverShared" value={confirmed ? "true" : "false"} />
+            <div className="grid gap-2">
+              <Label htmlFor="invoice-number">Invoice number</Label>
+              <Input
+                id="invoice-number"
+                name="invoiceNumber"
+                defaultValue={invoiceNumber}
+                autoCapitalize="characters"
+                autoComplete="off"
+                spellCheck={false}
+                disabled={isPending}
+              />
+              <p className="text-muted-foreground text-xs">
+                Use INV followed by a number, such as INV0010. The requested number must already be released.
+              </p>
+            </div>
+            <div className="flex items-start gap-2 rounded-md border p-3">
+              <Checkbox
+                id="invoice-number-never-shared"
+                checked={confirmed}
+                disabled={isPending}
+                onCheckedChange={(checked) => setConfirmed(checked === true)}
+              />
+              <Label htmlFor="invoice-number-never-shared" className="font-normal leading-relaxed">
+                I confirm this invoice has never been downloaded, printed, or otherwise shared.
+              </Label>
+            </div>
+            {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+            <DialogFooter showCloseButton={false}>
+              <Button type="button" variant="outline" disabled={isPending} onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!confirmed || isPending}>
+                {isPending ? "Saving..." : "Save invoice number"}
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : (
+          <div className="grid gap-4">
+            <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900 text-sm dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              {lockReason ?? "This invoice number is locked and cannot be changed."}
+            </p>
+            <DialogFooter showCloseButton={false}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -351,6 +486,8 @@ export function DeleteInvoiceButton({
   action,
   hideTrigger = false,
   invoiceId,
+  numberLockReason,
+  numberReleasable = false,
   onOpenChange,
   open: controlledOpen,
   redirectTo,
@@ -359,6 +496,8 @@ export function DeleteInvoiceButton({
   action: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
   hideTrigger?: boolean;
   invoiceId: string;
+  numberLockReason?: string;
+  numberReleasable?: boolean;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   redirectTo?: string;
@@ -367,6 +506,7 @@ export function DeleteInvoiceButton({
   const formRef = React.useRef<HTMLFormElement>(null);
   const router = useRouter();
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const [releaseNumber, setReleaseNumber] = React.useState(false);
   const [state, formAction, isPending] = React.useActionState(action, deleteInitialState);
   const open = controlledOpen ?? uncontrolledOpen;
 
@@ -376,6 +516,7 @@ export function DeleteInvoiceButton({
       if (controlledOpen === undefined) {
         setUncontrolledOpen(nextOpen);
       }
+      if (!nextOpen) setReleaseNumber(false);
     },
     [controlledOpen, onOpenChange],
   );
@@ -423,8 +564,28 @@ export function DeleteInvoiceButton({
 
         <form ref={formRef} action={formAction}>
           <input type="hidden" name="id" value={invoiceId} />
+          <input type="hidden" name="releaseNumber" value={releaseNumber ? "true" : "false"} />
           <input type="hidden" name="redirectTo" value={redirectTo ?? ""} />
         </form>
+
+        {numberReleasable ? (
+          <div className="flex items-start gap-2 rounded-md border p-3">
+            <Checkbox
+              id="release-invoice-number"
+              checked={releaseNumber}
+              disabled={isPending}
+              onCheckedChange={(checked) => setReleaseNumber(checked === true)}
+            />
+            <Label htmlFor="release-invoice-number" className="font-normal leading-relaxed">
+              This was only a draft and was never downloaded, printed, or shared. Release {snapshot?.invoiceNumber} for
+              reuse.
+            </Label>
+          </div>
+        ) : (
+          <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900 text-sm dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            {numberLockReason ?? "This invoice number will be voided and cannot be reused."}
+          </p>
+        )}
 
         {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
 
