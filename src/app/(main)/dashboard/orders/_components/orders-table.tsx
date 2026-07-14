@@ -252,28 +252,32 @@ function OrderActions({ order }: { order: OrderTableItem }) {
 function MobileOrderCard({ onOpen, order }: { onOpen: () => void; order: OrderTableItem }) {
   return (
     <div className="relative overflow-hidden rounded-lg border bg-card">
-      <button type="button" className="grid w-full gap-3 p-4 text-left hover:bg-muted/35" onClick={onOpen}>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pr-10">
+      <button
+        type="button"
+        className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden p-4 text-left hover:bg-muted/35"
+        onClick={onOpen}
+      >
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pr-10">
           <div className="min-w-0">
             <div className="font-medium text-sm">{order.orderNumber}</div>
             <div className="text-muted-foreground text-xs">
               {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
             </div>
           </div>
-          <div className="grid gap-0.5 text-right">
+          <div className="grid shrink-0 gap-0.5 text-right">
             <div className="text-muted-foreground text-xs">Total</div>
             <div className="font-medium text-sm tabular-nums">{formatCurrency(order.total)}</div>
             <RefundAmountText order={order} />
           </div>
         </div>
         <ReturnBadge order={order} />
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 text-sm">
-          <div>
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-3 text-sm">
+          <div className="min-w-0">
             <div className="text-muted-foreground text-xs">Customer</div>
             <div className="truncate">{order.customerName}</div>
           </div>
-          <div className="text-right text-muted-foreground text-xs">{formatOrderDate(order.orderedAt)}</div>
-          <div className="flex flex-wrap gap-2">
+          <div className="shrink-0 text-right text-muted-foreground text-xs">{formatOrderDate(order.orderedAt)}</div>
+          <div className="flex min-w-0 flex-wrap gap-2">
             <OrderStatusBadge status={order.paymentStatus} type="payment" />
             <OrderStatusBadge status={order.fulfillmentStatus} type="fulfillment" />
           </div>

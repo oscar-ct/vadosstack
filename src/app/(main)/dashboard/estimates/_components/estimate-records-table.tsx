@@ -479,10 +479,10 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
                 router.push(`/dashboard/estimates/records/${estimate.id}`);
               }}
             >
-              <CardContent className="grid gap-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className={"min-w-0"}>
-                    <div className="truncate text-wrap font-medium text-sm">{estimate.description}</div>
+              <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="line-clamp-2 min-w-0 font-medium text-sm">{estimate.description}</div>
                     <CustomerLink
                       customerId={estimate.customerId}
                       fallback="No customer or lead"
@@ -490,34 +490,34 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
                       className="block truncate text-muted-foreground text-sm"
                     />
                   </div>
-                  <span className="font-medium text-sm">{formatMoney(estimate.estimatedTotal)}</span>
+                  <span className="shrink-0 font-medium text-sm">{formatMoney(estimate.estimatedTotal)}</span>
                 </div>
-                <div className="grid gap-1 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="shrink-0 text-muted-foreground text-xs">Service Location</span>
-                    <span className={"line-clamp-2 w-48 min-w-0 text-right sm:w-64"}>
+                <div className="grid min-w-0 gap-2 text-sm">
+                  <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-3">
+                    <span className="text-muted-foreground text-xs leading-6">Service Location</span>
+                    <span className="line-clamp-2 min-w-0 break-words text-right leading-6">
                       {estimate.serviceLocation ? estimate.serviceLocation : "Not address on file"}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                     <span className="text-muted-foreground text-xs">Status</span>
-                    <Badge variant="outline" className={estimateStatusClassName(estimate.status)}>
+                    <Badge variant="outline" className={`${estimateStatusClassName(estimate.status)} justify-self-end`}>
                       {estimate.status}
                     </Badge>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                     <span className="text-muted-foreground text-xs">Next step</span>
-                    <span className="text-right">{nextActionLabel(estimate.status)}</span>
+                    <span className="min-w-0 break-words text-right">{nextActionLabel(estimate.status)}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                     <span className="text-muted-foreground text-xs">Scheduled date</span>
-                    <span>
+                    <span className="min-w-0 text-right">
                       {estimate.dateBegin ? new Date(estimate.dateBegin).toLocaleDateString() : "Unscheduled"}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                     <span className="text-muted-foreground text-xs">Created date</span>
-                    <span>{new Date(estimate.createdAt).toLocaleDateString()}</span>
+                    <span className="min-w-0 text-right">{new Date(estimate.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
                 <div>

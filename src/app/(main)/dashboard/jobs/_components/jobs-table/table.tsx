@@ -436,12 +436,12 @@ export function JobsTable({
                     router.push(`/dashboard/jobs/${row.original.id}`);
                   }}
                 >
-                  <CardContent className="grid gap-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className={"min-w-0"}>
+                  <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           {/*<span className="text-muted-foreground text-xs tabular-nums">#{rowNumber}</span>*/}
-                          <div className="truncate text-wrap font-medium text-sm">{row.original.description}</div>
+                          <div className="line-clamp-2 min-w-0 font-medium text-sm">{row.original.description}</div>
                         </div>
                         <CustomerLink
                           customerId={row.original.customerId}
@@ -449,7 +449,7 @@ export function JobsTable({
                           className="block truncate font-medium text-sm"
                         />
                       </div>
-                      <Badge variant="outline" className="bg-muted-foreground/10 px-1.5">
+                      <Badge variant="outline" className="shrink-0 bg-muted-foreground/10 px-1.5">
                         {statusIcon(row.original.status)}
                         {row.original.status}
                       </Badge>
@@ -459,24 +459,24 @@ export function JobsTable({
                         Overdue since {getJobOverdueDate(row.original)}
                       </div>
                     ) : null}
-                    <div className="grid gap-1 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="shrink-0 text-muted-foreground text-xs">Service Location</span>
-                        <span className={"line-clamp-2 w-48 min-w-0 text-right sm:w-64"}>
+                    <div className="grid min-w-0 gap-2 text-sm">
+                      <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-3">
+                        <span className="text-muted-foreground text-xs leading-6">Service Location</span>
+                        <span className="line-clamp-2 min-w-0 break-words text-right leading-6">
                           {row.original.serviceLocation ? row.original.serviceLocation : "Not address on file"}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">Start Date</span>
-                        <span>
+                        <span className="min-w-0 text-right">
                           {row.original.dateBegin
                             ? new Date(row.original.dateBegin).toLocaleDateString()
                             : "Not scheduled"}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">End Date</span>
-                        <span>
+                        <span className="min-w-0 text-right">
                           {row.original.dateEnd ? new Date(row.original.dateEnd).toLocaleDateString() : "Not scheduled"}
                         </span>
                       </div>
@@ -486,17 +486,23 @@ export function JobsTable({
                       {/*  {amountDue.label}*/}
                       {/*</Badge>*/}
                       {/*</div>*/}
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">Final Cost</span>
-                        <span>{row.original.finalCost ? `$${row.original.finalCost}` : "Not set"}</span>
+                        <span className="min-w-0 text-right">
+                          {row.original.finalCost ? `$${row.original.finalCost}` : "Not set"}
+                        </span>
                       </div>
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">Billing Status</span>
-                        <span className={`text-right ${amountDue.amountClassName}`}>{amountDue.label}</span>
+                        <span className={`min-w-0 break-words text-right ${amountDue.amountClassName}`}>
+                          {amountDue.label}
+                        </span>
                       </div>
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="text-muted-foreground text-xs">Invoice Readiness</span>
-                        <span className="max-w-52 text-right text-muted-foreground text-xs">{amountDue.detail}</span>
+                      <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-3">
+                        <span className="text-muted-foreground text-xs leading-5">Invoice Readiness</span>
+                        <span className="min-w-0 break-words text-right text-muted-foreground text-xs leading-5">
+                          {amountDue.detail}
+                        </span>
                       </div>
                     </div>
                     <div>

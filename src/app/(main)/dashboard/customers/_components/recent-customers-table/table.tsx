@@ -440,9 +440,9 @@ export function RecentCustomersTable({
                     router.push(`/dashboard/customers/${row.original.id}${viewQuery}`);
                   }}
                 >
-                  <CardContent className="grid gap-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                  <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-sm">{row.original.name}</div>
                         <div className="truncate text-muted-foreground text-sm">{row.original.email}</div>
                       </div>
@@ -456,53 +456,57 @@ export function RecentCustomersTable({
                         {view === "orders" ? (row.original.totalOrderSpent ?? "$0.00") : billingDisplay.amountLabel}
                       </span>
                     </div>
-                    <div className="grid gap-1 text-sm">
+                    <div className="grid min-w-0 gap-2 text-sm">
                       {view === "orders" ? (
                         <>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3">
                             <span className="text-muted-foreground text-xs">Last order</span>
-                            <span>
+                            <span className="min-w-0 text-right">
                               {row.original.lastOrderDate
                                 ? new Date(row.original.lastOrderDate).toLocaleDateString()
                                 : "No orders yet"}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3">
                             <span className="text-muted-foreground text-xs">Orders</span>
-                            <span>
+                            <span className="min-w-0 text-right">
                               {(row.original.orderCount ?? 0) === 1
                                 ? "1 order"
                                 : `${row.original.orderCount ?? 0} orders`}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3">
                             <span className="text-muted-foreground text-xs">Refunded</span>
-                            <span>{row.original.totalOrderRefunded ?? "$0.00"}</span>
+                            <span className="min-w-0 text-right">{row.original.totalOrderRefunded ?? "$0.00"}</span>
                           </div>
                         </>
                       ) : (
                         <>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-3">
                             <span className="text-muted-foreground text-xs">Billing</span>
-                            <span className="text-right">{billingDisplay.detail}</span>
+                            <span className="min-w-0 break-words text-right">{billingDisplay.detail}</span>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3">
                             <span className="text-muted-foreground text-xs">Last scheduled</span>
-                            <span>
+                            <span className="min-w-0 text-right">
                               {row.original.lastScheduledJobDate
                                 ? new Date(row.original.lastScheduledJobDate).toLocaleDateString()
                                 : "No jobs yet"}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3">
                             <span className="text-muted-foreground text-xs">Jobs</span>
-                            <span>{row.original.jobCount === 1 ? "1 job" : `${row.original.jobCount} jobs`}</span>
+                            <span className="min-w-0 text-right">
+                              {row.original.jobCount === 1 ? "1 job" : `${row.original.jobCount} jobs`}
+                            </span>
                           </div>
                         </>
                       )}
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">Phone</span>
-                        <span className="truncate">{row.original.phoneNumbers?.[0]?.value ?? "Not on file"}</span>
+                        <span className="min-w-0 truncate text-right">
+                          {row.original.phoneNumbers?.[0]?.value ?? "Not on file"}
+                        </span>
                       </div>
                     </div>
                     {view === "work" && row.original.unpaidJobs?.length ? (

@@ -116,9 +116,9 @@ export function EmailTemplatesDashboard({ templates }: { templates: EmailTemplat
               className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <Card className="h-full overflow-hidden rounded-lg transition-colors group-hover:bg-muted/20" size="sm">
-                <CardContent className="grid h-full gap-4 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                <CardContent className="grid h-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden p-4">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
                       <div className="truncate font-medium text-sm">{template.title}</div>
                       <p className="line-clamp-2 text-muted-foreground text-sm">{template.subject}</p>
                     </div>

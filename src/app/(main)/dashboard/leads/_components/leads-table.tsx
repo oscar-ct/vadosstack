@@ -509,27 +509,27 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
             <Link
               key={lead.id}
               href={`/dashboard/leads/${lead.id}`}
-              className="grid gap-3 rounded-lg border bg-card p-4"
+              className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-4"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{lead.name}</div>
                   <div className="truncate text-muted-foreground text-xs">
                     {lead.email ?? formatPhoneNumber(lead.phone ?? "")}
                   </div>
                 </div>
-                <Badge variant="outline" className={statusClassName(lead.status)}>
+                <Badge variant="outline" className={`${statusClassName(lead.status)} shrink-0`}>
                   {lead.status}
                 </Badge>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
+              <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
+                <div className="min-w-0">
                   <div className="text-muted-foreground text-xs">Follow-up</div>
-                  <div className="font-medium">{formatFollowUp(lead)}</div>
+                  <div className="min-w-0 truncate font-medium">{formatFollowUp(lead)}</div>
                 </div>
-                <div>
+                <div className="min-w-0 text-right">
                   <div className="text-muted-foreground text-xs">Value</div>
-                  <div className="font-medium">{formatMoney(lead.estimatedValue)}</div>
+                  <div className="min-w-0 truncate font-medium">{formatMoney(lead.estimatedValue)}</div>
                 </div>
               </div>
             </Link>

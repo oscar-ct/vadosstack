@@ -264,9 +264,12 @@ export default async function Page() {
                   const customerId = getRecordCustomerId(record);
 
                   return (
-                    <div key={record.id} className="min-w-0 rounded-lg border bg-background p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
+                    <div
+                      key={record.id}
+                      className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-background p-3"
+                    >
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
                           <div className="font-medium leading-6">
                             {record.documentNumber ?? formatDocumentType(record.documentType)}
                           </div>
@@ -275,7 +278,7 @@ export default async function Page() {
                         <StatusBadge status={record.status} />
                       </div>
 
-                      <div className="mt-3 grid gap-2 text-sm">
+                      <div className="grid min-w-0 gap-2 text-sm">
                         <div className="flex min-w-0 items-start gap-2">
                           <UserRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                           <div className="min-w-0">
@@ -294,9 +297,9 @@ export default async function Page() {
                           <Send className="size-4 shrink-0" />
                           <span className="truncate">{record.senderEmail || "Not connected"}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
+                        <div className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
                           <span className="font-medium text-muted-foreground text-xs uppercase">Amount</span>
-                          <span className="font-semibold">{formatAmount(record.documentTotal)}</span>
+                          <span className="shrink-0 font-semibold">{formatAmount(record.documentTotal)}</span>
                         </div>
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <Clock3 className="size-4 shrink-0" />
@@ -304,7 +307,7 @@ export default async function Page() {
                         </div>
                       </div>
 
-                      <div className="mt-3 rounded-md bg-muted/50 px-3 py-2 text-muted-foreground text-sm">
+                      <div className="rounded-md bg-muted/50 px-3 py-2 text-muted-foreground text-sm">
                         {record.status === "success"
                           ? record.subject || "Email sent"
                           : record.errorMessage || "Send failed"}

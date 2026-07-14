@@ -1062,7 +1062,7 @@ function EmployeeRequestsCard({
           {pendingRequests.length ? <Badge variant="secondary">{pendingRequests.length} pending</Badge> : null}
         </div>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden">
         <div className="grid gap-2">
           <div className="font-medium text-muted-foreground text-xs uppercase tracking-wide">Pending</div>
           {pendingRequests.length ? (
@@ -1112,9 +1112,9 @@ function EmployeeRequestRow({
   const canCancel = request.status === "Pending" && deleteAction;
 
   return (
-    <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-muted/20 p-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-sm">{request.action} request</span>
             <RequestStatusBadge status={request.status} />
@@ -1312,7 +1312,7 @@ export function TimeTrackingDashboard({
               </div>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-4">
+          <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden">
             {dayGroups.map((group) => {
               return (
                 <section key={group.date} className="grid gap-3 rounded-xl border bg-muted/20 p-3">
@@ -1434,14 +1434,14 @@ export function TimeTrackingDashboard({
             </CardTitle>
             <CardDescription>Hours worked for {periodLabel}</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden">
             {weeklyEmployees.length ? (
               weeklyEmployees.map((employee) => {
                 const accent = getEmployeeAccent(employee.id, employees);
 
                 return (
                   <div key={employee.id} className={cn("rounded-lg border p-3", accent.panel)}>
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
                       <div className="flex min-w-0 gap-2">
                         <span className={cn("mt-1 size-2.5 shrink-0 rounded-full", accent.dot)} />
                         <div className="min-w-0">
@@ -1455,7 +1455,7 @@ export function TimeTrackingDashboard({
                           </div>
                         </div>
                       </div>
-                      <Badge variant="secondary" className={cn("bg-background/80", accent.text)}>
+                      <Badge variant="secondary" className={cn("shrink-0 bg-background/80", accent.text)}>
                         {formatHours(employee.totalHours)}
                       </Badge>
                     </div>

@@ -564,9 +564,9 @@ export function EmployeesDashboard({
                     aria-label={`View ${employee.name}`}
                     onClick={() => setProfileEmployee(employee)}
                   />
-                  <CardContent className="pointer-events-none relative z-10 grid gap-4 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                  <CardContent className="pointer-events-none relative z-10 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden p-4">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="truncate font-medium text-sm">{employee.name}</div>
                           <Badge variant="outline" className={getStatusBadgeClass(employee.active)}>
@@ -580,7 +580,7 @@ export function EmployeesDashboard({
                       </div>
                     </div>
 
-                    <div className="grid gap-2 text-sm">
+                    <div className="grid min-w-0 gap-2 text-sm">
                       <div className="flex items-center gap-2">
                         <BriefcaseBusiness className="size-4 text-muted-foreground" />
                         <span className="min-w-0 truncate">
@@ -601,18 +601,18 @@ export function EmployeesDashboard({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 rounded-md bg-muted/20 p-3 text-sm">
-                      <div className="grid gap-1">
+                    <div className="grid min-w-0 grid-cols-3 gap-2 rounded-md bg-muted/20 p-3 text-sm">
+                      <div className="grid min-w-0 gap-1">
                         <span className="text-muted-foreground text-xs">Hours</span>
                         <span className="font-medium tabular-nums">{formatHours(employee.totalHours)}</span>
                       </div>
-                      <div className="grid gap-1">
+                      <div className="grid min-w-0 gap-1">
                         <span className="text-muted-foreground text-xs">Last</span>
-                        <span className="font-medium">
+                        <span className="truncate font-medium">
                           {employee.lastWorkedOn ? formatDate(employee.lastWorkedOn) : "Never"}
                         </span>
                       </div>
-                      <div className="grid gap-1">
+                      <div className="grid min-w-0 gap-1">
                         <span className="text-muted-foreground text-xs">Pay</span>
                         <span className="truncate font-medium">{formatPay(employee)}</span>
                       </div>

@@ -409,15 +409,15 @@ function MobileInventoryCard({
   const status = getInventoryStatus(item, stockRules);
 
   return (
-    <div className="relative grid gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-muted/35">
+    <div className="relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-4 transition-colors hover:bg-muted/35">
       <button
         type="button"
         className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         aria-label={`View ${item.product}`}
         onClick={onView}
       />
-      <div className="flex items-start justify-between gap-3">
-        <div className="relative flex min-w-0 items-start gap-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="relative flex min-w-0 flex-1 items-start gap-3">
           <div className="pointer-events-none min-w-0">
             <div className="truncate font-medium">{item.product}</div>
             <div className="truncate text-muted-foreground text-xs">
@@ -431,20 +431,20 @@ function MobileInventoryCard({
           </Badge>
         </div>
       </div>
-      <div className="pointer-events-none relative grid grid-cols-2 gap-3 text-sm">
-        <div>
+      <div className="pointer-events-none relative grid min-w-0 grid-cols-2 gap-3 text-sm">
+        <div className="min-w-0">
           <div className="text-muted-foreground text-xs">Stock</div>
           <div className={cn("font-semibold tabular-nums", getStockClassName(status))}>{item.stock}</div>
         </div>
-        <div>
+        <div className="min-w-0 text-right">
           <div className="text-muted-foreground text-xs">Value</div>
           <div className="font-medium tabular-nums">{formatCurrency(getInventoryValue(item))}</div>
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="text-muted-foreground text-xs">Location</div>
-          <div className="font-medium">{item.location}</div>
+          <div className="truncate font-medium">{item.location}</div>
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="text-muted-foreground text-xs">Level</div>
           <div className="mt-1">
             <StockLevel item={item} stockRules={stockRules} />

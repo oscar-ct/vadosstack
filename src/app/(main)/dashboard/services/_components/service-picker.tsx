@@ -167,11 +167,11 @@ export function ServicePicker({
                       <button
                         key={service.id}
                         type="button"
-                        className="grid gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted/35"
+                        className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted/35"
                         onClick={() => setSelectedService(service)}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
+                        <div className="flex min-w-0 items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
                             <div className="truncate font-medium">{service.title}</div>
                             <div className="line-clamp-2 text-muted-foreground text-sm">
                               {service.description || "No description saved."}
@@ -181,14 +181,14 @@ export function ServicePicker({
                             {service.category}
                           </span>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 text-sm">
-                          <span className="rounded-md bg-sky-50 px-2 py-1 text-sky-800 dark:bg-sky-950/30 dark:text-sky-200">
+                        <div className="grid min-w-0 grid-cols-3 gap-2 text-sm">
+                          <span className="truncate rounded-md bg-sky-50 px-2 py-1 text-sky-800 dark:bg-sky-950/30 dark:text-sky-200">
                             Labor {formatMoney(totals.laborSubtotal.toFixed(2))}
                           </span>
-                          <span className="rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                          <span className="truncate rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
                             Materials {formatMoney(totals.materialsSubtotal.toFixed(2))}
                           </span>
-                          <span className="rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+                          <span className="truncate rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
                             Total {formatMoney(totals.total.toFixed(2))}
                           </span>
                         </div>

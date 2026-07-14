@@ -93,9 +93,9 @@ export function ServicesDashboard({ services }: { services: ServiceTemplateRow[]
                 className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <Card className="h-full overflow-hidden rounded-lg transition-colors group-hover:bg-muted/20" size="sm">
-                  <CardContent className="grid h-full gap-4 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                  <CardContent className="grid h-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden p-4">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-sm">{service.title}</div>
                         <p className="line-clamp-2 text-muted-foreground text-sm">
                           {service.description || "No description saved yet."}
@@ -116,18 +116,22 @@ export function ServicesDashboard({ services }: { services: ServiceTemplateRow[]
                         {service.materials.length}
                       </Badge>
                     </div>
-                    <div className="mt-auto grid grid-cols-3 gap-2 rounded-md bg-muted/20 p-3 text-sm">
-                      <div className="grid gap-1">
+                    <div className="mt-auto grid min-w-0 grid-cols-3 gap-2 rounded-md bg-muted/20 p-3 text-sm">
+                      <div className="grid min-w-0 gap-1">
                         <span className="text-muted-foreground text-xs">Labor</span>
-                        <span className="font-medium tabular-nums">{formatMoney(laborSubtotal.toFixed(2))}</span>
+                        <span className="truncate font-medium tabular-nums">
+                          {formatMoney(laborSubtotal.toFixed(2))}
+                        </span>
                       </div>
-                      <div className="grid gap-1">
+                      <div className="grid min-w-0 gap-1">
                         <span className="text-muted-foreground text-xs">Materials</span>
-                        <span className="font-medium tabular-nums">{formatMoney(materialsSubtotal.toFixed(2))}</span>
+                        <span className="truncate font-medium tabular-nums">
+                          {formatMoney(materialsSubtotal.toFixed(2))}
+                        </span>
                       </div>
-                      <div className="grid gap-1">
+                      <div className="grid min-w-0 gap-1">
                         <span className="text-muted-foreground text-xs">Template</span>
-                        <span className="font-semibold tabular-nums">{formatMoney(total.toFixed(2))}</span>
+                        <span className="truncate font-semibold tabular-nums">{formatMoney(total.toFixed(2))}</span>
                       </div>
                     </div>
                   </CardContent>

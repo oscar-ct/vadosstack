@@ -901,7 +901,7 @@ export function InvoicesTable({ exportSlotId, invoices }: { exportSlotId?: strin
             return (
               <div
                 key={row.id}
-                className="relative grid gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40"
+                className="relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40"
               >
                 <Link
                   prefetch={false}
@@ -909,8 +909,8 @@ export function InvoicesTable({ exportSlotId, invoices }: { exportSlotId?: strin
                   className="absolute inset-0 z-10 rounded-lg"
                   aria-label={`Open invoice ${invoice.invoiceNumber}`}
                 />
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
                     <div className="font-medium">{invoice.invoiceNumber}</div>
                     <CustomerLink
                       customerId={invoice.customerId}
@@ -918,10 +918,10 @@ export function InvoicesTable({ exportSlotId, invoices }: { exportSlotId?: strin
                       className="relative z-20 block truncate text-muted-foreground text-sm"
                     />
                   </div>
-                  <div className="font-semibold text-sm tabular-nums">{formatMoney(invoice.total)}</div>
+                  <div className="shrink-0 font-semibold text-sm tabular-nums">{formatMoney(invoice.total)}</div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className={"flex flex-col gap-3"}>
+                <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
+                  <div className="flex min-w-0 flex-col gap-3">
                     <div className="grid gap-1">
                       <span className="text-muted-foreground text-xs">Issued</span>
                       <span>{formatDate(invoice.issuedAt)}</span>
@@ -935,11 +935,13 @@ export function InvoicesTable({ exportSlotId, invoices }: { exportSlotId?: strin
                       <span>{formatDate(invoice.dueAt)}</span>
                     </div>
                   </div>
-                  <div className={"flex flex-col gap-3"}>
+                  <div className="flex min-w-0 flex-col gap-3">
                     <div className="grid gap-1">
                       <span className="text-muted-foreground text-xs">Job</span>
-                      <span className="line-clamp-2">{invoice.jobTitle}</span>
-                      <span className="truncate text-muted-foreground text-xs">{invoice.jobServiceLocation}</span>
+                      <span className="line-clamp-2 min-w-0 break-words">{invoice.jobTitle}</span>
+                      <span className="min-w-0 truncate text-muted-foreground text-xs">
+                        {invoice.jobServiceLocation}
+                      </span>
                     </div>
                     <div className="grid gap-1">
                       <span className="text-muted-foreground text-xs">Balance</span>
