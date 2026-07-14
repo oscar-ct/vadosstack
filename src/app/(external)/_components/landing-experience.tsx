@@ -855,7 +855,11 @@ export function LandingExperience() {
                 </a>
               ))}
               <div className="mt-2 grid grid-cols-2 gap-2 border-current/10 border-t pt-3">
-                <Button asChild variant="outline" className="rounded-full">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="rounded-full bg-white text-[#303030] hover:bg-white/90 hover:text-[#303030]"
+                >
                   <Link href="/login">Sign In</Link>
                 </Button>
                 <Button asChild className="rounded-full bg-[#303030] text-white">
