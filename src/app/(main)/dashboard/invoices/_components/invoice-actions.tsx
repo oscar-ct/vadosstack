@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { escapeHtml } from "@/lib/email-content";
 import type { DocumentEmailTemplate } from "@/lib/email-templates";
 
@@ -506,7 +507,7 @@ export function DeleteInvoiceButton({
   const formRef = React.useRef<HTMLFormElement>(null);
   const router = useRouter();
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
-  const [releaseNumber, setReleaseNumber] = React.useState(false);
+  const [numberDisposition, setNumberDisposition] = React.useState<"release" | "void" | "">("");
   const [state, formAction, isPending] = React.useActionState(action, deleteInitialState);
   const open = controlledOpen ?? uncontrolledOpen;
 
@@ -516,7 +517,7 @@ export function DeleteInvoiceButton({
       if (controlledOpen === undefined) {
         setUncontrolledOpen(nextOpen);
       }
-      if (!nextOpen) setReleaseNumber(false);
+      if (!nextOpen) setNumberDisposition("");
     },
     [controlledOpen, onOpenChange],
   );
@@ -564,22 +565,47 @@ export function DeleteInvoiceButton({
 
         <form ref={formRef} action={formAction}>
           <input type="hidden" name="id" value={invoiceId} />
-          <input type="hidden" name="releaseNumber" value={releaseNumber ? "true" : "false"} />
+          <input type="hidden" name="numberDisposition" value={numberReleasable ? numberDisposition : "void"} />
           <input type="hidden" name="redirectTo" value={redirectTo ?? ""} />
         </form>
 
         {numberReleasable ? (
-          <div className="flex items-start gap-2 rounded-md border p-3">
-            <Checkbox
-              id="release-invoice-number"
-              checked={releaseNumber}
+          <div className="grid gap-2">
+            <p className="font-medium text-sm">What should happen to {snapshot?.invoiceNumber}?</p>
+            <RadioGroup
+              value={numberDisposition}
+              onValueChange={(value) => setNumberDisposition(value as "release" | "void")}
               disabled={isPending}
-              onCheckedChange={(checked) => setReleaseNumber(checked === true)}
-            />
-            <Label htmlFor="release-invoice-number" className="font-normal leading-relaxed">
-              This was only a draft and was never downloaded, printed, or shared. Release {snapshot?.invoiceNumber} for
-              reuse.
-            </Label>
+              aria-label="Invoice number disposition"
+            >
+              <Label
+                htmlFor="release-invoice-number"
+                className={`items-start rounded-md border p-3 font-normal leading-relaxed ${numberDisposition === "release" ? "border-primary bg-primary/5" : ""}`}
+              >
+                <RadioGroupItem id="release-invoice-number" value="release" className="mt-0.5" />
+                <span className="grid gap-0.5">
+                  <span className="font-medium">Draft only — release number</span>
+                  <span className="text-muted-foreground text-xs">
+                    It was never downloaded, printed, or shared. Make {snapshot?.invoiceNumber} available again.
+                  </span>
+                </span>
+              </Label>
+              <Label
+                htmlFor="void-invoice-number"
+                className={`items-start rounded-md border p-3 font-normal leading-relaxed ${numberDisposition === "void" ? "border-amber-500 bg-amber-50 dark:bg-amber-950/30" : ""}`}
+              >
+                <RadioGroupItem id="void-invoice-number" value="void" className="mt-0.5" />
+                <span className="grid gap-0.5">
+                  <span className="font-medium">Shared elsewhere — permanently void number</span>
+                  <span className="text-muted-foreground text-xs">
+                    Reserve {snapshot?.invoiceNumber} permanently because the invoice may have reached the customer.
+                  </span>
+                </span>
+              </Label>
+            </RadioGroup>
+            {!numberDisposition ? (
+              <p className="text-muted-foreground text-xs">Choose one option to continue.</p>
+            ) : null}
           </div>
         ) : (
           <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900 text-sm dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
@@ -593,7 +619,7 @@ export function DeleteInvoiceButton({
           <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             variant={"destructive"}
-            disabled={isPending}
+            disabled={isPending || (numberReleasable && !numberDisposition)}
             onClick={(event) => {
               event.preventDefault();
               formRef.current?.requestSubmit();

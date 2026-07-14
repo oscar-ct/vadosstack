@@ -38,7 +38,7 @@ const invoiceJobSchema = z.object({
 
 const deleteInvoiceSchema = z.object({
   id: z.string().trim().min(1, "Invoice is required."),
-  releaseNumber: z.string().optional(),
+  numberDisposition: z.enum(["release", "void"]).optional(),
   redirectTo: z.string().trim().optional(),
 });
 
@@ -526,7 +526,7 @@ export async function deleteInvoiceAction(
 
   const parsed = deleteInvoiceSchema.safeParse({
     id: formData.get("id"),
-    releaseNumber: formData.get("releaseNumber"),
+    numberDisposition: formData.get("numberDisposition") || undefined,
     redirectTo: formData.get("redirectTo"),
   });
 
@@ -573,8 +573,13 @@ export async function deleteInvoiceAction(
           },
         }),
       ]);
-      const canRelease =
-        parsed.data.releaseNumber === "true" && successfulEmailCount === 0 && Number(invoice.amountPaid) <= 0;
+      const numberIsLocked = successfulEmailCount > 0 || Number(invoice.amountPaid) > 0;
+
+      if (!numberIsLocked && !parsed.data.numberDisposition) {
+        throw new Error("Choose whether to release or permanently void this invoice number.");
+      }
+
+      const canRelease = !numberIsLocked && parsed.data.numberDisposition === "release";
       const now = new Date();
 
       if (assignment) {
