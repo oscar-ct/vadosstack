@@ -131,7 +131,10 @@ export function UsStateSelect({
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="max-h-72 w-[var(--radix-dropdown-menu-trigger-width)]">
+      <DropdownMenuContent
+        className="max-h-72 w-[min(20rem,calc(100vw-2rem))] min-w-[var(--radix-dropdown-menu-trigger-width)]"
+        align="start"
+      >
         <div className="p-1">
           <Input
             value={query}
@@ -150,7 +153,7 @@ export function UsStateSelect({
           filteredStates.map(([stateValue, label]) => (
             <DropdownMenuItem key={stateValue} onSelect={() => selectState(stateValue)}>
               <Check className={cn("size-4", selectedValue === stateValue ? "opacity-100" : "opacity-0")} />
-              <span>{label}</span>
+              <span className="min-w-0 truncate">{label}</span>
               <span className="ml-auto text-muted-foreground text-xs">{stateValue}</span>
             </DropdownMenuItem>
           ))

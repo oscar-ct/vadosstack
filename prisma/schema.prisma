@@ -33,39 +33,44 @@ model Customer {
 }
 
 model Job {
-  id                String             @id @default(cuid())
-  ownerId           String
-  customerId        String?
-  description       String
-  serviceLocation   String?
-  dateBegin         DateTime?
-  dateEnd           DateTime?
-  estimatedCost     Decimal?
-  laborCost         Decimal?           @default(0)
-  laborItems        String             @default("[]")
-  jobType           String             @default("Residential")
-  measurementRooms  String             @default("[]")
-  materialTaxRate   Decimal?           @default(0)
-  materials         String             @default("[]")
-  paymentStatus     String             @default("Pending Payment")
-  depositPaid       Decimal?           @default(0)
-  amountPaid        Decimal?           @default(0)
-  finalCost         Decimal?
-  scope             String?
-  category          String
-  status            String             @default("Scheduled")
-  pictures          String[]           @default([])
-  notes             String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  owner             User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  customer          Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  invoice           Invoice?
-  estimate          Estimate?
-  payments          JobPayment[]
-  timeEntries       TimeEntry[]
-  timeEntryRequests TimeEntryRequest[]
-  tasks             Task[]
+  id                  String             @id @default(cuid())
+  ownerId             String
+  customerId          String?
+  description         String
+  serviceLocation     String?
+  serviceAddressLine1 String?
+  serviceAddressLine2 String?
+  serviceCity         String?
+  serviceState        String?
+  servicePostalCode   String?
+  dateBegin           DateTime?
+  dateEnd             DateTime?
+  estimatedCost       Decimal?
+  laborCost           Decimal?           @default(0)
+  laborItems          String             @default("[]")
+  jobType             String             @default("Residential")
+  measurementRooms    String             @default("[]")
+  materialTaxRate     Decimal?           @default(0)
+  materials           String             @default("[]")
+  paymentStatus       String             @default("Pending Payment")
+  depositPaid         Decimal?           @default(0)
+  amountPaid          Decimal?           @default(0)
+  finalCost           Decimal?
+  scope               String?
+  category            String
+  status              String             @default("Scheduled")
+  pictures            String[]           @default([])
+  notes               String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  owner               User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customer            Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  invoice             Invoice?
+  estimate            Estimate?
+  payments            JobPayment[]
+  timeEntries         TimeEntry[]
+  timeEntryRequests   TimeEntryRequest[]
+  tasks               Task[]
 
   @@unique([id, ownerId])
   @@index([ownerId])
@@ -159,32 +164,37 @@ model User {
 }
 
 model EstimateRecord {
-  id                String    @id @default(cuid())
-  ownerId           String
-  customerId        String?
-  description       String
-  serviceLocation   String?
-  dateBegin         DateTime?
-  dateEnd           DateTime?
-  laborCost         Decimal?  @default(0)
-  laborItems        String    @default("[]")
-  jobType           String    @default("Residential")
-  measurementRooms  String    @default("[]")
-  materialTaxRate   Decimal?  @default(0)
-  materials         String    @default("[]")
-  estimatedTotal    Decimal?  @default(0)
-  scope             String?
-  category          String
-  status            String    @default("Draft")
-  notes             String?
-  convertedJobId    String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  owner             User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  customer          Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  printableEstimate Estimate?
-  lead              Lead?
-  tasks             Task[]
+  id                  String    @id @default(cuid())
+  ownerId             String
+  customerId          String?
+  description         String
+  serviceLocation     String?
+  serviceAddressLine1 String?
+  serviceAddressLine2 String?
+  serviceCity         String?
+  serviceState        String?
+  servicePostalCode   String?
+  dateBegin           DateTime?
+  dateEnd             DateTime?
+  laborCost           Decimal?  @default(0)
+  laborItems          String    @default("[]")
+  jobType             String    @default("Residential")
+  measurementRooms    String    @default("[]")
+  materialTaxRate     Decimal?  @default(0)
+  materials           String    @default("[]")
+  estimatedTotal      Decimal?  @default(0)
+  scope               String?
+  category            String
+  status              String    @default("Draft")
+  notes               String?
+  convertedJobId      String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  owner               User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customer            Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  printableEstimate   Estimate?
+  lead                Lead?
+  tasks               Task[]
 
   @@unique([id, ownerId])
   @@index([ownerId])
@@ -195,29 +205,34 @@ model EstimateRecord {
 }
 
 model Lead {
-  id               String          @id @default(cuid())
-  ownerId          String
-  customerId       String?
-  estimateRecordId String?         @unique
-  name             String
-  email            String?
-  phone            String?
-  source           String?
-  serviceType      String?
-  serviceLocation  String?
-  estimatedValue   Decimal?
-  status           String          @default("New")
-  priority         String          @default("Normal")
-  notes            String?
-  followUpAt       DateTime?
-  lostReason       String?
-  convertedAt      DateTime?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  owner            User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  customer         Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  estimateRecord   EstimateRecord? @relation(fields: [estimateRecordId], references: [id], onDelete: SetNull)
-  tasks            Task[]
+  id                  String          @id @default(cuid())
+  ownerId             String
+  customerId          String?
+  estimateRecordId    String?         @unique
+  name                String
+  email               String?
+  phone               String?
+  source              String?
+  serviceType         String?
+  serviceLocation     String?
+  serviceAddressLine1 String?
+  serviceAddressLine2 String?
+  serviceCity         String?
+  serviceState        String?
+  servicePostalCode   String?
+  estimatedValue      Decimal?
+  status              String          @default("New")
+  priority            String          @default("Normal")
+  notes               String?
+  followUpAt          DateTime?
+  lostReason          String?
+  convertedAt         DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  owner               User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customer            Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  estimateRecord      EstimateRecord? @relation(fields: [estimateRecordId], references: [id], onDelete: SetNull)
+  tasks               Task[]
 
   @@unique([id, ownerId])
   @@index([ownerId])
@@ -262,35 +277,40 @@ model Task {
 }
 
 model Invoice {
-  id                String    @id @default(cuid())
-  ownerId           String
-  jobId             String    @unique
-  invoiceNumber     String?
-  customerId        String?
-  customerName      String?
-  customerEmail     String?
-  customerPhone     String?
-  jobTitle          String
-  jobDescription    String?
-  serviceLocation   String?
-  dateBegin         DateTime?
-  dateEnd           DateTime?
-  laborCost         Decimal   @default(0)
-  materialTaxRate   Decimal   @default(0)
-  materials         String    @default("[]")
-  materialsSubtotal Decimal   @default(0)
-  materialTaxAmount Decimal   @default(0)
-  finalCost         Decimal   @default(0)
-  depositPaid       Decimal   @default(0)
-  amountPaid        Decimal   @default(0)
-  balanceDue        Decimal   @default(0)
-  paymentStatus     String
-  jobStatus         String
-  issuedAt          DateTime  @default(now())
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  owner             User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  job               Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id                  String    @id @default(cuid())
+  ownerId             String
+  jobId               String    @unique
+  invoiceNumber       String?
+  customerId          String?
+  customerName        String?
+  customerEmail       String?
+  customerPhone       String?
+  jobTitle            String
+  jobDescription      String?
+  serviceLocation     String?
+  serviceAddressLine1 String?
+  serviceAddressLine2 String?
+  serviceCity         String?
+  serviceState        String?
+  servicePostalCode   String?
+  dateBegin           DateTime?
+  dateEnd             DateTime?
+  laborCost           Decimal   @default(0)
+  materialTaxRate     Decimal   @default(0)
+  materials           String    @default("[]")
+  materialsSubtotal   Decimal   @default(0)
+  materialTaxAmount   Decimal   @default(0)
+  finalCost           Decimal   @default(0)
+  depositPaid         Decimal   @default(0)
+  amountPaid          Decimal   @default(0)
+  balanceDue          Decimal   @default(0)
+  paymentStatus       String
+  jobStatus           String
+  issuedAt            DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  owner               User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  job                 Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@unique([id, ownerId])
   @@unique([ownerId, invoiceNumber])
@@ -302,33 +322,38 @@ model Invoice {
 }
 
 model Estimate {
-  id                String          @id @default(cuid())
-  ownerId           String
-  jobId             String?         @unique
-  estimateRecordId  String?         @unique
-  estimateNumber    String?
-  customerId        String?
-  customerName      String?
-  customerEmail     String?
-  customerPhone     String?
-  jobTitle          String
-  jobDescription    String?
-  serviceLocation   String?
-  dateBegin         DateTime?
-  dateEnd           DateTime?
-  laborCost         Decimal         @default(0)
-  materialTaxRate   Decimal         @default(0)
-  materials         String          @default("[]")
-  materialsSubtotal Decimal         @default(0)
-  materialTaxAmount Decimal         @default(0)
-  estimatedTotal    Decimal         @default(0)
-  jobStatus         String
-  issuedAt          DateTime        @default(now())
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  owner             User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  job               Job?            @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  estimateRecord    EstimateRecord? @relation(fields: [estimateRecordId], references: [id], onDelete: Cascade)
+  id                  String          @id @default(cuid())
+  ownerId             String
+  jobId               String?         @unique
+  estimateRecordId    String?         @unique
+  estimateNumber      String?
+  customerId          String?
+  customerName        String?
+  customerEmail       String?
+  customerPhone       String?
+  jobTitle            String
+  jobDescription      String?
+  serviceLocation     String?
+  serviceAddressLine1 String?
+  serviceAddressLine2 String?
+  serviceCity         String?
+  serviceState        String?
+  servicePostalCode   String?
+  dateBegin           DateTime?
+  dateEnd             DateTime?
+  laborCost           Decimal         @default(0)
+  materialTaxRate     Decimal         @default(0)
+  materials           String          @default("[]")
+  materialsSubtotal   Decimal         @default(0)
+  materialTaxAmount   Decimal         @default(0)
+  estimatedTotal      Decimal         @default(0)
+  jobStatus           String
+  issuedAt            DateTime        @default(now())
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  owner               User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  job                 Job?            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  estimateRecord      EstimateRecord? @relation(fields: [estimateRecordId], references: [id], onDelete: Cascade)
 
   @@unique([id, ownerId])
   @@unique([ownerId, estimateNumber])

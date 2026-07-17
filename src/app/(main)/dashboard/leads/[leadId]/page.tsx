@@ -25,6 +25,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import { ConvertLeadButton, DeleteLeadButton, LeadStatusButton } from "../_components/lead-action-buttons";
@@ -131,6 +132,7 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
 
   const leadFirstName = lead.name.split(" ")[0] || lead.name;
   const serviceType = lead.serviceType?.toLowerCase() ?? "project";
+  const serviceLocation = formatServiceAddress(lead);
   const templates = await getRenderedDocumentEmailTemplates({
     ownerId: currentUser.id,
     scope: "lead",
@@ -145,8 +147,8 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
       leadName: lead.name,
       leadPhone: lead.phone ? formatPhoneNumber(lead.phone) : undefined,
       leadSource: lead.source,
-      serviceLocation: lead.serviceLocation,
-      serviceLocationPhrase: lead.serviceLocation ? ` at ${lead.serviceLocation}` : "",
+      serviceLocation,
+      serviceLocationPhrase: serviceLocation ? ` at ${serviceLocation}` : "",
       serviceType,
     },
   });
@@ -244,7 +246,7 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
               {lead.serviceType ?? "Not set"}
             </DetailTile>
             <DetailTile icon={<MapPin className="size-3.5" />} label="Service location">
-              <span className="whitespace-pre-wrap">{lead.serviceLocation ?? "Not on file"}</span>
+              <span className="whitespace-pre-wrap">{serviceLocation ?? "Not on file"}</span>
             </DetailTile>
           </div>
 

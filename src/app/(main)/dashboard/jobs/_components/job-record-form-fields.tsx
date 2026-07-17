@@ -35,6 +35,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UsStateSelect } from "@/components/us-state-select";
 import { useDiscardLocalDraftListener } from "@/lib/drafts.client";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
+import { formatServiceAddress, hasStructuredServiceAddress, type ServiceAddressFields } from "@/lib/service-address";
 import { cn } from "@/lib/utils";
 
 import { ServicePicker } from "../../services/_components/service-picker";
@@ -140,21 +141,38 @@ function formatAddress(address: JobCustomer["addresses"][number]) {
   return [address.line1, address.line2, cityLine, address.country].filter(Boolean).join(", ");
 }
 
-function createCustomLocationFields(value?: string): CustomLocationFields {
+function createCustomLocationFields(value?: ServiceAddressFields | null): CustomLocationFields {
   return {
-    street: value ?? "",
-    apt: "",
-    city: "",
-    state: "",
-    zip: "",
+    apt: value?.serviceAddressLine2 ?? "",
+    city: value?.serviceCity ?? "",
+    state: value?.serviceState ?? "",
+    street: value?.serviceAddressLine1 ?? "",
+    zip: value?.servicePostalCode ?? "",
   };
 }
 
-function formatCustomLocation(fields: CustomLocationFields) {
-  return [fields.street, fields.apt, [fields.city, fields.state].filter(Boolean).join(", "), fields.zip]
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .join(", ");
+function getServiceAddressFields(fields: CustomLocationFields): ServiceAddressFields {
+  return {
+    serviceAddressLine1: fields.street,
+    serviceAddressLine2: fields.apt,
+    serviceCity: fields.city,
+    servicePostalCode: fields.zip,
+    serviceState: fields.state,
+  };
+}
+
+function formatCustomLocation(fields: CustomLocationFields, fallback?: string) {
+  return formatServiceAddress({ ...getServiceAddressFields(fields), serviceLocation: fallback }) ?? "";
+}
+
+function getCustomerAddressFields(address?: JobCustomer["addresses"][number]): ServiceAddressFields {
+  return {
+    serviceAddressLine1: address?.line1,
+    serviceAddressLine2: address?.line2,
+    serviceCity: address?.city,
+    servicePostalCode: address?.postalCode,
+    serviceState: address?.state,
+  };
 }
 
 function parseJobDate(value?: string) {
@@ -1878,14 +1896,22 @@ export function JobRecordFormFields({
   const addressOptions = selectedCustomer?.addresses ?? [];
   const initialLocation = job?.serviceLocation ?? "";
   const hasSavedInitialLocation = addressOptions.some((address) => formatAddress(address) === initialLocation);
+  const legacyServiceLocation = hasStructuredServiceAddress(job) ? undefined : job?.serviceLocation;
   const [selectedLocation, setSelectedLocation] = React.useState(
     hasSavedInitialLocation && initialLocation ? initialLocation : customLocationValue,
   );
   const [customLocationFields, setCustomLocationFields] = React.useState(() =>
-    createCustomLocationFields(hasSavedInitialLocation ? "" : initialLocation),
+    createCustomLocationFields(hasSavedInitialLocation ? null : job),
   );
+  const selectedAddress = addressOptions.find((address) => formatAddress(address) === selectedLocation);
+  const serviceAddressFields =
+    selectedLocation === customLocationValue
+      ? getServiceAddressFields(customLocationFields)
+      : getCustomerAddressFields(selectedAddress);
   const serviceLocation =
-    selectedLocation === customLocationValue ? formatCustomLocation(customLocationFields) : selectedLocation;
+    selectedLocation === customLocationValue
+      ? formatCustomLocation(customLocationFields, legacyServiceLocation)
+      : selectedLocation;
   const initializedFromKeyRef = React.useRef(`${resetKey}:${job?.id ?? "new"}`);
   const draftHydratedRef = React.useRef(false);
   const skipNextDraftSaveRef = React.useRef(true);
@@ -1937,7 +1963,7 @@ export function JobRecordFormFields({
     setMeasurementsOpen(false);
     setTaxRate(Number(job?.materialTaxRate ?? "8.25"));
     setSelectedLocation(nextHasSavedInitialLocation && nextInitialLocation ? nextInitialLocation : customLocationValue);
-    setCustomLocationFields(createCustomLocationFields(nextHasSavedInitialLocation ? "" : nextInitialLocation));
+    setCustomLocationFields(createCustomLocationFields(nextHasSavedInitialLocation ? null : job));
   }, [customers, job]);
 
   React.useEffect(() => {
@@ -2141,6 +2167,11 @@ export function JobRecordFormFields({
       <div className="grid gap-0 md:gap-2">
         <input type="hidden" name="customerId" value={isCreatingNewCustomer ? "" : selectedCustomerId} />
         <input type="hidden" name="serviceLocation" value={serviceLocation} />
+        <input type="hidden" name="serviceAddressLine1" value={serviceAddressFields.serviceAddressLine1 ?? ""} />
+        <input type="hidden" name="serviceAddressLine2" value={serviceAddressFields.serviceAddressLine2 ?? ""} />
+        <input type="hidden" name="serviceCity" value={serviceAddressFields.serviceCity ?? ""} />
+        <input type="hidden" name="serviceState" value={serviceAddressFields.serviceState ?? ""} />
+        <input type="hidden" name="servicePostalCode" value={serviceAddressFields.servicePostalCode ?? ""} />
         <input type="hidden" name="dateBegin" value={toDateValue(scheduledDate)} />
         <input type="hidden" name="dateEnd" value={toDateValue(endDate)} />
         <input type="hidden" name="laborItems" value={stringifyPricingItems(laborItems)} />
@@ -2672,6 +2703,11 @@ export function JobRecordFormFields({
     <div className="grid gap-4">
       <input type="hidden" name="customerId" value={isCreatingNewCustomer ? "" : selectedCustomerId} />
       <input type="hidden" name="serviceLocation" value={serviceLocation} />
+      <input type="hidden" name="serviceAddressLine1" value={serviceAddressFields.serviceAddressLine1 ?? ""} />
+      <input type="hidden" name="serviceAddressLine2" value={serviceAddressFields.serviceAddressLine2 ?? ""} />
+      <input type="hidden" name="serviceCity" value={serviceAddressFields.serviceCity ?? ""} />
+      <input type="hidden" name="serviceState" value={serviceAddressFields.serviceState ?? ""} />
+      <input type="hidden" name="servicePostalCode" value={serviceAddressFields.servicePostalCode ?? ""} />
       <input type="hidden" name="dateBegin" value={toDateValue(scheduledDate)} />
       <input type="hidden" name="dateEnd" value={toDateValue(endDate)} />
       <input type="hidden" name="laborItems" value={stringifyPricingItems(laborItems)} />

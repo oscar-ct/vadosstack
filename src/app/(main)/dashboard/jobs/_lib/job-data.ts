@@ -1,5 +1,6 @@
 import { calculateOutstandingBalance } from "@/lib/customer-billing";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 
 import type { ServiceTemplateRow } from "../../services/types";
 import type { JobCustomer, JobRow } from "../_components/jobs-table/schema";
@@ -70,7 +71,12 @@ function toJobRow(
     customerId: job.customerId ?? undefined,
     customerName: job.customer?.name ?? undefined,
     description: job.description,
-    serviceLocation: job.serviceLocation ?? undefined,
+    serviceLocation: formatServiceAddress(job) ?? undefined,
+    serviceAddressLine1: job.serviceAddressLine1 ?? undefined,
+    serviceAddressLine2: job.serviceAddressLine2 ?? undefined,
+    serviceCity: job.serviceCity ?? undefined,
+    serviceState: job.serviceState ?? undefined,
+    servicePostalCode: job.servicePostalCode ?? undefined,
     dateBegin: job.dateBegin?.toISOString(),
     dateEnd: job.dateEnd?.toISOString(),
     estimatedCost: formatMoney(job.estimatedCost),

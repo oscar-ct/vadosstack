@@ -21,6 +21,7 @@ import { formatDocumentNumber } from "@/lib/document-number";
 import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 
 import { parsePricingItems } from "../../jobs/_components/pricing-items";
 import { createJobPaymentAction, deleteJobPaymentAction } from "../../jobs/actions";
@@ -254,6 +255,7 @@ export default async function Page({
   const subtotal = laborSubtotal + materialsSubtotal;
   const taxableItemsLabel = invoice.job.jobType === "Commercial" ? "labor + materials" : "materials";
   const invoiceNumber = invoice.invoiceNumber ?? formatDocumentNumber("INV", invoiceSequence);
+  const serviceLocation = formatServiceAddress(invoice);
   const companyAddress = currentUser.companyAddress?.trim();
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
   const dueDate = addDays(invoice.issuedAt, currentUser.invoiceDueDays);
@@ -266,7 +268,7 @@ export default async function Page({
     finalCost: formatMoney(invoice.finalCost),
     invoiceNumber,
     jobTitle: invoice.jobTitle,
-    serviceLocation: invoice.serviceLocation,
+    serviceLocation,
   };
   const invoiceMessage = currentUser.invoiceMessageEnabled
     ? renderDocumentMessage(currentUser.invoiceMessageText, invoiceMessageContext)
@@ -292,7 +294,7 @@ export default async function Page({
     jobDescription: invoice.jobDescription ?? undefined,
     jobNumber: invoice.jobId.slice(-6).toUpperCase(),
     jobHref: `/dashboard/jobs/${invoice.jobId}`,
-    jobServiceLocation: invoice.serviceLocation ?? undefined,
+    jobServiceLocation: serviceLocation ?? undefined,
     paymentStatus: invoice.paymentStatus,
     laborCost: invoice.laborCost.toString(),
     materialsSubtotal: invoice.materialsSubtotal.toString(),
@@ -333,7 +335,7 @@ export default async function Page({
       dueDate: format(dueDate, "MMM d, yyyy"),
       invoiceNumber,
       jobTitle: invoice.jobTitle,
-      serviceLocation: invoice.serviceLocation,
+      serviceLocation,
     },
   });
 
@@ -361,7 +363,7 @@ export default async function Page({
               dueDate: format(dueDate, "MMM d, yyyy"),
               invoiceNumber,
               jobTitle: invoice.jobTitle,
-              serviceLocation: invoice.serviceLocation,
+              serviceLocation,
             }}
             dueDate={format(dueDate, "MMM d, yyyy")}
             gmailConnected={Boolean(googleMailAccount)}
@@ -473,7 +475,7 @@ export default async function Page({
                   <MapPin className="size-3.5" />
                   Service Location
                 </div>
-                <div>{invoice.serviceLocation ?? "Not on file"}</div>
+                <div>{serviceLocation ?? "Not on file"}</div>
               </div>
             </div>
           </section>

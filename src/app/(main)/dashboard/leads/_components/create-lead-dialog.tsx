@@ -21,7 +21,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { UsStateSelect } from "@/components/us-state-select";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
+import { emptyServiceAddressFields, formatServiceAddress } from "@/lib/service-address";
 
 import type { LeadMutationState } from "../actions";
 import { leadPriorities, leadServiceTypes, leadSources } from "../constants";
@@ -40,12 +42,15 @@ export function CreateLeadDialog({
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [phoneDigits, setPhoneDigits] = React.useState("");
+  const [serviceLocationFields, setServiceLocationFields] = React.useState(emptyServiceAddressFields);
+  const serviceLocation = formatServiceAddress(serviceLocationFields) ?? "";
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [visibleMessage, setVisibleMessage] = React.useState("");
 
   const resetForm = React.useCallback(() => {
     formRef.current?.reset();
     setPhoneDigits("");
+    setServiceLocationFields(emptyServiceAddressFields());
   }, []);
 
   React.useEffect(() => {
@@ -169,9 +174,74 @@ export function CreateLeadDialog({
                 placeholder="0.00"
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3">
+            <div className="col-span-2 grid gap-1">
+              <Label>Service location</Label>
+              <p className="text-muted-foreground text-xs">
+                This address carries into estimates created from the lead.
+              </p>
+            </div>
+            <input type="hidden" name="serviceLocation" value={serviceLocation} />
+            <div className="col-span-2 grid gap-2 sm:col-span-2">
+              <Label htmlFor="lead-dialog-location-street">Street address</Label>
+              <Input
+                id="lead-dialog-location-street"
+                name="serviceAddressLine1"
+                value={serviceLocationFields.serviceAddressLine1}
+                onChange={(event) =>
+                  setServiceLocationFields((current) => ({ ...current, serviceAddressLine1: event.target.value }))
+                }
+                placeholder="123 Main St"
+              />
+            </div>
+            <div className="col-span-2 grid gap-2 sm:col-span-1">
+              <Label htmlFor="lead-dialog-location-apt">Apt, suite, unit</Label>
+              <Input
+                id="lead-dialog-location-apt"
+                name="serviceAddressLine2"
+                value={serviceLocationFields.serviceAddressLine2}
+                onChange={(event) =>
+                  setServiceLocationFields((current) => ({ ...current, serviceAddressLine2: event.target.value }))
+                }
+                placeholder="Unit B"
+              />
+            </div>
             <div className="grid min-w-0 gap-2">
-              <Label htmlFor="lead-dialog-location">Service location</Label>
-              <Input id="lead-dialog-location" name="serviceLocation" placeholder="123 Main St, Houston, TX" />
+              <Label htmlFor="lead-dialog-location-city">City</Label>
+              <Input
+                id="lead-dialog-location-city"
+                name="serviceCity"
+                value={serviceLocationFields.serviceCity}
+                onChange={(event) =>
+                  setServiceLocationFields((current) => ({ ...current, serviceCity: event.target.value }))
+                }
+                placeholder="Houston"
+              />
+            </div>
+            <div className="grid min-w-0 gap-2">
+              <Label htmlFor="lead-dialog-location-state">State</Label>
+              <UsStateSelect
+                id="lead-dialog-location-state"
+                name="serviceState"
+                value={serviceLocationFields.serviceState}
+                onChange={(event) =>
+                  setServiceLocationFields((current) => ({ ...current, serviceState: event.target.value }))
+                }
+              />
+            </div>
+            <div className="col-span-2 grid gap-2 sm:col-span-1">
+              <Label htmlFor="lead-dialog-location-zip">Zip code</Label>
+              <Input
+                id="lead-dialog-location-zip"
+                name="servicePostalCode"
+                value={serviceLocationFields.servicePostalCode}
+                onChange={(event) =>
+                  setServiceLocationFields((current) => ({ ...current, servicePostalCode: event.target.value }))
+                }
+                placeholder="77001"
+              />
             </div>
           </div>
 

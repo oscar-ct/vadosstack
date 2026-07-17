@@ -16,6 +16,7 @@ import {
 } from "@/lib/google-mail";
 import { isValidOptionalPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress, getServiceAddressPayload } from "@/lib/service-address";
 
 import { leadPriorities, leadStatuses } from "./constants";
 
@@ -69,6 +70,11 @@ const leadDetailsSchema = z.object({
   source: z.string().trim().optional(),
   serviceType: z.string().trim().optional(),
   serviceLocation: z.string().trim().optional(),
+  serviceAddressLine1: z.string().trim().optional(),
+  serviceAddressLine2: z.string().trim().optional(),
+  serviceCity: z.string().trim().optional(),
+  serviceState: z.string().trim().optional(),
+  servicePostalCode: z.string().trim().optional(),
   estimatedValue: optionalMoney,
   status: z.enum(leadStatuses),
   priority: z.enum(leadPriorities),
@@ -107,13 +113,15 @@ function createEmailLeadState(success: boolean, message: string, reconnectRequir
 }
 
 function getLeadPayload(formData: FormData) {
+  const serviceAddress = getServiceAddressPayload(formData);
+
   return {
     name: formData.get("name"),
     email: formData.get("email"),
     phone: formData.get("phone"),
     source: optionalText(formData.get("source")),
     serviceType: optionalText(formData.get("serviceType")),
-    serviceLocation: optionalText(formData.get("serviceLocation")),
+    ...serviceAddress,
     estimatedValue: optionalText(formData.get("estimatedValue")),
     status: formData.get("status"),
     priority: formData.get("priority"),
@@ -158,6 +166,11 @@ export async function createLeadAction(
         source: parsed.data.source || null,
         serviceType: parsed.data.serviceType || null,
         serviceLocation: parsed.data.serviceLocation || null,
+        serviceAddressLine1: parsed.data.serviceAddressLine1 || null,
+        serviceAddressLine2: parsed.data.serviceAddressLine2 || null,
+        serviceCity: parsed.data.serviceCity || null,
+        serviceState: parsed.data.serviceState || null,
+        servicePostalCode: parsed.data.servicePostalCode || null,
         estimatedValue: parsed.data.estimatedValue ?? null,
         followUpAt: parsed.data.followUpAt ?? null,
         notes: parsed.data.notes || null,
@@ -216,6 +229,11 @@ export async function updateLeadAction(
         source: lead.source || null,
         serviceType: lead.serviceType || null,
         serviceLocation: lead.serviceLocation || null,
+        serviceAddressLine1: lead.serviceAddressLine1 || null,
+        serviceAddressLine2: lead.serviceAddressLine2 || null,
+        serviceCity: lead.serviceCity || null,
+        serviceState: lead.serviceState || null,
+        servicePostalCode: lead.servicePostalCode || null,
         estimatedValue: lead.estimatedValue ?? null,
         followUpAt: lead.followUpAt ?? null,
         notes: lead.notes || null,
@@ -307,7 +325,12 @@ export async function convertLeadToCustomerAction(
         email: true,
         name: true,
         phone: true,
+        serviceAddressLine1: true,
+        serviceAddressLine2: true,
+        serviceCity: true,
         serviceLocation: true,
+        servicePostalCode: true,
+        serviceState: true,
         status: true,
       },
     });
@@ -335,6 +358,8 @@ export async function convertLeadToCustomerAction(
         })
       : null;
 
+    const serviceLocation = formatServiceAddress(lead);
+
     const customer =
       existingCustomer ??
       (await prisma.customer.create({
@@ -343,11 +368,15 @@ export async function convertLeadToCustomerAction(
           name: lead.name,
           email: lead.email,
           billingStatus: "No Balance",
-          addresses: lead.serviceLocation
+          addresses: serviceLocation
             ? {
                 create: {
                   label: "Service Location",
-                  line1: lead.serviceLocation,
+                  line1: lead.serviceAddressLine1 || serviceLocation,
+                  line2: lead.serviceAddressLine2 || null,
+                  city: lead.serviceCity || null,
+                  state: lead.serviceState || null,
+                  postalCode: lead.servicePostalCode || null,
                 },
               }
             : undefined,

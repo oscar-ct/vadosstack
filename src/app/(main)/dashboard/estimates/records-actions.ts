@@ -11,6 +11,7 @@ import { deriveCustomerBillingStatus } from "@/lib/customer-billing";
 import { allocateDocumentNumber, attachDocumentNumber } from "@/lib/document-numbering";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress, getServiceAddressPayload, type ServiceAddressFields } from "@/lib/service-address";
 
 import { parseMaterials } from "../jobs/_components/materials";
 import { parsePricingItems } from "../jobs/_components/pricing-items";
@@ -135,6 +136,11 @@ const estimateRecordSchema = z.object({
   newLeadSource: z.string().trim().optional(),
   description: z.string().trim().min(1, "Title is required."),
   serviceLocation: z.string().trim().optional(),
+  serviceAddressLine1: z.string().trim().optional(),
+  serviceAddressLine2: z.string().trim().optional(),
+  serviceCity: z.string().trim().optional(),
+  serviceState: z.string().trim().optional(),
+  servicePostalCode: z.string().trim().optional(),
   dateBegin: optionalDate,
   dateEnd: optionalDate,
   laborItems: lineItemsSchema,
@@ -168,6 +174,8 @@ const updateEstimateStatusSchema = z.object({
 });
 
 function getEstimatePayload(formData: FormData) {
+  const serviceAddress = getServiceAddressPayload(formData);
+
   return {
     leadId: emptyToUndefined(formData.get("leadId")),
     customerId: emptyToUndefined(formData.get("customerId")),
@@ -179,7 +187,7 @@ function getEstimatePayload(formData: FormData) {
     newLeadPhone: emptyToUndefined(formData.get("newLeadPhone")),
     newLeadSource: emptyToUndefined(formData.get("newLeadSource")),
     description: formData.get("description"),
-    serviceLocation: emptyToUndefined(formData.get("serviceLocation")),
+    ...serviceAddress,
     dateBegin: emptyToUndefined(formData.get("dateBegin")),
     dateEnd: emptyToUndefined(formData.get("dateEnd")),
     laborItems: parsePricingItems(String(formData.get("laborItems") ?? "")),
@@ -309,17 +317,36 @@ async function assertCustomer(ownerId: string, customerId: string) {
   }
 }
 
+function createCustomerAddressFromServiceAddress(
+  serviceAddress: ServiceAddressFields & { serviceLocation?: string | null },
+) {
+  const displayLocation = formatServiceAddress(serviceAddress);
+
+  if (!displayLocation) return undefined;
+
+  return {
+    label: "Service Location",
+    line1: serviceAddress.serviceAddressLine1 || displayLocation,
+    line2: serviceAddress.serviceAddressLine2 || null,
+    city: serviceAddress.serviceCity || null,
+    state: serviceAddress.serviceState || null,
+    postalCode: serviceAddress.servicePostalCode || null,
+  };
+}
+
 async function createCustomerForEstimate({
   email,
   name,
   ownerId,
   phone,
+  serviceAddress,
   serviceLocation,
 }: {
   email?: string;
   name?: string;
   ownerId: string;
   phone?: string;
+  serviceAddress?: ServiceAddressFields;
   serviceLocation?: string;
 }) {
   if (!name || !email || !phone) {
@@ -353,18 +380,20 @@ async function createCustomerForEstimate({
       throw new Error("A customer with that email already exists in your account. Select them from the customer list.");
     }
 
+    const address = createCustomerAddressFromServiceAddress({
+      ...serviceAddress,
+      serviceLocation,
+    });
+
     return await prisma.customer.create({
       data: {
         ownerId,
         name,
         email: parsedEmail.data,
         billingStatus: "No Balance",
-        addresses: serviceLocation
+        addresses: address
           ? {
-              create: {
-                label: "Service Location",
-                line1: serviceLocation,
-              },
+              create: address,
             }
           : undefined,
         phoneNumbers: {
@@ -395,6 +424,7 @@ async function createLeadForEstimate({
   name,
   ownerId,
   phone,
+  serviceAddress,
   serviceLocation,
   serviceType,
   source,
@@ -406,6 +436,7 @@ async function createLeadForEstimate({
   name?: string;
   ownerId: string;
   phone?: string;
+  serviceAddress?: ServiceAddressFields;
   serviceLocation?: string;
   serviceType?: string;
   source?: string;
@@ -431,6 +462,11 @@ async function createLeadForEstimate({
       source: source ?? null,
       serviceType: serviceType ?? null,
       serviceLocation: serviceLocation ?? null,
+      serviceAddressLine1: serviceAddress?.serviceAddressLine1 ?? null,
+      serviceAddressLine2: serviceAddress?.serviceAddressLine2 ?? null,
+      serviceCity: serviceAddress?.serviceCity ?? null,
+      serviceState: serviceAddress?.serviceState ?? null,
+      servicePostalCode: serviceAddress?.servicePostalCode ?? null,
       status: "Estimate Needed",
       priority: "Normal",
     },
@@ -443,6 +479,7 @@ async function createLeadForEstimate({
 async function findOrCreateCustomerForLead({
   lead,
   ownerId,
+  serviceAddress,
   serviceLocation,
 }: {
   lead: {
@@ -451,6 +488,7 @@ async function findOrCreateCustomerForLead({
     phone: string | null;
   };
   ownerId: string;
+  serviceAddress?: ServiceAddressFields;
   serviceLocation?: string | null;
 }) {
   const existingCustomer = lead.email
@@ -469,18 +507,20 @@ async function findOrCreateCustomerForLead({
     return existingCustomer;
   }
 
+  const address = createCustomerAddressFromServiceAddress({
+    ...serviceAddress,
+    serviceLocation,
+  });
+
   return prisma.customer.create({
     data: {
       ownerId,
       name: lead.name,
       email: lead.email,
       billingStatus: "No Balance",
-      addresses: serviceLocation
+      addresses: address
         ? {
-            create: {
-              label: "Service Location",
-              line1: serviceLocation,
-            },
+            create: address,
           }
         : undefined,
       phoneNumbers: lead.phone
@@ -582,7 +622,12 @@ async function syncPrintableEstimateSnapshotFromRecord(estimateRecordId: string,
       customerPhone: estimate.customer?.phoneNumbers[0]?.value ?? estimate.lead?.phone ?? null,
       jobTitle: estimate.description,
       jobDescription: estimate.scope,
-      serviceLocation: estimate.serviceLocation,
+      serviceLocation: formatServiceAddress(estimate) ?? undefined,
+      serviceAddressLine1: estimate.serviceAddressLine1,
+      serviceAddressLine2: estimate.serviceAddressLine2,
+      serviceCity: estimate.serviceCity,
+      serviceState: estimate.serviceState,
+      servicePostalCode: estimate.servicePostalCode,
       dateBegin: estimate.dateBegin,
       dateEnd: estimate.dateEnd,
       laborCost: estimate.laborCost ?? "0",
@@ -628,6 +673,13 @@ export async function createEstimateRecordAction(
       ...estimate
     } = parsed.data;
     const { jobType, leadId, measurementRooms, ...estimateInput } = estimate;
+    const serviceAddress = {
+      serviceAddressLine1: estimate.serviceAddressLine1,
+      serviceAddressLine2: estimate.serviceAddressLine2,
+      serviceCity: estimate.serviceCity,
+      servicePostalCode: estimate.servicePostalCode,
+      serviceState: estimate.serviceState,
+    };
     const laborItems = normalizeItems(estimate.laborItems);
     const materials = normalizeMaterials(estimate.materials);
     const normalizedMeasurementRooms = normalizeMeasurementRooms(measurementRooms);
@@ -673,7 +725,8 @@ export async function createEstimateRecordAction(
         name: newCustomerName,
         ownerId: currentUser.id,
         phone: newCustomerPhone,
-        serviceLocation: estimate.serviceLocation,
+        serviceAddress,
+        serviceLocation: formatServiceAddress(estimate) ?? undefined,
       });
       customerId = customer.id;
     }
@@ -697,7 +750,12 @@ export async function createEstimateRecordAction(
           customerId: customerId ?? null,
           dateBegin: estimate.dateBegin ?? null,
           dateEnd: estimate.dateEnd ?? null,
-          serviceLocation: estimate.serviceLocation || null,
+          serviceLocation: formatServiceAddress(estimate) ?? null,
+          serviceAddressLine1: estimate.serviceAddressLine1 || null,
+          serviceAddressLine2: estimate.serviceAddressLine2 || null,
+          serviceCity: estimate.serviceCity || null,
+          serviceState: estimate.serviceState || null,
+          servicePostalCode: estimate.servicePostalCode || null,
           laborCost: totals.laborCost,
           laborItems: JSON.stringify(laborItems),
           jobType,
@@ -720,7 +778,8 @@ export async function createEstimateRecordAction(
           name: newLeadName,
           ownerId: currentUser.id,
           phone: newLeadPhone,
-          serviceLocation: estimate.serviceLocation,
+          serviceAddress,
+          serviceLocation: formatServiceAddress(estimate) ?? undefined,
           serviceType: estimate.category,
           source: newLeadSource,
         });
@@ -800,6 +859,13 @@ export async function updateEstimateRecordAction(
 
   try {
     const { jobType, leadId, measurementRooms, ...estimateInput } = estimate;
+    const serviceAddress = {
+      serviceAddressLine1: estimate.serviceAddressLine1,
+      serviceAddressLine2: estimate.serviceAddressLine2,
+      serviceCity: estimate.serviceCity,
+      servicePostalCode: estimate.servicePostalCode,
+      serviceState: estimate.serviceState,
+    };
     const laborItems = normalizeItems(estimate.laborItems);
     const materials = normalizeMaterials(estimate.materials);
     const normalizedMeasurementRooms = normalizeMeasurementRooms(measurementRooms);
@@ -860,7 +926,8 @@ export async function updateEstimateRecordAction(
         name: newCustomerName,
         ownerId: currentUser.id,
         phone: newCustomerPhone,
-        serviceLocation: estimate.serviceLocation,
+        serviceAddress,
+        serviceLocation: formatServiceAddress(estimate) ?? undefined,
       });
       customerId = customer.id;
     }
@@ -904,7 +971,12 @@ export async function updateEstimateRecordAction(
         customerId: customerId ?? null,
         dateBegin: estimate.dateBegin ?? null,
         dateEnd: estimate.dateEnd ?? null,
-        serviceLocation: estimate.serviceLocation || null,
+        serviceLocation: formatServiceAddress(estimate) ?? null,
+        serviceAddressLine1: estimate.serviceAddressLine1 || null,
+        serviceAddressLine2: estimate.serviceAddressLine2 || null,
+        serviceCity: estimate.serviceCity || null,
+        serviceState: estimate.serviceState || null,
+        servicePostalCode: estimate.servicePostalCode || null,
         laborCost: totals.laborCost,
         laborItems: JSON.stringify(laborItems),
         jobType,
@@ -935,7 +1007,8 @@ export async function updateEstimateRecordAction(
         name: newLeadName,
         ownerId: currentUser.id,
         phone: newLeadPhone,
-        serviceLocation: estimate.serviceLocation,
+        serviceAddress,
+        serviceLocation: formatServiceAddress(estimate) ?? undefined,
         serviceType: estimate.category,
         source: newLeadSource,
       });
@@ -1081,7 +1154,8 @@ export async function updateEstimateStatusAction(
       const customer = await findOrCreateCustomerForLead({
         lead: estimate.lead,
         ownerId: currentUser.id,
-        serviceLocation: estimate.serviceLocation,
+        serviceAddress: estimate,
+        serviceLocation: formatServiceAddress(estimate) ?? undefined,
       });
 
       customerId = customer.id;
@@ -1192,7 +1266,8 @@ export async function convertEstimateToJobAction(
       const customer = await findOrCreateCustomerForLead({
         lead: estimate.lead,
         ownerId: currentUser.id,
-        serviceLocation: estimate.serviceLocation,
+        serviceAddress: estimate,
+        serviceLocation: formatServiceAddress(estimate) ?? undefined,
       });
 
       customerId = customer.id;
@@ -1207,7 +1282,12 @@ export async function convertEstimateToJobAction(
         ownerId: currentUser.id,
         customerId,
         description: estimate.description,
-        serviceLocation: estimate.serviceLocation,
+        serviceLocation: formatServiceAddress(estimate) ?? undefined,
+        serviceAddressLine1: estimate.serviceAddressLine1,
+        serviceAddressLine2: estimate.serviceAddressLine2,
+        serviceCity: estimate.serviceCity,
+        serviceState: estimate.serviceState,
+        servicePostalCode: estimate.servicePostalCode,
         dateBegin: null,
         dateEnd: null,
         estimatedCost: "0",
@@ -1336,7 +1416,12 @@ export async function createPrintableEstimateAction(
             customerPhone: estimate.customer?.phoneNumbers[0]?.value ?? estimate.lead?.phone,
             jobTitle: estimate.description,
             jobDescription: estimate.scope,
-            serviceLocation: estimate.serviceLocation,
+            serviceLocation: formatServiceAddress(estimate) ?? undefined,
+            serviceAddressLine1: estimate.serviceAddressLine1,
+            serviceAddressLine2: estimate.serviceAddressLine2,
+            serviceCity: estimate.serviceCity,
+            serviceState: estimate.serviceState,
+            servicePostalCode: estimate.servicePostalCode,
             dateBegin: estimate.dateBegin,
             dateEnd: estimate.dateEnd,
             laborCost: estimate.laborCost ?? "0",

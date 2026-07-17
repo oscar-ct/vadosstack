@@ -19,6 +19,7 @@ import {
 } from "@/lib/google-mail";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 
 import { parseMaterials as parseJobMaterials } from "../jobs/_components/materials";
 import { parsePricingItems } from "../jobs/_components/pricing-items";
@@ -280,6 +281,7 @@ export async function emailEstimateAction(
       validThrough,
     });
     const submittedEmailContent = getSubmittedEmailContent(formData, emailContent);
+    const serviceLocation = formatServiceAddress(estimate);
     const pdfBuffer = await renderEstimatePdfBuffer({
       companyEmail: currentUser.companyEmail ?? currentUser.email,
       companyLogoSrc,
@@ -301,7 +303,7 @@ export async function emailEstimateAction(
       materialTaxAmount: estimate.materialTaxAmount,
       materialTaxRate: estimate.materialTaxRate,
       materialsSubtotal: estimate.materialsSubtotal,
-      serviceLocation: estimate.serviceLocation,
+      serviceLocation,
       taxableItemsLabel,
       validThrough,
     });

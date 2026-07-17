@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 
 import { type LeadStatus, leadStatuses } from "../constants";
 
@@ -13,6 +14,11 @@ export type LeadRow = {
   source?: string;
   serviceType?: string;
   serviceLocation?: string;
+  serviceAddressLine1?: string;
+  serviceAddressLine2?: string;
+  serviceCity?: string;
+  serviceState?: string;
+  servicePostalCode?: string;
   estimatedValue?: string;
   status: LeadStatus | string;
   priority: string;
@@ -43,7 +49,12 @@ function toLeadRow(
     phone: lead.phone ?? undefined,
     source: lead.source ?? undefined,
     serviceType: lead.serviceType ?? undefined,
-    serviceLocation: lead.serviceLocation ?? undefined,
+    serviceLocation: formatServiceAddress(lead) ?? undefined,
+    serviceAddressLine1: lead.serviceAddressLine1 ?? undefined,
+    serviceAddressLine2: lead.serviceAddressLine2 ?? undefined,
+    serviceCity: lead.serviceCity ?? undefined,
+    serviceState: lead.serviceState ?? undefined,
+    servicePostalCode: lead.servicePostalCode ?? undefined,
     estimatedValue: formatMoney(lead.estimatedValue),
     status: lead.status,
     priority: lead.priority,

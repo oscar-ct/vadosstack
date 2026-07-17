@@ -3,6 +3,7 @@ import { addDays, endOfYear, startOfYear } from "date-fns";
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 
 import {
   CalendarDashboard,
@@ -133,7 +134,12 @@ export default async function Page() {
         name: true,
         email: true,
         phone: true,
+        serviceAddressLine1: true,
+        serviceAddressLine2: true,
+        serviceCity: true,
         serviceLocation: true,
+        servicePostalCode: true,
+        serviceState: true,
         serviceType: true,
         status: true,
       },
@@ -157,7 +163,7 @@ export default async function Page() {
       endDate: job.dateEnd?.toISOString(),
       status: job.status,
       amount: formatMoney(job.finalCost) ?? formatMoney(job.estimatedCost),
-      location: job.serviceLocation ?? undefined,
+      location: formatServiceAddress(job) ?? undefined,
       href: `/dashboard/jobs/${job.id}`,
     })),
     ...tasks.map((task) => ({
@@ -182,7 +188,7 @@ export default async function Page() {
       date: addDays(invoice.issuedAt, currentUser.invoiceDueDays).toISOString(),
       status: invoice.paymentStatus,
       amount: invoice.balanceDue.toString(),
-      location: invoice.serviceLocation ?? undefined,
+      location: formatServiceAddress(invoice) ?? undefined,
       href: `/dashboard/invoices?invoice=${invoice.id}`,
     })),
   ];
@@ -212,7 +218,9 @@ export default async function Page() {
       id: lead.id,
       kind: "lead" as const,
       label: lead.name,
-      meta: [lead.serviceType, lead.serviceLocation, lead.email ?? lead.phone, lead.status].filter(Boolean).join(" - "),
+      meta: [lead.serviceType, formatServiceAddress(lead), lead.email ?? lead.phone, lead.status]
+        .filter(Boolean)
+        .join(" - "),
     })),
   ];
 

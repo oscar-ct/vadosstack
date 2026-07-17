@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 
 import type { JobCustomer } from "../../jobs/_components/jobs-table/schema";
 import { parseMaterials } from "../../jobs/_components/materials";
@@ -61,7 +62,12 @@ function toEstimateRecordRow(
     leadId: estimate.lead?.id,
     leadName: estimate.lead?.name,
     description: estimate.description,
-    serviceLocation: estimate.serviceLocation ?? undefined,
+    serviceLocation: formatServiceAddress(estimate) ?? undefined,
+    serviceAddressLine1: estimate.serviceAddressLine1 ?? undefined,
+    serviceAddressLine2: estimate.serviceAddressLine2 ?? undefined,
+    serviceCity: estimate.serviceCity ?? undefined,
+    serviceState: estimate.serviceState ?? undefined,
+    servicePostalCode: estimate.servicePostalCode ?? undefined,
     dateBegin: estimate.dateBegin?.toISOString(),
     dateEnd: estimate.dateEnd?.toISOString(),
     laborCost: formatMoney(estimate.laborCost),
@@ -115,6 +121,11 @@ export type EstimateLeadOption = {
   name: string;
   phone?: string;
   serviceLocation?: string;
+  serviceAddressLine1?: string;
+  serviceAddressLine2?: string;
+  serviceCity?: string;
+  serviceState?: string;
+  servicePostalCode?: string;
   serviceType?: string;
   status: string;
 };
@@ -135,6 +146,11 @@ export async function getEstimateLeads(ownerId: string): Promise<EstimateLeadOpt
       name: true,
       phone: true,
       serviceLocation: true,
+      serviceAddressLine1: true,
+      serviceAddressLine2: true,
+      serviceCity: true,
+      serviceState: true,
+      servicePostalCode: true,
       serviceType: true,
       status: true,
     },
@@ -146,7 +162,12 @@ export async function getEstimateLeads(ownerId: string): Promise<EstimateLeadOpt
     email: lead.email ?? undefined,
     name: lead.name,
     phone: lead.phone ?? undefined,
-    serviceLocation: lead.serviceLocation ?? undefined,
+    serviceLocation: formatServiceAddress(lead) ?? undefined,
+    serviceAddressLine1: lead.serviceAddressLine1 ?? undefined,
+    serviceAddressLine2: lead.serviceAddressLine2 ?? undefined,
+    serviceCity: lead.serviceCity ?? undefined,
+    serviceState: lead.serviceState ?? undefined,
+    servicePostalCode: lead.servicePostalCode ?? undefined,
     serviceType: lead.serviceType ?? undefined,
     status: lead.status,
   }));

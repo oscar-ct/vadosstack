@@ -6,6 +6,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { getCurrentUser } from "@/lib/auth";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 
 import { InvoicesTable, type InvoiceTableItem } from "./_components/invoices-table";
 
@@ -58,7 +59,7 @@ export default async function Page() {
     jobDescription: invoice.jobDescription ?? undefined,
     jobNumber: invoice.jobId.slice(-6).toUpperCase(),
     jobHref: `/dashboard/jobs/${invoice.jobId}`,
-    jobServiceLocation: invoice.serviceLocation ?? undefined,
+    jobServiceLocation: formatServiceAddress(invoice) ?? undefined,
     paymentStatus: invoice.paymentStatus,
     laborCost: invoice.laborCost.toString(),
     materialsSubtotal: invoice.materialsSubtotal.toString(),

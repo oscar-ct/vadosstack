@@ -19,6 +19,7 @@ import { formatDocumentNumber } from "@/lib/document-number";
 import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 
 import { parseMaterials as parseJobMaterials } from "../../jobs/_components/materials";
 import { parsePricingItems } from "../../jobs/_components/pricing-items";
@@ -192,6 +193,7 @@ export default async function Page({
   const taxableItemsLabel = estimateJobType === "Commercial" ? "labor + materials" : "materials";
   const paymentAmount = Number(estimate.estimatedTotal.toString()) / 2;
   const estimateNumber = estimate.estimateNumber ?? formatDocumentNumber("EST", estimateSequence);
+  const serviceLocation = formatServiceAddress(estimate);
   const companyEmail = currentUser.companyEmail ?? currentUser.email;
   const companyLogoSrc = await getCompanyLogoSrc(currentUser.id);
   const validThrough = addDays(estimate.issuedAt, currentUser.estimateValidDays);
@@ -202,7 +204,7 @@ export default async function Page({
     estimateNumber,
     estimateTotal: formatMoney(estimate.estimatedTotal),
     jobTitle: estimate.jobTitle,
-    serviceLocation: estimate.serviceLocation,
+    serviceLocation,
     validThrough: format(validThrough, "MMM d, yyyy"),
   };
   const estimateMessage = currentUser.estimateMessageEnabled
@@ -243,7 +245,7 @@ export default async function Page({
       estimatedTotal: formatMoney(estimate.estimatedTotal),
       estimateNumber,
       jobTitle: estimate.jobTitle,
-      serviceLocation: estimate.serviceLocation,
+      serviceLocation,
       validThrough: format(validThrough, "MMM d, yyyy"),
     },
   });
@@ -265,7 +267,7 @@ export default async function Page({
               estimatedTotal: formatMoney(estimate.estimatedTotal),
               estimateNumber,
               jobTitle: estimate.jobTitle,
-              serviceLocation: estimate.serviceLocation,
+              serviceLocation,
               validThrough: format(validThrough, "MMM d, yyyy"),
             }}
             editHref={editHref}
@@ -372,7 +374,7 @@ export default async function Page({
                   <MapPin className="size-3.5" />
                   Service Location
                 </div>
-                <div>{estimate.serviceLocation ?? "Not on file"}</div>
+                <div>{serviceLocation ?? "Not on file"}</div>
               </div>
             </div>
           </section>

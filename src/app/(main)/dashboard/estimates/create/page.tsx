@@ -1,6 +1,7 @@
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 
 import { EstimateRecordWorkspace } from "../_components/estimate-record-workspace";
 import { getEstimateCustomers, getEstimateLeads, getEstimateServices } from "../_lib/estimate-record-data";
@@ -50,7 +51,12 @@ export default async function Page({ searchParams }: PageProps) {
         customerEmail: lead.email ?? undefined,
         customerPhone: lead.phone ?? undefined,
         description: lead.serviceType ? `${lead.serviceType} estimate for ${lead.name}` : `Estimate for ${lead.name}`,
-        serviceLocation: lead.serviceLocation ?? undefined,
+        serviceLocation: formatServiceAddress(lead) ?? undefined,
+        serviceAddressLine1: lead.serviceAddressLine1 ?? undefined,
+        serviceAddressLine2: lead.serviceAddressLine2 ?? undefined,
+        serviceCity: lead.serviceCity ?? undefined,
+        serviceState: lead.serviceState ?? undefined,
+        servicePostalCode: lead.servicePostalCode ?? undefined,
         category: lead.serviceType ?? undefined,
         notes: lead.notes ?? undefined,
       }

@@ -13,6 +13,7 @@ import {
 import { parseDateInput } from "@/lib/date-only";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress, getServiceAddressPayload, type ServiceAddressFields } from "@/lib/service-address";
 
 import { calculateSignedMaterialTotal, parseMaterials } from "./_components/materials";
 import { parsePricingItems } from "./_components/pricing-items";
@@ -123,6 +124,11 @@ const jobSchema = z.object({
   newCustomerPhone: z.string().trim().optional(),
   description: z.string().trim().min(1, "Job title is required."),
   serviceLocation: z.string().trim().optional(),
+  serviceAddressLine1: z.string().trim().optional(),
+  serviceAddressLine2: z.string().trim().optional(),
+  serviceCity: z.string().trim().optional(),
+  serviceState: z.string().trim().optional(),
+  servicePostalCode: z.string().trim().optional(),
   dateBegin: optionalDate,
   dateEnd: optionalDate,
   estimatedCost: optionalMoney,
@@ -150,13 +156,15 @@ const updateJobSchema = createJobSchema.and(
 );
 
 function getJobPayload(formData: FormData) {
+  const serviceAddress = getServiceAddressPayload(formData);
+
   return {
     customerId: emptyToUndefined(formData.get("customerId")),
     newCustomerName: emptyToUndefined(formData.get("newCustomerName")),
     newCustomerEmail: emptyToUndefined(formData.get("newCustomerEmail")),
     newCustomerPhone: emptyToUndefined(formData.get("newCustomerPhone")),
     description: formData.get("description"),
-    serviceLocation: emptyToUndefined(formData.get("serviceLocation")),
+    ...serviceAddress,
     dateBegin: emptyToUndefined(formData.get("dateBegin")),
     dateEnd: emptyToUndefined(formData.get("dateEnd")),
     estimatedCost: emptyToUndefined(formData.get("estimatedCost")),
@@ -222,12 +230,14 @@ async function createCustomerForJob({
   name,
   ownerId,
   phone,
+  serviceAddress,
   serviceLocation,
 }: {
   email?: string;
   name?: string;
   ownerId: string;
   phone?: string;
+  serviceAddress?: ServiceAddressFields;
   serviceLocation?: string;
 }) {
   if (!name || !email || !phone) {
@@ -261,18 +271,27 @@ async function createCustomerForJob({
       throw new Error("A customer with that email already exists in your account. Select them from the customer list.");
     }
 
+    const displayLocation = formatServiceAddress({ ...serviceAddress, serviceLocation });
+    const address = displayLocation
+      ? {
+          label: "Service Location",
+          line1: serviceAddress?.serviceAddressLine1 || displayLocation,
+          line2: serviceAddress?.serviceAddressLine2 || null,
+          city: serviceAddress?.serviceCity || null,
+          state: serviceAddress?.serviceState || null,
+          postalCode: serviceAddress?.servicePostalCode || null,
+        }
+      : undefined;
+
     return await prisma.customer.create({
       data: {
         ownerId,
         name,
         email: parsedEmail.data,
         billingStatus: "No Balance",
-        addresses: serviceLocation
+        addresses: address
           ? {
-              create: {
-                label: "Service Location",
-                line1: serviceLocation,
-              },
+              create: address,
             }
           : undefined,
         phoneNumbers: {
@@ -566,7 +585,12 @@ async function syncExistingInvoiceSnapshotFromJob(jobId: string, ownerId: string
       customerPhone: job.customer?.phoneNumbers[0]?.value ?? null,
       jobTitle: job.description,
       jobDescription: job.scope,
-      serviceLocation: job.serviceLocation,
+      serviceLocation: formatServiceAddress(job),
+      serviceAddressLine1: job.serviceAddressLine1,
+      serviceAddressLine2: job.serviceAddressLine2,
+      serviceCity: job.serviceCity,
+      serviceState: job.serviceState,
+      servicePostalCode: job.servicePostalCode,
       dateBegin: job.dateBegin,
       dateEnd: job.dateEnd,
       laborCost: laborCost.toFixed(2),
@@ -611,6 +635,13 @@ export async function createJobAction(_previousState: JobMutationState, formData
     const laborCost = laborItems.reduce((total, item) => total + Number(item.price), 0).toFixed(2);
     const calculatedFinalCost = calculateFinalCost({ ...job, laborItems, materials });
     const normalizedStatus = normalizeJobStatus(job.status, job.dateBegin, job.dateEnd);
+    const serviceAddress = {
+      serviceAddressLine1: job.serviceAddressLine1,
+      serviceAddressLine2: job.serviceAddressLine2,
+      serviceCity: job.serviceCity,
+      servicePostalCode: job.servicePostalCode,
+      serviceState: job.serviceState,
+    };
 
     let customerId = job.customerId;
 
@@ -620,7 +651,8 @@ export async function createJobAction(_previousState: JobMutationState, formData
         name: newCustomerName,
         ownerId: currentUser.id,
         phone: newCustomerPhone,
-        serviceLocation: job.serviceLocation,
+        serviceAddress,
+        serviceLocation: formatServiceAddress(job) ?? undefined,
       });
       customerId = customer.id;
     }
@@ -660,7 +692,12 @@ export async function createJobAction(_previousState: JobMutationState, formData
         customerId: customerId || null,
         dateBegin: job.dateBegin ?? null,
         dateEnd: job.dateEnd ?? null,
-        serviceLocation: job.serviceLocation || null,
+        serviceLocation: formatServiceAddress(job) ?? null,
+        serviceAddressLine1: job.serviceAddressLine1 || null,
+        serviceAddressLine2: job.serviceAddressLine2 || null,
+        serviceCity: job.serviceCity || null,
+        serviceState: job.serviceState || null,
+        servicePostalCode: job.servicePostalCode || null,
         estimatedCost: "0",
         laborCost,
         laborItems: JSON.stringify(laborItems),
@@ -730,6 +767,13 @@ export async function updateJobAction(_previousState: JobMutationState, formData
     const laborCost = laborItems.reduce((total, item) => total + Number(item.price), 0).toFixed(2);
     const calculatedFinalCost = calculateFinalCost({ ...job, laborItems, materials });
     const normalizedStatus = normalizeJobStatus(job.status, job.dateBegin, job.dateEnd);
+    const serviceAddress = {
+      serviceAddressLine1: job.serviceAddressLine1,
+      serviceAddressLine2: job.serviceAddressLine2,
+      serviceCity: job.serviceCity,
+      servicePostalCode: job.servicePostalCode,
+      serviceState: job.serviceState,
+    };
     const existingJob = await prisma.job.findUnique({
       where: {
         id_ownerId: {
@@ -763,7 +807,8 @@ export async function updateJobAction(_previousState: JobMutationState, formData
         name: newCustomerName,
         ownerId: currentUser.id,
         phone: newCustomerPhone,
-        serviceLocation: job.serviceLocation,
+        serviceAddress,
+        serviceLocation: formatServiceAddress(job) ?? undefined,
       });
       customerId = customer.id;
     }
@@ -808,7 +853,12 @@ export async function updateJobAction(_previousState: JobMutationState, formData
         customerId: customerId || null,
         dateBegin: job.dateBegin ?? null,
         dateEnd: job.dateEnd ?? null,
-        serviceLocation: job.serviceLocation || null,
+        serviceLocation: formatServiceAddress(job) ?? null,
+        serviceAddressLine1: job.serviceAddressLine1 || null,
+        serviceAddressLine2: job.serviceAddressLine2 || null,
+        serviceCity: job.serviceCity || null,
+        serviceState: job.serviceState || null,
+        servicePostalCode: job.servicePostalCode || null,
         estimatedCost: "0",
         laborCost,
         laborItems: JSON.stringify(laborItems),

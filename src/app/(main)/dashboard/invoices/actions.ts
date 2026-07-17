@@ -26,6 +26,7 @@ import {
 } from "@/lib/google-mail";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { formatServiceAddress } from "@/lib/service-address";
 
 import { calculateSignedMaterialTotal } from "../jobs/_components/materials";
 import { parsePricingItems } from "../jobs/_components/pricing-items";
@@ -291,7 +292,12 @@ export async function createInvoiceAction(
           customerPhone: job.customer?.phoneNumbers[0]?.value,
           jobTitle: job.description,
           jobDescription: job.scope,
-          serviceLocation: job.serviceLocation,
+          serviceLocation: formatServiceAddress(job),
+          serviceAddressLine1: job.serviceAddressLine1,
+          serviceAddressLine2: job.serviceAddressLine2,
+          serviceCity: job.serviceCity,
+          serviceState: job.serviceState,
+          servicePostalCode: job.servicePostalCode,
           dateBegin: job.dateBegin,
           dateEnd: job.dateEnd,
           laborCost: toMoney(job.laborCost),
@@ -426,6 +432,7 @@ export async function emailInvoiceAction(
       invoiceNumber,
     });
     const submittedEmailContent = getSubmittedEmailContent(formData, emailContent);
+    const serviceLocation = formatServiceAddress(invoice);
     const pdfBuffer = await renderInvoicePdfBuffer({
       amountPaid: invoice.amountPaid,
       balanceDue: invoice.balanceDue,
@@ -453,7 +460,7 @@ export async function emailInvoiceAction(
       materials,
       materialsSubtotal: invoice.materialsSubtotal,
       payments: invoice.job.payments,
-      serviceLocation: invoice.serviceLocation,
+      serviceLocation,
       taxableItemsLabel,
     });
     const pdfFilename = `${invoiceNumber.replace(/[^a-z0-9-]+/gi, "-")}.pdf`;

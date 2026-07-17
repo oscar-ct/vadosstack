@@ -13,7 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { UsStateSelect } from "@/components/us-state-select";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
+import { formatServiceAddress, hasStructuredServiceAddress, toServiceAddressFormFields } from "@/lib/service-address";
 
 import type { LeadRow } from "../_lib/lead-data";
 import type { LeadMutationState } from "../actions";
@@ -38,6 +40,10 @@ export function LeadForm({
   const router = useRouter();
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [phoneDigits, setPhoneDigits] = React.useState(lead.phone ?? "");
+  const [serviceLocationFields, setServiceLocationFields] = React.useState(() => toServiceAddressFormFields(lead));
+  const legacyServiceLocation = hasStructuredServiceAddress(lead) ? undefined : lead.serviceLocation;
+  const serviceLocation =
+    formatServiceAddress({ ...serviceLocationFields, serviceLocation: legacyServiceLocation }) ?? "";
 
   React.useEffect(() => {
     if (!state.success) return;
@@ -170,14 +176,73 @@ export function LeadForm({
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="lead-location">Service location</Label>
-            <Input
-              id="lead-location"
-              name="serviceLocation"
-              defaultValue={lead.serviceLocation}
-              placeholder="123 Main St, Houston, TX"
-            />
+          <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3">
+            <div className="col-span-2 grid gap-1">
+              <Label>Service location</Label>
+              <p className="text-muted-foreground text-xs">
+                This address carries into estimates created from the lead.
+              </p>
+            </div>
+            <input type="hidden" name="serviceLocation" value={serviceLocation} />
+            <div className="col-span-2 grid gap-2 sm:col-span-2">
+              <Label htmlFor="lead-location-street">Street address</Label>
+              <Input
+                id="lead-location-street"
+                name="serviceAddressLine1"
+                value={serviceLocationFields.serviceAddressLine1}
+                onChange={(event) =>
+                  setServiceLocationFields((current) => ({ ...current, serviceAddressLine1: event.target.value }))
+                }
+                placeholder="123 Main St"
+              />
+            </div>
+            <div className="col-span-2 grid gap-2 sm:col-span-1">
+              <Label htmlFor="lead-location-apt">Apt, suite, unit</Label>
+              <Input
+                id="lead-location-apt"
+                name="serviceAddressLine2"
+                value={serviceLocationFields.serviceAddressLine2}
+                onChange={(event) =>
+                  setServiceLocationFields((current) => ({ ...current, serviceAddressLine2: event.target.value }))
+                }
+                placeholder="Unit B"
+              />
+            </div>
+            <div className="grid min-w-0 gap-2">
+              <Label htmlFor="lead-location-city">City</Label>
+              <Input
+                id="lead-location-city"
+                name="serviceCity"
+                value={serviceLocationFields.serviceCity}
+                onChange={(event) =>
+                  setServiceLocationFields((current) => ({ ...current, serviceCity: event.target.value }))
+                }
+                placeholder="Houston"
+              />
+            </div>
+            <div className="grid min-w-0 gap-2">
+              <Label htmlFor="lead-location-state">State</Label>
+              <UsStateSelect
+                id="lead-location-state"
+                name="serviceState"
+                value={serviceLocationFields.serviceState}
+                onChange={(event) =>
+                  setServiceLocationFields((current) => ({ ...current, serviceState: event.target.value }))
+                }
+              />
+            </div>
+            <div className="col-span-2 grid gap-2 sm:col-span-1">
+              <Label htmlFor="lead-location-zip">Zip code</Label>
+              <Input
+                id="lead-location-zip"
+                name="servicePostalCode"
+                value={serviceLocationFields.servicePostalCode}
+                onChange={(event) =>
+                  setServiceLocationFields((current) => ({ ...current, servicePostalCode: event.target.value }))
+                }
+                placeholder="77001"
+              />
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
