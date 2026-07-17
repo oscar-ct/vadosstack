@@ -421,12 +421,12 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
           </div>
         </div>
         <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
-          <Table className="min-w-[1120px]">
+          <Table>
             <TableHeader className="bg-muted/15">
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id}>
+                    <TableHead key={header.id} className="h-11 p-3 font-medium">
                       {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   ))}
@@ -447,7 +447,9 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                      <TableCell key={cell.id} className="p-3 align-middle">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
                     ))}
                   </TableRow>
                 ))

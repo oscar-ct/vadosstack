@@ -67,18 +67,22 @@ export function getEstimateRecordsColumns({
       accessorKey: "createdAt",
       header: "Date",
       sortUndefined: "last",
-      cell: ({ row }) => format(parseISO(row.original.createdAt), "MMM d, yyyy"),
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-sm">{format(parseISO(row.original.createdAt), "MMM d, yyyy")}</span>
+      ),
     },
     {
       accessorKey: "customerName",
       header: "Customer",
       cell: ({ row }) => (
-        <CustomerLink
-          customerId={row.original.customerId}
-          fallback="No customer or lead"
-          name={row.original.customerName ?? row.original.leadName}
-          className="block truncate"
-        />
+        <div className="min-w-0">
+          <CustomerLink
+            customerId={row.original.customerId}
+            fallback="No customer or lead"
+            name={row.original.customerName ?? row.original.leadName}
+            className="block truncate font-medium text-sm"
+          />
+        </div>
       ),
     },
     {
@@ -87,7 +91,9 @@ export function getEstimateRecordsColumns({
       cell: ({ row }) => (
         <div className="grid min-w-0 gap-1.5">
           <span className="truncate font-medium text-sm leading-none">{row.original.description}</span>
-          <span className="w-72 truncate text-muted-foreground text-xs leading-none">{row.original.scope ?? ""}</span>
+          <span className="max-w-72 truncate text-muted-foreground text-xs leading-none">
+            {row.original.scope ?? ""}
+          </span>
         </div>
       ),
       enableHiding: false,
@@ -95,7 +101,11 @@ export function getEstimateRecordsColumns({
     {
       accessorKey: "estimatedTotal",
       header: () => <div className="text-left">Value</div>,
-      cell: ({ row }) => <div className="text-left tabular-nums">{formatMoney(row.original.estimatedTotal)}</div>,
+      cell: ({ row }) => (
+        <div className="whitespace-nowrap text-left text-sm tabular-nums">
+          {formatMoney(row.original.estimatedTotal)}
+        </div>
+      ),
       sortingFn: (rowA, rowB) => Number(rowA.original.estimatedTotal ?? 0) - Number(rowB.original.estimatedTotal ?? 0),
     },
     {
@@ -103,14 +113,14 @@ export function getEstimateRecordsColumns({
       header: "Status",
       filterFn: "equalsString",
       cell: ({ row }) => (
-        <div className="grid min-w-[9rem] gap-1 pr-4">
+        <div className="grid min-w-[6.5rem] gap-1">
           <Badge
             variant="outline"
             className={`${estimateStatusClassName(row.original.status)} w-fit whitespace-nowrap`}
           >
             {row.original.status}
           </Badge>
-          <span className="whitespace-nowrap px-1 text-muted-foreground text-xs">
+          <span className="max-w-28 truncate px-1 text-muted-foreground text-xs">
             {nextActionLabel(row.original.status)}
           </span>
         </div>
@@ -120,7 +130,7 @@ export function getEstimateRecordsColumns({
       id: "documents",
       header: "",
       cell: ({ row }) => (
-        <div className="flex min-w-[8.5rem] items-center">
+        <div className="flex items-center">
           {row.original.printableEstimateId ? (
             <Button
               asChild
@@ -143,11 +153,12 @@ export function getEstimateRecordsColumns({
       id: "actions",
       header: () => <div className="sr-only">Actions</div>,
       cell: ({ row }) => (
-        <div className="min-w-10 text-right">
+        <div className="flex justify-end">
           <Button
             type="button"
             variant="ghost"
             size="icon"
+            className="size-8"
             onClick={(event) => {
               event.stopPropagation();
               onEditEstimate(row.original);
