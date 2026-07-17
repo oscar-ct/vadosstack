@@ -415,6 +415,32 @@ function ScheduledDatePicker({
 }
 
 function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (items: LineItem[]) => void }) {
+  const descriptionRefs = React.useRef(new Map<string, HTMLTextAreaElement>());
+  const pendingFocusIdRef = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    const pendingFocusId = pendingFocusIdRef.current;
+    if (!pendingFocusId || typeof window === "undefined") return;
+
+    if (!window.matchMedia("(min-width: 768px)").matches) {
+      pendingFocusIdRef.current = undefined;
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      descriptionRefs.current.get(pendingFocusId)?.focus();
+      pendingFocusIdRef.current = undefined;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  });
+
+  function addLaborItem() {
+    const item = createLineItem();
+    pendingFocusIdRef.current = item.id;
+    onChange([item, ...items]);
+  }
+
   return (
     <div className="grid min-w-0 gap-3">
       <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
@@ -428,7 +454,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
           <p className="text-muted-foreground text-xs">Add optional labor line items for this estimate.</p>
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onChange([createLineItem(), ...items])}>
+          <Button type="button" variant="outline" onClick={addLaborItem}>
             <Plus />
             Add labor
           </Button>
@@ -461,6 +487,13 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
               <div className="grid min-w-0 gap-2 xl:col-span-1">
                 <Label>Description</Label>
                 <Textarea
+                  ref={(element) => {
+                    if (element) {
+                      descriptionRefs.current.set(item.id, element);
+                    } else {
+                      descriptionRefs.current.delete(item.id);
+                    }
+                  }}
                   aria-label={`Labor ${index + 1} description`}
                   value={item.description}
                   onChange={(event) =>
@@ -620,6 +653,32 @@ function MaterialItemsEditor({
   items: MaterialLineItem[];
   onChange: (items: MaterialLineItem[]) => void;
 }) {
+  const descriptionRefs = React.useRef(new Map<string, HTMLTextAreaElement>());
+  const pendingFocusIdRef = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    const pendingFocusId = pendingFocusIdRef.current;
+    if (!pendingFocusId || typeof window === "undefined") return;
+
+    if (!window.matchMedia("(min-width: 768px)").matches) {
+      pendingFocusIdRef.current = undefined;
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      descriptionRefs.current.get(pendingFocusId)?.focus();
+      pendingFocusIdRef.current = undefined;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  });
+
+  function addMaterialItem() {
+    const item = createMaterialLineItem();
+    pendingFocusIdRef.current = item.id;
+    onChange([item, ...items]);
+  }
+
   return (
     <div className="grid min-w-0 gap-3">
       <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
@@ -633,7 +692,7 @@ function MaterialItemsEditor({
           <p className="text-muted-foreground text-xs">Add optional material quantities and unit prices.</p>
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onChange([createMaterialLineItem(), ...items])}>
+          <Button type="button" variant="outline" onClick={addMaterialItem}>
             <Plus />
             Add material
           </Button>
@@ -669,6 +728,13 @@ function MaterialItemsEditor({
                 <div className="grid min-w-0 gap-2 xl:col-span-1">
                   <Label>Description</Label>
                   <Textarea
+                    ref={(element) => {
+                      if (element) {
+                        descriptionRefs.current.set(item.id, element);
+                      } else {
+                        descriptionRefs.current.delete(item.id);
+                      }
+                    }}
                     aria-label={`Material ${index + 1} description`}
                     value={item.description}
                     onChange={(event) =>
@@ -1033,19 +1099,13 @@ export function EstimateRecordFormFields({
   const [newCustomerPhone, setNewCustomerPhone] = React.useState(
     leadPrefill?.customerId ? "" : (leadPrefill?.customerPhone ?? ""),
   );
-  const [newLeadName, setNewLeadName] = React.useState(
-    leadPrefill?.customerId ? "" : (leadPrefill?.customerName ?? ""),
-  );
-  const [newLeadEmail, setNewLeadEmail] = React.useState(
-    leadPrefill?.customerId ? "" : (leadPrefill?.customerEmail ?? ""),
-  );
+  const [newLeadName, setNewLeadName] = React.useState("");
+  const [newLeadEmail, setNewLeadEmail] = React.useState("");
   const [newLeadEmailTouched, setNewLeadEmailTouched] = React.useState(false);
-  const [newLeadPhone, setNewLeadPhone] = React.useState(
-    leadPrefill?.customerId ? "" : (leadPrefill?.customerPhone ?? ""),
-  );
+  const [newLeadPhone, setNewLeadPhone] = React.useState("");
   const [newLeadSource, setNewLeadSource] = React.useState("");
   const [selectedCustomerId, setSelectedCustomerId] = React.useState(
-    estimate?.customerId ?? leadPrefill?.customerId ?? (leadPrefill ? newLeadValue : selectCustomerValue),
+    estimate?.customerId ?? leadPrefill?.customerId ?? selectCustomerValue,
   );
   const [selectedLeadId, setSelectedLeadId] = React.useState(estimate?.leadId ?? leadPrefill?.leadId ?? "");
   const [laborItems, setLaborItems] = React.useState<LineItem[]>(
@@ -1064,8 +1124,8 @@ export function EstimateRecordFormFields({
   );
   const [measurementsOpen, setMeasurementsOpen] = React.useState(() => Boolean(estimate?.measurementRooms.length));
   const [taxRate, setTaxRate] = React.useState(Number(estimate?.materialTaxRate ?? "8.25"));
-  const isCreatingNewCustomer = selectedCustomerId === newCustomerValue;
-  const isCreatingNewLead = selectedCustomerId === newLeadValue;
+  const isCreatingNewCustomer = selectedCustomerId === newCustomerValue && !selectedLeadId;
+  const isCreatingNewLead = selectedCustomerId === newLeadValue && !selectedLeadId;
   const selectedCustomer = isCreatingNewCustomer
     ? undefined
     : customers.find((customer) => customer.id === selectedCustomerId);
@@ -1102,8 +1162,7 @@ export function EstimateRecordFormFields({
   useDiscardLocalDraftListener(draftKey, clearLocalDraftState);
 
   const resetToEstimate = React.useCallback(() => {
-    const nextSelectedCustomerId =
-      estimate?.customerId ?? leadPrefill?.customerId ?? (leadPrefill ? newLeadValue : selectCustomerValue);
+    const nextSelectedCustomerId = estimate?.customerId ?? leadPrefill?.customerId ?? selectCustomerValue;
     const nextCustomer = customers.find((customer) => customer.id === nextSelectedCustomerId);
     const nextAddressOptions = nextCustomer?.addresses ?? [];
     const nextInitialLocation = estimate?.serviceLocation ?? leadPrefill?.serviceLocation ?? "";
@@ -1134,10 +1193,10 @@ export function EstimateRecordFormFields({
     setNewCustomerName(leadPrefill?.customerId ? "" : (leadPrefill?.customerName ?? ""));
     setNewCustomerEmail(leadPrefill?.customerId ? "" : (leadPrefill?.customerEmail ?? ""));
     setNewCustomerPhone(leadPrefill?.customerId ? "" : (leadPrefill?.customerPhone ?? ""));
-    setNewLeadName(leadPrefill?.customerId ? "" : (leadPrefill?.customerName ?? ""));
-    setNewLeadEmail(leadPrefill?.customerId ? "" : (leadPrefill?.customerEmail ?? ""));
+    setNewLeadName("");
+    setNewLeadEmail("");
     setNewLeadEmailTouched(false);
-    setNewLeadPhone(leadPrefill?.customerId ? "" : (leadPrefill?.customerPhone ?? ""));
+    setNewLeadPhone("");
     setNewLeadSource("");
     setJobType(estimate?.jobType ?? "Residential");
     setMeasurementRooms(
@@ -1179,7 +1238,11 @@ export function EstimateRecordFormFields({
       return;
     }
 
-    setSelectedCustomerId(parsed.selectedCustomerId);
+    setSelectedCustomerId(
+      parsed.selectedLeadId && parsed.selectedCustomerId === newLeadValue
+        ? selectCustomerValue
+        : parsed.selectedCustomerId,
+    );
     setSelectedLeadId(parsed.selectedLeadId);
     setLaborItems(parsed.laborItems);
     setMaterials(parsed.materials);

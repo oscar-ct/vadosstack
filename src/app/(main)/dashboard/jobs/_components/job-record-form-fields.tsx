@@ -547,6 +547,32 @@ function ScheduledDatePicker({
 // }
 
 function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (items: LineItem[]) => void }) {
+  const descriptionRefs = React.useRef(new Map<string, HTMLTextAreaElement>());
+  const pendingFocusIdRef = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    const pendingFocusId = pendingFocusIdRef.current;
+    if (!pendingFocusId || typeof window === "undefined") return;
+
+    if (!window.matchMedia("(min-width: 768px)").matches) {
+      pendingFocusIdRef.current = undefined;
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      descriptionRefs.current.get(pendingFocusId)?.focus();
+      pendingFocusIdRef.current = undefined;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  });
+
+  function addLaborItem() {
+    const item = createLineItem();
+    pendingFocusIdRef.current = item.id;
+    onChange([item, ...items]);
+  }
+
   return (
     <div className="grid min-w-0 gap-3">
       <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
@@ -561,7 +587,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
         </div>
 
         <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onChange([createLineItem(), ...items])}>
+          <Button type="button" variant="outline" onClick={addLaborItem}>
             <Plus />
             Add labor
           </Button>
@@ -595,6 +621,13 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
               <div className="grid min-w-0 gap-2 xl:col-span-1">
                 <Label>Description</Label>
                 <Textarea
+                  ref={(element) => {
+                    if (element) {
+                      descriptionRefs.current.set(item.id, element);
+                    } else {
+                      descriptionRefs.current.delete(item.id);
+                    }
+                  }}
                   aria-label={`Labor ${index + 1} description`}
                   value={item.description}
                   onChange={(event) =>
@@ -1337,6 +1370,32 @@ function MaterialItemsEditor({
   items: MaterialLineItem[];
   onChange: (items: MaterialLineItem[]) => void;
 }) {
+  const descriptionRefs = React.useRef(new Map<string, HTMLTextAreaElement>());
+  const pendingFocusIdRef = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    const pendingFocusId = pendingFocusIdRef.current;
+    if (!pendingFocusId || typeof window === "undefined") return;
+
+    if (!window.matchMedia("(min-width: 768px)").matches) {
+      pendingFocusIdRef.current = undefined;
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      descriptionRefs.current.get(pendingFocusId)?.focus();
+      pendingFocusIdRef.current = undefined;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  });
+
+  function addMaterialItem() {
+    const item = createMaterialLineItem();
+    pendingFocusIdRef.current = item.id;
+    onChange([item, ...items]);
+  }
+
   return (
     <div className="grid min-w-0 gap-3">
       <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-2">
@@ -1351,7 +1410,7 @@ function MaterialItemsEditor({
         </div>
 
         <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onChange([createMaterialLineItem(), ...items])}>
+          <Button type="button" variant="outline" onClick={addMaterialItem}>
             <Plus />
             Add material
           </Button>
@@ -1389,6 +1448,13 @@ function MaterialItemsEditor({
                 <div className="grid min-w-0 gap-2 xl:col-span-5 xl:col-start-2 xl:row-start-1">
                   <Label>Description</Label>
                   <Textarea
+                    ref={(element) => {
+                      if (element) {
+                        descriptionRefs.current.set(item.id, element);
+                      } else {
+                        descriptionRefs.current.delete(item.id);
+                      }
+                    }}
                     aria-label={`Material ${index + 1} description`}
                     value={item.description}
                     onChange={(event) =>
