@@ -195,7 +195,11 @@ export async function emailEstimateAction(
         },
       },
       include: {
-        estimateRecord: true,
+        estimateRecord: {
+          include: {
+            lead: true,
+          },
+        },
       },
     }),
     prisma.googleMailAccount.findUnique({
@@ -365,6 +369,26 @@ export async function emailEstimateAction(
           },
           data: {
             status: "Waiting on Customer",
+          },
+        }),
+      );
+    }
+
+    if (
+      estimate.estimateRecord?.lead &&
+      estimate.estimateRecord.lead.status !== "Won" &&
+      estimate.estimateRecord.lead.status !== "Lost"
+    ) {
+      statusUpdates.push(
+        prisma.lead.update({
+          where: {
+            id_ownerId: {
+              id: estimate.estimateRecord.lead.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            status: "Estimate Sent",
           },
         }),
       );

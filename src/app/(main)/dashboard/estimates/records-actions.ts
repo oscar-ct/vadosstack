@@ -738,7 +738,7 @@ export async function createEstimateRecordAction(
             customerId: customerId ?? selectedLead.customerId ?? null,
             estimateRecordId: createdEstimate.id,
             status:
-              estimate.status === "Waiting on Customer" || estimate.status === "Ready to Send"
+              estimate.status === "Waiting on Customer"
                 ? "Estimate Sent"
                 : selectedLead.status === "New" || selectedLead.status === "Contacted"
                   ? "Estimate Needed"
@@ -974,7 +974,7 @@ export async function updateEstimateRecordAction(
           customerId: customerId ?? lead.customerId ?? null,
           estimateRecordId: id,
           status:
-            estimate.status === "Waiting on Customer" || estimate.status === "Ready to Send"
+            estimate.status === "Waiting on Customer"
               ? "Estimate Sent"
               : lead.status === "New" || lead.status === "Contacted"
                 ? "Estimate Needed"
@@ -1111,7 +1111,12 @@ export async function updateEstimateStatusAction(
               },
               data: {
                 customerId: customerId ?? estimate.lead.customerId,
-                status: parsed.data.status === "Won" ? "Won" : estimate.lead.status,
+                status:
+                  parsed.data.status === "Won"
+                    ? "Won"
+                    : parsed.data.status === "Waiting on Customer"
+                      ? "Estimate Sent"
+                      : estimate.lead.status,
                 convertedAt: parsed.data.status === "Won" ? new Date() : estimate.lead.convertedAt,
               },
             }),
