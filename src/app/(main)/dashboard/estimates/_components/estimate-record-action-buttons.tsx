@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { BriefcaseBusiness, NotebookText, Trash2 } from "lucide-react";
@@ -151,10 +152,10 @@ export function PrintableEstimateButton({
         )}
         variant="outline"
       >
-        <a href={`/dashboard/estimates/${estimate.printableEstimateId}`}>
+        <Link prefetch={false} href={`/dashboard/estimates/${estimate.printableEstimateId}`}>
           <NotebookText />
           View Estimate
-        </a>
+        </Link>
       </Button>
     );
   }

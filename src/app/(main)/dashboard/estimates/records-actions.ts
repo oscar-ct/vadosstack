@@ -87,7 +87,7 @@ const materialsSchema = z.array(
       .trim()
       .optional()
       .refine(
-        (value) => !value || (!Number.isNaN(Number(value)) && Number(value) > 0),
+        (value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0),
         "Enter a valid material quantity.",
       ),
     unitPrice: z

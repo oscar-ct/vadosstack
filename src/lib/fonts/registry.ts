@@ -17,8 +17,7 @@ import {
   Roboto,
   Roboto_Slab,
 } from "next/font/google";
-
-import { GeistPixelSquare } from "geist/font/pixel";
+import localFont from "next/font/local";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -53,6 +52,26 @@ const outfit = Outfit({
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-geist-mono",
+  preload: false,
+});
+
+const geistPixelSquare = localFont({
+  src: "../../../node_modules/geist/dist/fonts/geist-pixel/GeistPixel-Square.woff2",
+  variable: "--font-geist-pixel-square",
+  weight: "500",
+  fallback: [
+    "Geist Mono",
+    "ui-monospace",
+    "SFMono-Regular",
+    "Roboto Mono",
+    "Menlo",
+    "Monaco",
+    "Liberation Mono",
+    "DejaVu Sans Mono",
+    "Courier New",
+    "monospace",
+  ],
+  adjustFontFallback: false,
   preload: false,
 });
 
@@ -170,7 +189,7 @@ export const fontRegistry = {
   },
   geistPixelSquare: {
     label: "Geist Pixel Square",
-    font: GeistPixelSquare,
+    font: geistPixelSquare,
   },
   jetBrainsMono: {
     label: "JetBrains Mono",
