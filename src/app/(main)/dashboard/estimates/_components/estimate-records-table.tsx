@@ -82,13 +82,13 @@ const pipelineStages = [
     status: "Ready to Send",
   },
   {
-    action: "Follow up",
+    action: "Convert or mark lost",
     description: "Estimate has been sent and you are waiting for a decision.",
     label: "Waiting",
     status: "Waiting on Customer",
   },
   {
-    action: "Convert to job",
+    action: "View job",
     description: "Customer approved the estimate.",
     label: "Won",
     status: "Won",
@@ -142,8 +142,8 @@ function estimateStatusClassName(status: string) {
 function nextActionLabel(status: string) {
   if (status === "Draft") return "Continue estimate";
   if (status === "Ready to Send") return "Send estimate";
-  if (status === "Waiting on Customer") return "Follow up";
-  if (status === "Won") return "Convert to job";
+  if (status === "Waiting on Customer") return "Convert or mark lost";
+  if (status === "Won") return "View job";
   if (status === "Lost") return "Reopen if needed";
   return "Review";
 }

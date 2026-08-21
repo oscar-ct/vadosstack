@@ -408,16 +408,25 @@ export default async function Page({
             </UpdateEstimateStatusButton>
           ) : null}
           {estimate.status === "Waiting on Customer" ? (
+            <ConvertEstimateButton
+              action={convertEstimateToJobAction}
+              className="w-auto"
+              estimate={estimate}
+              size="sm"
+            />
+          ) : null}
+          {estimate.status === "Waiting on Customer" ? (
             <UpdateEstimateStatusButton
               action={updateEstimateStatusAction}
               className="w-auto"
               estimate={estimate}
-              status="Won"
+              status="Lost"
+              variant="outline"
             >
-              Mark won
+              Mark lost
             </UpdateEstimateStatusButton>
           ) : null}
-          {estimate.status === "Won" ? (
+          {estimate.status === "Won" && estimate.convertedJobId ? (
             <ConvertEstimateButton
               action={convertEstimateToJobAction}
               className="w-auto"
@@ -430,7 +439,7 @@ export default async function Page({
               action={updateEstimateStatusAction}
               className="w-auto"
               estimate={estimate}
-              status="Draft"
+              status="Waiting on Customer"
             >
               Reopen estimate
             </UpdateEstimateStatusButton>

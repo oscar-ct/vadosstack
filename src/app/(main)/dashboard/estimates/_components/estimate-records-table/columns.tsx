@@ -27,8 +27,8 @@ function estimateStatusClassName(status: string) {
 function nextActionLabel(status: string) {
   if (status === "Draft") return "Continue estimate";
   if (status === "Ready to Send") return "Send estimate";
-  if (status === "Waiting on Customer") return "Follow up";
-  if (status === "Won") return "Convert to job";
+  if (status === "Waiting on Customer") return "Convert or mark lost";
+  if (status === "Won") return "View job";
   if (status === "Lost") return "Reopen if needed";
   return "Review";
 }

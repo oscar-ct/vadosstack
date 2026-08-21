@@ -25,6 +25,7 @@ export type EstimateRecordMutationState = {
 };
 
 const estimateRecordStatuses = ["Draft", "Ready to Send", "Waiting on Customer", "Won", "Lost"] as const;
+const userManagedEstimateStatuses = ["Draft", "Ready to Send", "Waiting on Customer", "Lost"] as const;
 const estimateJobTypes = ["Residential", "Commercial"] as const;
 
 const emptyToUndefined = (value: FormDataEntryValue | null) => {
@@ -170,7 +171,7 @@ const updateEstimateRecordSchema = createEstimateRecordSchema.and(
 
 const updateEstimateStatusSchema = z.object({
   id: z.string().trim().min(1, "Estimate is required."),
-  status: z.enum(estimateRecordStatuses),
+  status: z.enum(userManagedEstimateStatuses),
 });
 
 function getEstimatePayload(formData: FormData) {
@@ -481,11 +482,13 @@ async function createLeadForEstimate({
 }
 
 async function findOrCreateCustomerForLead({
+  db = prisma,
   lead,
   ownerId,
   serviceAddress,
   serviceLocation,
 }: {
+  db?: EstimateWriteClient;
   lead: {
     email: string | null;
     name: string;
@@ -496,7 +499,7 @@ async function findOrCreateCustomerForLead({
   serviceLocation?: string | null;
 }) {
   const existingCustomer = lead.email
-    ? await prisma.customer.findFirst({
+    ? await db.customer.findFirst({
         where: {
           email: lead.email,
           ownerId,
@@ -516,7 +519,7 @@ async function findOrCreateCustomerForLead({
     serviceLocation,
   });
 
-  return prisma.customer.create({
+  return db.customer.create({
     data: {
       ownerId,
       name: lead.name,
@@ -542,10 +545,14 @@ async function findOrCreateCustomerForLead({
   });
 }
 
-async function syncCustomerBillingStatus(customerId: string | null | undefined, ownerId: string) {
+async function syncCustomerBillingStatus(
+  customerId: string | null | undefined,
+  ownerId: string,
+  db: EstimateWriteClient = prisma,
+) {
   if (!customerId) return;
 
-  const jobs = await prisma.job.findMany({
+  const jobs = await db.job.findMany({
     where: {
       ownerId,
       customerId,
@@ -558,7 +565,7 @@ async function syncCustomerBillingStatus(customerId: string | null | undefined, 
     },
   });
 
-  await prisma.customer.update({
+  await db.customer.update({
     where: {
       id_ownerId: {
         id: customerId,
@@ -661,6 +668,10 @@ export async function createEstimateRecordAction(
 
   if (!parsed.success) {
     return { success: false, message: parsed.error.issues[0]?.message ?? "Check the estimate details and try again." };
+  }
+
+  if (parsed.data.status === "Won") {
+    return { success: false, message: "An estimate becomes Won when it is converted to a job." };
   }
 
   let createdEstimateId = "";
@@ -883,6 +894,7 @@ export async function updateEstimateRecordAction(
         },
       },
       select: {
+        convertedJobId: true,
         customerId: true,
         printableEstimate: {
           select: {
@@ -896,6 +908,20 @@ export async function updateEstimateRecordAction(
       return {
         success: false,
         message: "Estimate not found.",
+      };
+    }
+
+    if (existingEstimate.convertedJobId && estimate.status !== "Won") {
+      return {
+        success: false,
+        message: "A converted estimate must remain Won while its job exists.",
+      };
+    }
+
+    if (!existingEstimate.convertedJobId && estimate.status === "Won") {
+      return {
+        success: false,
+        message: "Convert this estimate to a job to mark it Won.",
       };
     }
 
@@ -1151,18 +1177,11 @@ export async function updateEstimateStatusAction(
       return { success: false, message: "Estimate not found." };
     }
 
-    let customerId = estimate.customerId;
-
-    if (parsed.data.status === "Won" && !customerId && estimate.lead) {
-      const customer = await findOrCreateCustomerForLead({
-        lead: estimate.lead,
-        ownerId: currentUser.id,
-        serviceAddress: estimate,
-        serviceLocation: formatServiceAddress(estimate) ?? undefined,
-      });
-
-      customerId = customer.id;
+    if (estimate.convertedJobId) {
+      return { success: false, message: "A converted estimate must remain Won while its job exists." };
     }
+
+    const customerId = estimate.customerId;
 
     await prisma.$transaction([
       prisma.estimateRecord.update({
@@ -1188,13 +1207,7 @@ export async function updateEstimateStatusAction(
               },
               data: {
                 customerId: customerId ?? estimate.lead.customerId,
-                status:
-                  parsed.data.status === "Won"
-                    ? "Won"
-                    : parsed.data.status === "Waiting on Customer"
-                      ? "Estimate Sent"
-                      : estimate.lead.status,
-                convertedAt: parsed.data.status === "Won" ? new Date() : estimate.lead.convertedAt,
+                status: parsed.data.status === "Waiting on Customer" ? "Estimate Sent" : estimate.lead.status,
               },
             }),
           ]
@@ -1243,113 +1256,154 @@ export async function convertEstimateToJobAction(
     return { success: false, message: "Estimate is required." };
   }
 
+  let convertedJobId = "";
+
   try {
-    const estimate = await prisma.estimateRecord.findUnique({
-      where: {
-        id_ownerId: {
-          id,
-          ownerId: currentUser.id,
-        },
-      },
-      include: {
-        lead: true,
-      },
-    });
-
-    if (!estimate) {
-      return { success: false, message: "Estimate not found." };
-    }
-
-    if (estimate.convertedJobId) {
-      return { success: false, message: "This estimate has already been converted to a job." };
-    }
-
-    let customerId = estimate.customerId;
-
-    if (!customerId && estimate.lead) {
-      const customer = await findOrCreateCustomerForLead({
-        lead: estimate.lead,
-        ownerId: currentUser.id,
-        serviceAddress: estimate,
-        serviceLocation: formatServiceAddress(estimate) ?? undefined,
-      });
-
-      customerId = customer.id;
-    }
-
-    if (!customerId) {
-      return { success: false, message: "Add a customer or lead before converting this estimate to a job." };
-    }
-
-    const job = await prisma.job.create({
-      data: {
-        ownerId: currentUser.id,
-        customerId,
-        description: estimate.description,
-        serviceLocation: formatServiceAddress(estimate) ?? undefined,
-        serviceAddressLine1: estimate.serviceAddressLine1,
-        serviceAddressLine2: estimate.serviceAddressLine2,
-        serviceCity: estimate.serviceCity,
-        serviceState: estimate.serviceState,
-        servicePostalCode: estimate.servicePostalCode,
-        dateBegin: estimate.dateBegin,
-        dateEnd: estimate.dateEnd,
-        estimatedCost: "0",
-        laborCost: estimate.laborCost ?? "0",
-        laborItems: estimate.laborItems,
-        jobType: estimate.jobType,
-        measurementRooms: estimate.measurementRooms,
-        materialTaxRate: estimate.materialTaxRate ?? "0",
-        materials: estimate.materials,
-        finalCost: estimate.estimatedTotal ?? "0",
-        amountPaid: "0",
-        paymentStatus: "Pending Payment",
-        scope: estimate.scope,
-        category: estimate.category,
-        status: estimate.dateBegin || estimate.dateEnd ? "Scheduled" : "Unscheduled",
-        notes: estimate.notes,
-      },
-    });
-
-    await prisma.estimateRecord.update({
-      where: {
-        id_ownerId: {
-          id,
-          ownerId: currentUser.id,
-        },
-      },
-      data: {
-        status: "Won",
-        convertedJobId: job.id,
-        customerId,
-      },
-    });
-
-    if (estimate.lead) {
-      await prisma.lead.update({
+    const conversion = await prisma.$transaction(async (tx) => {
+      const estimate = await tx.estimateRecord.findUnique({
         where: {
           id_ownerId: {
-            id: estimate.lead.id,
+            id,
             ownerId: currentUser.id,
           },
         },
-        data: {
-          customerId,
-          status: "Won",
-          convertedAt: new Date(),
+        include: {
+          lead: true,
+          printableEstimate: {
+            select: {
+              id: true,
+            },
+          },
         },
       });
-    }
 
-    await syncCustomerBillingStatus(job.customerId, currentUser.id);
+      if (!estimate) {
+        throw new Error("Estimate not found.");
+      }
+
+      if (estimate.convertedJobId) {
+        throw new Error("This estimate has already been converted to a job.");
+      }
+
+      if (estimate.status !== "Waiting on Customer") {
+        throw new Error("Only estimates waiting on a customer decision can be converted to a job.");
+      }
+
+      let customerId = estimate.customerId;
+
+      if (!customerId && estimate.lead) {
+        const customer = await findOrCreateCustomerForLead({
+          db: tx,
+          lead: estimate.lead,
+          ownerId: currentUser.id,
+          serviceAddress: estimate,
+          serviceLocation: formatServiceAddress(estimate) ?? undefined,
+        });
+
+        customerId = customer.id;
+      }
+
+      if (!customerId) {
+        throw new Error("Add a customer or lead before converting this estimate to a job.");
+      }
+
+      const job = await tx.job.create({
+        data: {
+          ownerId: currentUser.id,
+          customerId,
+          description: estimate.description,
+          serviceLocation: formatServiceAddress(estimate) ?? undefined,
+          serviceAddressLine1: estimate.serviceAddressLine1,
+          serviceAddressLine2: estimate.serviceAddressLine2,
+          serviceCity: estimate.serviceCity,
+          serviceState: estimate.serviceState,
+          servicePostalCode: estimate.servicePostalCode,
+          dateBegin: estimate.dateBegin,
+          dateEnd: estimate.dateEnd,
+          estimatedCost: "0",
+          laborCost: estimate.laborCost ?? "0",
+          laborItems: estimate.laborItems,
+          jobType: estimate.jobType,
+          measurementRooms: estimate.measurementRooms,
+          materialTaxRate: estimate.materialTaxRate ?? "0",
+          materials: estimate.materials,
+          finalCost: estimate.estimatedTotal ?? "0",
+          amountPaid: "0",
+          paymentStatus: "Pending Payment",
+          scope: estimate.scope,
+          category: estimate.category,
+          status: estimate.dateBegin || estimate.dateEnd ? "Scheduled" : "Unscheduled",
+          notes: estimate.notes,
+        },
+      });
+
+      const updatedEstimate = await tx.estimateRecord.updateMany({
+        where: {
+          convertedJobId: null,
+          id,
+          ownerId: currentUser.id,
+          status: "Waiting on Customer",
+        },
+        data: {
+          status: "Won",
+          convertedJobId: job.id,
+          customerId,
+        },
+      });
+
+      if (updatedEstimate.count !== 1) {
+        throw new Error("This estimate was already updated. Refresh the page and try again.");
+      }
+
+      if (estimate.lead) {
+        await tx.lead.update({
+          where: {
+            id_ownerId: {
+              id: estimate.lead.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            customerId,
+            status: "Won",
+            convertedAt: new Date(),
+          },
+        });
+      }
+
+      if (estimate.printableEstimate) {
+        await tx.estimate.update({
+          where: {
+            id_ownerId: {
+              id: estimate.printableEstimate.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            customerId,
+            jobStatus: "Won",
+          },
+        });
+      }
+
+      await syncCustomerBillingStatus(customerId, currentUser.id, tx);
+      return { jobId: job.id };
+    });
+
+    convertedJobId = conversion.jobId;
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Estimate could not be converted." };
   }
 
   revalidatePath("/dashboard/estimates");
   revalidatePath("/dashboard/jobs");
+  revalidatePath(`/dashboard/jobs/${convertedJobId}`);
   revalidatePath("/dashboard/customers");
-  return { success: true, message: "Estimate converted to job." };
+  return {
+    success: true,
+    message: "Estimate converted to job.",
+    redirectTo: `/dashboard/jobs/${convertedJobId}`,
+  };
 }
 
 export async function createPrintableEstimateAction(

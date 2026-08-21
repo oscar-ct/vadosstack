@@ -13,8 +13,10 @@ function formatMoney(value: { toString: () => string } | null) {
   return value ? value.toString() : undefined;
 }
 
-function normalizeEstimateStatus(status: string) {
-  return status === "Estimate Provided" ? "Waiting on Customer" : status;
+function normalizeEstimateStatus(status: string, convertedJobId?: string | null) {
+  if (convertedJobId) return "Won";
+  if (status === "Won" || status === "Estimate Provided") return "Waiting on Customer";
+  return status;
 }
 
 function normalizeJobType(jobType: string | null | undefined): "Residential" | "Commercial" {
@@ -81,7 +83,7 @@ function toEstimateRecordRow(
     estimatedTotal: formatMoney(estimate.estimatedTotal),
     scope: estimate.scope ?? undefined,
     category: estimate.category,
-    status: normalizeEstimateStatus(estimate.status),
+    status: normalizeEstimateStatus(estimate.status, estimate.convertedJobId),
     notes: estimate.notes ?? undefined,
     createdAt: estimate.createdAt.toISOString(),
   };

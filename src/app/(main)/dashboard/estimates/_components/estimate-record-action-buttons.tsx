@@ -59,8 +59,13 @@ export function ConvertEstimateButton({
 
   React.useEffect(() => {
     if (!state.success) return;
-    router.refresh();
     toast.success(state.message || "Estimate converted to job.");
+    if (state.redirectTo) {
+      router.push(state.redirectTo);
+      router.refresh();
+      return;
+    }
+    router.refresh();
   }, [router, state]);
 
   if (estimate.convertedJobId) {

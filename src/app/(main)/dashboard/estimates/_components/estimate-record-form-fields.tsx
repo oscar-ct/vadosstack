@@ -50,6 +50,7 @@ import type { EstimateLeadOption } from "../_lib/estimate-record-data";
 import type { EstimateRecordRow } from "./schema";
 
 const statuses = ["Draft", "Ready to Send", "Waiting on Customer", "Won", "Lost"] as const;
+const userManagedStatuses = statuses.filter((status) => status !== "Won");
 const categories = ["Repair", "Installation", "Other"] as const;
 const newCustomerValue = "new-customer";
 const newLeadValue = "new-lead";
@@ -1852,38 +1853,48 @@ export function EstimateRecordFormFields({
             <div className="grid gap-3">
               <Label>Status</Label>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {statuses.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setStatus(option)}
-                    className={cn(
-                      "grid min-h-20 gap-1 rounded-lg border bg-background p-3 text-left shadow-sm transition-colors",
-                      status === option && "border-primary bg-primary/5 ring-1 ring-primary/30",
-                    )}
-                  >
-                    <span className="flex items-center gap-2 font-medium text-sm">
-                      <span
-                        className={cn(
-                          "size-3 rounded-full border",
-                          status === option ? "border-primary bg-primary" : "border-muted-foreground/40",
-                        )}
-                      />
-                      {option}
+                {status === "Won" ? (
+                  <div className="grid min-h-20 gap-1 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-left shadow-sm dark:border-emerald-900 dark:bg-emerald-950/30">
+                    <span className="flex items-center gap-2 font-medium text-emerald-800 text-sm dark:text-emerald-200">
+                      <span className="size-3 rounded-full border border-emerald-600 bg-emerald-600" />
+                      Won
                     </span>
-                    <span className="text-muted-foreground text-xs">
-                      {option === "Draft"
-                        ? "Still shaping the estimate."
-                        : option === "Ready to Send"
-                          ? "Ready for the customer."
-                          : option === "Waiting on Customer"
-                            ? "Sent or being reviewed."
-                            : option === "Won"
-                              ? "Approved and ready for job conversion."
+                    <span className="text-emerald-800/70 text-xs dark:text-emerald-200/70">
+                      Managed automatically while the converted job exists.
+                    </span>
+                  </div>
+                ) : (
+                  userManagedStatuses.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setStatus(option)}
+                      className={cn(
+                        "grid min-h-20 gap-1 rounded-lg border bg-background p-3 text-left shadow-sm transition-colors",
+                        status === option && "border-primary bg-primary/5 ring-1 ring-primary/30",
+                      )}
+                    >
+                      <span className="flex items-center gap-2 font-medium text-sm">
+                        <span
+                          className={cn(
+                            "size-3 rounded-full border",
+                            status === option ? "border-primary bg-primary" : "border-muted-foreground/40",
+                          )}
+                        />
+                        {option}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {option === "Draft"
+                          ? "Still shaping the estimate."
+                          : option === "Ready to Send"
+                            ? "Ready for the customer."
+                            : option === "Waiting on Customer"
+                              ? "Sent or being reviewed."
                               : "Closed without moving forward."}
-                    </span>
-                  </button>
-                ))}
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
 
@@ -2319,17 +2330,22 @@ export function EstimateRecordFormFields({
 
         <div className="grid gap-2">
           <Label htmlFor={`estimate-status-${estimate?.id ?? "new"}`}>Status</Label>
-          <Select name="status" value={status} onValueChange={setStatus} required>
+          {status === "Won" ? <input type="hidden" name="status" value="Won" /> : null}
+          <Select name="status" value={status} onValueChange={setStatus} disabled={status === "Won"} required>
             <SelectTrigger id={`estimate-status-${estimate?.id ?? "new"}`} className={`w-full ${mobileFieldClassName}`}>
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {statuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status}
-                  </SelectItem>
-                ))}
+                {status === "Won" ? (
+                  <SelectItem value="Won">Won (job created)</SelectItem>
+                ) : (
+                  userManagedStatuses.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))
+                )}
               </SelectGroup>
             </SelectContent>
           </Select>

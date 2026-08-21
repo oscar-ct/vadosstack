@@ -1205,6 +1205,8 @@ export async function deleteJobAction(_previousState: JobMutationState, formData
     };
   }
 
+  let reopenedEstimateIds: string[] = [];
+
   try {
     const job = await prisma.job.findUnique({
       where: {
@@ -1238,6 +1240,43 @@ export async function deleteJobAction(_previousState: JobMutationState, formData
     }
 
     await prisma.$transaction(async (tx) => {
+      const linkedEstimates = await tx.estimateRecord.findMany({
+        where: {
+          ownerId: currentUser.id,
+          convertedJobId: parsed.data.id,
+        },
+        select: {
+          id: true,
+        },
+      });
+      const linkedEstimateIds = linkedEstimates.map((estimate) => estimate.id);
+
+      if (linkedEstimateIds.length) {
+        await tx.estimate.updateMany({
+          where: {
+            estimateRecordId: {
+              in: linkedEstimateIds,
+            },
+            ownerId: currentUser.id,
+          },
+          data: {
+            jobStatus: "Waiting on Customer",
+          },
+        });
+        await tx.lead.updateMany({
+          where: {
+            estimateRecordId: {
+              in: linkedEstimateIds,
+            },
+            ownerId: currentUser.id,
+          },
+          data: {
+            convertedAt: null,
+            status: "Estimate Sent",
+          },
+        });
+      }
+
       await tx.estimateRecord.updateMany({
         where: {
           ownerId: currentUser.id,
@@ -1245,7 +1284,7 @@ export async function deleteJobAction(_previousState: JobMutationState, formData
         },
         data: {
           convertedJobId: null,
-          status: "Estimate Provided",
+          status: "Waiting on Customer",
         },
       });
       const deletedJob = await tx.job.deleteMany({
@@ -1259,6 +1298,8 @@ export async function deleteJobAction(_previousState: JobMutationState, formData
       if (deletedJob.count !== 1) {
         throw new Error("Delete the invoice first so its number can be released or permanently voided.");
       }
+
+      reopenedEstimateIds = linkedEstimateIds;
     });
 
     await syncCustomerBillingStatus(job?.customerId, currentUser.id);
@@ -1274,9 +1315,12 @@ export async function deleteJobAction(_previousState: JobMutationState, formData
 
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard/estimates");
+  for (const estimateId of reopenedEstimateIds) {
+    revalidatePath(`/dashboard/estimates/records/${estimateId}`);
+  }
   // redirect("/dashboard/jobs");
   return {
     success: true,
-    message: "Job deleted.",
+    message: reopenedEstimateIds.length ? "Job deleted. The estimate has been reopened." : "Job deleted.",
   };
 }
