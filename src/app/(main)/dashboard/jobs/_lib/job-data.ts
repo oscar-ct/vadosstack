@@ -50,7 +50,7 @@ function toJobRow(
   job: Awaited<ReturnType<typeof prisma.job.findMany>>[number] & {
     customer?: { name: string } | null;
     estimate?: { id: string; issuedAt: Date } | null;
-    invoice?: { id: string; issuedAt: Date } | null;
+    invoice?: { id: string; invoiceNumber: string | null; issuedAt: Date } | null;
     payments?: Array<{
       id: string;
       paidOn: Date;
@@ -110,6 +110,7 @@ function toJobRow(
       createdAt: payment.createdAt.toISOString(),
     })),
     invoiceId: job.invoice?.id,
+    invoiceNumber: job.invoice?.invoiceNumber ?? undefined,
     invoiceIssuedAt: job.invoice?.issuedAt.toISOString(),
     estimateId: job.estimate?.id,
     estimateIssuedAt: job.estimate?.issuedAt.toISOString(),
@@ -164,6 +165,7 @@ export async function getJobCustomers(ownerId: string): Promise<JobCustomer[]> {
     },
     include: {
       addresses: true,
+      phoneNumbers: true,
     },
     orderBy: {
       name: "asc",
@@ -173,6 +175,7 @@ export async function getJobCustomers(ownerId: string): Promise<JobCustomer[]> {
   return customers.map((customer) => ({
     id: customer.id,
     name: customer.name,
+    email: customer.email ?? undefined,
     addresses: customer.addresses.map((address) => ({
       id: address.id,
       label: address.label ?? undefined,
@@ -182,6 +185,11 @@ export async function getJobCustomers(ownerId: string): Promise<JobCustomer[]> {
       state: address.state ?? undefined,
       postalCode: address.postalCode ?? undefined,
       country: address.country ?? undefined,
+    })),
+    phoneNumbers: customer.phoneNumbers.map((phone) => ({
+      id: phone.id,
+      label: phone.label ?? undefined,
+      value: phone.value,
     })),
   }));
 }

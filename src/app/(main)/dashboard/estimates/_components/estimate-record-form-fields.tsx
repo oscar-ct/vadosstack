@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 
+import { CustomerPhoneMatchWarning } from "@/components/customer-phone-match-warning";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -1138,6 +1139,12 @@ export function EstimateRecordFormFields({
   const selectedCustomer = isCreatingNewCustomer
     ? undefined
     : customers.find((customer) => customer.id === selectedCustomerId);
+  const matchingPhoneCustomer =
+    isCreatingNewCustomer && newCustomerPhone.length === 10
+      ? customers.find((customer) =>
+          customer.phoneNumbers.some((phone) => normalizePhoneNumber(phone.value) === newCustomerPhone),
+        )
+      : undefined;
   const addressOptions = selectedCustomer?.addresses ?? [];
   const initialLocation = estimate?.serviceLocation ?? leadPrefill?.serviceLocation ?? "";
   const hasSavedInitialLocation = addressOptions.some((address) => formatAddress(address) === initialLocation);
@@ -1713,7 +1720,7 @@ export function EstimateRecordFormFields({
               <div className="grid gap-1 sm:col-span-3">
                 <Label>New customer</Label>
                 <p className="text-muted-foreground text-xs">
-                  Name, email, and phone are <span className={"pl-0.25 font-semibold"}>required</span>
+                  Name and phone are required. Email is optional and can be added later.
                 </p>
               </div>
               <div className="grid gap-2">
@@ -1729,7 +1736,7 @@ export function EstimateRecordFormFields({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`estimate-new-customer-email-${estimate?.id ?? "new"}`}>Email</Label>
+                <Label htmlFor={`estimate-new-customer-email-${estimate?.id ?? "new"}`}>Email (optional)</Label>
                 <Input
                   id={`estimate-new-customer-email-${estimate?.id ?? "new"}`}
                   name="newCustomerEmail"
@@ -1738,7 +1745,6 @@ export function EstimateRecordFormFields({
                   onChange={(event) => setNewCustomerEmail(event.target.value)}
                   placeholder="customer@example.com"
                   className="bg-background"
-                  required
                 />
               </div>
               <div className="grid gap-2">
@@ -1757,6 +1763,13 @@ export function EstimateRecordFormFields({
                   required
                 />
               </div>
+              {matchingPhoneCustomer ? (
+                <CustomerPhoneMatchWarning
+                  className="sm:col-span-3"
+                  customerName={matchingPhoneCustomer.name}
+                  onUseCustomer={() => selectCustomer(matchingPhoneCustomer)}
+                />
+              ) : null}
             </div>
           ) : null}
           {isCreatingNewLead ? (
@@ -2370,7 +2383,7 @@ export function EstimateRecordFormFields({
           <div className="grid gap-1 sm:col-span-2">
             <Label>New customer</Label>
             <p className="text-muted-foreground text-xs">
-              This customer will be created and linked to the estimate. Name, email, and phone are required.
+              This customer will be created and linked to the estimate. Name and phone are required; email is optional.
             </p>
           </div>
           <div className="grid gap-2">
@@ -2386,7 +2399,7 @@ export function EstimateRecordFormFields({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor={`estimate-new-customer-email-${estimate?.id ?? "new"}`}>Customer email</Label>
+            <Label htmlFor={`estimate-new-customer-email-${estimate?.id ?? "new"}`}>Customer email (optional)</Label>
             <Input
               id={`estimate-new-customer-email-${estimate?.id ?? "new"}`}
               name="newCustomerEmail"
@@ -2395,7 +2408,6 @@ export function EstimateRecordFormFields({
               onChange={(event) => setNewCustomerEmail(event.target.value)}
               placeholder="customer@example.com"
               className={mobileFieldClassName}
-              required
             />
           </div>
           <div className="grid gap-2 sm:col-span-2">
@@ -2414,6 +2426,13 @@ export function EstimateRecordFormFields({
               required
             />
           </div>
+          {matchingPhoneCustomer ? (
+            <CustomerPhoneMatchWarning
+              className="sm:col-span-2"
+              customerName={matchingPhoneCustomer.name}
+              onUseCustomer={() => selectCustomer(matchingPhoneCustomer)}
+            />
+          ) : null}
         </div>
       ) : null}
       {isCreatingNewLead ? (

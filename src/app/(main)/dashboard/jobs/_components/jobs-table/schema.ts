@@ -11,6 +11,12 @@ const customerAddressSchema = z.object({
   country: z.string().optional(),
 });
 
+const customerPhoneNumberSchema = z.object({
+  id: z.string(),
+  label: z.string().optional(),
+  value: z.string(),
+});
+
 const jobPaymentSchema = z.object({
   id: z.string(),
   paidOn: z.string(),
@@ -26,7 +32,9 @@ const jobPaymentSchema = z.object({
 export const jobCustomerSchema = z.object({
   id: z.string(),
   name: z.string(),
+  email: z.string().optional(),
   addresses: z.array(customerAddressSchema),
+  phoneNumbers: z.array(customerPhoneNumberSchema),
 });
 
 export const jobRowSchema = z.object({
@@ -88,6 +96,7 @@ export const jobRowSchema = z.object({
   notes: z.string().optional(),
   payments: z.array(jobPaymentSchema),
   invoiceId: z.string().optional(),
+  invoiceNumber: z.string().optional(),
   invoiceIssuedAt: z.string().optional(),
   estimateId: z.string().optional(),
   estimateIssuedAt: z.string().optional(),

@@ -5,6 +5,7 @@ export const estimateRecordRowSchema = z.object({
   convertedJobId: z.string().optional(),
   printableEstimateId: z.string().optional(),
   customerId: z.string().optional(),
+  customerEmail: z.string().optional(),
   customerName: z.string().optional(),
   leadId: z.string().optional(),
   leadName: z.string().optional(),

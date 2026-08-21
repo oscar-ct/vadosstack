@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarDays,
   ClipboardList,
+  MailWarning,
   MapPin,
   Package,
   Pencil,
@@ -308,6 +309,11 @@ export default async function Page({
   const taxableItemsLabel = estimate.jobType === "Commercial" ? "labor + materials" : "materials";
   const customerName = publishedEstimate?.customerName ?? source.customer?.name ?? source.lead?.name;
   const customerEmail = publishedEstimate?.customerEmail ?? source.customer?.email ?? source.lead?.email;
+  const contactHref = estimate.customerId
+    ? `/dashboard/customers/${estimate.customerId}`
+    : estimate.leadId
+      ? `/dashboard/leads/${estimate.leadId}`
+      : null;
   const customerPhone =
     publishedEstimate?.customerPhone ?? source.customer?.phoneNumbers[0]?.value ?? source.lead?.phone;
   const publishedItems = publishedEstimate ? parsePublishedItems(publishedEstimate.materials) : [];
@@ -493,6 +499,26 @@ export default async function Page({
           </div>
         </div>
       </div>
+
+      {!customerEmail ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+          <div className="flex items-start gap-3">
+            <MailWarning className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-300" />
+            <div>
+              <div className="font-semibold text-sm">Email missing</div>
+              <p className="mt-1 text-amber-900/80 text-sm dark:text-amber-100/80">
+                You can publish and download this estimate, but emailing is unavailable until this contact has an email
+                address.
+              </p>
+            </div>
+          </div>
+          {contactHref ? (
+            <Button asChild size="sm" variant="outline" className="shrink-0 bg-background">
+              <Link href={contactHref}>Add email</Link>
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       <EstimateRecordViews
         defaultView={resolvedSearchParams?.view === "customer" ? "customer" : "overview"}

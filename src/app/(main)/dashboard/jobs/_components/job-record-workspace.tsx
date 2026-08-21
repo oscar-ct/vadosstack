@@ -106,10 +106,10 @@ export function JobRecordWorkspace({
 
   return (
     <div className="@container/main mx-auto grid w-full max-w-7xl gap-4 md:gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <JobBackButton />
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2 text-muted-foreground text-sm">
             <CheckCircle2 className="size-4 text-emerald-600" />
             {mode === "edit" ? "Working from saved job" : "Autosave protects this job locally"}
           </div>
@@ -120,7 +120,7 @@ export function JobRecordWorkspace({
       <form
         ref={formRef}
         action={formAction}
-        className="grid gap-4"
+        className="grid min-w-0 gap-4"
         onSubmit={(event) => {
           if (!requiresInvoiceSyncConfirmation || syncExistingInvoiceRef.current?.value === "true") {
             return;
@@ -132,7 +132,7 @@ export function JobRecordWorkspace({
       >
         {job ? <input type="hidden" name="id" value={job.id} /> : null}
         <input ref={syncExistingInvoiceRef} type="hidden" name="syncExistingInvoice" defaultValue="false" />
-        <Card className="overflow-visible rounded-lg">
+        <Card className="min-w-0 overflow-visible rounded-lg">
           <CardHeader className="border-b">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="grid gap-1">
@@ -166,7 +166,7 @@ export function JobRecordWorkspace({
           </CardContent>
         </Card>
 
-        <div className="sticky bottom-0 z-10 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+        <div className="sticky bottom-0 z-10 border-t bg-background/95 px-4 py-3 backdrop-blur md:static md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button asChild type="button" variant="outline">
               <Link prefetch={false} href="/dashboard/jobs" onClick={() => discardLocalDraft(draftKey)}>

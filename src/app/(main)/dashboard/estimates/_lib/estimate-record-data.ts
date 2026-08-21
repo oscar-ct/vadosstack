@@ -48,9 +48,9 @@ function parseMeasurementRooms(value: string) {
 
 function toEstimateRecordRow(
   estimate: Awaited<ReturnType<typeof prisma.estimateRecord.findMany>>[number] & {
-    customer?: { name: string } | null;
-    lead?: { id: string; name: string } | null;
-    printableEstimate?: { id: string } | null;
+    customer?: { email: string | null; name: string } | null;
+    lead?: { email: string | null; id: string; name: string } | null;
+    printableEstimate?: { customerEmail: string | null; id: string } | null;
   },
 ): EstimateRecordRow {
   return {
@@ -58,6 +58,8 @@ function toEstimateRecordRow(
     convertedJobId: estimate.convertedJobId ?? undefined,
     printableEstimateId: estimate.printableEstimate?.id,
     customerId: estimate.customerId ?? undefined,
+    customerEmail:
+      estimate.printableEstimate?.customerEmail ?? estimate.customer?.email ?? estimate.lead?.email ?? undefined,
     customerName: estimate.customer?.name ?? undefined,
     leadId: estimate.lead?.id,
     leadName: estimate.lead?.name,
@@ -92,6 +94,7 @@ export async function getEstimateCustomers(ownerId: string): Promise<JobCustomer
     },
     include: {
       addresses: true,
+      phoneNumbers: true,
     },
     orderBy: {
       name: "asc",
@@ -101,6 +104,7 @@ export async function getEstimateCustomers(ownerId: string): Promise<JobCustomer
   return customers.map((customer) => ({
     id: customer.id,
     name: customer.name,
+    email: customer.email ?? undefined,
     addresses: customer.addresses.map((address) => ({
       id: address.id,
       label: address.label ?? undefined,
@@ -110,6 +114,11 @@ export async function getEstimateCustomers(ownerId: string): Promise<JobCustomer
       state: address.state ?? undefined,
       postalCode: address.postalCode ?? undefined,
       country: address.country ?? undefined,
+    })),
+    phoneNumbers: customer.phoneNumbers.map((phone) => ({
+      id: phone.id,
+      label: phone.label ?? undefined,
+      value: phone.value,
     })),
   }));
 }

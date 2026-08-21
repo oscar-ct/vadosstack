@@ -23,6 +23,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  MailWarning,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
@@ -489,6 +490,12 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
                       name={estimate.customerName ?? estimate.leadName}
                       className="block truncate text-muted-foreground text-sm"
                     />
+                    {!estimate.customerEmail ? (
+                      <span className="mt-1 flex w-fit items-center gap-1.5 text-amber-700 text-xs dark:text-amber-300">
+                        <MailWarning className="size-3 shrink-0" />
+                        Email missing
+                      </span>
+                    ) : null}
                   </div>
                   <span className="shrink-0 font-medium text-sm">{formatMoney(estimate.estimatedTotal)}</span>
                 </div>

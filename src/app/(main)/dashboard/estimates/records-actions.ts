@@ -349,8 +349,8 @@ async function createCustomerForEstimate({
   serviceAddress?: ServiceAddressFields;
   serviceLocation?: string;
 }) {
-  if (!name || !email || !phone) {
-    throw new Error("Enter a customer name, email, and phone number before creating the estimate.");
+  if (!name || !phone) {
+    throw new Error("Enter a customer name and phone number before creating the estimate.");
   }
 
   const normalizedPhone = normalizePhoneNumber(phone);
@@ -359,22 +359,26 @@ async function createCustomerForEstimate({
     throw new Error("Enter a valid 10-digit phone number before creating the estimate.");
   }
 
-  const parsedEmail = z.string().trim().email("Enter a valid customer email.").safeParse(email);
+  const parsedEmail = email ? z.string().trim().email("Enter a valid customer email.").safeParse(email) : null;
 
-  if (!parsedEmail.success) {
+  if (parsedEmail && !parsedEmail.success) {
     throw new Error(parsedEmail.error.issues[0]?.message ?? "Enter a valid customer email.");
   }
 
+  const customerEmail = parsedEmail?.success ? parsedEmail.data : undefined;
+
   try {
-    const existingCustomer = await prisma.customer.findFirst({
-      where: {
-        email: parsedEmail.data,
-        ownerId,
-      },
-      select: {
-        id: true,
-      },
-    });
+    const existingCustomer = customerEmail
+      ? await prisma.customer.findFirst({
+          where: {
+            email: customerEmail,
+            ownerId,
+          },
+          select: {
+            id: true,
+          },
+        })
+      : null;
 
     if (existingCustomer) {
       throw new Error("A customer with that email already exists in your account. Select them from the customer list.");
@@ -389,7 +393,7 @@ async function createCustomerForEstimate({
       data: {
         ownerId,
         name,
-        email: parsedEmail.data,
+        email: customerEmail,
         billingStatus: "No Balance",
         addresses: address
           ? {

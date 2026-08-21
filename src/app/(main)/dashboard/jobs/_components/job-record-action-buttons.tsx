@@ -101,9 +101,13 @@ export function JobInvoiceButton({
         )}
         variant="outline"
       >
-        <Link prefetch={false} href={`/dashboard/invoices/${job.invoiceId}`}>
+        <Link
+          prefetch={false}
+          href={`/dashboard/invoices/${job.invoiceId}`}
+          aria-label={`View invoice ${job.invoiceNumber ?? ""}`.trim()}
+        >
           <ReceiptText />
-          View invoice
+          {job.invoiceNumber ?? "Invoice"}
         </Link>
       </Button>
     );

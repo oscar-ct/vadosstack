@@ -3,7 +3,7 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { format, parseISO } from "date-fns";
-import { Pencil } from "lucide-react";
+import { MailWarning, Pencil } from "lucide-react";
 
 import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
@@ -80,6 +80,12 @@ export function getEstimateRecordsColumns({
             name={row.original.customerName ?? row.original.leadName}
             className="block truncate font-medium text-sm"
           />
+          {!row.original.customerEmail ? (
+            <span className="mt-1 flex w-fit items-center gap-1.5 text-amber-700 text-xs dark:text-amber-300">
+              <MailWarning className="size-3 shrink-0" />
+              No email
+            </span>
+          ) : null}
         </div>
       ),
     },

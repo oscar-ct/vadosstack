@@ -25,6 +25,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   CreditCard,
+  MailWarning,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
@@ -444,7 +445,14 @@ export function RecentCustomersTable({
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-sm">{row.original.name}</div>
-                        <div className="truncate text-muted-foreground text-sm">{row.original.email}</div>
+                        {row.original.email ? (
+                          <div className="truncate text-muted-foreground text-sm">{row.original.email}</div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-amber-700 text-sm dark:text-amber-300">
+                            <MailWarning className="size-3.5 shrink-0" />
+                            Email missing
+                          </div>
+                        )}
                       </div>
                       <span
                         className={

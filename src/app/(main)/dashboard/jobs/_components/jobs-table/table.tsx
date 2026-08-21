@@ -513,9 +513,13 @@ export function JobsTable({
                           size={"xs"}
                           className="border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
                         >
-                          <Link prefetch={false} href={`/dashboard/invoices/${row.original.invoiceId}`}>
+                          <Link
+                            prefetch={false}
+                            href={`/dashboard/invoices/${row.original.invoiceId}`}
+                            aria-label={`View invoice ${row.original.invoiceNumber ?? ""}`.trim()}
+                          >
                             <ReceiptText className="size-3.5" />
-                            View invoice
+                            {row.original.invoiceNumber ?? "Invoice"}
                           </Link>
                         </Button>
                       ) : billingState.canCreateInvoice ? (

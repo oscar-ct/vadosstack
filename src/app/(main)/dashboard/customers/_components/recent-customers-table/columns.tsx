@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { differenceInCalendarDays, endOfToday, format, parseISO } from "date-fns";
-import { PackageCheck, RotateCcw, ShoppingCart, UserRound, WalletCards } from "lucide-react";
+import { MailWarning, PackageCheck, RotateCcw, ShoppingCart, UserRound, WalletCards } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -165,9 +165,14 @@ export function getRecentCustomersColumns({
           <div className="min-w-0 flex-1">
             <div className="grid min-w-0 gap-0.5">
               <span className="truncate font-medium text-sm leading-none">{row.original.name}</span>
-              <span className="truncate text-muted-foreground text-xs leading-none">
-                {row.original.email || "No email on file"}
-              </span>
+              {row.original.email ? (
+                <span className="truncate text-muted-foreground text-xs leading-none">{row.original.email}</span>
+              ) : (
+                <span className="flex items-center gap-1 text-amber-700 text-xs leading-none dark:text-amber-300">
+                  <MailWarning className="size-3 shrink-0" />
+                  Email missing
+                </span>
+              )}
             </div>
           </div>
         </div>

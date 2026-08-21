@@ -32,6 +32,7 @@ import { parseWorkspaceMode, type WorkspaceMode } from "@/lib/workspace-mode";
 
 import type { RecentCustomerRow } from "../_components/recent-customers-table/schema";
 import { deleteCustomerAction, updateCustomerAction } from "../actions";
+import { CustomerEmailWarning } from "./_components/customer-email-warning";
 import { CustomerProfileActions } from "./_components/customer-profile-actions";
 
 type CustomerPageProps = {
@@ -448,6 +449,14 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
           />
         </div>
       </div>
+
+      {!customer.email ? (
+        <CustomerEmailWarning
+          customer={customerRow}
+          deleteCustomerAction={deleteCustomerAction}
+          updateCustomerAction={updateCustomerAction}
+        />
+      ) : null}
 
       <section className="overflow-hidden rounded-lg border bg-card">
         <div className="grid gap-5 p-4 md:p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">

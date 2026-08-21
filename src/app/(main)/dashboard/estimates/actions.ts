@@ -198,6 +198,11 @@ export async function emailEstimateAction(
       include: {
         estimateRecord: {
           include: {
+            customer: {
+              select: {
+                email: true,
+              },
+            },
             lead: true,
           },
         },
@@ -213,6 +218,9 @@ export async function emailEstimateAction(
   if (!estimate) {
     return createEmailEstimateState(false, "Estimate could not be found.");
   }
+
+  const recipientEmail =
+    estimate.customerEmail ?? estimate.estimateRecord?.customer?.email ?? estimate.estimateRecord?.lead?.email;
 
   const estimateSequence = await prisma.estimate.count({
     where: {
@@ -230,11 +238,11 @@ export async function emailEstimateAction(
     documentNumber: estimateNumber,
     documentTotal: estimate.estimatedTotal,
     recipientName: estimate.customerName,
-    recipientEmail: estimate.customerEmail,
+    recipientEmail,
     senderEmail: googleMailAccount?.email,
   };
 
-  if (!estimate.customerEmail) {
+  if (!recipientEmail) {
     await logEmailRecord({
       ...emailRecordBase,
       status: "error",
@@ -287,7 +295,7 @@ export async function emailEstimateAction(
       companyLogoSrc,
       companyName: currentUser.companyName,
       companyPhone: currentUser.companyPhone ? formatPhoneNumber(currentUser.companyPhone) : null,
-      customerEmail: estimate.customerEmail,
+      customerEmail: recipientEmail,
       customerName: estimate.customerName,
       customerPhone: estimate.customerPhone ? formatPhoneNumber(estimate.customerPhone) : null,
       dateBegin: estimate.dateBegin,
@@ -324,7 +332,7 @@ export async function emailEstimateAction(
       html: submittedEmailContent.html,
       subject: submittedEmailContent.subject,
       text: submittedEmailContent.text,
-      to: estimate.customerEmail,
+      to: recipientEmail,
     });
 
     await logEmailRecord({
@@ -430,7 +438,7 @@ export async function emailEstimateAction(
   }
   revalidatePath("/dashboard/email-history");
 
-  return createEmailEstimateState(true, `Estimate sent to ${estimate.customerEmail}.`);
+  return createEmailEstimateState(true, `Estimate sent to ${recipientEmail}.`);
 }
 
 export async function deleteEstimateAction(
