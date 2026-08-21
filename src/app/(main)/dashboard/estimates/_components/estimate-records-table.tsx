@@ -2,7 +2,6 @@
 
 import * as React from "react";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
@@ -24,7 +23,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  NotebookText,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
@@ -522,24 +520,6 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
                     <span className="min-w-0 text-right">{new Date(estimate.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
-                <div>
-                  {estimate.printableEstimateId ? (
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="sm"
-                      className="border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
-                    >
-                      <Link prefetch={false} href={`/dashboard/estimates/${estimate.printableEstimateId}`}>
-                        <NotebookText />
-                        Final estimate
-                      </Link>
-                    </Button>
-                  ) : (
-                    <span className={"text-muted-foreground"}>No final estimate</span>
-                  )}
-                </div>
-
                 <div className="flex items-center justify-end">
                   <span className="text-muted-foreground text-sm">Open estimate</span>
                 </div>

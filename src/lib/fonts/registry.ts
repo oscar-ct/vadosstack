@@ -41,6 +41,7 @@ const roboto = Roboto({
 const geist = Geist({
   subsets: ["latin"],
   variable: "--font-geist",
+  preload: false,
 });
 
 const outfit = Outfit({

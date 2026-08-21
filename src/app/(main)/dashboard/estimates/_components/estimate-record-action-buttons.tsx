@@ -66,7 +66,7 @@ export function ConvertEstimateButton({
   if (estimate.convertedJobId) {
     return (
       <Button asChild size={size} className={className} variant="outline">
-        <a href={`/dashboard/jobs/${estimate.convertedJobId}`}>View converted job</a>
+        <Link href={`/dashboard/jobs/${estimate.convertedJobId}`}>View converted job</Link>
       </Button>
     );
   }
@@ -138,26 +138,11 @@ export function PrintableEstimateButton({
   React.useEffect(() => {
     if (!state.success) return;
     router.refresh();
-    toast.success(state.message || "Estimate PDF created.");
+    toast.success(state.message || "Estimate published.");
   }, [router, state]);
 
   if (estimate.printableEstimateId) {
-    return (
-      <Button
-        asChild
-        size={size}
-        className={cn(
-          "flex h-7 justify-center border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950",
-          className,
-        )}
-        variant="outline"
-      >
-        <Link prefetch={false} href={`/dashboard/estimates/${estimate.printableEstimateId}`}>
-          <NotebookText />
-          View Estimate
-        </Link>
-      </Button>
-    );
+    return null;
   }
 
   return (
@@ -173,7 +158,8 @@ export function PrintableEstimateButton({
         variant="outline"
         disabled={isPending}
       >
-        {isPending ? "Creating..." : "Ready to Send"}
+        <NotebookText />
+        {isPending ? "Publishing..." : "Publish estimate"}
       </Button>
       {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
     </form>

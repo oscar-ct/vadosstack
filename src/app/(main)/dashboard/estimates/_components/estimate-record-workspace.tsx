@@ -197,10 +197,10 @@ export function EstimateRecordWorkspace({
       <AlertDialog open={estimateSnapshotConfirmOpen} onOpenChange={setEstimateSnapshotConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Update existing estimate snapshot?</AlertDialogTitle>
+            <AlertDialogTitle>Update issued customer copy?</AlertDialogTitle>
             <AlertDialogDescription>
-              This estimate already has a printable customer-facing snapshot. Saving these changes will update that
-              snapshot, including customer details, scope, schedule, labor, materials, taxes, status, and total.
+              This estimate already has an issued customer copy. Saving these changes will update that copy, including
+              customer details, scope, schedule, labor, materials, taxes, status, and total.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="rounded-lg border bg-muted/40 p-3 text-muted-foreground text-sm leading-6">
@@ -216,7 +216,7 @@ export function EstimateRecordWorkspace({
                 formRef.current?.requestSubmit();
               }}
             >
-              Save estimate and update snapshot
+              Save estimate and update customer copy
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

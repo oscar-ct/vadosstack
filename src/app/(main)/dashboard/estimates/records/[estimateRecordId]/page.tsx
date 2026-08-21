@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { format, parseISO } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import type { LucideIcon } from "lucide-react";
 import {
   BadgeDollarSign,
@@ -22,20 +22,64 @@ import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
+import { getCompanyLogoSrc } from "@/lib/company-logo";
+import {
+  getDocumentMessageAlignClass,
+  getDocumentMessageLineItems,
+  normalizeDocumentMessageAlign,
+  renderDocumentMessage,
+} from "@/lib/document-messages";
+import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
+import { formatPhoneNumber } from "@/lib/phone";
+import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 
+import { EstimateActions } from "../../_components/estimate-actions";
 import { EstimateBackButton } from "../../_components/estimate-back-button";
+import { EstimateCustomerPreview, type EstimateCustomerPreviewItem } from "../../_components/estimate-customer-preview";
 import {
   ConvertEstimateButton,
   PrintableEstimateButton,
   UpdateEstimateStatusButton,
 } from "../../_components/estimate-record-action-buttons";
-import { getEstimateRecord } from "../../_lib/estimate-record-data";
+import { EstimateRecordViews } from "../../_components/estimate-record-views";
+import { getEstimateRecordWorkspace } from "../../_lib/estimate-record-data";
+import { emailEstimateAction } from "../../actions";
 import {
   convertEstimateToJobAction,
   createPrintableEstimateAction,
+  deleteEstimateRecordAction,
   updateEstimateStatusAction,
 } from "../../records-actions";
+
+const gmailErrorMessages: Record<string, string> = {
+  callback: "Gmail could not be connected. Please try again.",
+  config: "Google OAuth is not configured for Gmail sending yet.",
+  denied: "Gmail connection was cancelled.",
+  mismatch: "Connect the same Google account you use to sign in.",
+  refresh: "Google did not return offline Gmail access. Please try connecting again.",
+  scope: "Gmail send permission was not granted.",
+  state: "Gmail connection expired. Please try again.",
+  unverified: "Google has not verified that email address.",
+};
+
+function parsePublishedItems(value: string) {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.map<EstimateCustomerPreviewItem & { type: "labor" | "material" }>((item) => ({
+      description: String(item?.description ?? ""),
+      price: String(item?.price ?? "0"),
+      quantity: item?.quantity === undefined ? undefined : String(item.quantity),
+      type: item?.type === "labor" ? "labor" : "material",
+      unit: item?.unit === undefined ? undefined : String(item.unit),
+      unitPrice: item?.unitPrice === undefined ? undefined : String(item.unitPrice),
+    }));
+  } catch {
+    return [];
+  }
+}
 
 function formatMoney(value?: string | number) {
   const amount = Number(value ?? 0);
@@ -220,9 +264,15 @@ function LineItems({
 
 export default async function Page({
   params,
+  searchParams,
 }: {
   params: Promise<{
     estimateRecordId: string;
+  }>;
+  searchParams?: Promise<{
+    gmail_connected?: string;
+    gmail_error?: string;
+    view?: string;
   }>;
 }) {
   const currentUser = await getCurrentUser();
@@ -236,12 +286,15 @@ export default async function Page({
     );
   }
 
-  const { estimateRecordId } = await params;
-  const estimate = await getEstimateRecord(currentUser.id, estimateRecordId);
+  const [{ estimateRecordId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const workspace = await getEstimateRecordWorkspace(currentUser.id, estimateRecordId);
 
-  if (!estimate) {
+  if (!workspace) {
     notFound();
   }
+
+  const { estimate, source } = workspace;
+  const publishedEstimate = source.printableEstimate;
 
   const laborSubtotal = sum(estimate.laborItems);
   const materialsSubtotal = sum(estimate.materials);
@@ -253,13 +306,80 @@ export default async function Page({
   const measuredAreas = estimate.measurementRooms.filter((room) => roomArea(room) > 0);
   const scheduledDate = estimate.dateBegin ? format(parseISO(estimate.dateBegin), "MMM d, yyyy") : "Unscheduled";
   const taxableItemsLabel = estimate.jobType === "Commercial" ? "labor + materials" : "materials";
+  const customerName = publishedEstimate?.customerName ?? source.customer?.name ?? source.lead?.name;
+  const customerEmail = publishedEstimate?.customerEmail ?? source.customer?.email ?? source.lead?.email;
+  const customerPhone =
+    publishedEstimate?.customerPhone ?? source.customer?.phoneNumbers[0]?.value ?? source.lead?.phone;
+  const publishedItems = publishedEstimate ? parsePublishedItems(publishedEstimate.materials) : [];
+  const previewLaborItems = publishedEstimate
+    ? publishedItems.filter((item) => item.type === "labor")
+    : estimate.laborItems;
+  const previewMaterialItems = publishedEstimate
+    ? publishedItems.filter((item) => item.type === "material")
+    : estimate.materials;
+  const validThroughDate = publishedEstimate
+    ? addDays(publishedEstimate.issuedAt, currentUser.estimateValidDays)
+    : null;
+  const estimateNumber = publishedEstimate?.estimateNumber ?? "Draft estimate";
+  const previewTotal = publishedEstimate?.estimatedTotal.toString() ?? estimate.estimatedTotal ?? "0";
+  const previewMaterialsSubtotal = publishedEstimate?.materialsSubtotal.toString() ?? materialsSubtotal.toFixed(2);
+  const previewTaxAmount = publishedEstimate?.materialTaxAmount.toString() ?? tax.toFixed(2);
+  const serviceLocation = publishedEstimate?.serviceLocation ?? estimate.serviceLocation;
+  const estimateMessageContext = {
+    companyName: currentUser.companyName,
+    customerName,
+    estimateHalfTotal: formatMoney(Number(previewTotal) / 2),
+    estimateNumber,
+    estimateTotal: formatMoney(previewTotal),
+    jobTitle: publishedEstimate?.jobTitle ?? estimate.description,
+    serviceLocation,
+    validThrough: validThroughDate ? format(validThroughDate, "MMM d, yyyy") : "Not issued",
+  };
+  const estimateMessage = currentUser.estimateMessageEnabled
+    ? renderDocumentMessage(currentUser.estimateMessageText, estimateMessageContext)
+    : "";
+  const estimateMessageLines = getDocumentMessageLineItems(estimateMessage);
+  const estimateMessageAlign = normalizeDocumentMessageAlign(currentUser.estimateMessageAlign);
+  const companyEmail = currentUser.companyEmail ?? currentUser.email;
+  const [companyLogoSrc, googleMailAccount, emailTemplates] = await Promise.all([
+    getCompanyLogoSrc(currentUser.id),
+    prisma.googleMailAccount.findUnique({
+      where: {
+        userId: currentUser.id,
+      },
+    }),
+    getRenderedDocumentEmailTemplates({
+      ownerId: currentUser.id,
+      scope: "estimate",
+      context: {
+        companyEmail,
+        companyName: currentUser.companyName,
+        companyPhone: currentUser.companyPhone ? formatPhoneNumber(currentUser.companyPhone) : undefined,
+        customerEmail,
+        customerName,
+        customerPhone: customerPhone ? formatPhoneNumber(customerPhone) : undefined,
+        estimatedTotal: formatMoney(previewTotal),
+        estimateNumber,
+        jobTitle: publishedEstimate?.jobTitle ?? estimate.description,
+        serviceLocation,
+        validThrough: validThroughDate ? format(validThroughDate, "MMM d, yyyy") : "Not issued",
+      },
+    }),
+  ]);
+  const returnTo = `/dashboard/estimates/records/${estimate.id}?view=customer`;
+  const gmailError = resolvedSearchParams?.gmail_error;
+  const gmailNotice = resolvedSearchParams?.gmail_connected
+    ? { message: "Gmail is connected. You can email estimates from this account.", type: "success" as const }
+    : gmailError
+      ? { message: gmailErrorMessages[gmailError] ?? "Gmail could not be connected.", type: "error" as const }
+      : null;
 
   return (
     <div className="@container/main mx-auto grid w-full max-w-7xl gap-5 md:gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <EstimateBackButton />
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild size="sm">
+          <Button asChild size="sm" className="hidden sm:inline-flex">
             <Link prefetch={false} href={`/dashboard/estimates/records/${estimate.id}/edit`}>
               <Pencil />
               Edit
@@ -271,7 +391,7 @@ export default async function Page({
             estimate={estimate}
             size="sm"
           />
-          {estimate.status === "Ready to Send" ? (
+          {estimate.status === "Ready to Send" && publishedEstimate && !customerEmail ? (
             <UpdateEstimateStatusButton
               action={updateEstimateStatusAction}
               className="w-auto"
@@ -299,6 +419,49 @@ export default async function Page({
               size="sm"
             />
           ) : null}
+          {estimate.status === "Lost" ? (
+            <UpdateEstimateStatusButton
+              action={updateEstimateStatusAction}
+              className="w-auto"
+              estimate={estimate}
+              status="Draft"
+            >
+              Reopen estimate
+            </UpdateEstimateStatusButton>
+          ) : null}
+          <EstimateActions
+            action={emailEstimateAction}
+            compact
+            companyName={currentUser.companyName}
+            customerEmail={customerEmail}
+            customerName={customerName}
+            deleteAction={deleteEstimateRecordAction}
+            deleteDescription="This removes the working estimate and its issued customer copy. Converted jobs are not deleted."
+            deleteId={estimate.id}
+            deleteRedirectTo="/dashboard/estimates"
+            deleteSnapshot={{
+              customerName,
+              estimatedTotal: formatMoney(estimate.estimatedTotal),
+              estimateNumber: publishedEstimate?.estimateNumber ?? "Not issued",
+              jobTitle: estimate.description,
+              serviceLocation: estimate.serviceLocation,
+              validThrough: validThroughDate ? format(validThroughDate, "MMM d, yyyy") : "Not issued",
+            }}
+            editHref={`/dashboard/estimates/records/${estimate.id}/edit`}
+            estimateId={publishedEstimate?.id}
+            estimateMessageAlign={estimateMessageAlign}
+            estimateMessageEnabled={currentUser.estimateMessageEnabled}
+            estimateMessageText={currentUser.estimateMessageText}
+            estimateNumber={estimateNumber}
+            estimatedTotal={formatMoney(previewTotal)}
+            gmailConnected={Boolean(googleMailAccount)}
+            gmailSenderEmail={googleMailAccount?.email ?? null}
+            notice={gmailNotice}
+            primaryEmail={estimate.status === "Ready to Send" && Boolean(publishedEstimate)}
+            returnTo={returnTo}
+            templates={emailTemplates}
+            validThrough={validThroughDate ? format(validThroughDate, "MMM d, yyyy") : "Not issued"}
+          />
         </div>
       </div>
 
@@ -313,6 +476,11 @@ export default async function Page({
               <p className="mt-2 max-w-3xl text-muted-foreground text-sm">
                 {estimate.scope || "No scope description on file."}
               </p>
+              <p className="mt-3 text-muted-foreground text-xs">
+                {publishedEstimate
+                  ? `Customer copy ${publishedEstimate.estimateNumber ?? "issued"} · Issued ${format(publishedEstimate.issuedAt, "MMM d, yyyy")}`
+                  : "Customer copy not issued"}
+              </p>
             </div>
           </div>
           <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-4 text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-100">
@@ -326,100 +494,138 @@ export default async function Page({
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
-        <div className="grid gap-5">
-          <SectionPanel icon={ClipboardList} title="Estimate Details">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <InfoTile
-                customerId={estimate.customerId}
-                icon={UserRound}
-                label={estimate.customerId ? "Customer" : "Lead"}
-                value={estimate.customerName ?? estimate.leadName}
-              />
-              <InfoTile icon={MapPin} label="Service location" value={estimate.serviceLocation} />
-              <InfoTile icon={CalendarDays} label="Scheduled" value={scheduledDate} />
-              <InfoTile icon={Building2} label="Job type" value={estimate.jobType} />
-            </div>
-            {estimate.notes ? (
-              <div className="mt-3 rounded-lg border bg-muted/20 p-3">
-                <div className="text-muted-foreground text-xs">Internal notes</div>
-                <div className="mt-1 text-sm">{estimate.notes}</div>
-              </div>
-            ) : null}
-          </SectionPanel>
+      <EstimateRecordViews
+        defaultView={resolvedSearchParams?.view === "customer" ? "customer" : "overview"}
+        overview={
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+            <div className="grid gap-5">
+              <SectionPanel icon={ClipboardList} title="Estimate Details">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <InfoTile
+                    customerId={estimate.customerId}
+                    icon={UserRound}
+                    label={estimate.customerId ? "Customer" : "Lead"}
+                    value={estimate.customerName ?? estimate.leadName}
+                  />
+                  <InfoTile icon={MapPin} label="Service location" value={estimate.serviceLocation} />
+                  <InfoTile icon={CalendarDays} label="Scheduled" value={scheduledDate} />
+                  <InfoTile icon={Building2} label="Job type" value={estimate.jobType} />
+                </div>
+                {estimate.notes ? (
+                  <div className="mt-3 rounded-lg border bg-muted/20 p-3">
+                    <div className="text-muted-foreground text-xs">Internal notes</div>
+                    <div className="mt-1 text-sm">{estimate.notes}</div>
+                  </div>
+                ) : null}
+              </SectionPanel>
 
-          {measuredAreas.length ? (
-            <SectionPanel
-              icon={Ruler}
-              title="Measurements"
-              description={`${measuredAreas.length} ${measuredAreas.length === 1 ? "area" : "areas"} measured for sqft pricing.`}
-            >
-              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px] xl:items-start">
-                <div className="overflow-hidden rounded-lg border bg-background">
-                  {measuredAreas.map((room, index) => (
-                    <div
-                      key={room.id ?? `${room.name}-${index}`}
-                      className="grid gap-2 border-t p-3 first:border-t-0 md:grid-cols-[minmax(0,1fr)_90px_90px_70px] md:items-center"
-                    >
-                      <div className="font-medium text-sm">{room.name || `Area ${index + 1}`}</div>
-                      <div className="text-muted-foreground text-xs md:text-sm">{room.length || "0"} ft L</div>
-                      <div className="text-muted-foreground text-xs md:text-sm">{room.width || "0"} ft W</div>
-                      <div className="font-semibold text-sm tabular-nums md:text-right">
-                        {formatArea(roomArea(room))} sq ft
+              {measuredAreas.length ? (
+                <SectionPanel
+                  icon={Ruler}
+                  title="Measurements"
+                  description={`${measuredAreas.length} ${measuredAreas.length === 1 ? "area" : "areas"} measured for sqft pricing.`}
+                >
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px] xl:items-start">
+                    <div className="overflow-hidden rounded-lg border bg-background">
+                      {measuredAreas.map((room, index) => (
+                        <div
+                          key={room.id ?? `${room.name}-${index}`}
+                          className="grid gap-2 border-t p-3 first:border-t-0 md:grid-cols-[minmax(0,1fr)_90px_90px_70px] md:items-center"
+                        >
+                          <div className="font-medium text-sm">{room.name || `Area ${index + 1}`}</div>
+                          <div className="text-muted-foreground text-xs md:text-sm">{room.length || "0"} ft L</div>
+                          <div className="text-muted-foreground text-xs md:text-sm">{room.width || "0"} ft W</div>
+                          <div className="font-semibold text-sm tabular-nums md:text-right">
+                            {formatArea(roomArea(room))} sq ft
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-4 xl:text-right">
+                      <div className="text-muted-foreground text-xs">Building total</div>
+                      <div className="mt-1 font-semibold text-2xl tabular-nums">
+                        {formatArea(measurementTotal)} sq ft
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div className="rounded-lg border bg-muted/20 p-4 xl:text-right">
-                  <div className="text-muted-foreground text-xs">Building total</div>
-                  <div className="mt-1 font-semibold text-2xl tabular-nums">{formatArea(measurementTotal)} sq ft</div>
-                </div>
-              </div>
-            </SectionPanel>
-          ) : null}
+                  </div>
+                </SectionPanel>
+              ) : null}
 
-          <SectionPanel icon={Wrench} title="Labor" description="Work items and service pricing.">
-            <LineItems items={estimate.laborItems} label="Labor" tone="L" />
-          </SectionPanel>
+              <SectionPanel icon={Wrench} title="Labor" description="Work items and service pricing.">
+                <LineItems items={estimate.laborItems} label="Labor" tone="L" />
+              </SectionPanel>
 
-          <SectionPanel icon={Package} title="Materials" description="Parts, supplies, quantities, and rates.">
-            <LineItems items={estimate.materials} label="Materials" tone="M" />
-          </SectionPanel>
-        </div>
-
-        <aside className="grid gap-4 md:w-full md:max-w-sm md:justify-self-end xl:sticky xl:top-20">
-          <section className="w-full rounded-lg border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-900/60 dark:bg-sky-950/20">
-            <div className="flex items-center gap-2 font-semibold text-sky-900 text-sm uppercase tracking-normal dark:text-sky-200">
-              <ReceiptText className="size-4" />
-              Pricing
+              <SectionPanel icon={Package} title="Materials" description="Parts, supplies, quantities, and rates.">
+                <LineItems items={estimate.materials} label="Materials" tone="M" />
+              </SectionPanel>
             </div>
-            <div className="mt-4 grid gap-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Labor</span>
-                <span className="font-medium tabular-nums">{formatMoney(laborSubtotal)}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Materials</span>
-                <span className="font-medium tabular-nums">{formatMoney(materialsSubtotal)}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-medium tabular-nums">{formatMoney(subtotal)}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">
-                  Tax on {taxableItemsLabel} ({taxRate.toFixed(2)}%)
-                </span>
-                <span className="font-medium tabular-nums">{formatMoney(tax)}</span>
-              </div>
-              <div className="mt-2 flex justify-between gap-3 border-sky-200 border-t pt-3 dark:border-sky-900/60">
-                <span className="font-medium">Customer total</span>
-                <span className="font-semibold tabular-nums">{formatMoney(estimate.estimatedTotal)}</span>
-              </div>
-            </div>
-          </section>
-        </aside>
-      </div>
+
+            <aside className="grid gap-4 md:w-full md:max-w-sm md:justify-self-end xl:sticky xl:top-20">
+              <section className="w-full rounded-lg border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-900/60 dark:bg-sky-950/20">
+                <div className="flex items-center gap-2 font-semibold text-sky-900 text-sm uppercase tracking-normal dark:text-sky-200">
+                  <ReceiptText className="size-4" />
+                  Pricing
+                </div>
+                <div className="mt-4 grid gap-2 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Labor</span>
+                    <span className="font-medium tabular-nums">{formatMoney(laborSubtotal)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Materials</span>
+                    <span className="font-medium tabular-nums">{formatMoney(materialsSubtotal)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-medium tabular-nums">{formatMoney(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">
+                      Tax on {taxableItemsLabel} ({taxRate.toFixed(2)}%)
+                    </span>
+                    <span className="font-medium tabular-nums">{formatMoney(tax)}</span>
+                  </div>
+                  <div className="mt-2 flex justify-between gap-3 border-sky-200 border-t pt-3 dark:border-sky-900/60">
+                    <span className="font-medium">Customer total</span>
+                    <span className="font-semibold tabular-nums">{formatMoney(estimate.estimatedTotal)}</span>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </div>
+        }
+        customerPreview={
+          <EstimateCustomerPreview
+            companyEmail={companyEmail}
+            companyLogoSrc={companyLogoSrc}
+            companyName={currentUser.companyName}
+            companyPhone={currentUser.companyPhone}
+            data={{
+              customerEmail,
+              customerName,
+              customerPhone,
+              dateBegin: publishedEstimate?.dateBegin ?? source.dateBegin,
+              dateEnd: publishedEstimate?.dateEnd ?? source.dateEnd,
+              estimateNumber: publishedEstimate?.estimateNumber,
+              estimatedTotal: previewTotal,
+              issuedAt: publishedEstimate?.issuedAt,
+              jobDescription: publishedEstimate?.jobDescription ?? estimate.scope,
+              jobTitle: publishedEstimate?.jobTitle ?? estimate.description,
+              jobType: estimate.jobType,
+              laborCost: publishedEstimate?.laborCost.toString() ?? estimate.laborCost ?? "0",
+              laborItems: previewLaborItems,
+              materialItems: previewMaterialItems,
+              materialTaxAmount: previewTaxAmount,
+              materialTaxRate: publishedEstimate?.materialTaxRate.toString() ?? estimate.materialTaxRate ?? "0",
+              materialsSubtotal: previewMaterialsSubtotal,
+              serviceLocation,
+              validThrough: validThroughDate,
+            }}
+            messageAlignClassName={getDocumentMessageAlignClass(estimateMessageAlign)}
+            messageLines={estimateMessageLines}
+          />
+        }
+      />
     </div>
   );
 }

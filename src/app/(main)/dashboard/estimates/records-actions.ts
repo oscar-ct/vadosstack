@@ -898,8 +898,7 @@ export async function updateEstimateRecordAction(
     if (existingEstimate.printableEstimate && !syncExistingEstimate) {
       return {
         success: false,
-        message:
-          "This estimate already has a printable snapshot. Confirm that you want to update the existing estimate snapshot before saving.",
+        message: "This estimate already has an issued customer copy. Confirm that you want to update it before saving.",
       };
     }
 
@@ -1073,7 +1072,7 @@ export async function updateEstimateRecordAction(
 
   return {
     success: true,
-    message: syncedPrintableEstimateId ? "Estimate and snapshot updated." : "Estimate updated.",
+    message: syncedPrintableEstimateId ? "Estimate and issued customer copy updated." : "Estimate updated.",
   };
 }
 
@@ -1220,6 +1219,7 @@ export async function updateEstimateStatusAction(
   }
 
   revalidatePath("/dashboard/estimates");
+  revalidatePath(`/dashboard/estimates/records/${parsed.data.id}`);
   return { success: true, message: "Estimate status updated." };
 }
 
@@ -1355,7 +1355,7 @@ export async function createPrintableEstimateAction(
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
-    return { success: false, message: "You must be signed in to create a printable estimate." };
+    return { success: false, message: "You must be signed in to publish an estimate." };
   }
 
   const id = String(formData.get("id") ?? "").trim();
@@ -1363,8 +1363,6 @@ export async function createPrintableEstimateAction(
   if (!id) {
     return { success: false, message: "Estimate is required." };
   }
-
-  let printableEstimateId = "";
 
   try {
     const estimate = await prisma.estimateRecord.findUnique({
@@ -1390,7 +1388,7 @@ export async function createPrintableEstimateAction(
     }
 
     if (estimate.printableEstimate) {
-      printableEstimateId = estimate.printableEstimate.id;
+      // The existing customer copy is already linked to this record.
     } else {
       const laborItems = normalizeItems(parsePricingItems(estimate.laborItems));
       const materials = normalizeMaterials(parseMaterials(estimate.materials));
@@ -1451,15 +1449,16 @@ export async function createPrintableEstimateAction(
 
         return createdEstimate;
       });
-      printableEstimateId = printableEstimate.id;
+      revalidatePath(`/dashboard/estimates/${printableEstimate.id}`);
     }
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Printable estimate could not be created.",
+      message: error instanceof Error ? error.message : "Estimate could not be published.",
     };
   }
 
   revalidatePath("/dashboard/estimates");
-  redirect(`/dashboard/estimates/${printableEstimateId}`);
+  revalidatePath(`/dashboard/estimates/records/${id}`);
+  redirect(`/dashboard/estimates/records/${id}?view=customer`);
 }

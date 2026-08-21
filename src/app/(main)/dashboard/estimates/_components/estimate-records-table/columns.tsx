@@ -1,11 +1,9 @@
 "use client";
 "use no memo";
 
-import Link from "next/link";
-
 import type { ColumnDef } from "@tanstack/react-table";
 import { format, parseISO } from "date-fns";
-import { Minus, NotebookText, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 
 import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
@@ -123,29 +121,6 @@ export function getEstimateRecordsColumns({
           <span className="max-w-28 truncate px-1 text-muted-foreground text-xs">
             {nextActionLabel(row.original.status)}
           </span>
-        </div>
-      ),
-    },
-    {
-      id: "documents",
-      header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center">
-          {row.original.printableEstimateId ? (
-            <Button
-              asChild
-              variant="outline"
-              size="xs"
-              className="flex h-7 justify-center whitespace-nowrap border-sky-200 bg-sky-50 px-2 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
-            >
-              <Link prefetch={false} href={`/dashboard/estimates/${row.original.printableEstimateId}`}>
-                <NotebookText className="size-3.5" />
-                Final estimate
-              </Link>
-            </Button>
-          ) : (
-            <Minus className={"size-2.5"} />
-          )}
         </div>
       ),
     },

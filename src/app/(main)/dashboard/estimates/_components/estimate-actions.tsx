@@ -99,10 +99,13 @@ function createEstimateMessageHtml({
 
 export function EstimateActions({
   action,
+  compact = false,
   companyName,
   customerEmail,
   customerName,
   deleteAction,
+  deleteDescription,
+  deleteId,
   deleteRedirectTo,
   deleteSnapshot,
   editHref,
@@ -116,20 +119,24 @@ export function EstimateActions({
   gmailConnected,
   gmailSenderEmail,
   notice,
+  primaryEmail = false,
   returnTo,
   templates,
   validThrough,
 }: {
   action: (state: EmailEstimateState, formData: FormData) => Promise<EmailEstimateState>;
+  compact?: boolean;
   companyName: string;
   customerEmail?: string | null;
   customerName?: string | null;
   deleteAction: (state: EstimateMutationState, formData: FormData) => Promise<EstimateMutationState>;
+  deleteDescription?: string;
+  deleteId?: string;
   deleteRedirectTo?: string;
   deleteSnapshot?: DeleteEstimateSnapshot;
   editHref?: string | null;
   editLabel?: string;
-  estimateId: string;
+  estimateId?: string;
   estimateMessageAlign: "left" | "center" | "right";
   estimateMessageEnabled: boolean;
   estimateMessageText: string;
@@ -141,6 +148,7 @@ export function EstimateActions({
     message: string;
     type: "error" | "success";
   } | null;
+  primaryEmail?: boolean;
   returnTo: string;
   templates?: DocumentEmailTemplate[];
   validThrough: string;
@@ -207,23 +215,27 @@ export function EstimateActions({
   return (
     <div className="grid gap-2 print:hidden">
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!customerEmail}
-          className="hidden sm:inline-flex"
-          onClick={() => setEmailOpen(true)}
-        >
-          <Mail />
-          Email
-        </Button>
-        <Button asChild size="sm" className="hidden sm:inline-flex">
-          <Link href={`/dashboard/estimates/${estimateId}/pdf`} prefetch={false}>
-            <Download />
-            Download
-          </Link>
-        </Button>
+        {estimateId && (!compact || primaryEmail) ? (
+          <Button
+            type="button"
+            variant={primaryEmail ? "default" : "outline"}
+            size="sm"
+            disabled={!customerEmail}
+            className={primaryEmail ? "inline-flex" : "hidden sm:inline-flex"}
+            onClick={() => setEmailOpen(true)}
+          >
+            <Mail />
+            Email estimate
+          </Button>
+        ) : null}
+        {estimateId && !compact ? (
+          <Button asChild size="sm" className="hidden sm:inline-flex">
+            <Link href={`/dashboard/estimates/${estimateId}/pdf`} prefetch={false}>
+              <Download />
+              Download
+            </Link>
+          </Button>
+        ) : null}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="outline" size="sm" className="gap-1.5">
@@ -233,16 +245,25 @@ export function EstimateActions({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Estimate actions</DropdownMenuLabel>
-            <DropdownMenuItem className="sm:hidden" disabled={!customerEmail} onSelect={() => setEmailOpen(true)}>
-              <Mail />
-              Email estimate
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="sm:hidden">
-              <Link href={`/dashboard/estimates/${estimateId}/pdf`} prefetch={false}>
-                <Download />
-                Download
-              </Link>
-            </DropdownMenuItem>
+            {estimateId && (!primaryEmail || !compact) ? (
+              <DropdownMenuItem
+                className={compact ? undefined : "sm:hidden"}
+                disabled={!customerEmail}
+                onSelect={() => setEmailOpen(true)}
+              >
+                <Mail />
+                Email estimate
+              </DropdownMenuItem>
+            ) : null}
+            {estimateId ? (
+              <DropdownMenuItem asChild className={compact ? undefined : "sm:hidden"}>
+                <Link href={`/dashboard/estimates/${estimateId}/pdf`} prefetch={false}>
+                  <Download />
+                  Download PDF
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
+            {estimateId ? <DropdownMenuSeparator /> : null}
             {editHref ? (
               <DropdownMenuItem asChild>
                 <Link href={editHref}>
@@ -273,34 +294,37 @@ export function EstimateActions({
           onOpenChange={setEstimateNoteOpen}
           returnTo={returnTo}
         />
-        <DocumentEmailComposerDialog
-          action={action}
-          attachmentName={`${estimateNumber}.pdf`}
-          defaultHtml={defaultHtml}
-          defaultSubject={defaultSubject}
-          defaultText={defaultMessage}
-          details={[
-            { label: "Estimate", value: estimateNumber },
-            { label: "Recipient", value: customerEmail ?? "No email on file" },
-            { label: "Customer", value: customerName ?? "No customer name" },
-            { label: "Estimated total", value: estimatedTotal, tone: "estimate" },
-            { label: "Valid through", value: validThrough },
-          ]}
-          documentId={estimateId}
-          documentIdField="estimateId"
-          documentLabel="estimate"
-          gmailConnected={gmailConnected}
-          hideTrigger
-          open={emailOpen}
-          onOpenChange={setEmailOpen}
-          recipientEmail={customerEmail}
-          returnTo={returnTo}
-          senderEmail={gmailSenderEmail}
-          templates={templates}
-        />
+        {estimateId ? (
+          <DocumentEmailComposerDialog
+            action={action}
+            attachmentName={`${estimateNumber}.pdf`}
+            defaultHtml={defaultHtml}
+            defaultSubject={defaultSubject}
+            defaultText={defaultMessage}
+            details={[
+              { label: "Estimate", value: estimateNumber },
+              { label: "Recipient", value: customerEmail ?? "No email on file" },
+              { label: "Customer", value: customerName ?? "No customer name" },
+              { label: "Estimated total", value: estimatedTotal, tone: "estimate" },
+              { label: "Valid through", value: validThrough },
+            ]}
+            documentId={estimateId}
+            documentIdField="estimateId"
+            documentLabel="estimate"
+            gmailConnected={gmailConnected}
+            hideTrigger
+            open={emailOpen}
+            onOpenChange={setEmailOpen}
+            recipientEmail={customerEmail}
+            returnTo={returnTo}
+            senderEmail={gmailSenderEmail}
+            templates={templates}
+          />
+        ) : null}
         <DeleteEstimateButton
           action={deleteAction}
-          estimateId={estimateId}
+          description={deleteDescription}
+          estimateId={deleteId ?? estimateId ?? ""}
           hideTrigger
           open={deleteOpen}
           onOpenChange={setDeleteOpen}
@@ -315,6 +339,7 @@ export function EstimateActions({
 
 export function DeleteEstimateButton({
   action,
+  description,
   estimateId,
   hideTrigger = false,
   onOpenChange,
@@ -323,6 +348,7 @@ export function DeleteEstimateButton({
   snapshot,
 }: {
   action: (state: EstimateMutationState, formData: FormData) => Promise<EstimateMutationState>;
+  description?: string;
   estimateId: string;
   hideTrigger?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -373,7 +399,8 @@ export function DeleteEstimateButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete estimate?</AlertDialogTitle>
           <AlertDialogDescription>
-            This removes the estimate snapshot. You can create a new estimate from the job after updating details.
+            {description ??
+              "This removes the estimate snapshot. You can create a new estimate from the job after updating details."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {snapshot ? (

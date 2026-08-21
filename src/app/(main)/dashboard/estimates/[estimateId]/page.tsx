@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { addDays, format } from "date-fns";
 import { BriefcaseBusiness, CalendarDays, Mail, MapPin, NotebookText, Phone, UserRound } from "lucide-react";
@@ -156,6 +156,17 @@ export default async function Page({
 
   if (!estimate) {
     notFound();
+  }
+
+  if (estimate.estimateRecordId) {
+    const canonicalParams = new URLSearchParams({ view: "customer" });
+    if (resolvedSearchParams?.gmail_connected) {
+      canonicalParams.set("gmail_connected", resolvedSearchParams.gmail_connected);
+    }
+    if (resolvedSearchParams?.gmail_error) {
+      canonicalParams.set("gmail_error", resolvedSearchParams.gmail_error);
+    }
+    redirect(`/dashboard/estimates/records/${estimate.estimateRecordId}?${canonicalParams.toString()}`);
   }
 
   const estimateSequence = await prisma.estimate.count({

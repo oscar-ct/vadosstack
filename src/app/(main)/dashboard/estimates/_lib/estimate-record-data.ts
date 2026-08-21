@@ -209,6 +209,33 @@ export async function getEstimateRecord(ownerId: string, estimateRecordId: strin
   return estimate ? toEstimateRecordRow(estimate) : null;
 }
 
+export async function getEstimateRecordWorkspace(ownerId: string, estimateRecordId: string) {
+  const estimate = await prisma.estimateRecord.findUnique({
+    where: {
+      id_ownerId: {
+        id: estimateRecordId,
+        ownerId,
+      },
+    },
+    include: {
+      customer: {
+        include: {
+          phoneNumbers: true,
+        },
+      },
+      lead: true,
+      printableEstimate: true,
+    },
+  });
+
+  if (!estimate) return null;
+
+  return {
+    estimate: toEstimateRecordRow(estimate),
+    source: estimate,
+  };
+}
+
 export async function getEstimateServices(ownerId: string): Promise<ServiceTemplateRow[]> {
   const services = await prisma.serviceTemplate.findMany({
     where: {

@@ -425,6 +425,9 @@ export async function emailEstimateAction(
 
   revalidatePath("/dashboard/estimates");
   revalidatePath(`/dashboard/estimates/${estimate.id}`);
+  if (estimate.estimateRecordId) {
+    revalidatePath(`/dashboard/estimates/records/${estimate.estimateRecordId}`);
+  }
   revalidatePath("/dashboard/email-history");
 
   return createEmailEstimateState(true, `Estimate sent to ${estimate.customerEmail}.`);

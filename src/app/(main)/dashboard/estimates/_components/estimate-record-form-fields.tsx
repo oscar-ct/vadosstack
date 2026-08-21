@@ -204,20 +204,6 @@ function formatLeadMeta(lead: EstimateLeadOption) {
     .join(" - ");
 }
 
-function handleCommandListWheel(event: React.WheelEvent<HTMLDivElement>) {
-  if (!event.deltaY) return;
-
-  const list = event.currentTarget;
-  const canScrollUp = event.deltaY < 0 && list.scrollTop > 0;
-  const canScrollDown = event.deltaY > 0 && list.scrollTop + list.clientHeight < list.scrollHeight;
-
-  if (!canScrollUp && !canScrollDown) return;
-
-  event.preventDefault();
-  event.stopPropagation();
-  list.scrollTop += event.deltaY;
-}
-
 function parseEstimateDate(value?: string) {
   if (!value) return undefined;
 
@@ -1650,10 +1636,7 @@ export function EstimateRecordFormFields({
                 >
                   <Command>
                     <CommandInput placeholder="Search customers and leads..." />
-                    <CommandList
-                      className="max-h-[min(18rem,var(--radix-popover-content-available-height))] overscroll-contain pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar]:block [&::-webkit-scrollbar]:w-2"
-                      onWheel={handleCommandListWheel}
-                    >
+                    <CommandList className="max-h-[min(18rem,var(--radix-popover-content-available-height))] overscroll-contain pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar]:block [&::-webkit-scrollbar]:w-2">
                       <CommandEmpty>No customers or leads found.</CommandEmpty>
                       <CommandGroup>
                         <CommandItem value="New lead" onSelect={selectNewLead}>
@@ -2255,10 +2238,7 @@ export function EstimateRecordFormFields({
             >
               <Command>
                 <CommandInput placeholder="Search customers and leads..." />
-                <CommandList
-                  className="max-h-[min(18rem,var(--radix-popover-content-available-height))] overscroll-contain pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar]:block [&::-webkit-scrollbar]:w-2"
-                  onWheel={handleCommandListWheel}
-                >
+                <CommandList className="max-h-[min(18rem,var(--radix-popover-content-available-height))] overscroll-contain pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar]:block [&::-webkit-scrollbar]:w-2">
                   <CommandEmpty>No customers or leads found.</CommandEmpty>
                   <CommandGroup>
                     <CommandItem value="New lead" onSelect={selectNewLead}>
