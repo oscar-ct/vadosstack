@@ -11,6 +11,7 @@ type BillingStateKind =
   | "needsCustomer"
   | "needsFinalPrice"
   | "noBalance"
+  | "notInvoiced"
   | "paid"
   | "paidNotInvoiced"
   | "readyToInvoice";
@@ -112,14 +113,18 @@ export function getJobBillingState(job: BillingJob): JobBillingState {
   }
 
   if (balanceDue > 0) {
+    const readyToInvoice = job.status === "Completed";
+
     return {
       amountClassName: "text-amber-700 dark:text-amber-400",
       balanceDue,
       canCreateInvoice: true,
-      detail: `${formatJobMoney(balanceDue)} due, no invoice.`,
+      detail: readyToInvoice
+        ? `${formatJobMoney(balanceDue)} ready to invoice.`
+        : `${formatJobMoney(finalCost)} total, no invoice.`,
       finalCost,
-      kind: "readyToInvoice",
-      label: "Ready to invoice",
+      kind: readyToInvoice ? "readyToInvoice" : "notInvoiced",
+      label: readyToInvoice ? "Ready to invoice" : "Not invoiced",
     };
   }
 
