@@ -230,7 +230,7 @@ export function EstimateActions({
         ) : null}
         {estimateId && !compact ? (
           <Button asChild size="sm" className="hidden sm:inline-flex">
-            <Link href={`/dashboard/estimates/${estimateId}/pdf`} prefetch={false}>
+            <Link href={`/dashboard/estimates/${estimateId}/pdf`} download={`${estimateNumber}.pdf`} prefetch={false}>
               <Download />
               Download
             </Link>
@@ -257,7 +257,11 @@ export function EstimateActions({
             ) : null}
             {estimateId ? (
               <DropdownMenuItem asChild className={compact ? undefined : "sm:hidden"}>
-                <Link href={`/dashboard/estimates/${estimateId}/pdf`} prefetch={false}>
+                <Link
+                  href={`/dashboard/estimates/${estimateId}/pdf`}
+                  download={`${estimateNumber}.pdf`}
+                  prefetch={false}
+                >
                   <Download />
                   Download PDF
                 </Link>

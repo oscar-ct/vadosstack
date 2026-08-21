@@ -238,7 +238,7 @@ export function InvoiceActions({
           Email
         </Button>
         <Button asChild size="sm" className="hidden sm:inline-flex">
-          <Link href={`/dashboard/invoices/${invoiceId}/pdf`} prefetch={false}>
+          <Link href={`/dashboard/invoices/${invoiceId}/pdf`} download={`${invoiceNumber}.pdf`} prefetch={false}>
             <Download />
             Download
           </Link>
@@ -257,7 +257,7 @@ export function InvoiceActions({
               Email invoice
             </DropdownMenuItem>
             <DropdownMenuItem asChild className="sm:hidden">
-              <Link href={`/dashboard/invoices/${invoiceId}/pdf`} prefetch={false}>
+              <Link href={`/dashboard/invoices/${invoiceId}/pdf`} download={`${invoiceNumber}.pdf`} prefetch={false}>
                 <Download />
                 Download
               </Link>
