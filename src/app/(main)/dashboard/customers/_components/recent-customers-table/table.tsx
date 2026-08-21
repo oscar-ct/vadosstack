@@ -517,7 +517,7 @@ export function RecentCustomersTable({
                         </span>
                       </div>
                     </div>
-                    {view === "work" && row.original.unpaidJobs?.length ? (
+                    {view === "work" && row.original.unpaidInvoices?.length ? (
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <CustomerDueJobsPopover customer={row.original} />
                       </div>

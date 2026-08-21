@@ -291,19 +291,20 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
       paymentStatus: job.paymentStatus,
       linkedJobId: job.id,
     })),
-    unpaidJobs: invoices
+    unpaidInvoices: invoices
       .filter((invoice) => Number(invoice.balanceDue) > 0)
       .map((invoice) => ({
         id: invoice.id,
-        title: `Invoice ${invoice.id.slice(-6).toUpperCase()}`,
+        title: invoice.invoiceNumber ?? "Invoice",
         status: invoice.paymentStatus,
-        date: invoice.issuedAt.toISOString(),
+        dueAt: addDays(invoice.issuedAt, currentUser.invoiceDueDays).toISOString(),
         balance: formatMoney(invoice.balanceDue) ?? "$0.00",
         paymentStatus: invoice.paymentStatus,
         linkedInvoiceId: invoice.id,
       })),
     invoiceHistory: invoices.map((invoice) => ({
       id: invoice.id,
+      invoiceNumber: invoice.invoiceNumber ?? undefined,
       status: invoice.paymentStatus,
       issuedAt: invoice.issuedAt.toISOString(),
       dueAt: addDays(invoice.issuedAt, currentUser.invoiceDueDays).toISOString(),

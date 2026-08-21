@@ -51,16 +51,15 @@ export const recentCustomersSchema = z.object({
       }),
     )
     .optional(),
-  unpaidJobs: z
+  unpaidInvoices: z
     .array(
       z.object({
         id: z.string(),
         title: z.string(),
         status: z.string(),
-        date: z.string(),
+        dueAt: z.string(),
         balance: z.string(),
         paymentStatus: z.string().optional(),
-        linkedJobId: z.string().optional(),
         linkedInvoiceId: z.string().optional(),
       }),
     )
@@ -69,6 +68,7 @@ export const recentCustomersSchema = z.object({
     .array(
       z.object({
         id: z.string(),
+        invoiceNumber: z.string().optional(),
         status: z.string(),
         issuedAt: z.string(),
         dueAt: z.string().optional(),

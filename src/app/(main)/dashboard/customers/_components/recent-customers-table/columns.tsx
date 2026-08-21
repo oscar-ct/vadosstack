@@ -21,10 +21,10 @@ import {
 import type { RecentCustomerRow } from "./schema";
 
 export function getCustomerBillingDisplay(customer: RecentCustomerRow) {
-  const unpaidJobs = customer.unpaidJobs ?? [];
+  const unpaidInvoices = customer.unpaidInvoices ?? [];
   const invoiceHistory = customer.invoiceHistory ?? [];
-  const hasBalance = unpaidJobs.length > 0;
-  const unpaidJobCount = unpaidJobs.length;
+  const hasBalance = unpaidInvoices.length > 0;
+  const unpaidInvoiceCount = unpaidInvoices.length;
 
   if (!hasBalance) {
     const hasInvoices = invoiceHistory.length > 0;
@@ -45,8 +45,8 @@ export function getCustomerBillingDisplay(customer: RecentCustomerRow) {
       "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-950/60",
     tone: "due" as const,
     label: "Outstanding balance",
-    detail: `${unpaidJobCount} unpaid invoice${unpaidJobCount === 1 ? "" : "s"}`,
-    actionLabel: `Review ${unpaidJobCount} unpaid invoice${unpaidJobCount === 1 ? "" : "s"}`,
+    detail: `${unpaidInvoiceCount} unpaid invoice${unpaidInvoiceCount === 1 ? "" : "s"}`,
+    actionLabel: `Review ${unpaidInvoiceCount} unpaid invoice${unpaidInvoiceCount === 1 ? "" : "s"}`,
   };
 }
 
@@ -59,10 +59,10 @@ function formatOrderDate(value?: string) {
 }
 
 export function CustomerDueJobsPopover({ customer }: { customer: RecentCustomerRow }) {
-  const unpaidJobs = customer.unpaidJobs ?? [];
+  const unpaidInvoices = customer.unpaidInvoices ?? [];
   const billingDisplay = getCustomerBillingDisplay(customer);
 
-  if (!unpaidJobs.length) {
+  if (!unpaidInvoices.length) {
     return null;
   }
 
@@ -83,31 +83,28 @@ export function CustomerDueJobsPopover({ customer }: { customer: RecentCustomerR
           <div className="border-b p-3">
             <PopoverTitle>Unpaid invoices</PopoverTitle>
             <PopoverDescription>
-              {billingDisplay.amountLabel} across {unpaidJobs.length} invoice{unpaidJobs.length === 1 ? "" : "s"}.
+              {billingDisplay.amountLabel} across {unpaidInvoices.length} invoice
+              {unpaidInvoices.length === 1 ? "" : "s"}.
             </PopoverDescription>
           </div>
         </PopoverHeader>
         <div className="grid max-h-72 overflow-auto">
-          {unpaidJobs.map((job) => (
+          {unpaidInvoices.map((invoice) => (
             <Link
-              key={job.id}
+              key={invoice.id}
               prefetch={false}
-              href={
-                job.linkedInvoiceId
-                  ? `/dashboard/invoices/${job.linkedInvoiceId}`
-                  : `/dashboard/jobs/${job.linkedJobId ?? job.id}`
-              }
+              href={`/dashboard/invoices/${invoice.linkedInvoiceId ?? invoice.id}`}
               className="grid gap-1 border-b p-3 transition-colors last:border-b-0 hover:bg-muted/50"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate font-medium text-sm">{job.title}</div>
+                  <div className="truncate font-medium text-sm">{invoice.title}</div>
                   <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
-                    <span>{formatDate(job.date)}</span>
-                    <span>{job.paymentStatus ?? job.status}</span>
+                    <span>Due {formatDate(invoice.dueAt)}</span>
+                    <span>{invoice.paymentStatus ?? invoice.status}</span>
                   </div>
                 </div>
-                <span className="shrink-0 font-medium text-rose-700 text-sm dark:text-rose-400">{job.balance}</span>
+                <span className="shrink-0 font-medium text-rose-700 text-sm dark:text-rose-400">{invoice.balance}</span>
               </div>
             </Link>
           ))}
@@ -190,7 +187,8 @@ export function getRecentCustomersColumns({
           row.outstandingAmount,
           row.totalOrderSpent,
           row.totalOrderRefunded,
-          ...(row.unpaidJobs?.map((job) => [job.title, job.paymentStatus, job.balance].join(" ")) ?? []),
+          ...(row.unpaidInvoices?.map((invoice) => [invoice.title, invoice.paymentStatus, invoice.balance].join(" ")) ??
+            []),
           ...(row.orderHistory?.map((order) =>
             [order.orderNumber, order.paymentStatus, order.fulfillmentStatus].join(" "),
           ) ?? []),
@@ -201,9 +199,9 @@ export function getRecentCustomersColumns({
     {
       id: "billingBucket",
       accessorFn: (row) => {
-        const unpaidJobs = row.unpaidJobs ?? [];
+        const unpaidInvoices = row.unpaidInvoices ?? [];
 
-        if (!unpaidJobs.length) {
+        if (!unpaidInvoices.length) {
           return ["no-balance"];
         }
 

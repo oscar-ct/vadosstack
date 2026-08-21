@@ -83,6 +83,7 @@ async function getCustomers(ownerId: string, invoiceDueDays: number): Promise<Re
       .sort((left, right) => right.issuedAt.getTime() - left.issuedAt.getTime())
       .map((invoice) => ({
         id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber ?? undefined,
         status: invoice.paymentStatus,
         issuedAt: invoice.issuedAt.toISOString(),
         dueAt: addDays(invoice.issuedAt, invoiceDueDays).toISOString(),
@@ -94,9 +95,9 @@ async function getCustomers(ownerId: string, invoiceDueDays: number): Promise<Re
       .filter((invoice) => invoice.balanceValue > 0)
       .map((invoice) => ({
         id: invoice.id,
-        title: `Invoice ${invoice.id.slice(-6).toUpperCase()}`,
+        title: invoice.invoiceNumber ?? "Invoice",
         status: invoice.status,
-        date: invoice.issuedAt,
+        dueAt: invoice.dueAt,
         balance: invoice.balance,
         paymentStatus: invoice.status,
         linkedInvoiceId: invoice.id,
@@ -158,7 +159,7 @@ async function getCustomers(ownerId: string, invoiceDueDays: number): Promise<Re
         value: formatPhoneNumber(phoneNumber.value),
       })),
       jobHistory,
-      unpaidJobs: unpaidInvoices,
+      unpaidInvoices,
       invoiceHistory,
       orderHistory,
       notes: customer.notes ?? undefined,

@@ -247,7 +247,7 @@ export function CustomerDetailsDialog({
                         >
                           <div className="grid gap-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-medium text-sm">Invoice #{invoice.id}</span>
+                              <span className="font-medium text-sm">{invoice.invoiceNumber ?? "Invoice"}</span>
                               <Badge variant="outline">{invoice.status}</Badge>
                             </div>
                             <span className="flex items-center gap-1 text-muted-foreground text-xs">
