@@ -579,7 +579,7 @@ export function InvoicesTable({ exportSlotId, invoices }: { exportSlotId?: strin
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "issuedAt", desc: true }]);
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: 20,
   });
   const [columnVisibility] = React.useState<VisibilityState>({
     dueBucket: false,
@@ -1046,7 +1046,7 @@ export function InvoicesTable({ exportSlotId, invoices }: { exportSlotId?: strin
               </SelectTrigger>
               <SelectContent side="top">
                 <SelectGroup>
-                  {[10, 20, 30, 40, 50].map((pageSize) => (
+                  {[20, 30, 40, 50].map((pageSize) => (
                     <SelectItem key={pageSize} value={`${pageSize}`}>
                       {pageSize}
                     </SelectItem>

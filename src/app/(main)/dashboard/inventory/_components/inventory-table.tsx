@@ -473,7 +473,7 @@ export function InventoryTable({
   const [categoryFilter, setCategoryFilter] = React.useState("all");
   const [locationFilter, setLocationFilter] = React.useState("all");
   const [pageIndex, setPageIndex] = React.useState(0);
-  const [pageSize, setPageSize] = React.useState(10);
+  const [pageSize, setPageSize] = React.useState(20);
   const [sortValue, setSortValue] = React.useState<SortValue>("value-desc");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
   const [activeItem, setActiveItem] = React.useState<InventoryItem | null>(null);
@@ -952,7 +952,7 @@ export function InventoryTable({
                 </SelectTrigger>
                 <SelectContent side="top">
                   <SelectGroup>
-                    {[10, 20, 30, 40, 50].map((size) => (
+                    {[20, 30, 40, 50].map((size) => (
                       <SelectItem key={size} value={`${size}`}>
                         {size}
                       </SelectItem>

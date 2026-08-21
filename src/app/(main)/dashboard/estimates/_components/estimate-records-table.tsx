@@ -59,7 +59,7 @@ import { cn } from "@/lib/utils";
 import { getEstimateRecordsColumns } from "./estimate-records-table/columns";
 import type { EstimateRecordRow } from "./schema";
 
-const pageSize = 10;
+const pageSize = 20;
 const statusOptions = [
   { value: "all", label: "All statuses" },
   { value: "Draft", label: "Draft" },
@@ -560,7 +560,7 @@ export function EstimateRecordsTable({ data, exportSlotId }: { data: EstimateRec
                 </SelectTrigger>
                 <SelectContent side="top">
                   <SelectGroup>
-                    {[10, 20, 30, 40, 50].map((pageSize) => (
+                    {[20, 30, 40, 50].map((pageSize) => (
                       <SelectItem key={pageSize} value={`${pageSize}`}>
                         {pageSize}
                       </SelectItem>

@@ -295,7 +295,7 @@ export function OrdersTable({ exportSlotId, orders }: { exportSlotId?: string; o
   const router = useRouter();
   const [activeFilter, setActiveFilter] = React.useState<OrderFilter>("all");
   const [pageIndex, setPageIndex] = React.useState(0);
-  const [pageSize, setPageSize] = React.useState(10);
+  const [pageSize, setPageSize] = React.useState(20);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortValue, setSortValue] = React.useState<OrderSort>("newest");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
@@ -637,7 +637,7 @@ export function OrdersTable({ exportSlotId, orders }: { exportSlotId?: string; o
                 </SelectTrigger>
                 <SelectContent side="top">
                   <SelectGroup>
-                    {[10, 20, 30, 40, 50].map((size) => (
+                    {[20, 30, 40, 50].map((size) => (
                       <SelectItem key={size} value={`${size}`}>
                         {size}
                       </SelectItem>

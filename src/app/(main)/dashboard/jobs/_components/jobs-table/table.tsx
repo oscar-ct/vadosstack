@@ -136,7 +136,7 @@ export function JobsTable({
   });
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: 20,
   });
   const columns = React.useMemo(
     () =>
@@ -614,7 +614,7 @@ export function JobsTable({
                 </SelectTrigger>
                 <SelectContent side="top">
                   <SelectGroup>
-                    {[10, 20, 30, 40, 50].map((pageSize) => (
+                    {[20, 30, 40, 50].map((pageSize) => (
                       <SelectItem key={pageSize} value={`${pageSize}`}>
                         {pageSize}
                       </SelectItem>
