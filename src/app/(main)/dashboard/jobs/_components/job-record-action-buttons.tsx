@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { CircleDollarSign, MoreVertical, Pencil, ReceiptText, Trash2 } from "lucide-react";
+import { CircleCheck, CircleDollarSign, MoreVertical, Pencil, ReceiptText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -69,6 +69,15 @@ function DeleteSnapshotRow({ label, value }: { label: string; value?: string | n
   );
 }
 
+function JobActionSnapshotRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 text-sm">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 break-words text-right font-medium text-foreground">{value?.trim() || "-"}</dd>
+    </div>
+  );
+}
+
 export function JobInvoiceButton({
   action,
   className,
@@ -83,6 +92,8 @@ export function JobInvoiceButton({
   const [state, formAction, isPending] = React.useActionState(action, initialInvoiceState);
   const billingState = getJobBillingState(job);
   const createInvoiceLabel = billingState.kind === "paidNotInvoiced" ? "Create paid invoice" : "Create invoice";
+  const createInvoiceOnlyLabel =
+    billingState.kind === "paidNotInvoiced" ? "Create paid invoice only" : "Create invoice only";
 
   React.useEffect(() => {
     if (!state.message || state.success) return;
@@ -113,27 +124,282 @@ export function JobInvoiceButton({
     );
   }
 
-  return (
-    <form action={formAction} className="grid gap-2">
-      <input type="hidden" name="jobId" value={job.id} />
+  if (!billingState.canCreateInvoice) {
+    return (
       <Button
-        type="submit"
+        type="button"
         size={size}
         className={cn(
-          "flex h-7 justify-center px-2",
-          billingState.canCreateInvoice
-            ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950"
-            : "border-muted bg-muted/30 text-muted-foreground hover:bg-muted/30 hover:text-muted-foreground",
+          "flex h-7 justify-center border-muted bg-muted/30 px-2 text-muted-foreground hover:bg-muted/30 hover:text-muted-foreground",
           className,
         )}
         variant="outline"
-        disabled={isPending || !billingState.canCreateInvoice}
+        disabled
         title={billingState.detail}
       >
         <ReceiptText />
-        {isPending ? "Creating..." : billingState.canCreateInvoice ? createInvoiceLabel : billingState.label}
+        {billingState.label}
       </Button>
-    </form>
+    );
+  }
+
+  const jobIsComplete = job.status === "Completed";
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          size={size}
+          className={cn(
+            "flex h-7 justify-center border-amber-200 bg-amber-50 px-2 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950",
+            className,
+          )}
+          variant="outline"
+          disabled={isPending}
+          title={billingState.detail}
+        >
+          <ReceiptText />
+          {createInvoiceLabel}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent className="data-[size=default]:sm:max-w-xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Create invoice?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {jobIsComplete
+              ? "Review the completed job totals before creating its invoice."
+              : `This job is still ${job.status}. You can create an invoice for a deposit or progress billing, but the work has not been marked complete.`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <form action={formAction} className="grid gap-4">
+          <input type="hidden" name="jobId" value={job.id} />
+          <dl className="grid gap-2 rounded-md border bg-muted/30 p-3">
+            <JobActionSnapshotRow label="Customer" value={job.customerName} />
+            <JobActionSnapshotRow label="Job" value={job.description} />
+            <JobActionSnapshotRow label="Status" value={job.status} />
+            <JobActionSnapshotRow label="Job total" value={formatDeleteMoney(job.finalCost)} />
+            <JobActionSnapshotRow label="Amount paid" value={formatDeleteMoney(job.amountPaid ?? "0")} />
+            <JobActionSnapshotRow label="Invoice balance" value={`$${billingState.balanceDue.toFixed(2)}`} />
+          </dl>
+
+          {!jobIsComplete ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+              Confirm that this invoice is intended for billing before the job is complete.
+            </div>
+          ) : null}
+
+          <AlertDialogFooter className="grid gap-3 sm:justify-stretch">
+            {!jobIsComplete ? (
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Button
+                    type="submit"
+                    name="markComplete"
+                    value="true"
+                    variant="outline"
+                    disabled={isPending}
+                    className="order-2 h-auto min-h-8 w-full whitespace-normal py-2 text-center leading-tight sm:order-1"
+                  >
+                    <CircleCheck />
+                    {isPending ? "Creating..." : "Mark complete & create invoice"}
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={isPending}
+                    className="order-1 h-auto min-h-8 w-full whitespace-normal py-2 text-center leading-tight sm:order-2"
+                  >
+                    <ReceiptText />
+                    {isPending ? "Creating..." : createInvoiceOnlyLabel}
+                  </Button>
+                </div>
+                <div className="flex justify-end">
+                  <AlertDialogCancel type="button" variant="default" disabled={isPending} className="w-full sm:w-1/2">
+                    Cancel
+                  </AlertDialogCancel>
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <AlertDialogCancel
+                  type="button"
+                  variant="default"
+                  disabled={isPending}
+                  className="order-2 w-full sm:order-1"
+                >
+                  Cancel
+                </AlertDialogCancel>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={isPending}
+                  className="order-1 h-auto min-h-8 w-full whitespace-normal py-2 text-center leading-tight sm:order-2"
+                >
+                  <ReceiptText />
+                  {isPending ? "Creating..." : createInvoiceLabel}
+                </Button>
+              </div>
+            )}
+          </AlertDialogFooter>
+        </form>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+export function MarkJobCompleteButton({
+  action,
+  className,
+  createInvoiceAction,
+  job,
+  size = "sm",
+}: {
+  action: (state: JobMutationState, formData: FormData) => Promise<JobMutationState>;
+  className?: string;
+  createInvoiceAction: (state: InvoiceMutationState, formData: FormData) => Promise<InvoiceMutationState>;
+  job: JobRow;
+  size?: React.ComponentProps<typeof Button>["size"];
+}) {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const [state, formAction, isPending] = React.useActionState(action, initialState);
+  const [invoiceState, invoiceFormAction, isInvoicePending] = React.useActionState(
+    createInvoiceAction,
+    initialInvoiceState,
+  );
+  const billingState = getJobBillingState(job);
+  const actionPending = isPending || isInvoicePending;
+  const canCompleteAndInvoice = !job.invoiceId && billingState.canCreateInvoice;
+
+  React.useEffect(() => {
+    if (!state.message) return;
+
+    if (state.success) {
+      toast.success(state.message);
+      setOpen(false);
+      router.refresh();
+      return;
+    }
+
+    toast.error(state.message);
+  }, [router, state]);
+
+  React.useEffect(() => {
+    if (!invoiceState.message || invoiceState.success) return;
+
+    toast.error(invoiceState.message);
+  }, [invoiceState]);
+
+  if (job.status === "Completed" || job.status === "Cancelled") return null;
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          size={size}
+          className={cn(
+            "bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500",
+            className,
+          )}
+        >
+          <CircleCheck />
+          Mark complete
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent className="data-[size=default]:sm:max-w-xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Mark job complete?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This changes only the job status. Pricing, schedule, line items, payments, and invoice details will not be
+            modified.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <dl className="grid gap-2 rounded-md border bg-muted/30 p-3">
+          <JobActionSnapshotRow label="Customer" value={job.customerName} />
+          <JobActionSnapshotRow label="Job" value={job.description} />
+          <JobActionSnapshotRow label="Current status" value={job.status} />
+          <JobActionSnapshotRow label="Job total" value={formatDeleteMoney(job.finalCost)} />
+          <JobActionSnapshotRow label="Amount paid" value={formatDeleteMoney(job.amountPaid ?? "0")} />
+          <JobActionSnapshotRow label="Balance" value={`$${billingState.balanceDue.toFixed(2)}`} />
+          <JobActionSnapshotRow
+            label="Invoice"
+            value={job.invoiceId ? (job.invoiceNumber ?? "Created") : "Not invoiced"}
+          />
+        </dl>
+
+        {job.invoiceId ? (
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-muted-foreground text-sm">
+            The existing invoice will remain unchanged.
+          </div>
+        ) : null}
+
+        <AlertDialogFooter className="grid gap-3 sm:justify-stretch">
+          {canCompleteAndInvoice ? (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <form action={invoiceFormAction} className="order-2 sm:order-1">
+                  <input type="hidden" name="jobId" value={job.id} />
+                  <input type="hidden" name="markComplete" value="true" />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={actionPending}
+                    className="h-auto min-h-8 w-full whitespace-normal py-2 text-center leading-tight"
+                  >
+                    <ReceiptText />
+                    {isInvoicePending ? "Creating..." : "Mark complete & create invoice"}
+                  </Button>
+                </form>
+                <form action={formAction} className="order-1 sm:order-2">
+                  <input type="hidden" name="jobId" value={job.id} />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={actionPending}
+                    className="h-auto min-h-8 w-full whitespace-normal py-2 text-center leading-tight"
+                  >
+                    <CircleCheck />
+                    {isPending ? "Completing..." : "Mark complete only"}
+                  </Button>
+                </form>
+              </div>
+              <div className="flex justify-end">
+                <AlertDialogCancel type="button" variant="default" disabled={actionPending} className="w-full sm:w-1/2">
+                  Cancel
+                </AlertDialogCancel>
+              </div>
+            </>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <AlertDialogCancel
+                type="button"
+                variant="default"
+                disabled={actionPending}
+                className="order-2 w-full sm:order-1"
+              >
+                Cancel
+              </AlertDialogCancel>
+              <form action={formAction} className="order-1 sm:order-2">
+                <input type="hidden" name="jobId" value={job.id} />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={actionPending}
+                  className="h-auto min-h-8 w-full whitespace-normal py-2 text-center leading-tight"
+                >
+                  <CircleCheck />
+                  {isPending ? "Completing..." : "Mark complete"}
+                </Button>
+              </form>
+            </div>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -351,11 +617,11 @@ function DepositDialog({
             </div>
           </div>
           {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={isPending}>
+            <Button type="submit" disabled={isPending}>
               {isPending ? (isEditing ? "Saving..." : "Recording...") : isEditing ? "Save deposit" : "Record deposit"}
             </Button>
           </div>

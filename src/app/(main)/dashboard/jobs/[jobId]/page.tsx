@@ -29,10 +29,15 @@ import { cn } from "@/lib/utils";
 
 import { createInvoiceAction } from "../../invoices/actions";
 import { JobBackButton } from "../_components/job-back-button";
-import { CreateDepositButton, DepositActionsMenu, JobInvoiceButton } from "../_components/job-record-action-buttons";
+import {
+  CreateDepositButton,
+  DepositActionsMenu,
+  JobInvoiceButton,
+  MarkJobCompleteButton,
+} from "../_components/job-record-action-buttons";
 import { calculateSignedMaterialTotal } from "../_components/materials";
 import { getJob } from "../_lib/job-data";
-import { createJobPaymentAction, deleteJobPaymentAction, updateJobPaymentAction } from "../actions";
+import { completeJobAction, createJobPaymentAction, deleteJobPaymentAction, updateJobPaymentAction } from "../actions";
 
 function formatMoney(value?: string | number) {
   const amount = Number(value ?? 0);
@@ -290,7 +295,14 @@ export default async function Page({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <JobBackButton />
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild size="sm">
+          <MarkJobCompleteButton
+            action={completeJobAction}
+            className="w-auto"
+            createInvoiceAction={createInvoiceAction}
+            job={job}
+            size="sm"
+          />
+          <Button asChild size="sm" variant="outline">
             <Link prefetch={false} href={`/dashboard/jobs/${job.id}/edit`}>
               <Pencil />
               Edit

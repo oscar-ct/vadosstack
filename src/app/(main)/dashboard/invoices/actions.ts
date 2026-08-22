@@ -35,6 +35,7 @@ import type { InvoiceMutationState } from "./types";
 
 const invoiceJobSchema = z.object({
   jobId: z.string().trim().min(1, "Job is required."),
+  markComplete: z.boolean().default(false),
 });
 
 const deleteInvoiceSchema = z.object({
@@ -210,6 +211,7 @@ export async function createInvoiceAction(
 
   const parsed = invoiceJobSchema.safeParse({
     jobId: formData.get("jobId"),
+    markComplete: formData.get("markComplete") === "true",
   });
 
   if (!parsed.success) {
@@ -267,6 +269,13 @@ export async function createInvoiceAction(
       };
     }
 
+    if (parsed.data.markComplete && job.status === "Cancelled") {
+      return {
+        success: false,
+        message: "A cancelled job cannot be marked complete.",
+      };
+    }
+
     const materials = parseInvoiceMaterials(job.materials);
     const materialsSubtotal = materials.reduce(
       (total, material) => total + Number(calculateSignedMaterialTotal(material)),
@@ -278,8 +287,23 @@ export async function createInvoiceAction(
     const materialTaxAmount = taxableSubtotal * (materialTaxRate / 100);
     const balanceDue = calculateOutstandingBalance(job.status, job.finalCost?.toString(), job.amountPaid?.toString());
     const depositPaid = job.depositPaid?.toString() ?? "0";
+    const invoiceJobStatus = parsed.data.markComplete ? "Completed" : job.status;
 
     const invoice = await prisma.$transaction(async (tx) => {
+      if (parsed.data.markComplete && job.status !== "Completed") {
+        await tx.job.update({
+          where: {
+            id_ownerId: {
+              id: job.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            status: "Completed",
+          },
+        });
+      }
+
       const invoiceNumberAssignment = await allocateDocumentNumber(tx, currentUser.id, "invoice");
       const createdInvoice = await tx.invoice.create({
         data: {
@@ -310,7 +334,7 @@ export async function createInvoiceAction(
           amountPaid: toMoney(job.amountPaid),
           balanceDue: balanceDue.toFixed(2),
           paymentStatus: job.paymentStatus,
-          jobStatus: job.status,
+          jobStatus: invoiceJobStatus,
         },
       });
       await attachDocumentNumber(tx, invoiceNumberAssignment.assignmentId, createdInvoice.id);
@@ -325,7 +349,14 @@ export async function createInvoiceAction(
   }
 
   revalidatePath("/dashboard/jobs");
+  revalidatePath(`/dashboard/jobs/${parsed.data.jobId}`);
   revalidatePath("/dashboard/invoices");
+  if (parsed.data.markComplete) {
+    revalidatePath("/dashboard/overview");
+    revalidatePath("/dashboard/calendar");
+    revalidatePath("/dashboard/command-center");
+    revalidatePath("/dashboard/customers");
+  }
   redirect(`/dashboard/invoices/${invoiceId}?from=jobs`);
 }
 

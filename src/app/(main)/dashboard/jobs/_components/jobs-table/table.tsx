@@ -89,10 +89,11 @@ const sortOptions = [
   { value: "cost-desc", label: "Cost high-low" },
 ] as const;
 
-function shouldIgnoreRowClick(target: EventTarget | null) {
-  return target instanceof HTMLElement
-    ? !!target.closest("a, button, input, label, select, textarea, [data-row-click-ignore]")
-    : false;
+function shouldIgnoreRowClick(target: EventTarget | null, row: HTMLElement) {
+  if (!(target instanceof Node) || !row.contains(target)) return true;
+
+  const element = target instanceof Element ? target : target.parentElement;
+  return !!element?.closest("a, button, input, label, select, textarea, [data-row-click-ignore]");
 }
 
 function formatExportDate(value?: string) {
@@ -427,11 +428,13 @@ export function JobsTable({
                   role="link"
                   tabIndex={0}
                   onClick={(event) => {
-                    if (event.target instanceof HTMLElement && event.target.closest("button, a, input, label")) return;
+                    if (shouldIgnoreRowClick(event.target, event.currentTarget)) return;
                     router.push(`/dashboard/jobs/${row.original.id}`);
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== "Enter" && event.key !== " ") return;
+                    if (shouldIgnoreRowClick(event.target, event.currentTarget)) return;
+
                     event.preventDefault();
                     router.push(`/dashboard/jobs/${row.original.id}`);
                   }}
@@ -564,12 +567,12 @@ export function JobsTable({
                     role="button"
                     aria-label={`View ${row.original.description} details`}
                     onClick={(event) => {
-                      if (shouldIgnoreRowClick(event.target)) return;
+                      if (shouldIgnoreRowClick(event.target, event.currentTarget)) return;
                       router.push(`/dashboard/jobs/${row.original.id}`);
                     }}
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
-                      if (shouldIgnoreRowClick(event.target)) return;
+                      if (shouldIgnoreRowClick(event.target, event.currentTarget)) return;
 
                       event.preventDefault();
                       router.push(`/dashboard/jobs/${row.original.id}`);

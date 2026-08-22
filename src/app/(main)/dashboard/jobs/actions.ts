@@ -27,10 +27,85 @@ export type JobMutationState = {
   redirectTo?: string;
 };
 
+const completeJobSchema = z.object({
+  jobId: z.string().trim().min(1, "Job is required."),
+});
+
 const emptyToUndefined = (value: FormDataEntryValue | null) => {
   const text = String(value ?? "").trim();
   return text ? text : undefined;
 };
+
+export async function completeJobAction(
+  _previousState: JobMutationState,
+  formData: FormData,
+): Promise<JobMutationState> {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return { success: false, message: "You must be signed in to complete a job." };
+  }
+
+  const parsed = completeJobSchema.safeParse({
+    jobId: formData.get("jobId"),
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Select a job and try again." };
+  }
+
+  try {
+    const job = await prisma.job.findUnique({
+      where: {
+        id_ownerId: {
+          id: parsed.data.jobId,
+          ownerId: currentUser.id,
+        },
+      },
+      select: {
+        status: true,
+      },
+    });
+
+    if (!job) {
+      return { success: false, message: "Job could not be found." };
+    }
+
+    if (job.status === "Cancelled") {
+      return { success: false, message: "A cancelled job cannot be marked complete." };
+    }
+
+    if (job.status === "Completed") {
+      return { success: true, message: "Job is already complete." };
+    }
+
+    await prisma.job.update({
+      where: {
+        id_ownerId: {
+          id: parsed.data.jobId,
+          ownerId: currentUser.id,
+        },
+      },
+      data: {
+        status: "Completed",
+      },
+    });
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Job could not be marked complete.",
+    };
+  }
+
+  revalidatePath("/dashboard/jobs");
+  revalidatePath(`/dashboard/jobs/${parsed.data.jobId}`);
+  revalidatePath("/dashboard/overview");
+  revalidatePath("/dashboard/calendar");
+  revalidatePath("/dashboard/command-center");
+  revalidatePath("/dashboard/customers");
+
+  return { success: true, message: "Job marked complete." };
+}
 
 const optionalDate = z
   .string()
