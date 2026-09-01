@@ -1,4 +1,4 @@
-import { CalendarClock, CircleDollarSign, UserRoundCheck, UsersRound } from "lucide-react";
+import { BellRing, CircleDotDashed, UserRoundCheck, UsersRound } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,10 +39,14 @@ export default async function Page() {
           label="Total leads"
           value={summary.total}
         />
-        <StatCard icon={<CalendarClock className="size-4 text-amber-600" />} label="Open leads" value={summary.open} />
+        <StatCard
+          icon={<CircleDotDashed className="size-4 text-amber-600" />}
+          label="Open leads"
+          value={summary.open}
+        />
         <StatCard icon={<UserRoundCheck className="size-4 text-emerald-600" />} label="Won" value={summary.won} />
         <StatCard
-          icon={<CircleDollarSign className="size-4 text-sky-600" />}
+          icon={<BellRing className="size-4 text-sky-600" />}
           label="Needs follow-up"
           value={summary.needsFollowUp}
         />

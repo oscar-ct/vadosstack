@@ -133,7 +133,6 @@ const variableGroups = {
     { label: "Service type", value: "serviceType" },
     { label: "Service location", value: "serviceLocation" },
     { label: "Service location phrase", value: "serviceLocationPhrase" },
-    { label: "Estimated value", value: "estimatedValue" },
     { label: "Follow-up date", value: "followUpDate" },
     { label: "Company name", value: "companyName" },
     { label: "Company email", value: "companyEmail" },

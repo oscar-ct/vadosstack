@@ -25,7 +25,6 @@ type QueueLead = {
   name: string | null;
   source: string | null;
   serviceType: string | null;
-  estimatedValue: MoneyValue;
   status: string;
   followUpAt: Date | null;
   createdAt: Date;
@@ -191,7 +190,7 @@ export function buildManagerActionQueue({
       href: `/dashboard/leads/${lead.id}`,
       priority: "Follow up",
       severity: "cyan" as const,
-      value: lead.estimatedValue ? Math.round(money(lead.estimatedValue)) : "Lead",
+      value: lead.status,
     })),
     ...tasksDueToday.map((task) => ({
       id: task.id,
@@ -211,7 +210,7 @@ export function buildManagerActionQueue({
       href: `/dashboard/leads/${lead.id}`,
       priority: "Contact",
       severity: "amber" as const,
-      value: lead.estimatedValue ? Math.round(money(lead.estimatedValue)) : "New",
+      value: "New",
     })),
     ...pendingTimeRequests.map((request) => ({
       id: request.id,

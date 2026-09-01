@@ -7,27 +7,11 @@ const money = (value: number) => new Prisma.Decimal(value.toFixed(2));
 const demoEmployeeNumbers = ["4101", "4102", "4103"] as const;
 
 const leads = [
-  ["Skyler Monroe", "skyler.monroe@example.com", "New", "Google", "HVAC", 3200, "2026-07-10T15:30:00-05:00"],
-  ["Dakota Lane", "dakota.lane@example.com", "Contacted", "Referral", "Plumbing", 1450, "2026-07-11T10:00:00-05:00"],
-  [
-    "Finley Harper",
-    "finley.harper@example.com",
-    "Estimate Needed",
-    "Website",
-    "Electrical",
-    4800,
-    "2026-07-10T13:00:00-05:00",
-  ],
-  [
-    "Sage Bennett",
-    "sage.bennett@example.com",
-    "Estimate Sent",
-    "Repeat Customer",
-    "Maintenance",
-    890,
-    "2026-07-12T09:00:00-05:00",
-  ],
-  ["Arden Wells", "arden.wells@example.com", "Won", "Local Event", "Installation", 7200, null],
+  ["Skyler Monroe", "skyler.monroe@example.com", "New", "Google", "HVAC", "2026-07-10T15:30:00-05:00"],
+  ["Dakota Lane", "dakota.lane@example.com", "In Progress", "Referral", "Plumbing", "2026-07-11T10:00:00-05:00"],
+  ["Finley Harper", "finley.harper@example.com", "New", "Website", "Electrical", "2026-07-10T13:00:00-05:00"],
+  ["Sage Bennett", "sage.bennett@example.com", "New", "Repeat Customer", "Maintenance", "2026-07-12T09:00:00-05:00"],
+  ["Arden Wells", "arden.wells@example.com", "Won", "Local Event", "Installation", null],
 ] as const;
 
 const estimateRecords = [
@@ -59,7 +43,7 @@ async function main() {
 
   const rows = [];
   for (const [index, fixture] of leads.entries()) {
-    const [name, email, status, source, serviceType, estimatedValue, followUpAt] = fixture;
+    const [name, email, status, source, serviceType, followUpAt] = fixture;
     rows.push(
       await prisma.lead.create({
         data: {
@@ -70,7 +54,6 @@ async function main() {
           source,
           serviceType,
           serviceLocation: `${100 + index} Demo Lead Way, Austin, TX 78701`,
-          estimatedValue: money(estimatedValue),
           status,
           priority: index < 2 ? "High" : "Normal",
           notes: "Fictional lead created for VadosStack product screenshots.",

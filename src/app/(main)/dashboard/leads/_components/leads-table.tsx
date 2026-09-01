@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { format, isBefore, startOfToday } from "date-fns";
-import { ArrowRight, ArrowUpDown, CalendarDays, Search, SlidersHorizontal, Tag } from "lucide-react";
+import { ArrowUpDown, CalendarDays, Flame, ReceiptText, Search, SlidersHorizontal, Tag } from "lucide-react";
 
 import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +33,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatPhoneNumber } from "@/lib/phone";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 import type { LeadRow } from "../_lib/lead-data";
 import { leadPriorities, leadStatuses } from "../constants";
@@ -58,7 +58,6 @@ const followUpOptions = [
 const sortOptions = [
   { value: "follow-up", label: "Follow-up first" },
   { value: "newest", label: "Newest first" },
-  { value: "value-desc", label: "Highest value" },
   { value: "name-asc", label: "Name A-Z" },
 ] as const;
 
@@ -68,35 +67,13 @@ type SortValue = (typeof sortOptions)[number]["value"];
 function statusClassName(status: string) {
   if (status === "Won") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900";
   if (status === "Lost") return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900";
-  if (status === "Estimate Sent") return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900";
-  if (status === "Estimate Needed") return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900";
-  if (status === "Contacted") return "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900";
+  if (status === "In Progress") return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900";
   return "bg-muted-foreground/10 text-muted-foreground";
-}
-
-function priorityClassName(priority: string) {
-  if (priority === "High") return "border-rose-200 bg-rose-50 text-rose-700";
-  if (priority === "Low") return "border-slate-200 bg-slate-50 text-slate-700";
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
-}
-
-function formatMoney(value?: string) {
-  return value ? formatCurrency(Number(value)) : "No value";
 }
 
 function formatFollowUp(lead: LeadRow) {
   if (!lead.followUpAt) return "No follow-up";
   return format(new Date(lead.followUpAt), "MMM d, yyyy");
-}
-
-function nextActionLabel(status: string) {
-  if (status === "New") return "Contact lead";
-  if (status === "Contacted") return "Create estimate";
-  if (status === "Estimate Needed") return "Create estimate";
-  if (status === "Estimate Sent") return "Follow up";
-  if (status === "Won") return "Convert work";
-  if (status === "Lost") return "Review";
-  return "Open";
 }
 
 function shouldIgnoreRowClick(target: EventTarget | null) {
@@ -119,11 +96,6 @@ function getLeadSearchText(lead: LeadRow) {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-}
-
-function leadValue(lead: LeadRow) {
-  const value = Number(lead.estimatedValue ?? 0);
-  return Number.isFinite(value) ? value : 0;
 }
 
 function leadDateTime(value?: string) {
@@ -170,10 +142,6 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
       .sort((left, right) => {
         if (sortValue === "newest") {
           return leadDateTime(right.createdAt) - leadDateTime(left.createdAt);
-        }
-
-        if (sortValue === "value-desc") {
-          return leadValue(right) - leadValue(left);
         }
 
         if (sortValue === "name-asc") {
@@ -407,11 +375,10 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
             <TableRow>
               <TableHead>Lead</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Source</TableHead>
+              <TableHead>Service</TableHead>
               <TableHead>Follow-up</TableHead>
-              <TableHead>Value</TableHead>
               <TableHead>Customer</TableHead>
-              <TableHead className="text-right">Next</TableHead>
+              <TableHead className="text-right">Estimate</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -444,9 +411,17 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                     }}
                   >
                     <TableCell onClick={() => openLead(href)}>
-                      <Link href={href} className="font-medium hover:underline">
-                        {lead.name}
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <Link href={href} className="font-medium hover:underline">
+                          {lead.name}
+                        </Link>
+                        {lead.priority === "High" ? (
+                          <span className="inline-flex items-center gap-1 font-medium text-rose-600 text-xs dark:text-rose-400">
+                            <Flame className="size-3.5" />
+                            High priority
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="mt-1 text-muted-foreground text-xs">
                         {[lead.email, lead.phone ? formatPhoneNumber(lead.phone) : undefined]
                           .filter(Boolean)
@@ -454,18 +429,15 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                       </div>
                     </TableCell>
                     <TableCell onClick={() => openLead(href)}>
-                      <div className="flex flex-col gap-1">
-                        <Badge variant="outline" className={statusClassName(lead.status)}>
-                          {lead.status}
-                        </Badge>
-                        <Badge variant="outline" className={cn("w-fit", priorityClassName(lead.priority))}>
-                          {lead.priority}
-                        </Badge>
-                      </div>
+                      <Badge variant="outline" className={statusClassName(lead.status)}>
+                        {lead.status}
+                      </Badge>
                     </TableCell>
                     <TableCell onClick={() => openLead(href)}>
-                      <div className="font-medium text-sm">{lead.source ?? "Not set"}</div>
-                      <div className="text-muted-foreground text-xs">{lead.serviceType ?? "No service type"}</div>
+                      <div className="font-medium text-sm">{lead.serviceType ?? "Not set"}</div>
+                      <div className="max-w-52 truncate text-muted-foreground text-xs">
+                        {lead.serviceLocation ?? "No service location"}
+                      </div>
                     </TableCell>
                     <TableCell
                       className={cn(followUpOverdue && "font-medium text-destructive")}
@@ -473,7 +445,6 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                     >
                       {formatFollowUp(lead)}
                     </TableCell>
-                    <TableCell onClick={() => openLead(href)}>{formatMoney(lead.estimatedValue)}</TableCell>
                     <TableCell>
                       {lead.customerId ? (
                         <CustomerLink customerId={lead.customerId} name={lead.customerName} />
@@ -482,10 +453,33 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button asChild size="sm" variant="ghost">
-                        <Link href={href}>
-                          {nextActionLabel(lead.status)}
-                          <ArrowRight />
+                      <Button
+                        asChild
+                        size="xs"
+                        variant="outline"
+                        className={cn(
+                          "h-7 px-2",
+                          lead.estimateRecordId
+                            ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
+                            : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950",
+                        )}
+                      >
+                        <Link
+                          prefetch={false}
+                          href={
+                            lead.estimateRecordId
+                              ? `/dashboard/estimates/records/${lead.estimateRecordId}`
+                              : `/dashboard/estimates/create?leadId=${lead.id}`
+                          }
+                        >
+                          {lead.estimateRecordId ? (
+                            (lead.estimateNumber ?? "Draft")
+                          ) : (
+                            <>
+                              <ReceiptText className="size-3.5" />
+                              Create estimate
+                            </>
+                          )}
                         </Link>
                       </Button>
                     </TableCell>
@@ -494,7 +488,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-24 text-center">
                   No results.
                 </TableCell>
               </TableRow>
@@ -505,35 +499,84 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
 
       <div className="grid gap-3 md:hidden">
         {filteredLeads.length ? (
-          filteredLeads.map((lead) => (
-            <Link
-              key={lead.id}
-              href={`/dashboard/leads/${lead.id}`}
-              className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-4"
-            >
-              <div className="flex min-w-0 items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{lead.name}</div>
-                  <div className="truncate text-muted-foreground text-xs">
-                    {lead.email ?? formatPhoneNumber(lead.phone ?? "")}
+          filteredLeads.map((lead) => {
+            const href = `/dashboard/leads/${lead.id}`;
+            const followUpOverdue =
+              lead.followUpAt &&
+              isBefore(new Date(lead.followUpAt), today) &&
+              lead.status !== "Won" &&
+              lead.status !== "Lost";
+
+            return (
+              <div key={lead.id} className="grid min-w-0 gap-3 overflow-hidden rounded-lg border bg-card p-4">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Link href={href} className="block truncate font-medium hover:underline">
+                      {lead.name}
+                    </Link>
+                    <div className="truncate text-muted-foreground text-xs">
+                      {lead.email ?? formatPhoneNumber(lead.phone ?? "")}
+                    </div>
+                    {lead.priority === "High" ? (
+                      <div className="mt-1 inline-flex items-center gap-1 font-medium text-rose-600 text-xs dark:text-rose-400">
+                        <Flame className="size-3.5" />
+                        High priority
+                      </div>
+                    ) : null}
+                  </div>
+                  <Badge variant="outline" className={`${statusClassName(lead.status)} shrink-0`}>
+                    {lead.status}
+                  </Badge>
+                </div>
+                <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
+                  <div className="min-w-0">
+                    <div className="text-muted-foreground text-xs">Follow-up</div>
+                    <div className={cn("min-w-0 truncate font-medium", followUpOverdue && "text-destructive")}>
+                      {formatFollowUp(lead)}
+                    </div>
+                  </div>
+                  <div className="min-w-0 text-right">
+                    <div className="text-muted-foreground text-xs">Service</div>
+                    <div className="min-w-0 truncate font-medium">{lead.serviceType ?? "Not set"}</div>
                   </div>
                 </div>
-                <Badge variant="outline" className={`${statusClassName(lead.status)} shrink-0`}>
-                  {lead.status}
-                </Badge>
-              </div>
-              <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
-                <div className="min-w-0">
-                  <div className="text-muted-foreground text-xs">Follow-up</div>
-                  <div className="min-w-0 truncate font-medium">{formatFollowUp(lead)}</div>
+                <div className="grid grid-cols-2 gap-2 border-t pt-3">
+                  <Button asChild size="sm" variant="ghost" className="justify-start">
+                    <Link href={href}>View lead</Link>
+                  </Button>
+                  <Button
+                    asChild
+                    size="xs"
+                    variant="outline"
+                    className={cn(
+                      "h-7 px-2",
+                      lead.estimateRecordId
+                        ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
+                        : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950",
+                    )}
+                  >
+                    <Link
+                      prefetch={false}
+                      href={
+                        lead.estimateRecordId
+                          ? `/dashboard/estimates/records/${lead.estimateRecordId}`
+                          : `/dashboard/estimates/create?leadId=${lead.id}`
+                      }
+                    >
+                      {lead.estimateRecordId ? (
+                        (lead.estimateNumber ?? "Draft")
+                      ) : (
+                        <>
+                          <ReceiptText className="size-3.5" />
+                          Create estimate
+                        </>
+                      )}
+                    </Link>
+                  </Button>
                 </div>
-                <div className="min-w-0 text-right">
-                  <div className="text-muted-foreground text-xs">Value</div>
-                  <div className="min-w-0 truncate font-medium">{formatMoney(lead.estimatedValue)}</div>
-                </div>
               </div>
-            </Link>
-          ))
+            );
+          })
         ) : (
           <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm">
             <p>No results.</p>

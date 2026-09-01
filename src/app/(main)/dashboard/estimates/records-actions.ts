@@ -15,11 +15,14 @@ import { formatServiceAddress, getServiceAddressPayload, type ServiceAddressFiel
 
 import { parseMaterials } from "../jobs/_components/materials";
 import { parsePricingItems } from "../jobs/_components/pricing-items";
+import { getLeadStatusForEstimateStatus } from "../leads/constants";
 
 type EstimateWriteClient = typeof prisma | Prisma.TransactionClient;
 
 export type EstimateRecordMutationState = {
+  customerCopyChangedFields?: string[];
   redirectTo?: string;
+  requiresCustomerCopyConfirmation?: boolean;
   success: boolean;
   message: string;
 };
@@ -226,15 +229,14 @@ function normalizeItems(
     .filter((item) => item.description || item.quantity || item.unit || item.unitPrice || Number(item.price) !== 0);
 }
 
-function normalizeMaterials<
-  T extends { description?: string; quantity?: string; unit?: string; unitPrice?: string; price?: string },
->(items: T[]) {
+function normalizeMaterials(
+  items: Array<{ description?: string; quantity?: string; unit?: string; unitPrice?: string; price?: string }>,
+) {
   return items
     .map((item) => ({
-      ...item,
-      description: item.description ?? "",
-      quantity: item.quantity ?? "",
-      unit: item.unit ?? "",
+      description: item.description?.trim() ?? "",
+      quantity: item.quantity?.trim() ?? "",
+      unit: item.unit?.trim() ?? "",
       unitPrice: normalizeMoney(item.unitPrice, ""),
       price: normalizeMoney(item.price),
     }))
@@ -425,6 +427,7 @@ async function createLeadForEstimate({
   customerId,
   db = prisma,
   email,
+  estimateStatus,
   estimateRecordId,
   name,
   ownerId,
@@ -437,6 +440,7 @@ async function createLeadForEstimate({
   customerId?: string;
   db?: EstimateWriteClient;
   email?: string;
+  estimateStatus: string;
   estimateRecordId: string;
   name?: string;
   ownerId: string;
@@ -472,7 +476,7 @@ async function createLeadForEstimate({
       serviceCity: serviceAddress?.serviceCity ?? null,
       serviceState: serviceAddress?.serviceState ?? null,
       servicePostalCode: serviceAddress?.servicePostalCode ?? null,
-      status: "Estimate Needed",
+      status: getLeadStatusForEstimateStatus(estimateStatus),
       priority: "Normal",
     },
     select: {
@@ -584,8 +588,12 @@ async function syncCustomerBillingStatus(
   });
 }
 
-async function syncPrintableEstimateSnapshotFromRecord(estimateRecordId: string, ownerId: string) {
-  const estimate = await prisma.estimateRecord.findUnique({
+async function upsertPrintableEstimateSnapshotFromRecord(
+  db: Prisma.TransactionClient,
+  estimateRecordId: string,
+  ownerId: string,
+) {
+  const estimate = await db.estimateRecord.findUnique({
     where: {
       id_ownerId: {
         id: estimateRecordId,
@@ -603,8 +611,8 @@ async function syncPrintableEstimateSnapshotFromRecord(estimateRecordId: string,
     },
   });
 
-  if (!estimate?.printableEstimate) {
-    return undefined;
+  if (!estimate) {
+    throw new Error("Estimate not found.");
   }
 
   const laborItems = normalizeItems(parsePricingItems(estimate.laborItems));
@@ -619,39 +627,56 @@ async function syncPrintableEstimateSnapshotFromRecord(estimateRecordId: string,
   const taxableSubtotal = estimate.jobType === "Commercial" ? laborCost + materialsSubtotal : materialsSubtotal;
   const materialTaxAmount = taxableSubtotal * (materialTaxRate / 100);
 
-  await prisma.estimate.update({
-    where: {
-      id_ownerId: {
-        id: estimate.printableEstimate.id,
-        ownerId,
+  const snapshotData = {
+    customerId: estimate.customerId,
+    customerName: estimate.customer?.name ?? estimate.lead?.name ?? null,
+    customerEmail: estimate.customer?.email ?? estimate.lead?.email ?? null,
+    customerPhone: estimate.customer?.phoneNumbers[0]?.value ?? estimate.lead?.phone ?? null,
+    jobTitle: estimate.description,
+    jobDescription: estimate.scope,
+    serviceLocation: formatServiceAddress(estimate) ?? undefined,
+    serviceAddressLine1: estimate.serviceAddressLine1,
+    serviceAddressLine2: estimate.serviceAddressLine2,
+    serviceCity: estimate.serviceCity,
+    serviceState: estimate.serviceState,
+    servicePostalCode: estimate.servicePostalCode,
+    dateBegin: estimate.dateBegin,
+    dateEnd: estimate.dateEnd,
+    laborCost: estimate.laborCost ?? "0",
+    materialTaxRate: estimate.materialTaxRate ?? "0",
+    materials: JSON.stringify(printableItems),
+    materialsSubtotal: materialsSubtotal.toFixed(2),
+    materialTaxAmount: materialTaxAmount.toFixed(2),
+    estimatedTotal: estimate.estimatedTotal ?? "0",
+    jobStatus: estimate.status,
+  };
+
+  if (estimate.printableEstimate) {
+    await db.estimate.update({
+      where: {
+        id_ownerId: {
+          id: estimate.printableEstimate.id,
+          ownerId,
+        },
       },
-    },
+      data: snapshotData,
+    });
+
+    return estimate.printableEstimate.id;
+  }
+
+  const estimateNumberAssignment = await allocateDocumentNumber(db, ownerId, "estimate");
+  const printableEstimate = await db.estimate.create({
     data: {
-      customerId: estimate.customerId,
-      customerName: estimate.customer?.name ?? estimate.lead?.name ?? null,
-      customerEmail: estimate.customer?.email ?? estimate.lead?.email ?? null,
-      customerPhone: estimate.customer?.phoneNumbers[0]?.value ?? estimate.lead?.phone ?? null,
-      jobTitle: estimate.description,
-      jobDescription: estimate.scope,
-      serviceLocation: formatServiceAddress(estimate) ?? undefined,
-      serviceAddressLine1: estimate.serviceAddressLine1,
-      serviceAddressLine2: estimate.serviceAddressLine2,
-      serviceCity: estimate.serviceCity,
-      serviceState: estimate.serviceState,
-      servicePostalCode: estimate.servicePostalCode,
-      dateBegin: estimate.dateBegin,
-      dateEnd: estimate.dateEnd,
-      laborCost: estimate.laborCost ?? "0",
-      materialTaxRate: estimate.materialTaxRate ?? "0",
-      materials: JSON.stringify(printableItems),
-      materialsSubtotal: materialsSubtotal.toFixed(2),
-      materialTaxAmount: materialTaxAmount.toFixed(2),
-      estimatedTotal: estimate.estimatedTotal ?? "0",
-      jobStatus: estimate.status,
+      ...snapshotData,
+      ownerId,
+      estimateNumber: estimateNumberAssignment.documentNumber,
+      estimateRecordId: estimate.id,
     },
   });
+  await attachDocumentNumber(db, estimateNumberAssignment.assignmentId, printableEstimate.id);
 
-  return estimate.printableEstimate.id;
+  return printableEstimate.id;
 }
 
 export async function createEstimateRecordAction(
@@ -713,7 +738,6 @@ export async function createEstimateRecordAction(
             customerId: true,
             estimateRecordId: true,
             id: true,
-            status: true,
           },
         })
       : null;
@@ -789,6 +813,7 @@ export async function createEstimateRecordAction(
           customerId,
           db: tx,
           email: newLeadEmail,
+          estimateStatus: estimate.status,
           estimateRecordId: createdEstimate.id,
           name: newLeadName,
           ownerId: currentUser.id,
@@ -811,14 +836,13 @@ export async function createEstimateRecordAction(
           data: {
             customerId: customerId ?? selectedLead.customerId ?? null,
             estimateRecordId: createdEstimate.id,
-            status:
-              estimate.status === "Waiting on Customer"
-                ? "Estimate Sent"
-                : selectedLead.status === "New" || selectedLead.status === "Contacted"
-                  ? "Estimate Needed"
-                  : selectedLead.status,
+            status: getLeadStatusForEstimateStatus(estimate.status),
           },
         });
+      }
+
+      if (estimate.status === "Ready to Send" || estimate.status === "Waiting on Customer") {
+        await upsertPrintableEstimateSnapshotFromRecord(tx, createdEstimate.id, currentUser.id);
       }
 
       return createdEstimate;
@@ -834,7 +858,12 @@ export async function createEstimateRecordAction(
   revalidatePath("/dashboard/command-center");
   return {
     success: true,
-    message: "Estimate created.",
+    message:
+      parsed.data.status === "Waiting on Customer"
+        ? "Estimate created, published, and marked Waiting on Customer."
+        : parsed.data.status === "Ready to Send"
+          ? "Estimate created and published."
+          : "Estimate created.",
     redirectTo: `/dashboard/estimates/records/${createdEstimateId}`,
   };
 }
@@ -871,6 +900,10 @@ export async function updateEstimateRecordAction(
     ...estimate
   } = parsed.data;
   let syncedPrintableEstimateId: string | undefined;
+  let unpublishedCustomerCopy = false;
+  let customerDocumentChanged = false;
+  let previousStatus = "";
+  let previouslyPublished = false;
 
   try {
     const { jobType, leadId, measurementRooms, ...estimateInput } = estimate;
@@ -896,11 +929,33 @@ export async function updateEstimateRecordAction(
       select: {
         convertedJobId: true,
         customerId: true,
+        dateBegin: true,
+        dateEnd: true,
+        description: true,
+        estimatedTotal: true,
+        jobType: true,
+        laborCost: true,
+        laborItems: true,
+        lead: {
+          select: {
+            id: true,
+          },
+        },
+        materialTaxRate: true,
+        materials: true,
         printableEstimate: {
           select: {
             id: true,
           },
         },
+        scope: true,
+        serviceAddressLine1: true,
+        serviceAddressLine2: true,
+        serviceCity: true,
+        serviceLocation: true,
+        servicePostalCode: true,
+        serviceState: true,
+        status: true,
       },
     });
 
@@ -925,13 +980,6 @@ export async function updateEstimateRecordAction(
       };
     }
 
-    if (existingEstimate.printableEstimate && !syncExistingEstimate) {
-      return {
-        success: false,
-        message: "This estimate already has an issued customer copy. Confirm that you want to update it before saving.",
-      };
-    }
-
     const selectedLead = leadId
       ? await prisma.lead.findUnique({
           where: {
@@ -944,10 +992,67 @@ export async function updateEstimateRecordAction(
             customerId: true,
             estimateRecordId: true,
             id: true,
-            status: true,
           },
         })
       : null;
+
+    if (leadId && !selectedLead) {
+      return {
+        success: false,
+        message: "Select a lead from your account.",
+      };
+    }
+
+    previousStatus = existingEstimate.status;
+    previouslyPublished = Boolean(existingEstimate.printableEstimate);
+    const changedCustomerDocumentFields = [
+      ["new customer", Boolean(newCustomerName)],
+      ["new lead", Boolean(newLeadName)],
+      ["customer", (estimate.customerId ?? "") !== (existingEstimate.customerId ?? "")],
+      ["lead", (leadId ?? "") !== (existingEstimate.lead?.id ?? "")],
+      ["description", estimate.description !== existingEstimate.description],
+      ["scope", (estimate.scope ?? "") !== (existingEstimate.scope ?? "")],
+      ["service location", (formatServiceAddress(estimate) ?? "") !== (existingEstimate.serviceLocation ?? "")],
+      ["address line 1", (estimate.serviceAddressLine1 ?? "") !== (existingEstimate.serviceAddressLine1 ?? "")],
+      ["address line 2", (estimate.serviceAddressLine2 ?? "") !== (existingEstimate.serviceAddressLine2 ?? "")],
+      ["city", (estimate.serviceCity ?? "") !== (existingEstimate.serviceCity ?? "")],
+      ["state", (estimate.serviceState ?? "") !== (existingEstimate.serviceState ?? "")],
+      ["postal code", (estimate.servicePostalCode ?? "") !== (existingEstimate.servicePostalCode ?? "")],
+      ["start date", (estimate.dateBegin?.getTime() ?? 0) !== (existingEstimate.dateBegin?.getTime() ?? 0)],
+      ["end date", (estimate.dateEnd?.getTime() ?? 0) !== (existingEstimate.dateEnd?.getTime() ?? 0)],
+      ["job type", jobType !== existingEstimate.jobType],
+      ["labor total", Number(totals.laborCost) !== Number(existingEstimate.laborCost ?? 0)],
+      ["tax rate", Number(estimate.materialTaxRate ?? 0) !== Number(existingEstimate.materialTaxRate ?? 0)],
+      [
+        "labor items",
+        JSON.stringify(laborItems) !== JSON.stringify(normalizeItems(parsePricingItems(existingEstimate.laborItems))),
+      ],
+      [
+        "materials",
+        JSON.stringify(materials) !== JSON.stringify(normalizeMaterials(parseMaterials(existingEstimate.materials))),
+      ],
+      ["total", Number(totals.total) !== Number(existingEstimate.estimatedTotal ?? 0)],
+    ] as const;
+    customerDocumentChanged = changedCustomerDocumentFields.some(([, changed]) => changed);
+    const customerCopyChangedFields = changedCustomerDocumentFields
+      .filter(([, changed]) => changed)
+      .map(([field]) => field);
+
+    if (
+      existingEstimate.printableEstimate &&
+      !syncExistingEstimate &&
+      (estimate.status === "Draft" || customerDocumentChanged)
+    ) {
+      return {
+        success: false,
+        message:
+          estimate.status === "Draft"
+            ? "Confirm that you want to unpublish this estimate before saving it as Draft."
+            : "Confirm that you want to update the published customer copy before saving.",
+        customerCopyChangedFields,
+        requiresCustomerCopyConfirmation: true,
+      };
+    }
 
     if (!customerId && newCustomerName) {
       const customer = await createCustomerForEstimate({
@@ -974,13 +1079,6 @@ export async function updateEstimateRecordAction(
       await assertCustomer(currentUser.id, customerId);
     }
 
-    if (leadId && !selectedLead) {
-      return {
-        success: false,
-        message: "Select a lead from your account.",
-      };
-    }
-
     if (selectedLead?.estimateRecordId && selectedLead.estimateRecordId !== id) {
       return {
         success: false,
@@ -988,106 +1086,127 @@ export async function updateEstimateRecordAction(
       };
     }
 
-    await prisma.estimateRecord.update({
-      where: {
-        id_ownerId: {
-          id,
-          ownerId: currentUser.id,
-        },
-      },
-      data: {
-        ...estimateInput,
-        customerId: customerId ?? null,
-        dateBegin: estimate.dateBegin ?? null,
-        dateEnd: estimate.dateEnd ?? null,
-        serviceLocation: formatServiceAddress(estimate) ?? null,
-        serviceAddressLine1: estimate.serviceAddressLine1 || null,
-        serviceAddressLine2: estimate.serviceAddressLine2 || null,
-        serviceCity: estimate.serviceCity || null,
-        serviceState: estimate.serviceState || null,
-        servicePostalCode: estimate.servicePostalCode || null,
-        laborCost: totals.laborCost,
-        laborItems: JSON.stringify(laborItems),
-        jobType,
-        measurementRooms: JSON.stringify(normalizedMeasurementRooms),
-        materialTaxRate: estimate.materialTaxRate ?? "8.25",
-        materials: JSON.stringify(materials),
-        estimatedTotal: totals.total,
-        scope: estimate.scope || null,
-        notes: estimate.notes || null,
-      },
-    });
-
-    if (newLeadName) {
-      await prisma.lead.updateMany({
-        where: {
-          ownerId: currentUser.id,
-          estimateRecordId: id,
-        },
-        data: {
-          estimateRecordId: null,
-        },
-      });
-
-      await createLeadForEstimate({
-        customerId,
-        email: newLeadEmail,
-        estimateRecordId: id,
-        name: newLeadName,
-        ownerId: currentUser.id,
-        phone: newLeadPhone,
-        serviceAddress,
-        serviceLocation: formatServiceAddress(estimate) ?? undefined,
-        serviceType: estimate.category,
-        source: newLeadSource,
-      });
-    }
-
-    if (leadId) {
-      const lead = selectedLead;
-      if (!lead) {
-        return {
-          success: false,
-          message: "Select a lead from your account.",
-        };
-      }
-
-      await prisma.lead.updateMany({
-        where: {
-          ownerId: currentUser.id,
-          estimateRecordId: id,
-          id: {
-            not: lead.id,
-          },
-        },
-        data: {
-          estimateRecordId: null,
-        },
-      });
-
-      await prisma.lead.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.estimateRecord.update({
         where: {
           id_ownerId: {
-            id: lead.id,
+            id,
             ownerId: currentUser.id,
           },
         },
         data: {
-          customerId: customerId ?? lead.customerId ?? null,
-          estimateRecordId: id,
-          status:
-            estimate.status === "Waiting on Customer"
-              ? "Estimate Sent"
-              : lead.status === "New" || lead.status === "Contacted"
-                ? "Estimate Needed"
-                : lead.status,
+          ...estimateInput,
+          customerId: customerId ?? null,
+          dateBegin: estimate.dateBegin ?? null,
+          dateEnd: estimate.dateEnd ?? null,
+          serviceLocation: formatServiceAddress(estimate) ?? null,
+          serviceAddressLine1: estimate.serviceAddressLine1 || null,
+          serviceAddressLine2: estimate.serviceAddressLine2 || null,
+          serviceCity: estimate.serviceCity || null,
+          serviceState: estimate.serviceState || null,
+          servicePostalCode: estimate.servicePostalCode || null,
+          laborCost: totals.laborCost,
+          laborItems: JSON.stringify(laborItems),
+          jobType,
+          measurementRooms: JSON.stringify(normalizedMeasurementRooms),
+          materialTaxRate: estimate.materialTaxRate ?? "8.25",
+          materials: JSON.stringify(materials),
+          estimatedTotal: totals.total,
+          scope: estimate.scope || null,
+          notes: estimate.notes || null,
         },
       });
-    }
 
-    if (existingEstimate.printableEstimate && syncExistingEstimate) {
-      syncedPrintableEstimateId = await syncPrintableEstimateSnapshotFromRecord(id, currentUser.id);
-    }
+      if (newLeadName) {
+        await tx.lead.updateMany({
+          where: {
+            ownerId: currentUser.id,
+            estimateRecordId: id,
+          },
+          data: {
+            convertedAt: null,
+            estimateRecordId: null,
+            status: "New",
+          },
+        });
+
+        await createLeadForEstimate({
+          customerId,
+          db: tx,
+          email: newLeadEmail,
+          estimateStatus: estimate.status,
+          estimateRecordId: id,
+          name: newLeadName,
+          ownerId: currentUser.id,
+          phone: newLeadPhone,
+          serviceAddress,
+          serviceLocation: formatServiceAddress(estimate) ?? undefined,
+          serviceType: estimate.category,
+          source: newLeadSource,
+        });
+      }
+
+      if (leadId && selectedLead) {
+        await tx.lead.updateMany({
+          where: {
+            ownerId: currentUser.id,
+            estimateRecordId: id,
+            id: {
+              not: selectedLead.id,
+            },
+          },
+          data: {
+            convertedAt: null,
+            estimateRecordId: null,
+            status: "New",
+          },
+        });
+
+        await tx.lead.update({
+          where: {
+            id_ownerId: {
+              id: selectedLead.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            customerId: customerId ?? selectedLead.customerId ?? null,
+            estimateRecordId: id,
+            status: getLeadStatusForEstimateStatus(estimate.status),
+          },
+        });
+      }
+
+      if (estimate.status === "Draft" && existingEstimate.printableEstimate) {
+        await tx.estimate.delete({
+          where: {
+            id_ownerId: {
+              id: existingEstimate.printableEstimate.id,
+              ownerId: currentUser.id,
+            },
+          },
+        });
+        unpublishedCustomerCopy = true;
+      } else if (estimate.status === "Ready to Send" || estimate.status === "Waiting on Customer") {
+        if (!existingEstimate.printableEstimate || customerDocumentChanged) {
+          syncedPrintableEstimateId = await upsertPrintableEstimateSnapshotFromRecord(tx, id, currentUser.id);
+        } else if (estimate.status !== existingEstimate.status) {
+          await tx.estimate.update({
+            where: {
+              id_ownerId: {
+                id: existingEstimate.printableEstimate.id,
+                ownerId: currentUser.id,
+              },
+            },
+            data: {
+              jobStatus: estimate.status,
+            },
+          });
+        }
+      } else if (existingEstimate.printableEstimate && syncExistingEstimate) {
+        syncedPrintableEstimateId = await upsertPrintableEstimateSnapshotFromRecord(tx, id, currentUser.id);
+      }
+    });
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Estimate could not be updated." };
   }
@@ -1102,7 +1221,27 @@ export async function updateEstimateRecordAction(
 
   return {
     success: true,
-    message: syncedPrintableEstimateId ? "Estimate and issued customer copy updated." : "Estimate updated.",
+    message: unpublishedCustomerCopy
+      ? "Estimate saved as Draft and the customer copy was unpublished."
+      : previouslyPublished && previousStatus !== estimate.status && !customerDocumentChanged
+        ? estimate.status === "Waiting on Customer"
+          ? "Estimate marked Waiting on Customer."
+          : estimate.status === "Ready to Send"
+            ? "Estimate marked Ready to Send."
+            : `Estimate marked ${estimate.status}.`
+        : previouslyPublished && customerDocumentChanged
+          ? previousStatus !== estimate.status
+            ? `Estimate updated and marked ${estimate.status}.`
+            : "Estimate and customer copy updated."
+          : previouslyPublished
+            ? "Estimate updated."
+            : estimate.status === "Waiting on Customer"
+              ? "Estimate published and marked Waiting on Customer."
+              : estimate.status === "Ready to Send"
+                ? "Estimate published and marked Ready to Send."
+                : syncedPrintableEstimateId
+                  ? "Estimate and customer copy updated."
+                  : "Estimate updated.",
   };
 }
 
@@ -1123,13 +1262,51 @@ export async function deleteEstimateRecordAction(
   }
 
   try {
-    await prisma.estimateRecord.delete({
-      where: {
-        id_ownerId: {
-          id,
-          ownerId: currentUser.id,
+    await prisma.$transaction(async (tx) => {
+      const estimate = await tx.estimateRecord.findUnique({
+        where: {
+          id_ownerId: {
+            id,
+            ownerId: currentUser.id,
+          },
         },
-      },
+        select: {
+          convertedJobId: true,
+          lead: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+
+      if (!estimate) {
+        throw new Error("Estimate not found.");
+      }
+
+      if (estimate.lead && !estimate.convertedJobId) {
+        await tx.lead.update({
+          where: {
+            id_ownerId: {
+              id: estimate.lead.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            convertedAt: null,
+            status: "New",
+          },
+        });
+      }
+
+      await tx.estimateRecord.delete({
+        where: {
+          id_ownerId: {
+            id,
+            ownerId: currentUser.id,
+          },
+        },
+      });
     });
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Estimate could not be deleted." };
@@ -1159,6 +1336,8 @@ export async function updateEstimateStatusAction(
     return { success: false, message: parsed.error.issues[0]?.message ?? "Choose a status and try again." };
   }
 
+  let hadPublishedEstimate = false;
+
   try {
     const estimate = await prisma.estimateRecord.findUnique({
       where: {
@@ -1181,10 +1360,11 @@ export async function updateEstimateStatusAction(
       return { success: false, message: "A converted estimate must remain Won while its job exists." };
     }
 
+    hadPublishedEstimate = Boolean(estimate.printableEstimate);
     const customerId = estimate.customerId;
 
-    await prisma.$transaction([
-      prisma.estimateRecord.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.estimateRecord.update({
         where: {
           id_ownerId: {
             id: parsed.data.id,
@@ -1195,39 +1375,62 @@ export async function updateEstimateStatusAction(
           customerId,
           status: parsed.data.status,
         },
-      }),
-      ...(estimate.lead
-        ? [
-            prisma.lead.update({
-              where: {
-                id_ownerId: {
-                  id: estimate.lead.id,
-                  ownerId: currentUser.id,
-                },
+      });
+
+      if (estimate.lead) {
+        await tx.lead.update({
+          where: {
+            id_ownerId: {
+              id: estimate.lead.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            customerId: customerId ?? estimate.lead.customerId,
+            status: getLeadStatusForEstimateStatus(parsed.data.status),
+          },
+        });
+      }
+
+      if (parsed.data.status === "Draft" && estimate.printableEstimate) {
+        await tx.estimate.delete({
+          where: {
+            id_ownerId: {
+              id: estimate.printableEstimate.id,
+              ownerId: currentUser.id,
+            },
+          },
+        });
+      } else if (parsed.data.status === "Ready to Send" || parsed.data.status === "Waiting on Customer") {
+        if (estimate.printableEstimate) {
+          await tx.estimate.update({
+            where: {
+              id_ownerId: {
+                id: estimate.printableEstimate.id,
+                ownerId: currentUser.id,
               },
-              data: {
-                customerId: customerId ?? estimate.lead.customerId,
-                status: parsed.data.status === "Waiting on Customer" ? "Estimate Sent" : estimate.lead.status,
-              },
-            }),
-          ]
-        : []),
-      ...(estimate.printableEstimate
-        ? [
-            prisma.estimate.update({
-              where: {
-                id_ownerId: {
-                  id: estimate.printableEstimate.id,
-                  ownerId: currentUser.id,
-                },
-              },
-              data: {
-                jobStatus: parsed.data.status,
-              },
-            }),
-          ]
-        : []),
-    ]);
+            },
+            data: {
+              jobStatus: parsed.data.status,
+            },
+          });
+        } else {
+          await upsertPrintableEstimateSnapshotFromRecord(tx, parsed.data.id, currentUser.id);
+        }
+      } else if (estimate.printableEstimate) {
+        await tx.estimate.update({
+          where: {
+            id_ownerId: {
+              id: estimate.printableEstimate.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            jobStatus: parsed.data.status,
+          },
+        });
+      }
+    });
   } catch (error) {
     return {
       success: false,
@@ -1237,7 +1440,21 @@ export async function updateEstimateStatusAction(
 
   revalidatePath("/dashboard/estimates");
   revalidatePath(`/dashboard/estimates/records/${parsed.data.id}`);
-  return { success: true, message: "Estimate status updated." };
+  return {
+    success: true,
+    message:
+      parsed.data.status === "Waiting on Customer"
+        ? hadPublishedEstimate
+          ? "Estimate marked Waiting on Customer."
+          : "Estimate published and marked Waiting on Customer."
+        : parsed.data.status === "Ready to Send"
+          ? hadPublishedEstimate
+            ? "Estimate marked Ready to Send."
+            : "Estimate published and marked Ready to Send."
+          : parsed.data.status === "Draft"
+            ? "Estimate returned to Draft and unpublished."
+            : "Estimate status updated.",
+  };
 }
 
 export async function convertEstimateToJobAction(
@@ -1423,92 +1640,59 @@ export async function createPrintableEstimateAction(
   }
 
   try {
-    const estimate = await prisma.estimateRecord.findUnique({
-      where: {
-        id_ownerId: {
-          id,
-          ownerId: currentUser.id,
-        },
-      },
-      include: {
-        customer: {
-          include: {
-            phoneNumbers: true,
+    const printableEstimateId = await prisma.$transaction(async (tx) => {
+      const estimate = await tx.estimateRecord.findUnique({
+        where: {
+          id_ownerId: {
+            id,
+            ownerId: currentUser.id,
           },
         },
-        lead: true,
-        printableEstimate: true,
-      },
-    });
+        select: {
+          lead: {
+            select: {
+              id: true,
+            },
+          },
+          status: true,
+        },
+      });
 
-    if (!estimate) {
-      return { success: false, message: "Estimate not found." };
-    }
+      if (!estimate) {
+        throw new Error("Estimate not found.");
+      }
 
-    if (estimate.printableEstimate) {
-      // The existing customer copy is already linked to this record.
-    } else {
-      const laborItems = normalizeItems(parsePricingItems(estimate.laborItems));
-      const materials = normalizeMaterials(parseMaterials(estimate.materials));
-      const printableItems = [
-        ...laborItems.map((item) => ({ ...item, type: "labor" })),
-        ...materials.map((item) => ({ ...item, type: "material" })),
-      ];
-      const materialsSubtotal = calculateSubtotal(materials);
-      const taxableSubtotal =
-        estimate.jobType === "Commercial" ? Number(estimate.laborCost ?? 0) + materialsSubtotal : materialsSubtotal;
-      const materialTaxAmount = (taxableSubtotal * Number(estimate.materialTaxRate ?? 0)) / 100;
-
-      const printableEstimate = await prisma.$transaction(async (tx) => {
-        const estimateNumberAssignment = await allocateDocumentNumber(tx, currentUser.id, "estimate");
-        const createdEstimate = await tx.estimate.create({
+      if (estimate.status === "Draft") {
+        await tx.estimateRecord.update({
+          where: {
+            id_ownerId: {
+              id,
+              ownerId: currentUser.id,
+            },
+          },
           data: {
-            ownerId: currentUser.id,
-            estimateNumber: estimateNumberAssignment.documentNumber,
-            estimateRecordId: estimate.id,
-            customerId: estimate.customerId,
-            customerName: estimate.customer?.name ?? estimate.lead?.name,
-            customerEmail: estimate.customer?.email ?? estimate.lead?.email,
-            customerPhone: estimate.customer?.phoneNumbers[0]?.value ?? estimate.lead?.phone,
-            jobTitle: estimate.description,
-            jobDescription: estimate.scope,
-            serviceLocation: formatServiceAddress(estimate) ?? undefined,
-            serviceAddressLine1: estimate.serviceAddressLine1,
-            serviceAddressLine2: estimate.serviceAddressLine2,
-            serviceCity: estimate.serviceCity,
-            serviceState: estimate.serviceState,
-            servicePostalCode: estimate.servicePostalCode,
-            dateBegin: estimate.dateBegin,
-            dateEnd: estimate.dateEnd,
-            laborCost: estimate.laborCost ?? "0",
-            materialTaxRate: estimate.materialTaxRate ?? "0",
-            materials: JSON.stringify(printableItems),
-            materialsSubtotal: materialsSubtotal.toFixed(2),
-            materialTaxAmount: materialTaxAmount.toFixed(2),
-            estimatedTotal: estimate.estimatedTotal ?? "0",
-            jobStatus: estimate.status === "Draft" ? "Ready to Send" : estimate.status,
+            status: "Ready to Send",
           },
         });
-        await attachDocumentNumber(tx, estimateNumberAssignment.assignmentId, createdEstimate.id);
+      }
 
-        if (estimate.status === "Draft") {
-          await tx.estimateRecord.update({
-            where: {
-              id_ownerId: {
-                id: estimate.id,
-                ownerId: currentUser.id,
-              },
+      if (estimate.lead) {
+        await tx.lead.update({
+          where: {
+            id_ownerId: {
+              id: estimate.lead.id,
+              ownerId: currentUser.id,
             },
-            data: {
-              status: "Ready to Send",
-            },
-          });
-        }
+          },
+          data: {
+            status: getLeadStatusForEstimateStatus(estimate.status === "Draft" ? "Ready to Send" : estimate.status),
+          },
+        });
+      }
 
-        return createdEstimate;
-      });
-      revalidatePath(`/dashboard/estimates/${printableEstimate.id}`);
-    }
+      return upsertPrintableEstimateSnapshotFromRecord(tx, id, currentUser.id);
+    });
+    revalidatePath(`/dashboard/estimates/${printableEstimateId}`);
   } catch (error) {
     return {
       success: false,

@@ -48,16 +48,15 @@ type UpcomingTask = {
 };
 
 type LeadPipelineItem = {
-  estimatedValue: number;
   href: string;
   id: string;
   meta: string;
   priority: "Follow up" | "New";
+  status: string;
   title: string;
 };
 
 type LeadOverview = {
-  estimatedValue: number;
   followUpCount: number;
   items: LeadPipelineItem[];
   newCount: number;
@@ -148,7 +147,6 @@ async function getLeadOverview(ownerId: string): Promise<LeadOverview> {
       ownerId,
     },
     select: {
-      estimatedValue: true,
       followUpAt: true,
       id: true,
       name: true,
@@ -161,24 +159,18 @@ async function getLeadOverview(ownerId: string): Promise<LeadOverview> {
   const openLeads = leads.filter((lead) => lead.status !== "Won" && lead.status !== "Lost");
 
   return {
-    estimatedValue: Math.round(
-      openLeads.reduce((total, lead) => {
-        const value = Number(lead.estimatedValue ?? 0);
-        return total + (Number.isFinite(value) ? value : 0);
-      }, 0),
-    ),
     followUpCount: openLeads.filter((lead) => lead.followUpAt).length,
     items: openLeads
       .filter((lead) => lead.followUpAt || lead.status === "New")
       .slice(0, 4)
       .map((lead) => ({
-        estimatedValue: Math.round(money(lead.estimatedValue)),
         href: `/dashboard/leads/${lead.id}`,
         id: lead.id,
         meta: lead.followUpAt
           ? `${lead.serviceType ?? "Inquiry"} · ${format(lead.followUpAt, "MMM d")}`
           : `${lead.serviceType ?? "Inquiry"} · newly added`,
         priority: lead.followUpAt ? ("Follow up" as const) : ("New" as const),
+        status: lead.status,
         title: lead.name,
       })),
     newCount: openLeads.filter((lead) => lead.status === "New").length,
@@ -236,9 +228,7 @@ function LeadPipelineCard({ leadOverview }: { leadOverview: LeadOverview }) {
                 >
                   {lead.priority}
                 </Badge>
-                <span className="font-medium text-muted-foreground text-xs tabular-nums">
-                  {formatCompactCurrency(lead.estimatedValue)}
-                </span>
+                <span className="font-medium text-muted-foreground text-xs">{lead.status}</span>
               </div>
             </Link>
           ))
@@ -782,11 +772,7 @@ export default async function Page() {
                 href="/dashboard/leads"
                 icon={MessagesSquare}
                 label="Lead pipeline"
-                value={
-                  leadOverview.openCount
-                    ? `${leadOverview.openCount} open · ${formatCompactCurrency(leadOverview.estimatedValue)}`
-                    : "0 open"
-                }
+                value={leadOverview.openCount ? `${leadOverview.openCount} open` : "0 open"}
               />
               <OverviewSignal
                 accent="cyan"
@@ -850,7 +836,7 @@ export default async function Page() {
                 label={leadOverview.nextLeadName ?? (leadOverview.openCount ? "Lead pipeline" : "Leads clear")}
                 value={
                   leadOverview.openCount
-                    ? `${leadOverview.followUpCount} follow-ups · ${leadOverview.newCount} new · ${formatCompactCurrency(leadOverview.estimatedValue)}`
+                    ? `${leadOverview.followUpCount} follow-ups · ${leadOverview.newCount} new`
                     : "No open lead pressure"
                 }
               />

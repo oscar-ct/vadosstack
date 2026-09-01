@@ -40,7 +40,14 @@ import { siGmail } from "simple-icons";
 import { EmailDeliveryResult, type EmailDeliveryResultValue } from "@/components/email-delivery-result";
 import { SimpleIcon } from "@/components/simple-icon";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -321,428 +328,436 @@ export function LeadEmailComposer({
   );
 
   return (
-    <Card className="rounded-lg border border-cyan-200 bg-cyan-50/50 ring-cyan-200/70 dark:border-cyan-900/60 dark:bg-cyan-950/15 dark:ring-cyan-900/50">
-      <CardHeader className="border-cyan-200/80 border-b bg-cyan-50/80 dark:border-cyan-900/60 dark:bg-cyan-950/25">
-        <CardTitle className="flex min-w-30 items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-cyan-600 text-white shadow-sm dark:bg-cyan-500">
-            <Mail className="size-4" />
-          </span>
-          <span>Email lead</span>
-        </CardTitle>
-        <CardDescription className="col-span-full text-cyan-950/70 dark:text-cyan-100/70">
-          Send a direct Gmail message or start from a lead template.
-        </CardDescription>
-        <CardAction>
-          {canSendEmail ? (
-            <div className="hidden rounded-md border border-emerald-200 bg-emerald-50 p-1.5 text-emerald-700 text-xs md:block dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
-              Gmail connected: {senderEmail ?? "ready"}
-            </div>
-          ) : (
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="border-cyan-300 bg-background text-cyan-800 hover:bg-cyan-50 dark:border-cyan-800 dark:text-cyan-200 dark:hover:bg-cyan-950/40"
-            >
-              <a href={`/api/auth/google/mail?returnTo=${encodeURIComponent(returnTo)}`}>
-                <SimpleIcon icon={siGmail} className="size-3.5 fill-current" />
-                {gmailConnectLabel}
-              </a>
-            </Button>
-          )}
-        </CardAction>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <form action={formAction} onSubmit={prepareSubmit} className="grid gap-4">
-          <input type="hidden" name="leadId" value={lead.id} />
-          <input ref={messageTextInputRef} type="hidden" name="message" value={messageText} readOnly />
-          <input ref={messageHtmlInputRef} type="hidden" name="html" value={messageHtml} readOnly />
-
-          <div className="grid gap-3 rounded-lg border border-cyan-200/80 bg-background/90 p-3 text-sm shadow-sm md:grid-cols-2 dark:border-cyan-900/60">
-            <div className="grid gap-1">
-              <span className="text-muted-foreground text-xs">To</span>
-              <span className="font-medium">{lead.email ?? "Add an email address to this lead"}</span>
-            </div>
-            <div className="grid gap-1">
-              <span className="text-muted-foreground text-xs">Lead</span>
-              <span className="font-medium">{lead.name}</span>
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor={`lead-email-subject-${lead.id}`}>Subject</Label>
-            <Input
-              id={`lead-email-subject-${lead.id}`}
-              name="subject"
-              value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-              placeholder="Type a subject or choose a template"
-              className="border-cyan-200 bg-background shadow-sm focus-visible:border-cyan-500 dark:border-cyan-900/70"
-              required
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Message</Label>
-            <div className="overflow-hidden rounded-lg border border-cyan-200 bg-background shadow-sm dark:border-cyan-900/70">
-              <div className="flex flex-wrap items-center gap-1 border-cyan-200 border-b bg-cyan-50/60 p-2 dark:border-cyan-900/70 dark:bg-cyan-950/20">
-                <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
-                  {[
-                    { action: () => editor?.chain().focus().undo().run(), icon: Undo2, label: "Undo" },
-                    { action: () => editor?.chain().focus().redo().run(), icon: Redo2, label: "Redo" },
-                  ].map((tool) => (
-                    <Tooltip key={tool.label}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={tool.label}
-                          disabled={!editor}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={tool.action}
-                        >
-                          <tool.icon />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{tool.label}</TooltipContent>
-                    </Tooltip>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
-                  {[
-                    { active: editor?.isActive("bold"), command: "bold", icon: Bold, label: "Bold" },
-                    { active: editor?.isActive("italic"), command: "italic", icon: Italic, label: "Italic" },
-                    {
-                      active: editor?.isActive("underline"),
-                      command: "underline",
-                      icon: Underline,
-                      label: "Underline",
-                    },
-                    { active: editor?.isActive("strike"), command: "strike", icon: Strikethrough, label: "Strike" },
-                  ].map((tool) => (
-                    <Tooltip key={tool.command}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={tool.label}
-                          aria-pressed={Boolean(tool.active)}
-                          className={cn(tool.active && activeToolClass)}
-                          disabled={!editor}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => applyTextTool(tool.command)}
-                        >
-                          <tool.icon />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{tool.label}</TooltipContent>
-                    </Tooltip>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
-                  {[
-                    { active: editor?.isActive("bulletList"), command: "list", icon: List, label: "Bulleted list" },
-                    {
-                      active: editor?.isActive("orderedList"),
-                      command: "orderedList",
-                      icon: ListOrdered,
-                      label: "Numbered list",
-                    },
-                    {
-                      active: editor?.isActive("blockquote"),
-                      command: "blockquote",
-                      icon: Quote,
-                      label: "Quote",
-                    },
-                  ].map((tool) => (
-                    <Tooltip key={tool.command}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={tool.label}
-                          aria-pressed={Boolean(tool.active)}
-                          className={cn(tool.active && activeToolClass)}
-                          disabled={!editor}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => applyTextTool(tool.command)}
-                        >
-                          <tool.icon />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{tool.label}</TooltipContent>
-                    </Tooltip>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
-                  {[
-                    {
-                      active: editor?.isActive({ textAlign: "left" }),
-                      action: () => applyAlignment("left"),
-                      icon: AlignLeft,
-                      label: "Align left",
-                    },
-                    {
-                      active: editor?.isActive({ textAlign: "center" }),
-                      action: () => applyAlignment("center"),
-                      icon: AlignCenter,
-                      label: "Align center",
-                    },
-                    {
-                      active: editor?.isActive({ textAlign: "right" }),
-                      action: () => applyAlignment("right"),
-                      icon: AlignRight,
-                      label: "Align right",
-                    },
-                  ].map((tool) => (
-                    <Tooltip key={tool.label}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={tool.label}
-                          aria-pressed={Boolean(tool.active)}
-                          className={cn(tool.active && activeToolClass)}
-                          disabled={!editor}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={tool.action}
-                        >
-                          <tool.icon />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{tool.label}</TooltipContent>
-                    </Tooltip>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
-                  <Popover>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            aria-label="Text size"
-                            disabled={!editor}
-                            onMouseDown={(event) => event.preventDefault()}
-                          >
-                            Aa
-                            <ChevronDown className="size-3" />
-                          </Button>
-                        </PopoverTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>Text size</TooltipContent>
-                    </Tooltip>
-                    <PopoverContent align="start" className="w-40 p-2">
-                      <div className="grid gap-1">
-                        {fontSizes.map((size) => (
-                          <button
-                            key={size.label}
-                            type="button"
-                            className="rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            onClick={() => applyFontSize(size.value)}
-                          >
-                            <span style={{ fontSize: size.value || undefined }}>{size.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-
-                  <Popover>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Add link"
-                            aria-pressed={editor?.isActive("link")}
-                            className={cn(editor?.isActive("link") && activeToolClass)}
-                            disabled={!editor}
-                            onMouseDown={(event) => event.preventDefault()}
-                          >
-                            <LinkIcon />
-                          </Button>
-                        </PopoverTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>Add link</TooltipContent>
-                    </Tooltip>
-                    <PopoverContent align="start" className="w-72 p-3">
-                      <div className="grid gap-2">
-                        <Label htmlFor={`lead-email-link-url-${lead.id}`}>Link URL</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            id={`lead-email-link-url-${lead.id}`}
-                            value={linkUrl}
-                            onChange={(event) => setLinkUrl(event.target.value)}
-                            placeholder="https://example.com"
-                          />
-                          <Button type="button" size="sm" onClick={applyLink}>
-                            Apply
-                          </Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Remove link"
-                        disabled={!editor?.isActive("link")}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={removeLink}
-                      >
-                        <Unlink />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Remove link</TooltipContent>
-                  </Tooltip>
-                </div>
-
-                <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
-                  <Popover>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Text color"
-                            disabled={!editor}
-                            onMouseDown={(event) => event.preventDefault()}
-                          >
-                            <Palette />
-                          </Button>
-                        </PopoverTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>Text color</TooltipContent>
-                    </Tooltip>
-                    <PopoverContent align="start" className="w-56 p-3">
-                      <div className="grid grid-cols-6 gap-2">
-                        {textColors.map((color) => (
-                          <button
-                            key={color.label}
-                            type="button"
-                            className="flex size-7 items-center justify-center rounded-md border text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            style={{
-                              backgroundColor: color.value || "transparent",
-                              color: color.value ? "transparent" : undefined,
-                            }}
-                            title={color.label}
-                            onClick={() => applyTextColor(color.value)}
-                          >
-                            {color.value ? "" : "A"}
-                          </button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-
-                  <Popover>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Highlight"
-                            disabled={!editor}
-                            onMouseDown={(event) => event.preventDefault()}
-                          >
-                            <Highlighter />
-                          </Button>
-                        </PopoverTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>Highlight</TooltipContent>
-                    </Tooltip>
-                    <PopoverContent align="start" className="w-48 p-3">
-                      <div className="grid grid-cols-5 gap-2">
-                        {highlightColors.map((color) => (
-                          <button
-                            key={color.label}
-                            type="button"
-                            className="flex size-7 items-center justify-center rounded-md border text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            style={{ backgroundColor: color.value || "transparent" }}
-                            title={color.label}
-                            onClick={() => applyHighlight(color.value)}
-                          >
-                            {color.value ? "" : "X"}
-                          </button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Clear formatting"
-                        disabled={!editor}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={clearFormatting}
-                      >
-                        <Eraser />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Clear formatting</TooltipContent>
-                  </Tooltip>
-                </div>
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="outline" disabled={!hasRecipient}>
+          <Mail />
+          Email lead
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] gap-0 overflow-y-auto overflow-x-hidden p-0 sm:max-w-4xl">
+        <DialogHeader className="border-cyan-200/80 border-b bg-cyan-50/80 p-4 pr-12 dark:border-cyan-900/60 dark:bg-cyan-950/25">
+          <DialogTitle className="flex min-w-30 items-center gap-2">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-cyan-600 text-white shadow-sm dark:bg-cyan-500">
+              <Mail className="size-4" />
+            </span>
+            <span>Email lead</span>
+          </DialogTitle>
+          <DialogDescription className="text-cyan-950/70 dark:text-cyan-100/70">
+            Send a direct Gmail message or start from a lead template.
+          </DialogDescription>
+          <div className="pt-1">
+            {canSendEmail ? (
+              <div className="w-fit rounded-md border border-emerald-200 bg-emerald-50 p-1.5 text-emerald-700 text-xs dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+                Gmail connected: {senderEmail ?? "ready"}
               </div>
-              <EditorContent editor={editor} />
+            ) : (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="border-cyan-300 bg-background text-cyan-800 hover:bg-cyan-50 dark:border-cyan-800 dark:text-cyan-200 dark:hover:bg-cyan-950/40"
+              >
+                <a href={`/api/auth/google/mail?returnTo=${encodeURIComponent(returnTo)}`}>
+                  <SimpleIcon icon={siGmail} className="size-3.5 fill-current" />
+                  {gmailConnectLabel}
+                </a>
+              </Button>
+            )}
+          </div>
+        </DialogHeader>
+        <div className="bg-cyan-50/30 p-4 dark:bg-cyan-950/10">
+          <form action={formAction} onSubmit={prepareSubmit} className="grid gap-4">
+            <input type="hidden" name="leadId" value={lead.id} />
+            <input ref={messageTextInputRef} type="hidden" name="message" value={messageText} readOnly />
+            <input ref={messageHtmlInputRef} type="hidden" name="html" value={messageHtml} readOnly />
+
+            <div className="grid gap-3 rounded-lg border border-cyan-200/80 bg-background/90 p-3 text-sm shadow-sm md:grid-cols-2 dark:border-cyan-900/60">
+              <div className="grid gap-1">
+                <span className="text-muted-foreground text-xs">To</span>
+                <span className="font-medium">{lead.email ?? "Add an email address to this lead"}</span>
+              </div>
+              <div className="grid gap-1">
+                <span className="text-muted-foreground text-xs">Lead</span>
+                <span className="font-medium">{lead.name}</span>
+              </div>
             </div>
-            {bodyError ? <p className="text-destructive text-sm">{bodyError}</p> : null}
-          </div>
 
-          <div className="grid gap-2">
-            <Label>Lead templates</Label>
-            <div className="flex flex-wrap gap-2">
-              {templates.map((template) => (
-                <Button
-                  key={template.title}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="border-cyan-200 bg-background text-cyan-900 hover:bg-cyan-100/70 dark:border-cyan-900/70 dark:text-cyan-100 dark:hover:bg-cyan-950/50"
-                  onClick={() => applyTemplate(template)}
-                >
-                  {template.title}
-                </Button>
-              ))}
+            <div className="grid gap-2">
+              <Label htmlFor={`lead-email-subject-${lead.id}`}>Subject</Label>
+              <Input
+                id={`lead-email-subject-${lead.id}`}
+                name="subject"
+                value={subject}
+                onChange={(event) => setSubject(event.target.value)}
+                placeholder="Type a subject or choose a template"
+                className="border-cyan-200 bg-background shadow-sm focus-visible:border-cyan-500 dark:border-cyan-900/70"
+                required
+              />
             </div>
-          </div>
 
-          <EmailDeliveryResult result={result} onDone={() => setResult(null)} />
+            <div className="grid gap-2">
+              <Label>Message</Label>
+              <div className="overflow-hidden rounded-lg border border-cyan-200 bg-background shadow-sm dark:border-cyan-900/70">
+                <div className="flex flex-wrap items-center gap-1 border-cyan-200 border-b bg-cyan-50/60 p-2 dark:border-cyan-900/70 dark:bg-cyan-950/20">
+                  <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
+                    {[
+                      { action: () => editor?.chain().focus().undo().run(), icon: Undo2, label: "Undo" },
+                      { action: () => editor?.chain().focus().redo().run(), icon: Redo2, label: "Redo" },
+                    ].map((tool) => (
+                      <Tooltip key={tool.label}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={tool.label}
+                            disabled={!editor}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={tool.action}
+                          >
+                            <tool.icon />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{tool.label}</TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
 
-          <div className="flex justify-end border-cyan-200/80 border-t pt-1 dark:border-cyan-900/60">
-            <Button
-              type="submit"
-              disabled={isPending || !canSendEmail || !hasRecipient}
-              className="bg-cyan-700 text-white hover:bg-cyan-800 dark:bg-cyan-500 dark:hover:bg-cyan-600"
-            >
-              <Send />
-              {isPending ? "Sending..." : "Send email"}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+                  <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
+                    {[
+                      { active: editor?.isActive("bold"), command: "bold", icon: Bold, label: "Bold" },
+                      { active: editor?.isActive("italic"), command: "italic", icon: Italic, label: "Italic" },
+                      {
+                        active: editor?.isActive("underline"),
+                        command: "underline",
+                        icon: Underline,
+                        label: "Underline",
+                      },
+                      { active: editor?.isActive("strike"), command: "strike", icon: Strikethrough, label: "Strike" },
+                    ].map((tool) => (
+                      <Tooltip key={tool.command}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={tool.label}
+                            aria-pressed={Boolean(tool.active)}
+                            className={cn(tool.active && activeToolClass)}
+                            disabled={!editor}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => applyTextTool(tool.command)}
+                          >
+                            <tool.icon />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{tool.label}</TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
+                    {[
+                      { active: editor?.isActive("bulletList"), command: "list", icon: List, label: "Bulleted list" },
+                      {
+                        active: editor?.isActive("orderedList"),
+                        command: "orderedList",
+                        icon: ListOrdered,
+                        label: "Numbered list",
+                      },
+                      {
+                        active: editor?.isActive("blockquote"),
+                        command: "blockquote",
+                        icon: Quote,
+                        label: "Quote",
+                      },
+                    ].map((tool) => (
+                      <Tooltip key={tool.command}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={tool.label}
+                            aria-pressed={Boolean(tool.active)}
+                            className={cn(tool.active && activeToolClass)}
+                            disabled={!editor}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => applyTextTool(tool.command)}
+                          >
+                            <tool.icon />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{tool.label}</TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
+                    {[
+                      {
+                        active: editor?.isActive({ textAlign: "left" }),
+                        action: () => applyAlignment("left"),
+                        icon: AlignLeft,
+                        label: "Align left",
+                      },
+                      {
+                        active: editor?.isActive({ textAlign: "center" }),
+                        action: () => applyAlignment("center"),
+                        icon: AlignCenter,
+                        label: "Align center",
+                      },
+                      {
+                        active: editor?.isActive({ textAlign: "right" }),
+                        action: () => applyAlignment("right"),
+                        icon: AlignRight,
+                        label: "Align right",
+                      },
+                    ].map((tool) => (
+                      <Tooltip key={tool.label}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={tool.label}
+                            aria-pressed={Boolean(tool.active)}
+                            className={cn(tool.active && activeToolClass)}
+                            disabled={!editor}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={tool.action}
+                          >
+                            <tool.icon />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{tool.label}</TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
+                    <Popover>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              aria-label="Text size"
+                              disabled={!editor}
+                              onMouseDown={(event) => event.preventDefault()}
+                            >
+                              Aa
+                              <ChevronDown className="size-3" />
+                            </Button>
+                          </PopoverTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>Text size</TooltipContent>
+                      </Tooltip>
+                      <PopoverContent align="start" className="w-40 p-2">
+                        <div className="grid gap-1">
+                          {fontSizes.map((size) => (
+                            <button
+                              key={size.label}
+                              type="button"
+                              className="rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              onClick={() => applyFontSize(size.value)}
+                            >
+                              <span style={{ fontSize: size.value || undefined }}>{size.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+
+                    <Popover>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Add link"
+                              aria-pressed={editor?.isActive("link")}
+                              className={cn(editor?.isActive("link") && activeToolClass)}
+                              disabled={!editor}
+                              onMouseDown={(event) => event.preventDefault()}
+                            >
+                              <LinkIcon />
+                            </Button>
+                          </PopoverTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>Add link</TooltipContent>
+                      </Tooltip>
+                      <PopoverContent align="start" className="w-72 p-3">
+                        <div className="grid gap-2">
+                          <Label htmlFor={`lead-email-link-url-${lead.id}`}>Link URL</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id={`lead-email-link-url-${lead.id}`}
+                              value={linkUrl}
+                              onChange={(event) => setLinkUrl(event.target.value)}
+                              placeholder="https://example.com"
+                            />
+                            <Button type="button" size="sm" onClick={applyLink}>
+                              Apply
+                            </Button>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Remove link"
+                          disabled={!editor?.isActive("link")}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={removeLink}
+                        >
+                          <Unlink />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Remove link</TooltipContent>
+                    </Tooltip>
+                  </div>
+
+                  <div className="flex items-center gap-1 rounded-md border bg-background/80 p-1">
+                    <Popover>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Text color"
+                              disabled={!editor}
+                              onMouseDown={(event) => event.preventDefault()}
+                            >
+                              <Palette />
+                            </Button>
+                          </PopoverTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>Text color</TooltipContent>
+                      </Tooltip>
+                      <PopoverContent align="start" className="w-56 p-3">
+                        <div className="grid grid-cols-6 gap-2">
+                          {textColors.map((color) => (
+                            <button
+                              key={color.label}
+                              type="button"
+                              className="flex size-7 items-center justify-center rounded-md border text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              style={{
+                                backgroundColor: color.value || "transparent",
+                                color: color.value ? "transparent" : undefined,
+                              }}
+                              title={color.label}
+                              onClick={() => applyTextColor(color.value)}
+                            >
+                              {color.value ? "" : "A"}
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+
+                    <Popover>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Highlight"
+                              disabled={!editor}
+                              onMouseDown={(event) => event.preventDefault()}
+                            >
+                              <Highlighter />
+                            </Button>
+                          </PopoverTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>Highlight</TooltipContent>
+                      </Tooltip>
+                      <PopoverContent align="start" className="w-48 p-3">
+                        <div className="grid grid-cols-5 gap-2">
+                          {highlightColors.map((color) => (
+                            <button
+                              key={color.label}
+                              type="button"
+                              className="flex size-7 items-center justify-center rounded-md border text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              style={{ backgroundColor: color.value || "transparent" }}
+                              title={color.label}
+                              onClick={() => applyHighlight(color.value)}
+                            >
+                              {color.value ? "" : "X"}
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Clear formatting"
+                          disabled={!editor}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={clearFormatting}
+                        >
+                          <Eraser />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Clear formatting</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
+                <EditorContent editor={editor} />
+              </div>
+              {bodyError ? <p className="text-destructive text-sm">{bodyError}</p> : null}
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Lead templates</Label>
+              <div className="flex flex-wrap gap-2">
+                {templates.map((template) => (
+                  <Button
+                    key={template.title}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-cyan-200 bg-background text-cyan-900 hover:bg-cyan-100/70 dark:border-cyan-900/70 dark:text-cyan-100 dark:hover:bg-cyan-950/50"
+                    onClick={() => applyTemplate(template)}
+                  >
+                    {template.title}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <EmailDeliveryResult result={result} onDone={() => setResult(null)} />
+
+            <div className="flex justify-end border-cyan-200/80 border-t pt-1 dark:border-cyan-900/60">
+              <Button
+                type="submit"
+                disabled={isPending || !canSendEmail || !hasRecipient}
+                className="bg-cyan-700 text-white hover:bg-cyan-800 dark:bg-cyan-500 dark:hover:bg-cyan-600"
+              >
+                <Send />
+                {isPending ? "Sending..." : "Send email"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

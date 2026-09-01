@@ -398,7 +398,7 @@ export async function emailEstimateAction(
             },
           },
           data: {
-            status: "Estimate Sent",
+            status: "In Progress",
           },
         }),
       );
@@ -466,24 +466,84 @@ export async function deleteEstimateAction(
     };
   }
 
+  let unpublishedEstimateRecordId: string | undefined;
+
   try {
-    await prisma.estimate.delete({
-      where: {
-        id_ownerId: {
-          id: parsed.data.id,
-          ownerId: currentUser.id,
+    await prisma.$transaction(async (tx) => {
+      const estimate = await tx.estimate.findUnique({
+        where: {
+          id_ownerId: {
+            id: parsed.data.id,
+            ownerId: currentUser.id,
+          },
         },
-      },
+        include: {
+          estimateRecord: {
+            include: {
+              lead: true,
+            },
+          },
+        },
+      });
+
+      if (!estimate) {
+        throw new Error("Estimate not found.");
+      }
+
+      if (estimate.estimateRecord?.convertedJobId) {
+        throw new Error("A converted estimate cannot be unpublished while its job exists.");
+      }
+
+      await tx.estimate.delete({
+        where: {
+          id_ownerId: {
+            id: parsed.data.id,
+            ownerId: currentUser.id,
+          },
+        },
+      });
+
+      if (estimate.estimateRecord) {
+        unpublishedEstimateRecordId = estimate.estimateRecord.id;
+        await tx.estimateRecord.update({
+          where: {
+            id_ownerId: {
+              id: estimate.estimateRecord.id,
+              ownerId: currentUser.id,
+            },
+          },
+          data: {
+            status: "Draft",
+          },
+        });
+
+        if (estimate.estimateRecord.lead && estimate.estimateRecord.lead.status !== "Won") {
+          await tx.lead.update({
+            where: {
+              id_ownerId: {
+                id: estimate.estimateRecord.lead.id,
+                ownerId: currentUser.id,
+              },
+            },
+            data: {
+              status: "In Progress",
+            },
+          });
+        }
+      }
     });
-  } catch {
+  } catch (error) {
     return {
       success: false,
-      message: "Estimate could not be deleted. Please try again.",
+      message: error instanceof Error ? error.message : "Estimate could not be deleted. Please try again.",
     };
   }
 
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard/estimates");
+  if (unpublishedEstimateRecordId) {
+    revalidatePath(`/dashboard/estimates/records/${unpublishedEstimateRecordId}`);
+  }
 
   if (parsed.data.redirectTo?.startsWith("/dashboard/")) {
     redirect(parsed.data.redirectTo);
@@ -491,6 +551,6 @@ export async function deleteEstimateAction(
 
   return {
     success: true,
-    message: "Estimate deleted.",
+    message: unpublishedEstimateRecordId ? "Customer estimate unpublished and returned to Draft." : "Estimate deleted.",
   };
 }

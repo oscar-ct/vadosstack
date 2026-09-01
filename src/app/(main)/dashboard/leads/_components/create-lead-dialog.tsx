@@ -162,20 +162,6 @@ export function CreateLeadDialog({
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-[160px_minmax(0,1fr)]">
-            <div className="grid min-w-0 gap-2">
-              <Label htmlFor="lead-dialog-value">Estimated value</Label>
-              <Input
-                id="lead-dialog-value"
-                name="estimatedValue"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
           <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3">
             <div className="col-span-2 grid gap-1">
               <Label>Service location</Label>

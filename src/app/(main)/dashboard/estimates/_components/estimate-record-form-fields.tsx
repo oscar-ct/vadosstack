@@ -1074,6 +1074,7 @@ export function EstimateRecordFormFields({
   estimate,
   leadPrefill,
   leads,
+  onStatusChange,
   presentation = "modal",
   resetKey = 0,
   services,
@@ -1084,6 +1085,7 @@ export function EstimateRecordFormFields({
   estimate?: EstimateRecordRow;
   leadPrefill?: LeadEstimatePrefill;
   leads: EstimateLeadOption[];
+  onStatusChange?: (status: string) => void;
   presentation?: "modal" | "workspace";
   resetKey?: number;
   services: ServiceTemplateRow[];
@@ -1115,6 +1117,10 @@ export function EstimateRecordFormFields({
   const [newLeadEmailTouched, setNewLeadEmailTouched] = React.useState(false);
   const [newLeadPhone, setNewLeadPhone] = React.useState("");
   const [newLeadSource, setNewLeadSource] = React.useState("");
+
+  React.useEffect(() => {
+    onStatusChange?.(status);
+  }, [onStatusChange, status]);
   const [selectedCustomerId, setSelectedCustomerId] = React.useState(
     estimate?.customerId ?? leadPrefill?.customerId ?? selectCustomerValue,
   );
@@ -1885,11 +1891,11 @@ export function EstimateRecordFormFields({
                       </span>
                       <span className="text-muted-foreground text-xs">
                         {option === "Draft"
-                          ? "Still shaping the estimate."
+                          ? "Unpublished working estimate."
                           : option === "Ready to Send"
-                            ? "Ready for the customer."
+                            ? "Publishes a customer document."
                             : option === "Waiting on Customer"
-                              ? "Sent or being reviewed."
+                              ? "Publishes and records delivery."
                               : "Closed without moving forward."}
                       </span>
                     </button>

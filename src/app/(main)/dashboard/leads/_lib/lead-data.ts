@@ -1,13 +1,21 @@
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
 
-import { type LeadStatus, leadStatuses } from "../constants";
+import {
+  getLeadStatusForEstimateStatus,
+  type LeadStatus,
+  leadStatuses,
+  normalizeStandaloneLeadStatus,
+} from "../constants";
 
 export type LeadRow = {
   id: string;
   customerId?: string;
   customerName?: string;
   estimateRecordId?: string;
+  estimateNumber?: string;
   name: string;
   email?: string;
   phone?: string;
@@ -19,31 +27,35 @@ export type LeadRow = {
   serviceCity?: string;
   serviceState?: string;
   servicePostalCode?: string;
-  estimatedValue?: string;
-  status: LeadStatus | string;
+  status: LeadStatus;
   priority: string;
   notes?: string;
   followUpAt?: string;
   lostReason?: string;
-  convertedAt?: string;
   createdAt: string;
   updatedAt: string;
 };
 
-function formatMoney(value: { toString: () => string } | null) {
-  return value ? Number(value.toString()).toFixed(2) : undefined;
-}
+type LeadWithRelations = Prisma.LeadGetPayload<{
+  include: {
+    customer: { select: { name: true } };
+    estimateRecord: {
+      select: {
+        convertedJobId: true;
+        printableEstimate: { select: { estimateNumber: true } };
+        status: true;
+      };
+    };
+  };
+}>;
 
-function toLeadRow(
-  lead: Awaited<ReturnType<typeof prisma.lead.findMany>>[number] & {
-    customer?: { name: string } | null;
-  },
-): LeadRow {
+function toLeadRow(lead: LeadWithRelations): LeadRow {
   return {
     id: lead.id,
     customerId: lead.customerId ?? undefined,
     customerName: lead.customer?.name ?? undefined,
     estimateRecordId: lead.estimateRecordId ?? undefined,
+    estimateNumber: lead.estimateRecord?.printableEstimate?.estimateNumber ?? undefined,
     name: lead.name,
     email: lead.email ?? undefined,
     phone: lead.phone ?? undefined,
@@ -55,13 +67,13 @@ function toLeadRow(
     serviceCity: lead.serviceCity ?? undefined,
     serviceState: lead.serviceState ?? undefined,
     servicePostalCode: lead.servicePostalCode ?? undefined,
-    estimatedValue: formatMoney(lead.estimatedValue),
-    status: lead.status,
-    priority: lead.priority,
+    status: lead.estimateRecord
+      ? getLeadStatusForEstimateStatus(lead.estimateRecord.status, lead.estimateRecord.convertedJobId)
+      : normalizeStandaloneLeadStatus(lead.status),
+    priority: lead.priority === "High" ? "High" : "Normal",
     notes: lead.notes ?? undefined,
     followUpAt: lead.followUpAt?.toISOString(),
     lostReason: lead.lostReason ?? undefined,
-    convertedAt: lead.convertedAt?.toISOString(),
     createdAt: lead.createdAt.toISOString(),
     updatedAt: lead.updatedAt.toISOString(),
   };
@@ -74,6 +86,17 @@ export async function getLeads(ownerId: string) {
       customer: {
         select: {
           name: true,
+        },
+      },
+      estimateRecord: {
+        select: {
+          convertedJobId: true,
+          printableEstimate: {
+            select: {
+              estimateNumber: true,
+            },
+          },
+          status: true,
         },
       },
     },
@@ -95,6 +118,17 @@ export async function getLead(ownerId: string, leadId: string) {
       customer: {
         select: {
           name: true,
+        },
+      },
+      estimateRecord: {
+        select: {
+          convertedJobId: true,
+          printableEstimate: {
+            select: {
+              estimateNumber: true,
+            },
+          },
+          status: true,
         },
       },
     },

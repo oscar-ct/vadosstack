@@ -1347,7 +1347,7 @@ export async function deleteJobAction(_previousState: JobMutationState, formData
           },
           data: {
             convertedAt: null,
-            status: "Estimate Sent",
+            status: "In Progress",
           },
         });
       }

@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { CheckCircle2, RotateCcw, Trash2, UserRound, XCircle } from "lucide-react";
+import { RotateCcw, Trash2, UserRound, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -57,7 +57,7 @@ export function LeadStatusButton({
 }: {
   action: (state: LeadMutationState, formData: FormData) => Promise<LeadMutationState>;
   lead: LeadRow;
-  status: "New" | "Contacted" | "Won" | "Lost";
+  status: "New" | "Lost";
 }) {
   const router = useRouter();
   const [state, formAction, isPending] = React.useActionState(action, initialState);
@@ -73,11 +73,11 @@ export function LeadStatusButton({
       <input type="hidden" name="id" value={lead.id} />
       <input type="hidden" name="status" value={status} />
       <SubmitButton
-        icon={status === "New" ? <RotateCcw /> : status === "Lost" ? <XCircle /> : <CheckCircle2 />}
+        icon={status === "New" ? <RotateCcw /> : <XCircle />}
         isPending={isPending}
         variant={status === "Lost" ? "destructive" : "outline"}
       >
-        {status === "Contacted" ? "Mark contacted" : `Mark ${status.toLowerCase()}`}
+        {status === "New" ? "Reopen lead" : "Mark lost"}
       </SubmitButton>
     </form>
   );

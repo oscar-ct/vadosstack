@@ -64,6 +64,23 @@ function getWorkspaceCopy(mode: "create" | "edit") {
   };
 }
 
+function getSubmitCopy({ isPending, mode, status }: { isPending: boolean; mode: "create" | "edit"; status: string }) {
+  if (mode === "edit") {
+    return isPending ? "Saving..." : "Save changes";
+  }
+
+  if (status === "Waiting on Customer") {
+    return isPending ? "Publishing..." : "Publish & mark waiting";
+  }
+
+  if (status === "Ready to Send") {
+    return isPending ? "Publishing..." : "Create & publish";
+  }
+
+  const copy = getWorkspaceCopy(mode);
+  return isPending ? copy.pendingLabel : copy.submitLabel;
+}
+
 export function EstimateRecordWorkspace({
   action,
   customers,
@@ -88,6 +105,7 @@ export function EstimateRecordWorkspace({
   const syncExistingEstimateRef = React.useRef<HTMLInputElement>(null);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [estimateSnapshotConfirmOpen, setEstimateSnapshotConfirmOpen] = React.useState(false);
+  const [selectedStatus, setSelectedStatus] = React.useState(estimate?.status ?? "Draft");
   const copy = getWorkspaceCopy(mode);
   const draftKey = React.useMemo(
     () => getEstimateDraftKey(mode, estimate?.id, leadPrefill?.leadId),
@@ -113,6 +131,22 @@ export function EstimateRecordWorkspace({
     }
   }, [draftKey, estimate?.id, mode, router, state]);
 
+  React.useEffect(() => {
+    if (!state.success && state.message && syncExistingEstimateRef.current) {
+      syncExistingEstimateRef.current.value = "false";
+    }
+  }, [state.message, state.success]);
+
+  React.useEffect(() => {
+    if (state.requiresCustomerCopyConfirmation) {
+      setEstimateSnapshotConfirmOpen(true);
+    }
+  }, [state]);
+
+  const returningPublishedEstimateToDraft = requiresEstimateSnapshotSyncConfirmation && selectedStatus === "Draft";
+  const publishingOnSave =
+    !estimate?.printableEstimateId && (selectedStatus === "Ready to Send" || selectedStatus === "Waiting on Customer");
+
   return (
     <div className="@container/main mx-auto grid w-full max-w-7xl gap-4 md:gap-6">
       <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -133,7 +167,7 @@ export function EstimateRecordWorkspace({
         action={formAction}
         className="grid min-w-0 gap-4"
         onSubmit={(event) => {
-          if (!requiresEstimateSnapshotSyncConfirmation || syncExistingEstimateRef.current?.value === "true") {
+          if (!returningPublishedEstimateToDraft || syncExistingEstimateRef.current?.value === "true") {
             return;
           }
 
@@ -168,10 +202,31 @@ export function EstimateRecordWorkspace({
               estimate={estimate}
               leadPrefill={leadPrefill}
               leads={leads}
+              onStatusChange={setSelectedStatus}
               presentation="workspace"
               services={services}
             />
-            {state.message && !state.success ? (
+            {publishingOnSave ? (
+              <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-100">
+                <div className="font-medium text-sm">
+                  {selectedStatus === "Waiting on Customer"
+                    ? "Saving will publish this estimate and mark it as awaiting the customer’s response."
+                    : "Saving will publish the latest customer estimate so it is ready to send."}
+                </div>
+                <p className="mt-1 text-sky-900/75 text-xs dark:text-sky-100/70">
+                  Publishing assigns an estimate number and creates or refreshes the customer document.
+                </p>
+              </div>
+            ) : null}
+            {returningPublishedEstimateToDraft ? (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+                <div className="font-medium text-sm">Saving as Draft will unpublish the active customer document.</div>
+                <p className="mt-1 text-amber-900/75 text-xs dark:text-amber-100/70">
+                  The published customer copy will be removed. PDFs already downloaded or emailed cannot be recalled.
+                </p>
+              </div>
+            ) : null}
+            {state.message && !state.success && !state.requiresCustomerCopyConfirmation ? (
               <p className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm">
                 {state.message}
               </p>
@@ -188,23 +243,45 @@ export function EstimateRecordWorkspace({
             </Button>
             <Button type="submit" disabled={isPending}>
               <Save />
-              {isPending ? copy.pendingLabel : copy.submitLabel}
+              {getSubmitCopy({
+                isPending,
+                mode,
+                status: selectedStatus,
+              })}
             </Button>
           </div>
         </div>
       </form>
 
-      <AlertDialog open={estimateSnapshotConfirmOpen} onOpenChange={setEstimateSnapshotConfirmOpen}>
+      <AlertDialog
+        open={estimateSnapshotConfirmOpen}
+        onOpenChange={(open) => {
+          setEstimateSnapshotConfirmOpen(open);
+          if (!open && syncExistingEstimateRef.current) {
+            syncExistingEstimateRef.current.value = "false";
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Update issued customer copy?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {returningPublishedEstimateToDraft ? "Return estimate to Draft?" : "Update published customer copy?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This estimate already has an issued customer copy. Saving these changes will update that copy, including
-              customer details, scope, schedule, labor, materials, taxes, status, and total.
+              {returningPublishedEstimateToDraft
+                ? "Saving will remove the active customer document and return this estimate to Draft."
+                : "Saving will replace the active customer document with the latest customer details, scope, schedule, labor, materials, taxes, status, and total."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="rounded-lg border bg-muted/40 p-3 text-muted-foreground text-sm leading-6">
-            If the customer already received this estimate, you may need to resend the updated estimate after saving.
+            {returningPublishedEstimateToDraft
+              ? estimate?.status === "Waiting on Customer"
+                ? "This estimate was waiting on the customer. The published customer copy will be removed, but any PDF already emailed or downloaded cannot be recalled."
+                : "The published customer copy will be removed until the estimate is published again."
+              : "If the customer already received this estimate, you may need to resend the updated estimate after saving."}
+            {!returningPublishedEstimateToDraft && state.customerCopyChangedFields?.length ? (
+              <div className="mt-1 text-xs">Changed: {state.customerCopyChangedFields.join(", ")}.</div>
+            ) : null}
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -216,7 +293,15 @@ export function EstimateRecordWorkspace({
                 formRef.current?.requestSubmit();
               }}
             >
-              Save estimate and update customer copy
+              {returningPublishedEstimateToDraft
+                ? "Save as Draft & unpublish"
+                : selectedStatus !== estimate?.status
+                  ? selectedStatus === "Waiting on Customer"
+                    ? "Save changes & mark waiting"
+                    : selectedStatus === "Ready to Send"
+                      ? "Save changes & mark ready to send"
+                      : `Save changes & mark ${selectedStatus.toLowerCase()}`
+                  : "Save & update customer copy"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

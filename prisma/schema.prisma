@@ -220,7 +220,6 @@ model Lead {
   serviceCity         String?
   serviceState        String?
   servicePostalCode   String?
-  estimatedValue      Decimal?
   status              String          @default("New")
   priority            String          @default("Normal")
   notes               String?

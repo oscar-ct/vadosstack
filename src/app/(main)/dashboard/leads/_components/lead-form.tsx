@@ -77,7 +77,7 @@ export function LeadForm({
               <NativeSelect
                 id="lead-priority"
                 name="priority"
-                defaultValue={lead.priority ?? "Normal"}
+                defaultValue={lead.priority === "High" ? "High" : "Normal"}
                 className="w-full"
               >
                 {leadPriorities.map((priority) => (
@@ -127,13 +127,23 @@ export function LeadForm({
           <div className="grid gap-4 md:grid-cols-4">
             <div className="grid gap-2">
               <Label htmlFor="lead-status">Status</Label>
-              <NativeSelect id="lead-status" name="status" defaultValue={lead.status ?? "New"} className="w-full">
-                {leadStatuses.map((status) => (
-                  <NativeSelectOption key={status} value={status}>
-                    {status}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              {lead.estimateRecordId || lead.status === "Won" ? (
+                <>
+                  <Input id="lead-status" value={lead.status} disabled />
+                  <input type="hidden" name="status" value={lead.status} />
+                  <p className="text-muted-foreground text-xs">
+                    {lead.estimateRecordId ? "Managed by the linked estimate." : "Won leads are managed by conversion."}
+                  </p>
+                </>
+              ) : (
+                <NativeSelect id="lead-status" name="status" defaultValue={lead.status ?? "New"} className="w-full">
+                  {leadStatuses.map((status) => (
+                    <NativeSelectOption key={status} value={status}>
+                      {status}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="lead-source">Source</Label>
@@ -161,18 +171,6 @@ export function LeadForm({
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="lead-value">Estimated value</Label>
-              <Input
-                id="lead-value"
-                name="estimatedValue"
-                type="number"
-                min="0"
-                step="0.01"
-                defaultValue={lead.estimatedValue}
-                placeholder="0.00"
-              />
             </div>
           </div>
 

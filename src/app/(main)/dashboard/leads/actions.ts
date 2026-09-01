@@ -18,7 +18,7 @@ import { isValidOptionalPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress, getServiceAddressPayload } from "@/lib/service-address";
 
-import { leadPriorities, leadStatuses } from "./constants";
+import { getLeadStatusForEstimateStatus, leadPriorities, leadStatuses } from "./constants";
 
 export type LeadMutationState = {
   redirectTo?: string;
@@ -45,13 +45,6 @@ const optionalDate = z
   .transform((value) => (value ? new Date(`${value}T12:00:00`) : undefined))
   .refine((value) => !value || !Number.isNaN(value.getTime()), "Enter a valid follow-up date.");
 
-const optionalMoney = z
-  .string()
-  .trim()
-  .optional()
-  .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid estimated value.")
-  .transform((value) => (value ? Number(value).toFixed(2) : undefined));
-
 const leadDetailsSchema = z.object({
   name: z.string().trim().min(1, "Name is required."),
   email: z.preprocess((value) => {
@@ -75,7 +68,6 @@ const leadDetailsSchema = z.object({
   serviceCity: z.string().trim().optional(),
   serviceState: z.string().trim().optional(),
   servicePostalCode: z.string().trim().optional(),
-  estimatedValue: optionalMoney,
   status: z.enum(leadStatuses),
   priority: z.enum(leadPriorities),
   followUpAt: optionalDate,
@@ -122,7 +114,6 @@ function getLeadPayload(formData: FormData) {
     source: optionalText(formData.get("source")),
     serviceType: optionalText(formData.get("serviceType")),
     ...serviceAddress,
-    estimatedValue: optionalText(formData.get("estimatedValue")),
     status: formData.get("status"),
     priority: formData.get("priority"),
     followUpAt: optionalText(formData.get("followUpAt")),
@@ -171,7 +162,6 @@ export async function createLeadAction(
         serviceCity: parsed.data.serviceCity || null,
         serviceState: parsed.data.serviceState || null,
         servicePostalCode: parsed.data.servicePostalCode || null,
-        estimatedValue: parsed.data.estimatedValue ?? null,
         followUpAt: parsed.data.followUpAt ?? null,
         notes: parsed.data.notes || null,
         lostReason: parsed.data.status === "Lost" ? parsed.data.lostReason || null : null,
@@ -215,6 +205,32 @@ export async function updateLeadAction(
   const { id, ...lead } = parsed.data;
 
   try {
+    const existingLead = await prisma.lead.findUnique({
+      where: {
+        id_ownerId: {
+          id,
+          ownerId: currentUser.id,
+        },
+      },
+      select: {
+        convertedAt: true,
+        estimateRecord: {
+          select: {
+            convertedJobId: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!existingLead) {
+      return { success: false, message: "Lead not found." };
+    }
+
+    const status = existingLead.estimateRecord
+      ? getLeadStatusForEstimateStatus(existingLead.estimateRecord.status, existingLead.estimateRecord.convertedJobId)
+      : lead.status;
+
     await prisma.lead.update({
       where: {
         id_ownerId: {
@@ -224,6 +240,7 @@ export async function updateLeadAction(
       },
       data: {
         ...lead,
+        status,
         email: lead.email ?? null,
         phone: lead.phone ?? null,
         source: lead.source || null,
@@ -234,11 +251,10 @@ export async function updateLeadAction(
         serviceCity: lead.serviceCity || null,
         serviceState: lead.serviceState || null,
         servicePostalCode: lead.servicePostalCode || null,
-        estimatedValue: lead.estimatedValue ?? null,
         followUpAt: lead.followUpAt ?? null,
         notes: lead.notes || null,
-        lostReason: lead.status === "Lost" ? lead.lostReason || null : null,
-        convertedAt: lead.status === "Won" ? new Date() : undefined,
+        lostReason: status === "Lost" ? lead.lostReason || null : null,
+        convertedAt: status === "Won" ? (existingLead.convertedAt ?? new Date()) : null,
       },
     });
   } catch {
@@ -271,6 +287,26 @@ export async function updateLeadStatusAction(
   }
 
   try {
+    const lead = await prisma.lead.findUnique({
+      where: {
+        id_ownerId: {
+          id: parsed.data.id,
+          ownerId: currentUser.id,
+        },
+      },
+      select: {
+        estimateRecordId: true,
+      },
+    });
+
+    if (!lead) {
+      return { success: false, message: "Lead not found." };
+    }
+
+    if (lead.estimateRecordId) {
+      return { success: false, message: "This lead’s status is managed by its linked estimate." };
+    }
+
     await prisma.lead.update({
       where: {
         id_ownerId: {
@@ -281,7 +317,7 @@ export async function updateLeadStatusAction(
       data: {
         status: parsed.data.status,
         lostReason: parsed.data.status === "Lost" ? parsed.data.lostReason || null : null,
-        convertedAt: parsed.data.status === "Won" ? new Date() : undefined,
+        convertedAt: parsed.data.status === "Won" ? new Date() : null,
       },
     });
   } catch {
@@ -331,7 +367,6 @@ export async function convertLeadToCustomerAction(
         serviceLocation: true,
         servicePostalCode: true,
         serviceState: true,
-        status: true,
       },
     });
 
@@ -404,7 +439,6 @@ export async function convertLeadToCustomerAction(
       data: {
         customerId: customer.id,
         convertedAt: new Date(),
-        status: lead.status === "New" || lead.status === "Contacted" ? "Estimate Needed" : lead.status,
       },
     });
 
@@ -499,7 +533,6 @@ export async function sendLeadEmailAction(_previousState: EmailLeadState, formDa
     documentType: "lead" as const,
     documentId: lead.id,
     documentNumber: "Lead",
-    documentTotal: lead.estimatedValue,
     recipientName: lead.name,
     recipientEmail: lead.email,
     senderEmail: googleMailAccount?.email,
@@ -544,20 +577,6 @@ export async function sendLeadEmailAction(_previousState: EmailLeadState, formDa
       senderEmail: googleMailAccount.email,
       status: "success",
     });
-
-    if (lead.status === "New") {
-      await prisma.lead.update({
-        where: {
-          id_ownerId: {
-            id: lead.id,
-            ownerId: currentUser.id,
-          },
-        },
-        data: {
-          status: "Contacted",
-        },
-      });
-    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Lead email could not be sent. Please try again.";
     const reconnectRequired = message === GMAIL_REFRESH_ERROR_MESSAGE;
