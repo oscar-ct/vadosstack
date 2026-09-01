@@ -2,10 +2,9 @@
 
 import * as React from "react";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { RotateCcw, Trash2, UserRound, XCircle } from "lucide-react";
+import { CircleCheckBig, RotateCcw, Trash2, UserRound, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -57,7 +56,7 @@ export function LeadStatusButton({
 }: {
   action: (state: LeadMutationState, formData: FormData) => Promise<LeadMutationState>;
   lead: LeadRow;
-  status: "New" | "Lost";
+  status: "New" | "In Progress" | "Won" | "Lost";
 }) {
   const router = useRouter();
   const [state, formAction, isPending] = React.useActionState(action, initialState);
@@ -73,11 +72,19 @@ export function LeadStatusButton({
       <input type="hidden" name="id" value={lead.id} />
       <input type="hidden" name="status" value={status} />
       <SubmitButton
-        icon={status === "New" ? <RotateCcw /> : <XCircle />}
+        icon={
+          status === "New" || status === "In Progress" ? (
+            <RotateCcw />
+          ) : status === "Won" ? (
+            <CircleCheckBig />
+          ) : (
+            <XCircle />
+          )
+        }
         isPending={isPending}
-        variant={status === "Lost" ? "destructive" : "outline"}
+        variant={status === "Lost" ? "destructive" : status === "Won" ? "default" : "outline"}
       >
-        {status === "New" ? "Reopen lead" : "Mark lost"}
+        {status === "New" || status === "In Progress" ? "Reopen lead" : status === "Won" ? "Mark won" : "Mark lost"}
       </SubmitButton>
     </form>
   );
@@ -103,14 +110,7 @@ export function ConvertLeadButton({
   }, [router, state]);
 
   if (lead.customerId) {
-    return (
-      <Button asChild size="sm" className="w-full sm:w-auto">
-        <Link prefetch={false} href={`/dashboard/customers/${lead.customerId}`}>
-          <UserRound />
-          Open customer
-        </Link>
-      </Button>
-    );
+    return null;
   }
 
   return (

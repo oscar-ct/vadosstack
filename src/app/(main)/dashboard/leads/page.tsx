@@ -21,6 +21,15 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 }
 
+function MobileStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="min-w-0 px-3 py-2.5 text-center">
+      <p className="truncate text-[11px] text-muted-foreground">{label}</p>
+      <p className="mt-0.5 font-semibold text-lg tabular-nums">{value}</p>
+    </div>
+  );
+}
+
 export default async function Page() {
   const currentUser = await getCurrentUser();
 
@@ -33,7 +42,13 @@ export default async function Page() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-3 divide-x overflow-hidden rounded-lg border bg-card md:hidden">
+        <MobileStat label="Open" value={summary.open} />
+        <MobileStat label="Follow-up" value={summary.needsFollowUp} />
+        <MobileStat label="Won" value={summary.won} />
+      </div>
+
+      <div className="hidden min-w-0 grid-cols-2 gap-3 md:grid xl:grid-cols-4">
         <StatCard
           icon={<UsersRound className="size-4 text-muted-foreground" />}
           label="Total leads"
@@ -53,14 +68,14 @@ export default async function Page() {
       </div>
 
       <Card className="rounded-lg">
-        <CardHeader>
+        <CardHeader className="gap-2 pb-3 sm:gap-4 sm:pb-6">
           <CardTitle className="flex items-center gap-2 leading-none">
             <span className="text-lg">Leads</span>
             <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <UsersRound className="size-4" />
             </div>
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="hidden sm:block">
             Track inquiries before they become customers, estimates, jobs, or lost opportunities.
           </CardDescription>
           <CardAction>

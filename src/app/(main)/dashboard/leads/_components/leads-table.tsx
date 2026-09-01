@@ -175,11 +175,11 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
     <>
       <div className="mb-4 space-y-3">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-full lg:w-80">
+          <div className="flex items-center gap-2 md:flex-wrap">
+            <div className="relative min-w-0 flex-1 md:w-80 md:flex-none">
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="h-7 rounded-[min(var(--radius-md),12px)] pl-8"
+                className="h-9 rounded-[min(var(--radius-md),12px)] pl-8 md:h-7"
                 placeholder="Search leads..."
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
@@ -188,7 +188,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
             <div className="md:hidden">
               <Drawer>
                 <DrawerTrigger asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="h-9 shrink-0 md:h-7">
                     <SlidersHorizontal />
                     Filters
                   </Button>
@@ -364,7 +364,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
             </div>
           </div>
         </div>
-        <div className="px-1 text-muted-foreground text-sm">
+        <div className="px-1 text-muted-foreground text-xs sm:text-sm">
           Showing {filteredLeads.length} of {leads.length} {leads.length === 1 ? "lead" : "leads"}.
         </div>
       </div>
@@ -508,48 +508,47 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
               lead.status !== "Lost";
 
             return (
-              <div key={lead.id} className="grid min-w-0 gap-3 overflow-hidden rounded-lg border bg-card p-4">
-                <div className="flex min-w-0 items-start justify-between gap-3">
+              <article
+                key={lead.id}
+                className="relative grid min-w-0 gap-2 overflow-hidden rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
+              >
+                <Link
+                  href={href}
+                  className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  aria-label={`View ${lead.name} details`}
+                />
+                <div className="pointer-events-none relative flex min-w-0 items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <Link href={href} className="block truncate font-medium hover:underline">
-                      {lead.name}
-                    </Link>
-                    <div className="truncate text-muted-foreground text-xs">
-                      {lead.email ?? formatPhoneNumber(lead.phone ?? "")}
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium">{lead.name}</span>
+                      {lead.priority === "High" ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 font-medium text-rose-600 text-xs dark:text-rose-400">
+                          <Flame className="size-3.5" />
+                          High
+                        </span>
+                      ) : null}
                     </div>
-                    {lead.priority === "High" ? (
-                      <div className="mt-1 inline-flex items-center gap-1 font-medium text-rose-600 text-xs dark:text-rose-400">
-                        <Flame className="size-3.5" />
-                        High priority
-                      </div>
-                    ) : null}
+                    <div className="truncate text-muted-foreground text-xs">
+                      {lead.email ?? (lead.phone ? formatPhoneNumber(lead.phone) : "No contact details")}
+                    </div>
                   </div>
                   <Badge variant="outline" className={`${statusClassName(lead.status)} shrink-0`}>
                     {lead.status}
                   </Badge>
                 </div>
-                <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
-                  <div className="min-w-0">
-                    <div className="text-muted-foreground text-xs">Follow-up</div>
-                    <div className={cn("min-w-0 truncate font-medium", followUpOverdue && "text-destructive")}>
+                <div className="pointer-events-none relative flex min-w-0 items-end justify-between gap-3 border-t pt-2">
+                  <div className="min-w-0 text-xs">
+                    <div className="truncate text-muted-foreground">{lead.serviceType ?? "Service not set"}</div>
+                    <div className={cn("truncate font-medium", followUpOverdue && "text-destructive")}>
                       {formatFollowUp(lead)}
                     </div>
                   </div>
-                  <div className="min-w-0 text-right">
-                    <div className="text-muted-foreground text-xs">Service</div>
-                    <div className="min-w-0 truncate font-medium">{lead.serviceType ?? "Not set"}</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-t pt-3">
-                  <Button asChild size="sm" variant="ghost" className="justify-start">
-                    <Link href={href}>View lead</Link>
-                  </Button>
                   <Button
                     asChild
                     size="xs"
                     variant="outline"
                     className={cn(
-                      "h-7 px-2",
+                      "pointer-events-auto h-8 shrink-0 px-2.5",
                       lead.estimateRecordId
                         ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950"
                         : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950",
@@ -574,7 +573,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                     </Link>
                   </Button>
                 </div>
-              </div>
+              </article>
             );
           })
         ) : (

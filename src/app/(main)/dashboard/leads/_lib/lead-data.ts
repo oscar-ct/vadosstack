@@ -3,12 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
 
-import {
-  getLeadStatusForEstimateStatus,
-  type LeadStatus,
-  leadStatuses,
-  normalizeStandaloneLeadStatus,
-} from "../constants";
+import { type LeadStatus, leadStatuses, normalizeStandaloneLeadStatus } from "../constants";
 
 export type LeadRow = {
   id: string;
@@ -41,9 +36,7 @@ type LeadWithRelations = Prisma.LeadGetPayload<{
     customer: { select: { name: true } };
     estimateRecord: {
       select: {
-        convertedJobId: true;
         printableEstimate: { select: { estimateNumber: true } };
-        status: true;
       };
     };
   };
@@ -67,9 +60,7 @@ function toLeadRow(lead: LeadWithRelations): LeadRow {
     serviceCity: lead.serviceCity ?? undefined,
     serviceState: lead.serviceState ?? undefined,
     servicePostalCode: lead.servicePostalCode ?? undefined,
-    status: lead.estimateRecord
-      ? getLeadStatusForEstimateStatus(lead.estimateRecord.status, lead.estimateRecord.convertedJobId)
-      : normalizeStandaloneLeadStatus(lead.status),
+    status: normalizeStandaloneLeadStatus(lead.status),
     priority: lead.priority === "High" ? "High" : "Normal",
     notes: lead.notes ?? undefined,
     followUpAt: lead.followUpAt?.toISOString(),
@@ -90,13 +81,11 @@ export async function getLeads(ownerId: string) {
       },
       estimateRecord: {
         select: {
-          convertedJobId: true,
           printableEstimate: {
             select: {
               estimateNumber: true,
             },
           },
-          status: true,
         },
       },
     },
@@ -122,13 +111,11 @@ export async function getLead(ownerId: string, leadId: string) {
       },
       estimateRecord: {
         select: {
-          convertedJobId: true,
           printableEstimate: {
             select: {
               estimateNumber: true,
             },
           },
-          status: true,
         },
       },
     },

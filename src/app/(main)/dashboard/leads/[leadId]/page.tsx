@@ -2,18 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { format } from "date-fns";
-import {
-  CalendarClock,
-  CalendarDays,
-  Flame,
-  Mail,
-  MailWarning,
-  MapPin,
-  Pencil,
-  Phone,
-  ReceiptText,
-  UserRound,
-} from "lucide-react";
+import { CalendarClock, Flame, Mail, MailWarning, MapPin, Pencil, Phone, ReceiptText, UserRound } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { BackButton } from "@/components/back-button";
@@ -31,7 +20,7 @@ import { cn } from "@/lib/utils";
 
 import { ConvertLeadButton, DeleteLeadButton, LeadStatusButton } from "../_components/lead-action-buttons";
 import { LeadEmailComposer } from "../_components/lead-email-composer";
-import { LeadForm } from "../_components/lead-form";
+import { EditLeadDialog } from "../_components/lead-form";
 import { getLead } from "../_lib/lead-data";
 import {
   convertLeadToCustomerAction,
@@ -73,57 +62,26 @@ function formatDate(value?: string) {
   return value ? format(new Date(value), "MMM d, yyyy") : "Not set";
 }
 
-const detailTileTones = {
-  amber: {
-    container: "border-amber-200/80 bg-amber-50/65 dark:border-amber-900/60 dark:bg-amber-950/20",
-    icon: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-  },
-  cyan: {
-    container: "border-cyan-200/80 bg-cyan-50/65 dark:border-cyan-900/60 dark:bg-cyan-950/20",
-    icon: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300",
-  },
-  emerald: {
-    container: "border-emerald-200/80 bg-emerald-50/65 dark:border-emerald-900/60 dark:bg-emerald-950/20",
-    icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
-  },
-  orange: {
-    container: "border-orange-200/80 bg-orange-50/65 dark:border-orange-900/60 dark:bg-orange-950/20",
-    icon: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300",
-  },
-  rose: {
-    container: "border-rose-200/80 bg-rose-50/65 dark:border-rose-900/60 dark:bg-rose-950/20",
-    icon: "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300",
-  },
-  sky: {
-    container: "border-sky-200/80 bg-sky-50/65 dark:border-sky-900/60 dark:bg-sky-950/20",
-    icon: "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300",
-  },
-  violet: {
-    container: "border-violet-200/80 bg-violet-50/65 dark:border-violet-900/60 dark:bg-violet-950/20",
-    icon: "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300",
-  },
-} as const;
-
-function DetailTile({
+function DetailItem({
   children,
+  className,
   icon,
   label,
-  tone,
 }: {
   children: React.ReactNode;
+  className?: string;
   icon: React.ReactNode;
   label: string;
-  tone: keyof typeof detailTileTones;
 }) {
-  const classes = detailTileTones[tone];
-
   return (
-    <div className={cn("grid gap-2 rounded-lg border p-3", classes.container)}>
+    <div className={cn("min-w-0 bg-card p-3 sm:p-4", className)}>
       <div className="flex items-center gap-2 text-muted-foreground text-xs">
-        <span className={cn("grid size-7 shrink-0 place-items-center rounded-md", classes.icon)}>{icon}</span>
+        <span className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+          {icon}
+        </span>
         {label}
       </div>
-      <div className="min-w-0 font-medium text-sm">{children}</div>
+      <div className="mt-2 min-w-0 break-words font-medium text-sm">{children}</div>
     </div>
   );
 }
@@ -202,12 +160,18 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <BackButton fallbackHref="/dashboard/leads" />
         <div className="flex flex-wrap items-center gap-2">
-          {!lead.estimateRecordId && lead.status === "Lost" ? (
-            <LeadStatusButton action={updateLeadStatusAction} lead={lead} status="New" />
-          ) : null}
-          {!lead.estimateRecordId && lead.status !== "Lost" && lead.status !== "Won" ? (
-            <LeadStatusButton action={updateLeadStatusAction} lead={lead} status="Lost" />
-          ) : null}
+          {lead.status === "Won" || lead.status === "Lost" ? (
+            <LeadStatusButton
+              action={updateLeadStatusAction}
+              lead={lead}
+              status={lead.estimateRecordId ? "In Progress" : "New"}
+            />
+          ) : (
+            <>
+              <LeadStatusButton action={updateLeadStatusAction} lead={lead} status="Won" />
+              <LeadStatusButton action={updateLeadStatusAction} lead={lead} status="Lost" />
+            </>
+          )}
           <DeleteLeadButton action={deleteLeadAction} lead={lead} />
         </div>
       </div>
@@ -229,7 +193,8 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
             </CardTitle>
             <CardDescription>Lead created {formatDate(lead.createdAt)}.</CardDescription>
           </div>
-          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center [&_button]:w-full sm:[&_button]:w-auto">
+            <EditLeadDialog action={updateLeadAction} lead={lead} />
             <LeadEmailComposer
               action={sendLeadEmailAction}
               gmailConnected={Boolean(googleMailAccount)}
@@ -258,8 +223,8 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
         </CardHeader>
         <CardContent className="grid gap-4">
           {!lead.email ? <LeadEmailWarning /> : null}
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <DetailTile icon={<Mail className="size-3.5" />} label="Email" tone="sky">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border lg:grid-cols-3">
+            <DetailItem className="col-span-2 sm:col-span-1" icon={<Mail className="size-3.5" />} label="Email">
               {lead.email ? (
                 <a href={`mailto:${lead.email}`} className="hover:underline">
                   {lead.email}
@@ -267,8 +232,8 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
               ) : (
                 "Not on file"
               )}
-            </DetailTile>
-            <DetailTile icon={<Phone className="size-3.5" />} label="Phone" tone="emerald">
+            </DetailItem>
+            <DetailItem icon={<Phone className="size-3.5" />} label="Phone">
               {lead.phone ? (
                 <a href={`tel:${lead.phone}`} className="hover:underline">
                   {formatPhoneNumber(lead.phone)}
@@ -276,34 +241,32 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
               ) : (
                 "Not on file"
               )}
-            </DetailTile>
-            <DetailTile icon={<CalendarClock className="size-3.5" />} label="Follow-up" tone="amber">
+            </DetailItem>
+            <DetailItem icon={<CalendarClock className="size-3.5" />} label="Follow-up">
               {formatDate(lead.followUpAt)}
-            </DetailTile>
-            <DetailTile icon={<CalendarDays className="size-3.5" />} label="Created" tone="violet">
-              {formatDate(lead.createdAt)}
-            </DetailTile>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <DetailTile icon={<UserRound className="size-3.5" />} label="Customer" tone="cyan">
+            </DetailItem>
+            <DetailItem icon={<UserRound className="size-3.5" />} label="Customer">
               {lead.customerId ? (
                 <CustomerLink customerId={lead.customerId} name={lead.customerName} />
               ) : (
                 "Not converted"
               )}
-            </DetailTile>
-            <DetailTile icon={<Pencil className="size-3.5" />} label="Service type" tone="orange">
+            </DetailItem>
+            <DetailItem icon={<Pencil className="size-3.5" />} label="Service type">
               {lead.serviceType ?? "Not set"}
-            </DetailTile>
-            <DetailTile icon={<MapPin className="size-3.5" />} label="Service location" tone="rose">
+            </DetailItem>
+            <DetailItem
+              className="col-span-2 lg:col-span-1"
+              icon={<MapPin className="size-3.5" />}
+              label="Service location"
+            >
               <span className="whitespace-pre-wrap">{serviceLocation ?? "Not on file"}</span>
-            </DetailTile>
+            </DetailItem>
           </div>
 
           {lead.notes ? (
-            <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 p-3 dark:border-amber-900/60 dark:bg-amber-950/15">
-              <div className="font-medium text-amber-700 text-xs dark:text-amber-300">Notes</div>
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <div className="font-medium text-muted-foreground text-xs">Notes</div>
               <p className="mt-1 whitespace-pre-wrap text-sm">{lead.notes}</p>
             </div>
           ) : null}
@@ -322,8 +285,6 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
           {notice.message}
         </div>
       ) : null}
-
-      <LeadForm action={updateLeadAction} lead={lead} />
     </div>
   );
 }

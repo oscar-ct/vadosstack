@@ -9,9 +9,14 @@ export const leadServiceTypes = ["Repair", "Installation", "Other"] as const;
 export type LeadStatus = (typeof leadStatuses)[number];
 export type LeadPriority = (typeof leadPriorities)[number];
 
-export function getLeadStatusForEstimateStatus(status: string, convertedJobId?: string | null): LeadStatus {
+export function getLeadStatusForEstimateStatus(
+  status: string,
+  convertedJobId?: string | null,
+  currentLeadStatus?: string,
+): LeadStatus {
   if (convertedJobId || status === "Won") return "Won";
   if (status === "Lost") return "Lost";
+  if (currentLeadStatus === "Won" || currentLeadStatus === "Lost") return currentLeadStatus;
   return "In Progress";
 }
 

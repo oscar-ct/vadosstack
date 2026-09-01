@@ -18,7 +18,7 @@ import { isValidOptionalPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress, getServiceAddressPayload } from "@/lib/service-address";
 
-import { getLeadStatusForEstimateStatus, leadPriorities, leadStatuses } from "./constants";
+import { leadPriorities, leadStatuses } from "./constants";
 
 export type LeadMutationState = {
   redirectTo?: string;
@@ -214,12 +214,6 @@ export async function updateLeadAction(
       },
       select: {
         convertedAt: true,
-        estimateRecord: {
-          select: {
-            convertedJobId: true,
-            status: true,
-          },
-        },
       },
     });
 
@@ -227,9 +221,7 @@ export async function updateLeadAction(
       return { success: false, message: "Lead not found." };
     }
 
-    const status = existingLead.estimateRecord
-      ? getLeadStatusForEstimateStatus(existingLead.estimateRecord.status, existingLead.estimateRecord.convertedJobId)
-      : lead.status;
+    const status = lead.status;
 
     await prisma.lead.update({
       where: {
@@ -287,26 +279,6 @@ export async function updateLeadStatusAction(
   }
 
   try {
-    const lead = await prisma.lead.findUnique({
-      where: {
-        id_ownerId: {
-          id: parsed.data.id,
-          ownerId: currentUser.id,
-        },
-      },
-      select: {
-        estimateRecordId: true,
-      },
-    });
-
-    if (!lead) {
-      return { success: false, message: "Lead not found." };
-    }
-
-    if (lead.estimateRecordId) {
-      return { success: false, message: "This lead’s status is managed by its linked estimate." };
-    }
-
     await prisma.lead.update({
       where: {
         id_ownerId: {

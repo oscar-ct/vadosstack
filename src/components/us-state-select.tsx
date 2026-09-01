@@ -132,8 +132,9 @@ export function UsStateSelect({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="max-h-72 w-[min(20rem,calc(100vw-2rem))] min-w-[var(--radix-dropdown-menu-trigger-width)]"
+        className="z-[60] max-h-56 w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 max-w-[calc(100vw-1rem)]"
         align="start"
+        collisionPadding={8}
       >
         <div className="p-1">
           <Input
