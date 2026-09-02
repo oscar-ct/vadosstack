@@ -91,6 +91,7 @@ function AddressFields({ address, idPrefix, index }: { address?: CustomerAddress
           name="addressState"
           defaultValue={address?.state ?? ""}
           className={customInputStyles}
+          contentClassName="z-[60] max-h-44 w-[min(15rem,calc(100vw-1rem))] min-w-0"
         />
       </div>
       <div className="col-span-2 grid gap-2 sm:col-span-1">
@@ -159,96 +160,98 @@ export function EditCustomerDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="top-0 left-0 grid h-svh max-h-svh w-screen max-w-none translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-none p-0 sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[calc(100svh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
+        <DialogHeader className="border-b p-4 pr-12">
           <DialogTitle>Edit customer</DialogTitle>
           <DialogDescription>Update shared contact details for work and order records.</DialogDescription>
         </DialogHeader>
 
         {customer ? (
-          <form action={formAction} className="grid gap-4">
+          <form action={formAction} className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto]">
             <input type="hidden" name="id" value={customer.id} />
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor={`customer-name-${customer.id}`}>Name</Label>
-                <Input id={`customer-name-${customer.id}`} name="name" defaultValue={customer.name} required />
+            <div className="grid min-h-0 gap-4 overflow-y-auto p-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor={`customer-name-${customer.id}`}>Name</Label>
+                  <Input id={`customer-name-${customer.id}`} name="name" defaultValue={customer.name} required />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`customer-email-${customer.id}`}>Email</Label>
+                  <Input id={`customer-email-${customer.id}`} name="email" type="email" defaultValue={customer.email} />
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor={`customer-email-${customer.id}`}>Email</Label>
-                <Input id={`customer-email-${customer.id}`} name="email" type="email" defaultValue={customer.email} />
-              </div>
-            </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor={`customer-phone-${customer.id}`}>Phone</Label>
+                  <Input
+                    id={`customer-phone-${customer.id}`}
+                    name="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    maxLength={14}
+                    value={formatPhoneNumber(phoneDigits)}
+                    onChange={(event) => setPhoneDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Shared record</Label>
+                  <p className="rounded-lg border bg-muted/20 px-3 py-2 text-muted-foreground text-sm">
+                    Contact details are shared across work, orders, email, and customer history.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor={`customer-address-${customer.id}-1`}>Addresses</Label>
+                  <span className="text-muted-foreground text-xs">
+                    {addressFields.length} of {maxAddresses}
+                  </span>
+                </div>
+                <div className="grid gap-3">
+                  {addressFields.map((addressField, index) => (
+                    <AddressFields
+                      key={addressField.id}
+                      address={addresses[index]}
+                      idPrefix={`customer-address-${customer.id}`}
+                      index={index}
+                    />
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-fit"
+                  disabled={addressFields.length >= maxAddresses}
+                  onClick={() =>
+                    setAddressFields((fields) =>
+                      fields.length >= maxAddresses ? fields : [...fields, { id: `address-${fields.length + 1}` }],
+                    )
+                  }
+                >
+                  <Plus />
+                  Add address
+                </Button>
+              </div>
+
               <div className="grid gap-2">
-                <Label htmlFor={`customer-phone-${customer.id}`}>Phone</Label>
-                <Input
-                  id={`customer-phone-${customer.id}`}
-                  name="phone"
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel"
-                  maxLength={14}
-                  value={formatPhoneNumber(phoneDigits)}
-                  onChange={(event) => setPhoneDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
+                <Label htmlFor={`customer-notes-${customer.id}`}>Notes</Label>
+                <Textarea
+                  id={`customer-notes-${customer.id}`}
+                  name="notes"
+                  defaultValue={customer.notes ?? ""}
+                  placeholder="Add any customer notes..."
                 />
               </div>
-              <div className="grid gap-2">
-                <Label>Shared record</Label>
-                <p className="rounded-lg border bg-muted/20 px-3 py-2 text-muted-foreground text-sm">
-                  Contact details are shared across work, orders, email, and customer history.
-                </p>
-              </div>
+
+              {visibleMessage ? <p className="text-destructive text-sm">{visibleMessage}</p> : null}
             </div>
 
-            <div className="grid gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor={`customer-address-${customer.id}-1`}>Addresses</Label>
-                <span className="text-muted-foreground text-xs">
-                  {addressFields.length} of {maxAddresses}
-                </span>
-              </div>
-              <div className="grid gap-3">
-                {addressFields.map((addressField, index) => (
-                  <AddressFields
-                    key={addressField.id}
-                    address={addresses[index]}
-                    idPrefix={`customer-address-${customer.id}`}
-                    index={index}
-                  />
-                ))}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-fit"
-                disabled={addressFields.length >= maxAddresses}
-                onClick={() =>
-                  setAddressFields((fields) =>
-                    fields.length >= maxAddresses ? fields : [...fields, { id: `address-${fields.length + 1}` }],
-                  )
-                }
-              >
-                <Plus />
-                Add address
-              </Button>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor={`customer-notes-${customer.id}`}>Notes</Label>
-              <Textarea
-                id={`customer-notes-${customer.id}`}
-                name="notes"
-                defaultValue={customer.notes ?? ""}
-                placeholder="Add any customer notes..."
-              />
-            </div>
-
-            {visibleMessage ? <p className="text-destructive text-sm">{visibleMessage}</p> : null}
-
-            <DialogFooter className="gap-2 sm:justify-between">
+            <DialogFooter className="mx-0 mb-0 shrink-0 gap-2 rounded-none sm:justify-between">
               <Button
                 type="button"
                 variant="destructive"
