@@ -126,33 +126,49 @@ export function ConvertLeadButton({
 export function DeleteLeadButton({
   action,
   lead,
+  onOpenChange,
+  open: controlledOpen,
+  showTrigger = true,
 }: {
   action: (state: LeadMutationState, formData: FormData) => Promise<LeadMutationState>;
   lead: LeadRow;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+  showTrigger?: boolean;
 }) {
   const formRef = React.useRef<HTMLFormElement>(null);
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
+  const open = controlledOpen ?? internalOpen;
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      setInternalOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [onOpenChange],
+  );
 
   React.useEffect(() => {
     if (!state.success) return;
-    setOpen(false);
+    handleOpenChange(false);
     toast.success(state.message || "Lead deleted.");
     if (state.redirectTo) {
       router.push(state.redirectTo);
       router.refresh();
     }
-  }, [router, state]);
+  }, [handleOpenChange, router, state]);
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button type="button" size="sm" variant="destructive">
-          <Trash2 />
-          Delete
-        </Button>
-      </AlertDialogTrigger>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
+      {showTrigger ? (
+        <AlertDialogTrigger asChild>
+          <Button type="button" size="sm" variant="destructive">
+            <Trash2 />
+            Delete
+          </Button>
+        </AlertDialogTrigger>
+      ) : null}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete lead?</AlertDialogTitle>

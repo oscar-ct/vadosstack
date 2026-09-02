@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
 import { cn } from "@/lib/utils";
 
-import { ConvertLeadButton, DeleteLeadButton, LeadStatusButton } from "../_components/lead-action-buttons";
+import { ConvertLeadButton, LeadStatusButton } from "../_components/lead-action-buttons";
 import { LeadEmailComposer } from "../_components/lead-email-composer";
 import { EditLeadDialog } from "../_components/lead-form";
 import { getLead } from "../_lib/lead-data";
@@ -172,7 +172,6 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
               <LeadStatusButton action={updateLeadStatusAction} lead={lead} status="Lost" />
             </>
           )}
-          <DeleteLeadButton action={deleteLeadAction} lead={lead} />
         </div>
       </div>
 
@@ -194,7 +193,7 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
             <CardDescription>Lead created {formatDate(lead.createdAt)}.</CardDescription>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center [&_button]:w-full sm:[&_button]:w-auto">
-            <EditLeadDialog action={updateLeadAction} lead={lead} />
+            <EditLeadDialog action={updateLeadAction} deleteAction={deleteLeadAction} lead={lead} />
             <LeadEmailComposer
               action={sendLeadEmailAction}
               gmailConnected={Boolean(googleMailAccount)}
