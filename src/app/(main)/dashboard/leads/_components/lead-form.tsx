@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, Save } from "lucide-react";
 import { toast } from "sonner";
 
+import { OptionalDatePicker } from "@/components/optional-date-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,8 +36,10 @@ const initialState: LeadMutationState = {
   message: "",
 };
 
-function formatDateInput(value?: string) {
-  return value ? value.slice(0, 10) : "";
+function parseFollowUpDate(value?: string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 export function EditLeadDialog({
@@ -50,6 +53,7 @@ export function EditLeadDialog({
   const [open, setOpen] = React.useState(false);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [phoneDigits, setPhoneDigits] = React.useState(lead.phone ?? "");
+  const [followUpDate, setFollowUpDate] = React.useState(() => parseFollowUpDate(lead.followUpAt));
   const [serviceLocationFields, setServiceLocationFields] = React.useState(() => toServiceAddressFormFields(lead));
   const [visibleMessage, setVisibleMessage] = React.useState("");
   const legacyServiceLocation = hasStructuredServiceAddress(lead) ? undefined : lead.serviceLocation;
@@ -58,6 +62,7 @@ export function EditLeadDialog({
 
   const resetDraft = React.useCallback(() => {
     setPhoneDigits(lead.phone ?? "");
+    setFollowUpDate(parseFollowUpDate(lead.followUpAt));
     setServiceLocationFields(toServiceAddressFormFields(lead));
     setVisibleMessage("");
   }, [lead]);
@@ -105,29 +110,12 @@ export function EditLeadDialog({
           <input type="hidden" name="id" value={lead.id} />
 
           <div className="grid min-h-0 gap-5 overflow-y-auto p-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="grid gap-2 md:col-span-2">
-                <Label htmlFor="lead-name">Name</Label>
-                <Input id="lead-name" name="name" defaultValue={lead.name} placeholder="Jane Smith" required />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="lead-priority">Priority</Label>
-                <NativeSelect
-                  id="lead-priority"
-                  name="priority"
-                  defaultValue={lead.priority === "High" ? "High" : "Normal"}
-                  className="w-full"
-                >
-                  {leadPriorities.map((priority) => (
-                    <NativeSelectOption key={priority} value={priority}>
-                      {priority}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </div>
+            <div className="grid gap-2">
+              <Label htmlFor="lead-name">Name</Label>
+              <Input id="lead-name" name="name" defaultValue={lead.name} placeholder="Jane Smith" required />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="lead-email">Email</Label>
                 <Input
@@ -151,30 +139,31 @@ export function EditLeadDialog({
                   placeholder="(555) 555-1234"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="lead-follow-up">Follow-up date</Label>
-                <Input
-                  id="lead-follow-up"
-                  name="followUpAt"
-                  type="date"
-                  defaultValue={formatDateInput(lead.followUpAt)}
-                />
-              </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-4">
-              <div className="grid gap-2">
-                <Label htmlFor="lead-status">Status</Label>
-                <NativeSelect id="lead-status" name="status" defaultValue={lead.status} className="w-full">
-                  {leadStatuses.map((status) => (
-                    <NativeSelectOption key={status} value={status}>
-                      {status}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-                {lead.estimateRecordId ? (
-                  <p className="text-muted-foreground text-xs">Estimate updates can also advance this status.</p>
-                ) : null}
+            <div className="grid gap-2">
+              <Label htmlFor="lead-status">Status</Label>
+              <NativeSelect id="lead-status" name="status" defaultValue={lead.status} className="w-full md:max-w-40">
+                {leadStatuses.map((status) => (
+                  <NativeSelectOption key={status} value={status}>
+                    {status}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+              {lead.estimateRecordId ? (
+                <p className="text-muted-foreground text-xs">Estimate updates can also advance this status.</p>
+              ) : null}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="grid min-w-0 gap-2">
+                <Label htmlFor="lead-follow-up">Follow-up date</Label>
+                <OptionalDatePicker
+                  id="lead-follow-up"
+                  name="followUpAt"
+                  value={followUpDate}
+                  onChange={setFollowUpDate}
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="lead-source">Source</Label>
@@ -199,6 +188,21 @@ export function EditLeadDialog({
                   {leadServiceTypes.map((serviceType) => (
                     <NativeSelectOption key={serviceType} value={serviceType}>
                       {serviceType}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lead-priority">Priority</Label>
+                <NativeSelect
+                  id="lead-priority"
+                  name="priority"
+                  defaultValue={lead.priority === "High" ? "High" : "Normal"}
+                  className="w-full"
+                >
+                  {leadPriorities.map((priority) => (
+                    <NativeSelectOption key={priority} value={priority}>
+                      {priority}
                     </NativeSelectOption>
                   ))}
                 </NativeSelect>
@@ -254,6 +258,7 @@ export function EditLeadDialog({
                 <UsStateSelect
                   id="lead-location-state"
                   name="serviceState"
+                  contentClassName="z-[60] max-h-44 w-[min(15rem,calc(100vw-1rem))] min-w-0"
                   value={serviceLocationFields.serviceState}
                   onChange={(event) =>
                     setServiceLocationFields((current) => ({ ...current, serviceState: event.target.value }))

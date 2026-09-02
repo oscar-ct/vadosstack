@@ -68,6 +68,7 @@ const usStates = [
 ] as const;
 
 type UsStateSelectProps = Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "children" | "onChange"> & {
+  contentClassName?: string;
   onChange?: (event: React.ChangeEvent<HTMLSelectElement>) => void;
   placeholder?: string;
 };
@@ -78,6 +79,7 @@ function getStateLabel(value: string) {
 
 export function UsStateSelect({
   className,
+  contentClassName,
   defaultValue,
   disabled,
   id,
@@ -132,7 +134,10 @@ export function UsStateSelect({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="z-[60] max-h-56 w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 max-w-[calc(100vw-1rem)]"
+        className={cn(
+          "max-h-72 w-[min(20rem,calc(100vw-2rem))] min-w-[var(--radix-dropdown-menu-trigger-width)]",
+          contentClassName,
+        )}
         align="start"
         collisionPadding={8}
       >

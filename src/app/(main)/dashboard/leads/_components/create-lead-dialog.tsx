@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { OptionalDatePicker } from "@/components/optional-date-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -43,6 +44,7 @@ export function CreateLeadDialog({
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [phoneDigits, setPhoneDigits] = React.useState("");
+  const [followUpDate, setFollowUpDate] = React.useState<Date>();
   const [serviceLocationFields, setServiceLocationFields] = React.useState(emptyServiceAddressFields);
   const serviceLocation = formatServiceAddress(serviceLocationFields) ?? "";
   const [state, formAction, isPending] = React.useActionState(action, initialState);
@@ -51,6 +53,7 @@ export function CreateLeadDialog({
   const resetForm = React.useCallback(() => {
     formRef.current?.reset();
     setPhoneDigits("");
+    setFollowUpDate(undefined);
     setServiceLocationFields(emptyServiceAddressFields());
   }, []);
 
@@ -98,7 +101,7 @@ export function CreateLeadDialog({
           <input type="hidden" name="status" value="New" />
 
           <div className="grid min-h-0 gap-4 overflow-y-auto p-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="grid min-w-0 gap-2">
                 <Label htmlFor="lead-dialog-name">Name</Label>
                 <Input id="lead-dialog-name" name="name" placeholder="Jane Smith" required />
@@ -107,9 +110,6 @@ export function CreateLeadDialog({
                 <Label htmlFor="lead-dialog-email">Email</Label>
                 <Input id="lead-dialog-email" name="email" type="email" placeholder="jane@example.com" />
               </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid min-w-0 gap-2">
                 <Label htmlFor="lead-dialog-phone">Phone</Label>
                 <Input
@@ -123,13 +123,18 @@ export function CreateLeadDialog({
                   placeholder="(555) 555-1234"
                 />
               </div>
-              <div className="grid min-w-0 gap-2">
-                <Label htmlFor="lead-dialog-follow-up">Follow-up date</Label>
-                <Input id="lead-dialog-follow-up" name="followUpAt" type="date" />
-              </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="grid min-w-0 gap-2">
+                <Label htmlFor="lead-dialog-follow-up">Follow-up date</Label>
+                <OptionalDatePicker
+                  id="lead-dialog-follow-up"
+                  name="followUpAt"
+                  value={followUpDate}
+                  onChange={setFollowUpDate}
+                />
+              </div>
               <div className="grid min-w-0 gap-2">
                 <Label htmlFor="lead-dialog-source">Source</Label>
                 <NativeSelect id="lead-dialog-source" name="source" defaultValue="" className="w-full min-w-0">
@@ -172,6 +177,11 @@ export function CreateLeadDialog({
                   ))}
                 </NativeSelect>
               </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="lead-dialog-notes">Notes</Label>
+              <Textarea id="lead-dialog-notes" name="notes" placeholder="What did they ask for?" />
             </div>
 
             <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3">
@@ -223,6 +233,7 @@ export function CreateLeadDialog({
                 <UsStateSelect
                   id="lead-dialog-location-state"
                   name="serviceState"
+                  contentClassName="z-[60] max-h-44 w-[min(15rem,calc(100vw-1rem))] min-w-0"
                   value={serviceLocationFields.serviceState}
                   onChange={(event) =>
                     setServiceLocationFields((current) => ({ ...current, serviceState: event.target.value }))
@@ -242,12 +253,6 @@ export function CreateLeadDialog({
                 />
               </div>
             </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="lead-dialog-notes">Notes</Label>
-              <Textarea id="lead-dialog-notes" name="notes" placeholder="What did they ask for?" />
-            </div>
-
             {visibleMessage ? <p className="text-destructive text-sm">{visibleMessage}</p> : null}
           </div>
 

@@ -517,7 +517,11 @@ export async function deleteEstimateAction(
           },
         });
 
-        if (estimate.estimateRecord.lead && estimate.estimateRecord.lead.status !== "Won") {
+        if (
+          estimate.estimateRecord.lead &&
+          estimate.estimateRecord.lead.status !== "Won" &&
+          estimate.estimateRecord.lead.status !== "Lost"
+        ) {
           await tx.lead.update({
             where: {
               id_ownerId: {

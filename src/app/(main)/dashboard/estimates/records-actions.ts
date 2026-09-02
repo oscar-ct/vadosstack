@@ -738,6 +738,7 @@ export async function createEstimateRecordAction(
             customerId: true,
             estimateRecordId: true,
             id: true,
+            status: true,
           },
         })
       : null;
@@ -836,7 +837,7 @@ export async function createEstimateRecordAction(
           data: {
             customerId: customerId ?? selectedLead.customerId ?? null,
             estimateRecordId: createdEstimate.id,
-            status: getLeadStatusForEstimateStatus(estimate.status),
+            status: getLeadStatusForEstimateStatus(estimate.status, null, selectedLead.status),
           },
         });
       }
@@ -992,6 +993,7 @@ export async function updateEstimateRecordAction(
             customerId: true,
             estimateRecordId: true,
             id: true,
+            status: true,
           },
         })
       : null;
@@ -1172,7 +1174,7 @@ export async function updateEstimateRecordAction(
           data: {
             customerId: customerId ?? selectedLead.customerId ?? null,
             estimateRecordId: id,
-            status: getLeadStatusForEstimateStatus(estimate.status),
+            status: getLeadStatusForEstimateStatus(estimate.status, null, selectedLead.status),
           },
         });
       }
@@ -1275,6 +1277,7 @@ export async function deleteEstimateRecordAction(
           lead: {
             select: {
               id: true,
+              status: true,
             },
           },
         },
@@ -1284,7 +1287,12 @@ export async function deleteEstimateRecordAction(
         throw new Error("Estimate not found.");
       }
 
-      if (estimate.lead && !estimate.convertedJobId) {
+      if (
+        estimate.lead &&
+        !estimate.convertedJobId &&
+        estimate.lead.status !== "Won" &&
+        estimate.lead.status !== "Lost"
+      ) {
         await tx.lead.update({
           where: {
             id_ownerId: {
@@ -1387,7 +1395,7 @@ export async function updateEstimateStatusAction(
           },
           data: {
             customerId: customerId ?? estimate.lead.customerId,
-            status: getLeadStatusForEstimateStatus(parsed.data.status),
+            status: getLeadStatusForEstimateStatus(parsed.data.status, null, estimate.lead.status),
           },
         });
       }
@@ -1652,6 +1660,7 @@ export async function createPrintableEstimateAction(
           lead: {
             select: {
               id: true,
+              status: true,
             },
           },
           status: true,
@@ -1685,7 +1694,11 @@ export async function createPrintableEstimateAction(
             },
           },
           data: {
-            status: getLeadStatusForEstimateStatus(estimate.status === "Draft" ? "Ready to Send" : estimate.status),
+            status: getLeadStatusForEstimateStatus(
+              estimate.status === "Draft" ? "Ready to Send" : estimate.status,
+              null,
+              estimate.lead.status,
+            ),
           },
         });
       }
