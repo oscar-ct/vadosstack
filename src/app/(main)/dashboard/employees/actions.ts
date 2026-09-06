@@ -39,7 +39,10 @@ const optionalMoney = z
   .string()
   .trim()
   .optional()
-  .refine((value) => !value || !Number.isNaN(Number(value)), "Enter a valid pay rate.")
+  .refine(
+    (value) => !value || (Number.isFinite(Number(value)) && Number(value) >= 0),
+    "Enter a valid non-negative pay amount.",
+  )
   .transform((value) => (value ? Number(value).toFixed(2) : undefined));
 
 const optionalDate = z
@@ -49,7 +52,7 @@ const optionalDate = z
   .transform((value) => (value ? new Date(`${value}T12:00:00`) : undefined))
   .refine((value) => !value || !Number.isNaN(value.getTime()), "Enter a valid date.");
 
-const employeeSchema = z.object({
+const employeeFieldsSchema = z.object({
   name: z.string().trim().min(1, "Employee name is required."),
   employeeNumber: z
     .string()
@@ -73,16 +76,34 @@ const employeeSchema = z.object({
   active: z.preprocess((value) => value === "true" || value === "on" || value === true, z.boolean()),
 });
 
-const updateEmployeeSchema = employeeSchema.extend({
-  employeeId: z.string().trim().min(1, "Employee is required."),
-  employeeNumber: z
-    .string()
-    .trim()
-    .regex(/^\d{4}$/, "Employee number must be exactly 4 digits."),
-});
+function validateEmployeeDates(employee: { endDate?: Date; startDate?: Date }, context: z.RefinementCtx) {
+  if (employee.startDate && employee.endDate && employee.endDate < employee.startDate) {
+    context.addIssue({
+      code: "custom",
+      message: "End date cannot be earlier than the start date.",
+      path: ["endDate"],
+    });
+  }
+}
+
+const employeeSchema = employeeFieldsSchema.superRefine(validateEmployeeDates);
+
+const updateEmployeeSchema = employeeFieldsSchema
+  .extend({
+    employeeId: z.string().trim().min(1, "Employee is required."),
+    employeeNumber: z
+      .string()
+      .trim()
+      .regex(/^\d{4}$/, "Employee number must be exactly 4 digits."),
+  })
+  .superRefine(validateEmployeeDates);
 
 const deleteEmployeeSchema = z.object({
   employeeId: z.string().trim().min(1, "Employee is required."),
+});
+
+const updateEmployeeStatusSchema = deleteEmployeeSchema.extend({
+  active: z.enum(["true", "false"]).transform((value) => value === "true"),
 });
 
 function emptyToNull(value?: string) {
@@ -261,6 +282,45 @@ export async function updateEmployeeAction(
   return { success: true, message: "Employee updated." };
 }
 
+export async function updateEmployeeStatusAction(
+  _previousState: EmployeeMutationState,
+  formData: FormData,
+): Promise<EmployeeMutationState> {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return { success: false, message: "You must be signed in to update an employee." };
+  }
+
+  const parsed = updateEmployeeStatusSchema.safeParse({
+    employeeId: formData.get("employeeId"),
+    active: formData.get("active"),
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Select an employee and try again." };
+  }
+
+  await prisma.employee.update({
+    where: {
+      id_ownerId: {
+        id: parsed.data.employeeId,
+        ownerId: currentUser.id,
+      },
+    },
+    data: {
+      active: parsed.data.active,
+    },
+  });
+
+  revalidateEmployeePaths();
+
+  return {
+    success: true,
+    message: parsed.data.active ? "Employee marked active." : "Employee marked inactive.",
+  };
+}
+
 export async function deleteEmployeeAction(
   _previousState: EmployeeMutationState,
   formData: FormData,
@@ -279,14 +339,17 @@ export async function deleteEmployeeAction(
     return { success: false, message: parsed.error.issues[0]?.message ?? "Select an employee and try again." };
   }
 
-  await prisma.employee.delete({
+  const result = await prisma.employee.deleteMany({
     where: {
-      id_ownerId: {
-        id: parsed.data.employeeId,
-        ownerId: currentUser.id,
-      },
+      id: parsed.data.employeeId,
+      ownerId: currentUser.id,
+      active: false,
     },
   });
+
+  if (result.count === 0) {
+    return { success: false, message: "Only inactive employees can be deleted." };
+  }
 
   revalidateEmployeePaths();
 

@@ -58,12 +58,14 @@ export function OptionalDatePicker({
             type="button"
             variant="outline"
             className={cn(
-              "w-full justify-start gap-2 bg-background/60 text-left font-normal text-base md:text-sm",
+              "w-full min-w-0 justify-start gap-2 overflow-hidden bg-background/60 text-left font-normal text-base md:text-sm",
               className,
             )}
           >
             <CalendarDays className="size-4 text-muted-foreground" />
-            <span className="truncate text-muted-foreground">{value ? format(value, "MMM d, yyyy") : placeholder}</span>
+            <span className="min-w-0 truncate text-muted-foreground">
+              {value ? format(value, "MMM d, yyyy") : placeholder}
+            </span>
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="z-[60] w-auto overflow-hidden p-0">

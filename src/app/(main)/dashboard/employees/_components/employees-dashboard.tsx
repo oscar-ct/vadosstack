@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { useRouter } from "next/navigation";
+
 import { format, parseISO } from "date-fns";
 import {
   BriefcaseBusiness,
@@ -17,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { OptionalDatePicker } from "@/components/optional-date-picker";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -25,7 +28,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +44,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 
@@ -94,161 +97,240 @@ function getSearchText(employee: EmployeeRow) {
 }
 
 function PhoneInput({ defaultValue, id, name }: { defaultValue?: string | null; id: string; name: string }) {
-  const [digits, setDigits] = React.useState(() => normalizePhoneNumber(defaultValue));
+  const [digits, setDigits] = React.useState(() => normalizePhoneNumber(defaultValue).slice(0, 10));
 
   return (
     <Input
       id={id}
       name={name}
       type="tel"
-      inputMode="tel"
+      inputMode="numeric"
       autoComplete="tel"
+      maxLength={14}
       value={formatPhoneNumber(digits)}
-      onChange={(event) => setDigits(normalizePhoneNumber(event.target.value))}
+      onChange={(event) => setDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
+      placeholder="(555) 555-1234"
     />
   );
 }
 
 function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
+  const [startDate, setStartDate] = React.useState<Date | undefined>(() =>
+    employee?.startDate ? parseISO(employee.startDate) : undefined,
+  );
+  const [endDate, setEndDate] = React.useState<Date | undefined>(() =>
+    employee?.endDate ? parseISO(employee.endDate) : undefined,
+  );
+
   return (
-    <div className="grid min-w-0 gap-4">
+    <div className="grid min-w-0 gap-5">
       {employee ? <input type="hidden" name="employeeId" value={employee.id} /> : null}
-      <div className="grid gap-4 md:grid-cols-[8rem_minmax(0,1fr)]">
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-number">Number</Label>
-          <Input
-            id="employee-number"
-            name="employeeNumber"
-            inputMode="numeric"
-            maxLength={4}
-            minLength={4}
-            pattern="\d{4}"
-            defaultValue={employee?.employeeNumber ?? ""}
-            placeholder="Auto"
-          />
-        </div>
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-name">Name</Label>
-          <Input
-            id="employee-name"
-            name="name"
-            defaultValue={employee?.name ?? ""}
-            placeholder="Employee name"
-            required
-          />
-        </div>
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-email">Email</Label>
-          <Input id="employee-email" name="email" type="email" defaultValue={employee?.email ?? ""} />
+      <section className="grid gap-4 rounded-lg border bg-muted/15 p-4">
+        <div className="grid gap-1">
+          <h3 className="font-medium text-sm">Basic information</h3>
+          <p className="text-muted-foreground text-xs">Identity and contact details for this employee.</p>
         </div>
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-phone">Phone</Label>
-          <PhoneInput id="employee-phone" name="phone" defaultValue={employee?.phone} />
+        <div className="grid gap-4 md:grid-cols-[11rem_minmax(0,1fr)]">
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-number">Employee number</Label>
+            <Input
+              id="employee-number"
+              name="employeeNumber"
+              aria-describedby="employee-number-help"
+              inputMode="numeric"
+              maxLength={4}
+              minLength={4}
+              pattern="\d{4}"
+              defaultValue={employee?.employeeNumber ?? ""}
+              placeholder={employee ? "0000" : "Auto-generated"}
+            />
+            <p id="employee-number-help" className="text-muted-foreground text-xs">
+              {employee ? "A unique 4-digit employee ID." : "Leave blank to generate a unique 4-digit ID."}
+            </p>
+          </div>
+          <div className="grid min-w-0 content-start gap-2">
+            <Label htmlFor="employee-name">Name</Label>
+            <Input
+              id="employee-name"
+              name="name"
+              autoComplete="name"
+              defaultValue={employee?.name ?? ""}
+              placeholder="Employee name"
+              required
+            />
+          </div>
         </div>
-      </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-email">Email (optional)</Label>
+            <Input
+              id="employee-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              defaultValue={employee?.email ?? ""}
+              placeholder="employee@example.com"
+            />
+          </div>
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-phone">Phone (optional)</Label>
+            <PhoneInput id="employee-phone" name="phone" defaultValue={employee?.phone} />
+          </div>
+        </div>
+      </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-job-title">Job title</Label>
-          <Input id="employee-job-title" name="jobTitle" defaultValue={employee?.jobTitle ?? ""} />
+      <section className="grid gap-4 rounded-lg border bg-muted/15 p-4">
+        <div className="grid gap-1">
+          <h3 className="font-medium text-sm">Employment details</h3>
+          <p className="text-muted-foreground text-xs">Role, compensation, status, and employment dates.</p>
         </div>
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-department">Department</Label>
-          <Input id="employee-department" name="department" defaultValue={employee?.department ?? ""} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-job-title">Job title (optional)</Label>
+            <Input id="employee-job-title" name="jobTitle" defaultValue={employee?.jobTitle ?? ""} />
+          </div>
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-department">Department (optional)</Label>
+            <Input id="employee-department" name="department" defaultValue={employee?.department ?? ""} />
+          </div>
         </div>
-      </div>
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-employment-type">Type</Label>
+            <NativeSelect
+              id="employee-employment-type"
+              name="employmentType"
+              defaultValue={employee?.employmentType ?? "Employee"}
+              className="w-full min-w-0"
+            >
+              {employmentTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-pay-type">Pay type</Label>
+            <NativeSelect
+              id="employee-pay-type"
+              name="payType"
+              defaultValue={employee?.payType ?? "Hourly"}
+              className="w-full min-w-0"
+            >
+              {payTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-pay-rate">Pay amount ($) (optional)</Label>
+            <Input
+              id="employee-pay-rate"
+              name="payRate"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              defaultValue={employee?.payRate ?? ""}
+              placeholder="0.00"
+            />
+          </div>
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-active">Status</Label>
+            <NativeSelect
+              id="employee-active"
+              name="active"
+              defaultValue={employee?.active === false ? "false" : "true"}
+              className="w-full min-w-0"
+            >
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </NativeSelect>
+          </div>
+        </div>
+        <p className="text-muted-foreground text-xs">Pay amount corresponds to the selected pay type.</p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-start-date">Start date (optional)</Label>
+            <OptionalDatePicker
+              id="employee-start-date"
+              name="startDate"
+              value={startDate}
+              onChange={setStartDate}
+              placeholder="Select start date"
+            />
+          </div>
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-end-date">End date (optional)</Label>
+            <OptionalDatePicker
+              id="employee-end-date"
+              name="endDate"
+              value={endDate}
+              onChange={setEndDate}
+              placeholder="Select end date"
+            />
+          </div>
+        </div>
+        <p className="text-muted-foreground text-xs">End date cannot be earlier than the start date.</p>
+      </section>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-employment-type">Type</Label>
-          <NativeSelect
-            id="employee-employment-type"
-            name="employmentType"
-            defaultValue={employee?.employmentType ?? "Employee"}
-            className="w-full min-w-0"
-          >
-            {employmentTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </NativeSelect>
+      <section className="grid gap-3 rounded-lg border bg-muted/15 p-4">
+        <div className="grid gap-1">
+          <h3 className="font-medium text-sm">Address (optional)</h3>
+          <p className="text-muted-foreground text-xs">Employee mailing or home address.</p>
         </div>
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-pay-type">Pay type</Label>
-          <NativeSelect
-            id="employee-pay-type"
-            name="payType"
-            defaultValue={employee?.payType ?? "Hourly"}
-            className="w-full min-w-0"
-          >
-            {payTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-pay-rate">Pay rate</Label>
-          <Input id="employee-pay-rate" name="payRate" inputMode="decimal" defaultValue={employee?.payRate ?? ""} />
-        </div>
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-active">Status</Label>
-          <NativeSelect
-            id="employee-active"
-            name="active"
-            defaultValue={employee?.active === false ? "false" : "true"}
-            className="w-full min-w-0"
-          >
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </NativeSelect>
-        </div>
-      </div>
+        <Label htmlFor="employee-address" className="sr-only">
+          Address
+        </Label>
+        <Textarea
+          id="employee-address"
+          name="address"
+          defaultValue={employee?.address ?? ""}
+          placeholder="Street, city, state, and ZIP code"
+          className="min-h-24"
+        />
+      </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-start-date">Start date</Label>
-          <Input id="employee-start-date" name="startDate" type="date" defaultValue={employee?.startDate ?? ""} />
+      <section className="grid gap-4 rounded-lg border border-amber-200/80 bg-amber-50/40 p-4 dark:border-amber-900/60 dark:bg-amber-950/15">
+        <div className="grid gap-1">
+          <h3 className="font-medium text-sm">Emergency contact (optional)</h3>
+          <p className="text-muted-foreground text-xs">Who should be contacted in an emergency.</p>
         </div>
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-end-date">End date</Label>
-          <Input id="employee-end-date" name="endDate" type="date" defaultValue={employee?.endDate ?? ""} />
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-emergency-name">Name</Label>
+            <Input id="employee-emergency-name" name="emergencyName" defaultValue={employee?.emergencyName ?? ""} />
+          </div>
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-emergency-phone">Phone</Label>
+            <PhoneInput id="employee-emergency-phone" name="emergencyPhone" defaultValue={employee?.emergencyPhone} />
+          </div>
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="employee-emergency-relation">Relationship</Label>
+            <Input
+              id="employee-emergency-relation"
+              name="emergencyRelation"
+              defaultValue={employee?.emergencyRelation ?? ""}
+              placeholder="Spouse, parent, friend…"
+            />
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid gap-2">
-        <Label htmlFor="employee-address">Address</Label>
-        <Textarea id="employee-address" name="address" defaultValue={employee?.address ?? ""} />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-emergency-name">Emergency contact</Label>
-          <Input id="employee-emergency-name" name="emergencyName" defaultValue={employee?.emergencyName ?? ""} />
-        </div>
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-emergency-phone">Emergency phone</Label>
-          <PhoneInput id="employee-emergency-phone" name="emergencyPhone" defaultValue={employee?.emergencyPhone} />
-        </div>
-        <div className="grid min-w-0 gap-2">
-          <Label htmlFor="employee-emergency-relation">Relationship</Label>
-          <Input
-            id="employee-emergency-relation"
-            name="emergencyRelation"
-            defaultValue={employee?.emergencyRelation ?? ""}
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-2">
-        <Label htmlFor="employee-notes">Notes</Label>
-        <Textarea id="employee-notes" name="notes" defaultValue={employee?.notes ?? ""} />
-      </div>
+      <section className="grid gap-2">
+        <Label htmlFor="employee-notes">Internal notes (optional)</Label>
+        <Textarea
+          id="employee-notes"
+          name="notes"
+          defaultValue={employee?.notes ?? ""}
+          placeholder="Add internal employee notes…"
+          className="min-h-24"
+        />
+      </section>
     </div>
   );
 }
@@ -263,6 +345,7 @@ function EmployeeDialog({
   employee?: EmployeeRow;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
 
   React.useEffect(() => {
@@ -273,87 +356,114 @@ function EmployeeDialog({
   }, [state]);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {employee ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          {employee ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              Edit
+            </Button>
+          ) : (
+            <Button type="button" size="sm">
+              <Plus />
+              Add employee
+            </Button>
+          )}
+        </DialogTrigger>
+        <DialogContent className="top-0 left-0 grid h-svh max-h-svh w-screen max-w-none translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-none p-0 sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[calc(100svh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-3xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
+          <DialogHeader className="border-b p-4 pr-12">
+            <DialogTitle>{employee ? "Edit employee" : "Add employee"}</DialogTitle>
+            <DialogDescription>
+              {employee
+                ? "Update employment details, contacts, and internal notes."
+                : "Create a detailed employee record."}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto]"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const formData = new FormData(event.currentTarget);
+              React.startTransition(() => formAction(formData));
+            }}
           >
-            Edit
-          </Button>
-        ) : (
-          <Button type="button" size="sm">
-            <Plus />
-            Add employee
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{employee ? "Edit employee" : "Add employee"}</DialogTitle>
-          <DialogDescription>
-            {employee
-              ? "Update employment details, contacts, and internal notes."
-              : "Create a detailed employee record."}
-          </DialogDescription>
-        </DialogHeader>
-        <form action={formAction} className="grid min-w-0 gap-4">
-          <EmployeeFormFields employee={employee} />
-          {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving..." : employee ? "Save changes" : "Create employee"}
-            </Button>
-          </DialogFooter>
-        </form>
-        {employee && deleteAction ? (
-          <div className="flex min-w-0 flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="grid min-w-0 gap-1">
-              <div className="font-medium text-sm">Delete employee</div>
-              <div className="text-muted-foreground text-xs">
-                Permanently removes this employee and their tracked time.
-              </div>
+            <div className="grid min-h-0 gap-4 overflow-y-auto overflow-x-hidden p-4">
+              <EmployeeFormFields employee={employee} />
+              {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
             </div>
-            <DeleteEmployeeDialog action={deleteAction} employee={employee} />
-          </div>
-        ) : null}
-      </DialogContent>
-    </Dialog>
+            <DialogFooter className="mx-0 mb-0 shrink-0 gap-2 rounded-none sm:justify-between">
+              {employee && deleteAction ? (
+                employee.active ? (
+                  <p className="max-w-xs text-muted-foreground text-xs sm:mr-auto">
+                    Only inactive employees can be deleted. Mark this employee inactive first.
+                  </p>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={isPending}
+                    onClick={() => {
+                      setOpen(false);
+                      setDeleteOpen(true);
+                    }}
+                  >
+                    <Trash2 />
+                    Delete
+                  </Button>
+                )
+              ) : null}
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isPending}>
+                  {isPending ? "Saving..." : employee ? "Save changes" : "Create employee"}
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {employee && deleteAction && !employee.active ? (
+        <DeleteEmployeeDialog
+          action={deleteAction}
+          employee={employee}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+        />
+      ) : null}
+    </>
   );
 }
 
 function DeleteEmployeeDialog({
   action,
   employee,
+  onOpenChange,
+  open,
 }: {
   action: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   employee: EmployeeRow;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
 }) {
-  const [open, setOpen] = React.useState(false);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
 
   React.useEffect(() => {
     if (!state.success) return;
 
     toast.success(state.message || "Employee deleted.");
-    setOpen(false);
-  }, [state]);
+    onOpenChange(false);
+  }, [onOpenChange, state]);
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button type="button" variant="destructive" size="sm">
-          <Trash2 />
-          Delete
-        </Button>
-      </AlertDialogTrigger>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete employee?</AlertDialogTitle>
@@ -461,7 +571,7 @@ function EmployeeProfileDialog({
           </section>
 
           <div className="grid gap-3 rounded-lg border bg-muted/15 p-4 sm:grid-cols-3">
-            <DetailItem label="Current period hours" value={formatHours(employee.totalHours)} />
+            <DetailItem label="Lifetime hours" value={formatHours(employee.totalHours)} />
             <DetailItem label="Created" value={format(parseISO(employee.createdAt), "MMM d, yyyy")} />
             <DetailItem label="Updated" value={format(parseISO(employee.updatedAt), "MMM d, yyyy")} />
           </div>
@@ -471,16 +581,68 @@ function EmployeeProfileDialog({
   );
 }
 
+function EmployeeStatusToggle({
+  action,
+  employee,
+}: {
+  action: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
+  employee: EmployeeRow;
+}) {
+  const router = useRouter();
+  const [active, setActive] = React.useState(employee.active);
+  const [isPending, startTransition] = React.useTransition();
+
+  React.useEffect(() => {
+    setActive(employee.active);
+  }, [employee.active]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className={active ? "text-emerald-700 text-xs dark:text-emerald-300" : "text-muted-foreground text-xs"}>
+        {active ? "Active" : "Inactive"}
+      </span>
+      <Switch
+        checked={active}
+        disabled={isPending}
+        aria-label={`Mark ${employee.name} ${active ? "inactive" : "active"}`}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+        onCheckedChange={(nextActive) => {
+          const previousActive = active;
+          setActive(nextActive);
+          startTransition(async () => {
+            const formData = new FormData();
+            formData.set("employeeId", employee.id);
+            formData.set("active", String(nextActive));
+            const result = await action(initialState, formData);
+
+            if (!result.success) {
+              setActive(previousActive);
+              toast.error(result.message || "Employee status could not be updated.");
+              return;
+            }
+
+            toast.success(result.message);
+            router.refresh();
+          });
+        }}
+      />
+    </div>
+  );
+}
+
 export function EmployeesDashboard({
   createAction,
   deleteAction,
   employees,
   updateAction,
+  updateStatusAction,
 }: {
   createAction: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   deleteAction: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   employees: EmployeeRow[];
   updateAction: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
+  updateStatusAction: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
 }) {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<"active" | "all" | "inactive">("active");
@@ -565,19 +727,14 @@ export function EmployeesDashboard({
                     onClick={() => setProfileEmployee(employee)}
                   />
                   <CardContent className="pointer-events-none relative z-10 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden p-4">
-                    <div className="flex min-w-0 items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="truncate font-medium text-sm">{employee.name}</div>
-                          <Badge variant="outline" className={getStatusBadgeClass(employee.active)}>
-                            {employee.active ? "Active" : "Inactive"}
-                          </Badge>
-                        </div>
-                        <p className="text-muted-foreground text-xs">#{employee.employeeNumber}</p>
-                      </div>
-                      <div className="pointer-events-auto flex shrink-0 gap-1">
-                        <EmployeeDialog action={updateAction} deleteAction={deleteAction} employee={employee} />
-                      </div>
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-sm">{employee.name}</div>
+                      <p className="text-muted-foreground text-xs">#{employee.employeeNumber}</p>
+                    </div>
+
+                    <div className="pointer-events-auto flex items-center justify-between gap-3 rounded-md border bg-muted/15 px-3 py-2">
+                      <EmployeeStatusToggle action={updateStatusAction} employee={employee} />
+                      <EmployeeDialog action={updateAction} deleteAction={deleteAction} employee={employee} />
                     </div>
 
                     <div className="grid min-w-0 gap-2 text-sm">
@@ -603,7 +760,7 @@ export function EmployeesDashboard({
 
                     <div className="grid min-w-0 grid-cols-3 gap-2 rounded-md bg-muted/20 p-3 text-sm">
                       <div className="grid min-w-0 gap-1">
-                        <span className="text-muted-foreground text-xs">Hours</span>
+                        <span className="text-muted-foreground text-xs">Lifetime hours</span>
                         <span className="font-medium tabular-nums">{formatHours(employee.totalHours)}</span>
                       </div>
                       <div className="grid min-w-0 gap-1">

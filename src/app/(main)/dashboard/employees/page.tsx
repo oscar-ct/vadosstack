@@ -3,15 +3,14 @@ import { getCurrentUser } from "@/lib/auth";
 
 import { EmployeesDashboard } from "./_components/employees-dashboard";
 import { getEmployees } from "./_lib/employee-data";
-import { createEmployeeAction, deleteEmployeeAction, updateEmployeeAction } from "./actions";
+import {
+  createEmployeeAction,
+  deleteEmployeeAction,
+  updateEmployeeAction,
+  updateEmployeeStatusAction,
+} from "./actions";
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams?: Promise<{
-    week?: string;
-  }>;
-}) {
+export default async function Page() {
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
@@ -23,8 +22,7 @@ export default async function Page({
     );
   }
 
-  const params = await searchParams;
-  const employees = await getEmployees(currentUser.id, params?.week);
+  const employees = await getEmployees(currentUser.id);
 
   return (
     <EmployeesDashboard
@@ -32,6 +30,7 @@ export default async function Page({
       deleteAction={deleteEmployeeAction}
       employees={employees}
       updateAction={updateEmployeeAction}
+      updateStatusAction={updateEmployeeStatusAction}
     />
   );
 }
