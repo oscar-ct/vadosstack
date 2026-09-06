@@ -13,10 +13,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
-      url: `${siteUrl}/employee-time-tracking`,
+      url: `${siteUrl}/time-tracking`,
       lastModified: now,
       changeFrequency: "monthly",
-      priority: 0.4,
+      priority: 0.7,
     },
   ];
 }

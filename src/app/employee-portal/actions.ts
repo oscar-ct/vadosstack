@@ -4,10 +4,14 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { format, subDays } from "date-fns";
 import { z } from "zod";
 
 import { normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
+
+import { createHash, randomBytes } from "node:crypto";
 
 export type EmployeePortalState = {
   success: boolean;
@@ -15,6 +19,28 @@ export type EmployeePortalState = {
 };
 
 const employeeSessionCookie = "employee-time-session";
+const employeeSessionPath = "/employee-portal";
+const EMPLOYEE_SESSION_TTL_SECONDS = 60 * 60 * 12;
+const EMPLOYEE_LOGIN_RATE_LIMIT_MESSAGE = "Too many attempts. Please wait 15 minutes and try again.";
+
+const idSchema = z.string().trim().min(1).max(64);
+const timeSchema = z
+  .string()
+  .trim()
+  .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "Enter a valid time.");
+const workDateSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid work date.")
+  .refine((value) => {
+    const date = new Date(`${value}T12:00:00`);
+    return !Number.isNaN(date.getTime()) && format(date, "yyyy-MM-dd") === value;
+  }, "Enter a valid work date.")
+  .refine((value) => {
+    const earliest = format(subDays(new Date(), 90), "yyyy-MM-dd");
+    const latest = format(new Date(), "yyyy-MM-dd");
+    return value >= earliest && value <= latest;
+  }, "Work date must be within the last 90 days and cannot be in the future.");
 
 const loginSchema = z.object({
   employeeNumber: z
@@ -29,58 +55,41 @@ const loginSchema = z.object({
 const checkboxBoolean = z.preprocess((value) => value === "true" || value === true, z.boolean());
 
 const timeEntrySchema = z.object({
-  jobId: z.string().trim().optional(),
-  workedOn: z.string().trim().min(1, "Work date is required."),
-  startTime: z
-    .string()
-    .trim()
-    .regex(/^\d{2}:\d{2}$/, "Start time is required."),
-  endTime: z
-    .string()
-    .trim()
-    .regex(/^\d{2}:\d{2}$/, "End time is required."),
+  jobId: z.string().trim().max(64).optional(),
+  workedOn: workDateSchema,
+  startTime: timeSchema,
+  endTime: timeSchema,
   deductLunch: checkboxBoolean,
-  lunchMinutes: z
-    .string()
-    .trim()
-    .refine((value) => !Number.isNaN(Number(value)) && Number(value) >= 0, "Lunch must be 0 minutes or more."),
-  notes: z.string().trim().optional(),
+  lunchMinutes: z.coerce.number().int("Lunch must be a whole number of minutes.").min(0).max(240),
+  notes: z.string().trim().max(1000, "Notes must be 1,000 characters or fewer.").optional(),
 });
 
 const updateTimeEntrySchema = timeEntrySchema.omit({ workedOn: true }).extend({
-  entryId: z.string().trim().min(1),
+  entryId: idSchema,
 });
 
 const deleteTimeEntrySchema = z.object({
-  entryId: z.string().trim().min(1),
+  entryId: idSchema,
 });
 
 const updateTimeEntryRequestSchema = updateTimeEntrySchema.extend({
-  requestId: z.string().trim().min(1),
+  requestId: idSchema,
 });
 
 const deleteTimeEntryRequestSchema = z.object({
-  requestId: z.string().trim().min(1),
+  requestId: idSchema,
 });
 
-function encodeSession(value: { employeeId: string; ownerId: string }) {
-  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+function hashEmployeeSessionToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
 }
 
-function decodeSession(value?: string) {
-  if (!value) return null;
+function createPendingRequestKey(parts: string[]) {
+  return createHash("sha256").update(parts.join(":"), "utf8").digest("hex");
+}
 
-  try {
-    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
-
-    if (typeof parsed?.employeeId === "string" && typeof parsed?.ownerId === "string") {
-      return parsed as { employeeId: string; ownerId: string };
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
+function isUniqueConstraintError(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
 }
 
 function parseWorkDate(value: string) {
@@ -101,10 +110,10 @@ function getMinutesFromTime(value: string) {
   return hours * 60 + minutes;
 }
 
-function calculateHours(input: { deductLunch?: boolean; endTime: string; lunchMinutes: string; startTime: string }) {
+function calculateHours(input: { deductLunch?: boolean; endTime: string; lunchMinutes: number; startTime: string }) {
   const startMinutes = getMinutesFromTime(input.startTime);
   const endMinutes = getMinutesFromTime(input.endTime);
-  const lunchMinutes = input.deductLunch === false ? 0 : Number(input.lunchMinutes || 0);
+  const lunchMinutes = input.deductLunch === false ? 0 : input.lunchMinutes;
   const workedMinutes = endMinutes - startMinutes - lunchMinutes;
 
   if (endMinutes <= startMinutes) {
@@ -147,20 +156,29 @@ async function validateOptionalJob(ownerId: string, jobId?: string | null) {
 
 export async function getEmployeePortalSession() {
   const cookieStore = await cookies();
-  const session = decodeSession(cookieStore.get(employeeSessionCookie)?.value);
+  const sessionToken = cookieStore.get(employeeSessionCookie)?.value;
 
-  if (!session) return null;
+  if (!sessionToken) return null;
 
-  const employee = await prisma.employee.findUnique({
+  const session = await prisma.employeeSession.findUnique({
     where: {
-      id_ownerId: {
-        id: session.employeeId,
-        ownerId: session.ownerId,
-      },
+      tokenHash: hashEmployeeSessionToken(sessionToken),
+    },
+    include: {
+      employee: true,
     },
   });
 
-  return employee?.active ? employee : null;
+  if (
+    !session ||
+    session.expiresAt <= new Date() ||
+    !session.employee.active ||
+    session.employee.ownerId !== session.ownerId
+  ) {
+    return null;
+  }
+
+  return session.employee;
 }
 
 export async function employeeLoginAction(
@@ -180,6 +198,19 @@ export async function employeeLoginAction(
   }
 
   const submittedPhone = normalizePhoneNumber(parsed.data.phone);
+  const ip = await getRateLimitIp();
+  const [ipAllowed, phoneAllowed] = await Promise.all([
+    consumeRateLimit("employee-login", ["ip", ip]),
+    consumeRateLimit("employee-login", ["phone", submittedPhone]),
+  ]);
+
+  if (!ipAllowed || !phoneAllowed) {
+    return {
+      success: false,
+      message: EMPLOYEE_LOGIN_RATE_LIMIT_MESSAGE,
+    };
+  }
+
   const employees = await prisma.employee.findMany({
     where: {
       active: true,
@@ -191,7 +222,8 @@ export async function employeeLoginAction(
       phone: true,
     },
   });
-  const employee = employees.find((employee) => normalizePhoneNumber(employee.phone) === submittedPhone);
+  const matchingEmployees = employees.filter((employee) => normalizePhoneNumber(employee.phone) === submittedPhone);
+  const employee = matchingEmployees.length === 1 ? matchingEmployees[0] : null;
 
   if (!employee) {
     return {
@@ -200,23 +232,58 @@ export async function employeeLoginAction(
     };
   }
 
+  const sessionToken = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + EMPLOYEE_SESSION_TTL_SECONDS * 1000);
+
+  await prisma.$transaction([
+    prisma.employeeSession.deleteMany({
+      where: {
+        employeeId: employee.id,
+        expiresAt: {
+          lt: new Date(),
+        },
+      },
+    }),
+    prisma.employeeSession.create({
+      data: {
+        tokenHash: hashEmployeeSessionToken(sessionToken),
+        employeeId: employee.id,
+        ownerId: employee.ownerId,
+        expiresAt,
+      },
+    }),
+  ]);
+
   const cookieStore = await cookies();
-  cookieStore.set(employeeSessionCookie, encodeSession({ employeeId: employee.id, ownerId: employee.ownerId }), {
+  cookieStore.set(employeeSessionCookie, sessionToken, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
-    path: "/employee-time-tracking",
-    maxAge: 60 * 60 * 12,
+    path: employeeSessionPath,
+    maxAge: EMPLOYEE_SESSION_TTL_SECONDS,
   });
 
-  redirect("/employee-time-tracking/time");
+  redirect("/employee-portal/timesheet");
 }
 
 export async function employeeLogoutAction() {
   const cookieStore = await cookies();
-  cookieStore.delete(employeeSessionCookie);
+  const sessionToken = cookieStore.get(employeeSessionCookie)?.value;
 
-  redirect("/employee-time-tracking");
+  if (sessionToken) {
+    await prisma.employeeSession.deleteMany({
+      where: {
+        tokenHash: hashEmployeeSessionToken(sessionToken),
+      },
+    });
+  }
+
+  cookieStore.delete({
+    name: employeeSessionCookie,
+    path: employeeSessionPath,
+  });
+
+  redirect("/employee-portal");
 }
 
 export async function disabledEmployeePortalAction(): Promise<EmployeePortalState> {
@@ -269,23 +336,63 @@ export async function employeeCreateTimeEntryAction(
     };
   }
 
-  await prisma.timeEntryRequest.create({
-    data: {
-      ownerId: employee.ownerId,
-      employeeId: employee.id,
-      jobId,
+  const workedOn = parseWorkDate(parsed.data.workedOn);
+  const duplicateRequest = await prisma.timeEntryRequest.findFirst({
+    where: {
       action: "Create",
-      workedOn: parseWorkDate(parsed.data.workedOn),
+      employeeId: employee.id,
+      ownerId: employee.ownerId,
+      status: "Pending",
+      workedOn,
       startTime: parsed.data.startTime,
       endTime: parsed.data.endTime,
-      deductLunch: parsed.data.deductLunch !== false,
-      lunchMinutes: totals.lunchMinutes,
-      hours: totals.hours,
-      notes: emptyToNull(parsed.data.notes),
+    },
+    select: {
+      id: true,
     },
   });
 
-  revalidatePath("/employee-time-tracking/time");
+  if (duplicateRequest) {
+    return {
+      success: false,
+      message: "An identical time request is already waiting for manager review.",
+    };
+  }
+
+  try {
+    await prisma.timeEntryRequest.create({
+      data: {
+        ownerId: employee.ownerId,
+        employeeId: employee.id,
+        jobId,
+        action: "Create",
+        pendingKey: createPendingRequestKey([
+          "create",
+          employee.id,
+          parsed.data.workedOn,
+          parsed.data.startTime,
+          parsed.data.endTime,
+        ]),
+        workedOn,
+        startTime: parsed.data.startTime,
+        endTime: parsed.data.endTime,
+        deductLunch: parsed.data.deductLunch !== false,
+        lunchMinutes: totals.lunchMinutes,
+        hours: totals.hours,
+        notes: emptyToNull(parsed.data.notes),
+      },
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return {
+        success: false,
+        message: "An identical time request is already waiting for manager review.",
+      };
+    }
+    throw error;
+  }
+
+  revalidatePath("/employee-portal/timesheet");
   revalidatePath("/dashboard/time-tracking");
   revalidatePath("/dashboard/overview");
 
@@ -354,24 +461,54 @@ export async function employeeUpdateTimeEntryAction(
     };
   }
 
-  await prisma.timeEntryRequest.create({
-    data: {
-      ownerId: employee.ownerId,
+  const pendingRequest = await prisma.timeEntryRequest.findFirst({
+    where: {
+      timeEntryId: entry.id,
       employeeId: employee.id,
-      timeEntryId: parsed.data.entryId,
-      jobId,
-      action: "Update",
-      workedOn: entry.workedOn,
-      startTime: parsed.data.startTime,
-      endTime: parsed.data.endTime,
-      deductLunch: parsed.data.deductLunch !== false,
-      lunchMinutes: totals.lunchMinutes,
-      hours: totals.hours,
-      notes: emptyToNull(parsed.data.notes),
+      ownerId: employee.ownerId,
+      status: "Pending",
+    },
+    select: {
+      id: true,
     },
   });
 
-  revalidatePath("/employee-time-tracking/time");
+  if (pendingRequest) {
+    return {
+      success: false,
+      message: "A change for this time entry is already waiting for manager review.",
+    };
+  }
+
+  try {
+    await prisma.timeEntryRequest.create({
+      data: {
+        ownerId: employee.ownerId,
+        employeeId: employee.id,
+        timeEntryId: parsed.data.entryId,
+        jobId,
+        action: "Update",
+        pendingKey: createPendingRequestKey(["entry", entry.id]),
+        workedOn: entry.workedOn,
+        startTime: parsed.data.startTime,
+        endTime: parsed.data.endTime,
+        deductLunch: parsed.data.deductLunch !== false,
+        lunchMinutes: totals.lunchMinutes,
+        hours: totals.hours,
+        notes: emptyToNull(parsed.data.notes),
+      },
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return {
+        success: false,
+        message: "A change for this time entry is already waiting for manager review.",
+      };
+    }
+    throw error;
+  }
+
+  revalidatePath("/employee-portal/timesheet");
   revalidatePath("/dashboard/time-tracking");
   revalidatePath("/dashboard/overview");
 
@@ -421,24 +558,54 @@ export async function employeeDeleteTimeEntryAction(
     };
   }
 
-  await prisma.timeEntryRequest.create({
-    data: {
-      ownerId: employee.ownerId,
+  const pendingRequest = await prisma.timeEntryRequest.findFirst({
+    where: {
+      timeEntryId: entry.id,
       employeeId: employee.id,
-      timeEntryId: parsed.data.entryId,
-      jobId: entry.jobId,
-      action: "Delete",
-      workedOn: entry.workedOn,
-      startTime: entry.startTime,
-      endTime: entry.endTime,
-      deductLunch: entry.deductLunch,
-      lunchMinutes: entry.lunchMinutes,
-      hours: entry.hours,
-      notes: entry.notes,
+      ownerId: employee.ownerId,
+      status: "Pending",
+    },
+    select: {
+      id: true,
     },
   });
 
-  revalidatePath("/employee-time-tracking/time");
+  if (pendingRequest) {
+    return {
+      success: false,
+      message: "A change for this time entry is already waiting for manager review.",
+    };
+  }
+
+  try {
+    await prisma.timeEntryRequest.create({
+      data: {
+        ownerId: employee.ownerId,
+        employeeId: employee.id,
+        timeEntryId: parsed.data.entryId,
+        jobId: entry.jobId,
+        action: "Delete",
+        pendingKey: createPendingRequestKey(["entry", entry.id]),
+        workedOn: entry.workedOn,
+        startTime: entry.startTime,
+        endTime: entry.endTime,
+        deductLunch: entry.deductLunch,
+        lunchMinutes: entry.lunchMinutes,
+        hours: entry.hours,
+        notes: entry.notes,
+      },
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return {
+        success: false,
+        message: "A change for this time entry is already waiting for manager review.",
+      };
+    }
+    throw error;
+  }
+
+  revalidatePath("/employee-portal/timesheet");
   revalidatePath("/dashboard/time-tracking");
   revalidatePath("/dashboard/overview");
 
@@ -508,9 +675,12 @@ export async function employeeUpdateTimeEntryRequestAction(
     };
   }
 
-  await prisma.timeEntryRequest.update({
+  const updated = await prisma.timeEntryRequest.updateMany({
     where: {
       id: request.id,
+      employeeId: employee.id,
+      ownerId: employee.ownerId,
+      status: "Pending",
     },
     data: {
       startTime: parsed.data.startTime,
@@ -523,7 +693,14 @@ export async function employeeUpdateTimeEntryRequestAction(
     },
   });
 
-  revalidatePath("/employee-time-tracking/time");
+  if (updated.count !== 1) {
+    return {
+      success: false,
+      message: "This request can no longer be edited.",
+    };
+  }
+
+  revalidatePath("/employee-portal/timesheet");
   revalidatePath("/dashboard/time-tracking");
   revalidatePath("/dashboard/overview");
 
@@ -566,7 +743,7 @@ export async function employeeDeleteTimeEntryRequestAction(
     },
   });
 
-  revalidatePath("/employee-time-tracking/time");
+  revalidatePath("/employee-portal/timesheet");
   revalidatePath("/dashboard/time-tracking");
   revalidatePath("/dashboard/overview");
 

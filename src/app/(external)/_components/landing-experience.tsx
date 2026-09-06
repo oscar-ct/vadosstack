@@ -791,7 +791,7 @@ export function LandingExperience({ isAuthenticated }: { isAuthenticated: boolea
         <a href="#features" className="hover:text-[#6f78f7]">
           Features
         </a>
-        <Link href="/employee-time-tracking" className="hover:text-[#6f78f7]">
+        <Link href="/employee-portal" className="hover:text-[#6f78f7]">
           Employee Portal
         </Link>
         <Link href={isAuthenticated ? "/dashboard/overview" : "/login"} className="hover:text-[#6f78f7]">
@@ -867,7 +867,7 @@ export function LandingExperience({ isAuthenticated }: { isAuthenticated: boolea
                 </a>
               ))}
               <Link
-                href="/employee-time-tracking"
+                href="/employee-portal"
                 className="rounded-xl px-4 py-3 font-medium text-sm hover:bg-black/5"
                 onClick={() => setMobileMenuOpen(false)}
               >

@@ -146,6 +146,7 @@ model User {
   employees                 Employee[]
   timeEntries               TimeEntry[]
   timeEntryRequests         TimeEntryRequest[]
+  employeeSessions          EmployeeSession[]
   sessions                  Session[]
   passwordResetTokens       PasswordResetToken[]
   googleMailAccount         GoogleMailAccount?
@@ -766,6 +767,22 @@ model RateLimitAttempt {
   @@map("rate_limit_attempts")
 }
 
+model EmployeeSession {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  ownerId    String
+  employeeId String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  owner      User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([employeeId])
+  @@index([expiresAt])
+  @@map("employee_sessions")
+}
+
 model GoogleMailAccount {
   id                 String   @id @default(cuid())
   userId             String   @unique
@@ -833,6 +850,7 @@ model Employee {
   owner             User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   timeEntries       TimeEntry[]
   timeEntryRequests TimeEntryRequest[]
+  sessions          EmployeeSession[]
 
   @@unique([id, ownerId])
   @@unique([ownerId, employeeNumber])
@@ -888,6 +906,7 @@ model TimeEntryRequest {
   reviewedAt   DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  pendingKey   String?   @unique
 
   owner    User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)

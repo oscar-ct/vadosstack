@@ -550,97 +550,122 @@ export async function approveTimeEntryRequestAction(
     };
   }
 
-  const request = await prisma.timeEntryRequest.findUnique({
-    where: {
-      id: parsed.data.requestId,
-    },
-  });
+  let approved = false;
 
-  if (!request || request.ownerId !== currentUser.id || request.status !== "Pending") {
+  try {
+    approved = await prisma.$transaction(async (transaction) => {
+      const claimed = await transaction.timeEntryRequest.updateMany({
+        where: {
+          id: parsed.data.requestId,
+          ownerId: currentUser.id,
+          status: "Pending",
+        },
+        data: {
+          status: "Processing",
+        },
+      });
+
+      if (claimed.count !== 1) return false;
+
+      const request = await transaction.timeEntryRequest.findUniqueOrThrow({
+        where: {
+          id: parsed.data.requestId,
+        },
+      });
+
+      if (request.action === "Create") {
+        if (!request.workedOn || !request.startTime || !request.endTime || !request.hours) {
+          throw new Error("This request is missing time details.");
+        }
+
+        await transaction.timeEntry.create({
+          data: {
+            ownerId: request.ownerId,
+            employeeId: request.employeeId,
+            jobId: request.jobId,
+            workedOn: request.workedOn,
+            startTime: request.startTime,
+            endTime: request.endTime,
+            deductLunch: request.deductLunch,
+            lunchMinutes: request.lunchMinutes,
+            hours: request.hours,
+            notes: request.notes,
+          },
+        });
+      } else if (request.action === "Update") {
+        if (!request.timeEntryId || !request.startTime || !request.endTime || !request.hours) {
+          throw new Error("This request is missing time details.");
+        }
+
+        const updated = await transaction.timeEntry.updateMany({
+          where: {
+            id: request.timeEntryId,
+            employeeId: request.employeeId,
+            ownerId: request.ownerId,
+          },
+          data: {
+            jobId: request.jobId,
+            startTime: request.startTime,
+            endTime: request.endTime,
+            deductLunch: request.deductLunch,
+            lunchMinutes: request.lunchMinutes,
+            hours: request.hours,
+            notes: request.notes,
+          },
+        });
+
+        if (updated.count !== 1) {
+          throw new Error("The original time entry is no longer available.");
+        }
+      } else if (request.action === "Delete") {
+        if (!request.timeEntryId) {
+          throw new Error("This request is missing the time entry to delete.");
+        }
+
+        const deleted = await transaction.timeEntry.deleteMany({
+          where: {
+            id: request.timeEntryId,
+            employeeId: request.employeeId,
+            ownerId: request.ownerId,
+          },
+        });
+
+        if (deleted.count !== 1) {
+          throw new Error("The original time entry is no longer available.");
+        }
+      } else {
+        throw new Error("This request has an unsupported action.");
+      }
+
+      await transaction.timeEntryRequest.update({
+        where: {
+          id: request.id,
+        },
+        data: {
+          pendingKey: null,
+          reviewedAt: new Date(),
+          status: "Approved",
+        },
+      });
+
+      return true;
+    });
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "The request could not be approved.",
+    };
+  }
+
+  if (!approved) {
     return {
       success: false,
       message: "This request is no longer available.",
     };
   }
 
-  if (request.action === "Create") {
-    if (!request.workedOn || !request.startTime || !request.endTime || !request.hours) {
-      return {
-        success: false,
-        message: "This request is missing time details.",
-      };
-    }
-
-    await prisma.timeEntry.create({
-      data: {
-        ownerId: request.ownerId,
-        employeeId: request.employeeId,
-        jobId: request.jobId,
-        workedOn: request.workedOn,
-        startTime: request.startTime,
-        endTime: request.endTime,
-        deductLunch: request.deductLunch,
-        lunchMinutes: request.lunchMinutes,
-        hours: request.hours,
-        notes: request.notes,
-      },
-    });
-  }
-
-  if (request.action === "Update") {
-    if (!request.timeEntryId || !request.startTime || !request.endTime || !request.hours) {
-      return {
-        success: false,
-        message: "This request is missing time details.",
-      };
-    }
-
-    await prisma.timeEntry.updateMany({
-      where: {
-        id: request.timeEntryId,
-        employeeId: request.employeeId,
-        ownerId: request.ownerId,
-      },
-      data: {
-        startTime: request.startTime,
-        endTime: request.endTime,
-        deductLunch: request.deductLunch,
-        lunchMinutes: request.lunchMinutes,
-        hours: request.hours,
-        notes: request.notes,
-      },
-    });
-  }
-
-  if (request.action === "Delete") {
-    if (!request.timeEntryId) {
-      return {
-        success: false,
-        message: "This request is missing the time entry to delete.",
-      };
-    }
-
-    await prisma.timeEntry.deleteMany({
-      where: {
-        id: request.timeEntryId,
-        employeeId: request.employeeId,
-        ownerId: request.ownerId,
-      },
-    });
-  }
-
-  await prisma.timeEntryRequest.update({
-    where: {
-      id: request.id,
-    },
-    data: {
-      reviewedAt: new Date(),
-      status: "Approved",
-    },
-  });
-
   revalidatePath("/dashboard/time-tracking");
-  revalidatePath("/employee-time-tracking/time");
+  revalidatePath("/employee-portal/timesheet");
   revalidatePath("/dashboard/overview");
 
   return {
@@ -680,13 +705,14 @@ export async function rejectTimeEntryRequestAction(
       status: "Pending",
     },
     data: {
+      pendingKey: null,
       reviewedAt: new Date(),
       status: "Rejected",
     },
   });
 
   revalidatePath("/dashboard/time-tracking");
-  revalidatePath("/employee-time-tracking/time");
+  revalidatePath("/employee-portal/timesheet");
   revalidatePath("/dashboard/overview");
 
   return {

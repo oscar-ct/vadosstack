@@ -6,47 +6,56 @@ export async function cleanupAuthRecords() {
   const now = new Date();
   const rateLimitCutoff = new Date(Date.now() - ONE_DAY_IN_MS);
 
-  const [sessions, passwordResetTokens, pendingAccountConfirmations, rateLimitAttempts] = await Promise.all([
-    prisma.session.deleteMany({
-      where: {
-        expiresAt: {
-          lt: now,
-        },
-      },
-    }),
-    prisma.passwordResetToken.deleteMany({
-      where: {
-        OR: [
-          {
-            expiresAt: {
-              lt: now,
-            },
+  const [sessions, employeeSessions, passwordResetTokens, pendingAccountConfirmations, rateLimitAttempts] =
+    await Promise.all([
+      prisma.session.deleteMany({
+        where: {
+          expiresAt: {
+            lt: now,
           },
-          {
-            usedAt: {
-              not: null,
-            },
+        },
+      }),
+      prisma.employeeSession.deleteMany({
+        where: {
+          expiresAt: {
+            lt: now,
           },
-        ],
-      },
-    }),
-    prisma.pendingAccountConfirmation.deleteMany({
-      where: {
-        expiresAt: {
-          lt: now,
         },
-      },
-    }),
-    prisma.rateLimitAttempt.deleteMany({
-      where: {
-        createdAt: {
-          lt: rateLimitCutoff,
+      }),
+      prisma.passwordResetToken.deleteMany({
+        where: {
+          OR: [
+            {
+              expiresAt: {
+                lt: now,
+              },
+            },
+            {
+              usedAt: {
+                not: null,
+              },
+            },
+          ],
         },
-      },
-    }),
-  ]);
+      }),
+      prisma.pendingAccountConfirmation.deleteMany({
+        where: {
+          expiresAt: {
+            lt: now,
+          },
+        },
+      }),
+      prisma.rateLimitAttempt.deleteMany({
+        where: {
+          createdAt: {
+            lt: rateLimitCutoff,
+          },
+        },
+      }),
+    ]);
 
   return {
+    employeeSessions: employeeSessions.count,
     passwordResetTokens: passwordResetTokens.count,
     pendingAccountConfirmations: pendingAccountConfirmations.count,
     rateLimitAttempts: rateLimitAttempts.count,

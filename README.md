@@ -117,7 +117,8 @@ There are also legacy setup and seed scripts. Prefer Prisma migrations for schem
 - `/dashboard/invoices`
 - `/dashboard/services`
 - `/dashboard/time-tracking`
-- `/employee-time-tracking` employee portal
+- `/employee-portal` employee sign-in
+- `/employee-portal/timesheet` employee timesheet
 
 ## Current Caveats
 

@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/dashboard/", "/auth/", "/employee-time-tracking/time/"],
+      disallow: ["/dashboard/", "/auth/", "/employee-portal/timesheet"],
     },
     sitemap: `${siteUrl}/sitemap.xml`,
   };

@@ -9,7 +9,13 @@ const FIFTEEN_MINUTES_IN_MS = 15 * ONE_MINUTE_IN_MS;
 const ONE_HOUR_IN_MS = 60 * ONE_MINUTE_IN_MS;
 const RETENTION_MS = 24 * ONE_HOUR_IN_MS;
 
-type RateLimitAction = "account-confirmation" | "login" | "password-reset" | "register" | "reset-password";
+type RateLimitAction =
+  | "account-confirmation"
+  | "employee-login"
+  | "login"
+  | "password-reset"
+  | "register"
+  | "reset-password";
 
 type RateLimitRule = {
   limit: number;
@@ -19,6 +25,10 @@ type RateLimitRule = {
 const RATE_LIMIT_RULES: Record<RateLimitAction, RateLimitRule> = {
   "account-confirmation": {
     limit: 10,
+    windowMs: FIFTEEN_MINUTES_IN_MS,
+  },
+  "employee-login": {
+    limit: 8,
     windowMs: FIFTEEN_MINUTES_IN_MS,
   },
   login: {
