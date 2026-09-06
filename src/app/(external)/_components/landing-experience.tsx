@@ -751,19 +751,31 @@ function BandVisual({ type }: { type: "documents" | "commerce" | "pulse" | "serv
   return <AppScreen type="invoices" />;
 }
 
-export function LandingExperience() {
+export function LandingExperience({ isAuthenticated }: { isAuthenticated: boolean }) {
   const [heroView, setHeroView] = useState(0);
   const [activeFeature, setActiveFeature] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const reducedMotion = useReducedMotion();
   const feature = productFeatures[activeFeature];
+  const primaryCtaHref = isAuthenticated ? "/dashboard/overview" : "/register";
+  const primaryCtaLabel = isAuthenticated ? "Open Dashboard" : "Create Account";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 48);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const desktopNavigation = window.matchMedia("(min-width: 640px)");
+    const closeMobileMenu = (event: MediaQueryListEvent) => {
+      if (event.matches) setMobileMenuOpen(false);
+    };
+
+    desktopNavigation.addEventListener("change", closeMobileMenu);
+    return () => desktopNavigation.removeEventListener("change", closeMobileMenu);
   }, []);
 
   useEffect(() => {
@@ -782,8 +794,8 @@ export function LandingExperience() {
         <Link href="/employee-time-tracking" className="hover:text-[#6f78f7]">
           Employee Portal
         </Link>
-        <Link href="/login" className="hover:text-[#6f78f7]">
-          Sign In
+        <Link href={isAuthenticated ? "/dashboard/overview" : "/login"} className="hover:text-[#6f78f7]">
+          {isAuthenticated ? "Open Dashboard" : "Sign In"}
         </Link>
       </div>
 
@@ -817,7 +829,7 @@ export function LandingExperience() {
               size="lg"
               className={`rounded-full px-7 ${scrolled ? "bg-white text-[#303030] hover:bg-white/90" : "bg-gradient-to-r from-[#9365f4] to-[#6877ef] text-white hover:brightness-95"}`}
             >
-              <Link href="/register">Create Account</Link>
+              <Link href={primaryCtaHref}>{primaryCtaLabel}</Link>
             </Button>
           </div>
           <button
@@ -834,7 +846,7 @@ export function LandingExperience() {
           {mobileMenuOpen ? (
             <motion.nav
               aria-label="Mobile navigation"
-              className={`absolute inset-x-3 top-[74px] grid gap-1 rounded-2xl border p-3 shadow-xl ${scrolled ? "border-white/15 bg-gradient-to-r from-[#9365f4] to-[#6877ef]" : "border-black/10 bg-white"}`}
+              className={`absolute inset-x-3 top-[74px] grid gap-1 rounded-2xl border p-3 shadow-xl sm:hidden ${scrolled ? "border-white/15 bg-gradient-to-r from-[#9365f4] to-[#6877ef]" : "border-black/10 bg-white"}`}
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
@@ -854,17 +866,34 @@ export function LandingExperience() {
                   {label}
                 </a>
               ))}
-              <div className="mt-2 grid grid-cols-2 gap-2 border-current/10 border-t pt-3">
-                <Button
-                  asChild
-                  variant="outline"
-                  className="rounded-full bg-white text-[#303030] hover:bg-white/90 hover:text-[#303030]"
-                >
-                  <Link href="/login">Sign In</Link>
-                </Button>
-                <Button asChild className="rounded-full bg-[#303030] text-white">
-                  <Link href="/register">Create Account</Link>
-                </Button>
+              <Link
+                href="/employee-time-tracking"
+                className="rounded-xl px-4 py-3 font-medium text-sm hover:bg-black/5"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Employee Portal
+              </Link>
+              <div
+                className={`mt-2 grid gap-2 border-current/10 border-t pt-3 ${isAuthenticated ? "grid-cols-1" : "grid-cols-2"}`}
+              >
+                {isAuthenticated ? (
+                  <Button asChild className="rounded-full bg-[#303030] text-white">
+                    <Link href="/dashboard/overview">Open Dashboard</Link>
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="rounded-full bg-white text-[#303030] hover:bg-white/90 hover:text-[#303030]"
+                    >
+                      <Link href="/login">Sign In</Link>
+                    </Button>
+                    <Button asChild className="rounded-full bg-[#303030] text-white">
+                      <Link href="/register">Create Account</Link>
+                    </Button>
+                  </>
+                )}
               </div>
             </motion.nav>
           ) : null}
@@ -918,8 +947,8 @@ export function LandingExperience() {
                 size="lg"
                 className="h-14 rounded-full bg-gradient-to-r from-[#9365f4] to-[#6877ef] px-7 text-base text-white shadow-[0_12px_28px_rgba(116,99,241,0.22)] hover:brightness-95"
               >
-                <Link href="/register">
-                  Create Account <ArrowRight />
+                <Link href={primaryCtaHref}>
+                  {primaryCtaLabel} <ArrowRight />
                 </Link>
               </Button>
               <Button
@@ -1030,7 +1059,7 @@ export function LandingExperience() {
                   ))}
                 </div>
                 <Button asChild size="lg" className="mt-8 rounded-full bg-[#6f78f7] px-7 text-white hover:bg-[#5964dd]">
-                  <Link href="/register">Create Account</Link>
+                  <Link href={primaryCtaHref}>{primaryCtaLabel}</Link>
                 </Button>
               </motion.div>
             </AnimatePresence>
@@ -1277,23 +1306,27 @@ export function LandingExperience() {
           Ready to run your service business in one place?
         </h2>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-white/82 leading-8">
-          Create a VadosStack workspace for your service business, with commerce tools ready when you need them.
+          {isAuthenticated
+            ? "Return to your VadosStack workspace and keep your service operation moving."
+            : "Create a VadosStack workspace for your service business, with commerce tools ready when you need them."}
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <Link
-            href="/register"
+            href={primaryCtaHref}
             className="inline-flex h-14 items-center justify-center gap-1.5 rounded-full bg-white px-8 font-medium text-[#303030] text-sm transition-colors hover:bg-white/90 hover:text-[#303030]"
           >
-            Create Account <ArrowRight className="size-4" />
+            {primaryCtaLabel} <ArrowRight className="size-4" />
           </Link>
-          <Button
-            asChild
-            variant="outline"
-            size="lg"
-            className="h-14 rounded-full border-white/35 bg-transparent px-8 text-white hover:bg-white/10 hover:text-white"
-          >
-            <Link href="/login">Sign In</Link>
-          </Button>
+          {!isAuthenticated ? (
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="h-14 rounded-full border-white/35 bg-transparent px-8 text-white hover:bg-white/10 hover:text-white"
+            >
+              <Link href="/login">Sign In</Link>
+            </Button>
+          ) : null}
         </div>
       </section>
 
@@ -1320,8 +1353,8 @@ export function LandingExperience() {
               <a href="#industries" className="hover:text-white">
                 Industries
               </a>
-              <Link href="/login" className="hover:text-white">
-                Sign In
+              <Link href={isAuthenticated ? "/dashboard/overview" : "/login"} className="hover:text-white">
+                {isAuthenticated ? "Open Dashboard" : "Sign In"}
               </Link>
               <Link href="/privacy" className="hover:text-white">
                 Privacy

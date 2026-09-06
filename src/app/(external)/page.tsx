@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { APP_CONFIG } from "@/config/app-config";
+import { getCurrentUser } from "@/lib/auth";
 
 import { LandingExperience } from "./_components/landing-experience";
 
@@ -139,7 +140,9 @@ const faqJsonLd = {
   ],
 };
 
-export default function Home() {
+export default async function Home() {
+  const currentUser = await getCurrentUser();
+
   return (
     <>
       <script
@@ -152,7 +155,7 @@ export default function Home() {
         // biome-ignore lint/security/noDangerouslySetInnerHtml: Static JSON-LD for SEO.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
-      <LandingExperience />
+      <LandingExperience isAuthenticated={Boolean(currentUser)} />
     </>
   );
 }
