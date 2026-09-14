@@ -339,6 +339,19 @@ export async function deleteEmployeeAction(
     return { success: false, message: parsed.error.issues[0]?.message ?? "Select an employee and try again." };
   }
 
+  const [entryCount, requestCount, auditCount] = await Promise.all([
+    prisma.timeEntry.count({ where: { employeeId: parsed.data.employeeId, ownerId: currentUser.id } }),
+    prisma.timeEntryRequest.count({ where: { employeeId: parsed.data.employeeId, ownerId: currentUser.id } }),
+    prisma.timeEntryAudit.count({ where: { employeeId: parsed.data.employeeId, ownerId: currentUser.id } }),
+  ]);
+
+  if (entryCount + requestCount + auditCount > 0) {
+    return {
+      success: false,
+      message: "This employee has time history and must remain archived. Historical payroll records cannot be deleted.",
+    };
+  }
+
   const result = await prisma.employee.deleteMany({
     where: {
       id: parsed.data.employeeId,

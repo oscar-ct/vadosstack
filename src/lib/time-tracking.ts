@@ -24,10 +24,15 @@ export function getTimeTrackingRange(week?: string) {
   const weekEnd = addDays(weekStart, 7);
   const monthStart = startOfMonth(weekStart);
   const monthEnd = addMonths(monthStart, 1);
+  const weekLastDay = addDays(weekEnd, -1);
+  const monthLabel =
+    format(weekStart, "yyyy-MM") === format(weekLastDay, "yyyy-MM")
+      ? format(weekStart, "MMMM yyyy")
+      : `${format(weekStart, "MMM yyyy")} - ${format(weekLastDay, "MMM yyyy")}`;
 
   return {
     monthEnd,
-    monthLabel: format(monthStart, "MMMM yyyy"),
+    monthLabel,
     monthStart,
     nextWeek: format(addDays(weekStart, 7), "yyyy-MM-dd"),
     periodLabel: `${format(weekStart, "MMM d")} - ${format(addDays(weekEnd, -1), "MMM d")}`,
@@ -80,6 +85,8 @@ export function mapTimeEntry(entry: {
 }
 
 export function mapEmployeeSummary(employee: {
+  active: boolean;
+  department: string | null;
   id: string;
   email: string | null;
   employeeNumber: string;
@@ -93,6 +100,8 @@ export function mapEmployeeSummary(employee: {
   const lastEntry = employee.timeEntries[0];
 
   return {
+    active: employee.active,
+    department: employee.department ?? undefined,
     id: employee.id,
     email: employee.email ?? undefined,
     employeeNumber: employee.employeeNumber,

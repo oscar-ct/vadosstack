@@ -146,6 +146,8 @@ model User {
   employees                 Employee[]
   timeEntries               TimeEntry[]
   timeEntryRequests         TimeEntryRequest[]
+  timeEntryAudits           TimeEntryAudit[]
+  timesheetLocks            TimesheetLock[]
   employeeSessions          EmployeeSession[]
   sessions                  Session[]
   passwordResetTokens       PasswordResetToken[]
@@ -850,6 +852,7 @@ model Employee {
   owner             User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   timeEntries       TimeEntry[]
   timeEntryRequests TimeEntryRequest[]
+  timeEntryAudits   TimeEntryAudit[]
   sessions          EmployeeSession[]
 
   @@unique([id, ownerId])
@@ -884,29 +887,33 @@ model TimeEntry {
   @@index([employeeId])
   @@index([jobId])
   @@index([workedOn])
+  @@index([ownerId, workedOn])
+  @@index([ownerId, employeeId, workedOn])
   @@map("time_entries")
 }
 
 model TimeEntryRequest {
-  id           String    @id @default(cuid())
-  ownerId      String
-  employeeId   String
-  timeEntryId  String?
-  jobId        String?
-  action       String
-  status       String    @default("Pending")
-  workedOn     DateTime?
-  startTime    String?
-  endTime      String?
-  hours        Decimal?
-  deductLunch  Boolean   @default(true)
-  lunchMinutes Int       @default(60)
-  notes        String?
-  requestedAt  DateTime  @default(now())
-  reviewedAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  pendingKey   String?   @unique
+  id                 String    @id @default(cuid())
+  ownerId            String
+  employeeId         String
+  timeEntryId        String?
+  jobId              String?
+  action             String
+  status             String    @default("Pending")
+  workedOn           DateTime?
+  startTime          String?
+  endTime            String?
+  hours              Decimal?
+  deductLunch        Boolean   @default(true)
+  lunchMinutes       Int       @default(60)
+  notes              String?
+  requestedAt        DateTime  @default(now())
+  reviewedAt         DateTime?
+  baseEntryUpdatedAt DateTime?
+  reviewReason       String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  pendingKey         String?   @unique
 
   owner    User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -917,7 +924,43 @@ model TimeEntryRequest {
   @@index([jobId])
   @@index([status])
   @@index([requestedAt])
+  @@index([ownerId, status, requestedAt])
   @@map("time_entry_requests")
+}
+
+model TimeEntryAudit {
+  id             String   @id @default(cuid())
+  ownerId        String
+  employeeId     String
+  timeEntryId    String?
+  requestId      String?
+  action         String
+  source         String
+  actorId        String
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  createdAt      DateTime @default(now())
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, createdAt])
+  @@index([employeeId, createdAt])
+  @@index([timeEntryId])
+  @@index([requestId])
+  @@map("time_entry_audits")
+}
+
+model TimesheetLock {
+  id         String   @id @default(cuid())
+  ownerId    String
+  weekStart  DateTime
+  lockedById String
+  lockedAt   DateTime @default(now())
+  owner      User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, weekStart])
+  @@index([ownerId, lockedAt])
+  @@map("timesheet_locks")
 }
 
 model CustomerAddress {

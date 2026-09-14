@@ -67,7 +67,7 @@ export default async function Page({ searchParams }: PageProps) {
         employeeId: employee.id,
         ownerId: employee.ownerId,
         workedOn: {
-          gte: weekStart,
+          gte: addDays(weekStart, -1),
           lt: weekEnd,
         },
       },
@@ -148,10 +148,15 @@ export default async function Page({ searchParams }: PageProps) {
     : [];
   const currentEntriesById = new Map(requestCurrentEntries.map((entry) => [entry.id, entry]));
   const entryRows = entries.map(mapTimeEntry);
+  const weekStartKey = format(weekStart, "yyyy-MM-dd");
+  const carryInEntries = entryRows.filter(
+    (entry) => entry.workedOn < weekStartKey && entry.startTime && entry.endTime && entry.endTime < entry.startTime,
+  );
+  const weekEntryRows = entryRows.filter((entry) => entry.workedOn >= weekStartKey);
   const dayGroups = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(weekStart, index);
     const dateKey = format(date, "yyyy-MM-dd");
-    const dayEntries = entryRows.filter((entry) => entry.workedOn === dateKey);
+    const dayEntries = weekEntryRows.filter((entry) => entry.workedOn === dateKey);
 
     return {
       date: dateKey,
@@ -192,6 +197,7 @@ export default async function Page({ searchParams }: PageProps) {
       notes: request.notes ?? undefined,
       requestedAt: request.requestedAt.toISOString(),
       reviewedAt: request.reviewedAt?.toISOString(),
+      reviewReason: request.reviewReason ?? undefined,
       startTime: request.startTime ?? undefined,
       status: request.status,
       workedOn: request.workedOn ? format(request.workedOn, "yyyy-MM-dd") : undefined,
@@ -218,6 +224,7 @@ export default async function Page({ searchParams }: PageProps) {
       <main className="p-4 md:p-6">
         <div className="mx-auto w-full max-w-7xl">
           <TimeTrackingDashboard
+            carryInEntries={carryInEntries}
             createEmployeeAction={disabledEmployeePortalAction}
             createTimeEntryAction={employeeCreateTimeEntryAction}
             dayGroups={dayGroups}

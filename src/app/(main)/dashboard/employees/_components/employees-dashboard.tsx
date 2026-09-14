@@ -668,11 +668,12 @@ export function EmployeesDashboard({
         <CardHeader className="border-b bg-muted/20">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="grid max-w-2xl gap-2">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-normal">
-                <UserRound className="size-4" />
-                People
-              </div>
-              <CardTitle className="text-xl">Employees</CardTitle>
+              <CardTitle className="flex items-center gap-2 leading-none">
+                <span className="text-lg">Employees</span>
+                <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <UserRound className="size-4" />
+                </span>
+              </CardTitle>
               <CardDescription>
                 Manage employee profiles, employment details, pay metadata, and emergency contacts.
               </CardDescription>

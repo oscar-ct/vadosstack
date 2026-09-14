@@ -4,12 +4,20 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { format, subDays } from "date-fns";
 import { z } from "zod";
 
 import { normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
+import { getSafeTimeEntryErrorMessage, TimeEntryUserError } from "@/lib/time-entry-errors";
+import {
+  calculateShift,
+  employeeWorkDateSchema,
+  parseWorkDate,
+  timeEntryFieldsSchema,
+  timeEntryIdSchema,
+} from "@/lib/time-entry-rules";
+import { assertTimeEntryAvailable, assertTimesheetUnlocked } from "@/lib/time-entry-server";
 
 import { createHash, randomBytes } from "node:crypto";
 
@@ -23,25 +31,6 @@ const employeeSessionPath = "/employee-portal";
 const EMPLOYEE_SESSION_TTL_SECONDS = 60 * 60 * 12;
 const EMPLOYEE_LOGIN_RATE_LIMIT_MESSAGE = "Too many attempts. Please wait 15 minutes and try again.";
 
-const idSchema = z.string().trim().min(1).max(64);
-const timeSchema = z
-  .string()
-  .trim()
-  .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "Enter a valid time.");
-const workDateSchema = z
-  .string()
-  .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid work date.")
-  .refine((value) => {
-    const date = new Date(`${value}T12:00:00`);
-    return !Number.isNaN(date.getTime()) && format(date, "yyyy-MM-dd") === value;
-  }, "Enter a valid work date.")
-  .refine((value) => {
-    const earliest = format(subDays(new Date(), 90), "yyyy-MM-dd");
-    const latest = format(new Date(), "yyyy-MM-dd");
-    return value >= earliest && value <= latest;
-  }, "Work date must be within the last 90 days and cannot be in the future.");
-
 const loginSchema = z.object({
   employeeNumber: z
     .string()
@@ -52,32 +41,22 @@ const loginSchema = z.object({
     .trim()
     .refine((value) => normalizePhoneNumber(value).length === 10, "Enter a 10-digit phone number."),
 });
-const checkboxBoolean = z.preprocess((value) => value === "true" || value === true, z.boolean());
-
-const timeEntrySchema = z.object({
-  jobId: z.string().trim().max(64).optional(),
-  workedOn: workDateSchema,
-  startTime: timeSchema,
-  endTime: timeSchema,
-  deductLunch: checkboxBoolean,
-  lunchMinutes: z.coerce.number().int("Lunch must be a whole number of minutes.").min(0).max(240),
-  notes: z.string().trim().max(1000, "Notes must be 1,000 characters or fewer.").optional(),
-});
+const timeEntrySchema = timeEntryFieldsSchema.extend({ workedOn: employeeWorkDateSchema });
 
 const updateTimeEntrySchema = timeEntrySchema.omit({ workedOn: true }).extend({
-  entryId: idSchema,
+  entryId: timeEntryIdSchema,
 });
 
 const deleteTimeEntrySchema = z.object({
-  entryId: idSchema,
+  entryId: timeEntryIdSchema,
 });
 
 const updateTimeEntryRequestSchema = updateTimeEntrySchema.extend({
-  requestId: idSchema,
+  requestId: timeEntryIdSchema,
 });
 
 const deleteTimeEntryRequestSchema = z.object({
-  requestId: idSchema,
+  requestId: timeEntryIdSchema,
 });
 
 function hashEmployeeSessionToken(token: string) {
@@ -92,10 +71,6 @@ function isUniqueConstraintError(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
 }
 
-function parseWorkDate(value: string) {
-  return new Date(`${value}T12:00:00`);
-}
-
 function emptyToNull(value?: string) {
   const trimmed = value?.trim();
   return trimmed && trimmed !== "none" ? trimmed : null;
@@ -103,31 +78,6 @@ function emptyToNull(value?: string) {
 
 function formString(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value : undefined;
-}
-
-function getMinutesFromTime(value: string) {
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-function calculateHours(input: { deductLunch?: boolean; endTime: string; lunchMinutes: number; startTime: string }) {
-  const startMinutes = getMinutesFromTime(input.startTime);
-  const endMinutes = getMinutesFromTime(input.endTime);
-  const lunchMinutes = input.deductLunch === false ? 0 : input.lunchMinutes;
-  const workedMinutes = endMinutes - startMinutes - lunchMinutes;
-
-  if (endMinutes <= startMinutes) {
-    throw new Error("End time must be later than start time.");
-  }
-
-  if (workedMinutes <= 0) {
-    throw new Error("Worked time must be greater than 0 after lunch is deducted.");
-  }
-
-  return {
-    hours: (workedMinutes / 60).toFixed(2),
-    lunchMinutes,
-  };
 }
 
 async function validateOptionalJob(ownerId: string, jobId?: string | null) {
@@ -148,7 +98,7 @@ async function validateOptionalJob(ownerId: string, jobId?: string | null) {
   });
 
   if (!job) {
-    throw new Error("Select a job from your account.");
+    throw new TimeEntryUserError("Select a job from your account.");
   }
 
   return job.id;
@@ -323,64 +273,68 @@ export async function employeeCreateTimeEntryAction(
     };
   }
 
-  let totals: ReturnType<typeof calculateHours>;
+  let totals: ReturnType<typeof calculateShift>;
   let jobId: string | null;
 
   try {
-    totals = calculateHours(parsed.data);
+    totals = calculateShift(parsed.data);
     jobId = await validateOptionalJob(employee.ownerId, parsed.data.jobId);
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Check the time entry details.",
+      message: getSafeTimeEntryErrorMessage(error, "Check the time entry details.", "validate employee time entry"),
     };
   }
 
   const workedOn = parseWorkDate(parsed.data.workedOn);
-  const duplicateRequest = await prisma.timeEntryRequest.findFirst({
-    where: {
-      action: "Create",
-      employeeId: employee.id,
-      ownerId: employee.ownerId,
-      status: "Pending",
-      workedOn,
-      startTime: parsed.data.startTime,
-      endTime: parsed.data.endTime,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (duplicateRequest) {
-    return {
-      success: false,
-      message: "An identical time request is already waiting for manager review.",
-    };
-  }
-
   try {
-    await prisma.timeEntryRequest.create({
-      data: {
-        ownerId: employee.ownerId,
+    await prisma.$transaction(async (transaction) => {
+      await assertTimesheetUnlocked(transaction, employee.ownerId, workedOn);
+      await assertTimeEntryAvailable(transaction, {
         employeeId: employee.id,
-        jobId,
-        action: "Create",
-        pendingKey: createPendingRequestKey([
-          "create",
-          employee.id,
-          parsed.data.workedOn,
-          parsed.data.startTime,
-          parsed.data.endTime,
-        ]),
-        workedOn,
-        startTime: parsed.data.startTime,
         endTime: parsed.data.endTime,
-        deductLunch: parsed.data.deductLunch !== false,
-        lunchMinutes: totals.lunchMinutes,
-        hours: totals.hours,
-        notes: emptyToNull(parsed.data.notes),
-      },
+        hours: Number(totals.hours),
+        ownerId: employee.ownerId,
+        startTime: parsed.data.startTime,
+        workedOn,
+      });
+      const duplicateRequest = await transaction.timeEntryRequest.findFirst({
+        where: {
+          action: "Create",
+          employeeId: employee.id,
+          ownerId: employee.ownerId,
+          status: "Pending",
+          workedOn,
+          startTime: parsed.data.startTime,
+          endTime: parsed.data.endTime,
+        },
+        select: { id: true },
+      });
+      if (duplicateRequest) {
+        throw new TimeEntryUserError("An identical time request is already waiting for manager review.");
+      }
+      await transaction.timeEntryRequest.create({
+        data: {
+          ownerId: employee.ownerId,
+          employeeId: employee.id,
+          jobId,
+          action: "Create",
+          pendingKey: createPendingRequestKey([
+            "create",
+            employee.id,
+            parsed.data.workedOn,
+            parsed.data.startTime,
+            parsed.data.endTime,
+          ]),
+          workedOn,
+          startTime: parsed.data.startTime,
+          endTime: parsed.data.endTime,
+          deductLunch: parsed.data.deductLunch !== false,
+          lunchMinutes: totals.lunchMinutes,
+          hours: totals.hours,
+          notes: emptyToNull(parsed.data.notes),
+        },
+      });
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -389,7 +343,10 @@ export async function employeeCreateTimeEntryAction(
         message: "An identical time request is already waiting for manager review.",
       };
     }
-    throw error;
+    return {
+      success: false,
+      message: getSafeTimeEntryErrorMessage(error, "This shift cannot be submitted. Please try again.", "submit shift"),
+    };
   }
 
   revalidatePath("/employee-portal/timesheet");
@@ -432,16 +389,16 @@ export async function employeeUpdateTimeEntryAction(
     };
   }
 
-  let totals: ReturnType<typeof calculateHours>;
+  let totals: ReturnType<typeof calculateShift>;
   let jobId: string | null;
 
   try {
-    totals = calculateHours(parsed.data);
+    totals = calculateShift(parsed.data);
     jobId = await validateOptionalJob(employee.ownerId, parsed.data.jobId);
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Check the time entry details.",
+      message: getSafeTimeEntryErrorMessage(error, "Check the time entry details.", "validate employee shift update"),
     };
   }
 
@@ -461,42 +418,48 @@ export async function employeeUpdateTimeEntryAction(
     };
   }
 
-  const pendingRequest = await prisma.timeEntryRequest.findFirst({
-    where: {
-      timeEntryId: entry.id,
-      employeeId: employee.id,
-      ownerId: employee.ownerId,
-      status: "Pending",
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (pendingRequest) {
-    return {
-      success: false,
-      message: "A change for this time entry is already waiting for manager review.",
-    };
-  }
-
   try {
-    await prisma.timeEntryRequest.create({
-      data: {
-        ownerId: employee.ownerId,
+    await prisma.$transaction(async (transaction) => {
+      await assertTimesheetUnlocked(transaction, employee.ownerId, entry.workedOn);
+      await assertTimeEntryAvailable(transaction, {
         employeeId: employee.id,
-        timeEntryId: parsed.data.entryId,
-        jobId,
-        action: "Update",
-        pendingKey: createPendingRequestKey(["entry", entry.id]),
-        workedOn: entry.workedOn,
-        startTime: parsed.data.startTime,
         endTime: parsed.data.endTime,
-        deductLunch: parsed.data.deductLunch !== false,
-        lunchMinutes: totals.lunchMinutes,
-        hours: totals.hours,
-        notes: emptyToNull(parsed.data.notes),
-      },
+        excludeEntryId: entry.id,
+        hours: Number(totals.hours),
+        ownerId: employee.ownerId,
+        startTime: parsed.data.startTime,
+        workedOn: entry.workedOn,
+      });
+      const pendingRequest = await transaction.timeEntryRequest.findFirst({
+        where: {
+          timeEntryId: entry.id,
+          employeeId: employee.id,
+          ownerId: employee.ownerId,
+          status: "Pending",
+        },
+        select: { id: true },
+      });
+      if (pendingRequest) {
+        throw new TimeEntryUserError("A change for this time entry is already waiting for manager review.");
+      }
+      await transaction.timeEntryRequest.create({
+        data: {
+          ownerId: employee.ownerId,
+          employeeId: employee.id,
+          timeEntryId: parsed.data.entryId,
+          jobId,
+          action: "Update",
+          baseEntryUpdatedAt: entry.updatedAt,
+          pendingKey: createPendingRequestKey(["entry", entry.id]),
+          workedOn: entry.workedOn,
+          startTime: parsed.data.startTime,
+          endTime: parsed.data.endTime,
+          deductLunch: parsed.data.deductLunch !== false,
+          lunchMinutes: totals.lunchMinutes,
+          hours: totals.hours,
+          notes: emptyToNull(parsed.data.notes),
+        },
+      });
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -505,7 +468,14 @@ export async function employeeUpdateTimeEntryAction(
         message: "A change for this time entry is already waiting for manager review.",
       };
     }
-    throw error;
+    return {
+      success: false,
+      message: getSafeTimeEntryErrorMessage(
+        error,
+        "This shift cannot be submitted. Please try again.",
+        "submit shift update",
+      ),
+    };
   }
 
   revalidatePath("/employee-portal/timesheet");
@@ -558,42 +528,39 @@ export async function employeeDeleteTimeEntryAction(
     };
   }
 
-  const pendingRequest = await prisma.timeEntryRequest.findFirst({
-    where: {
-      timeEntryId: entry.id,
-      employeeId: employee.id,
-      ownerId: employee.ownerId,
-      status: "Pending",
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (pendingRequest) {
-    return {
-      success: false,
-      message: "A change for this time entry is already waiting for manager review.",
-    };
-  }
-
   try {
-    await prisma.timeEntryRequest.create({
-      data: {
-        ownerId: employee.ownerId,
-        employeeId: employee.id,
-        timeEntryId: parsed.data.entryId,
-        jobId: entry.jobId,
-        action: "Delete",
-        pendingKey: createPendingRequestKey(["entry", entry.id]),
-        workedOn: entry.workedOn,
-        startTime: entry.startTime,
-        endTime: entry.endTime,
-        deductLunch: entry.deductLunch,
-        lunchMinutes: entry.lunchMinutes,
-        hours: entry.hours,
-        notes: entry.notes,
-      },
+    await prisma.$transaction(async (transaction) => {
+      await assertTimesheetUnlocked(transaction, employee.ownerId, entry.workedOn);
+      const pendingRequest = await transaction.timeEntryRequest.findFirst({
+        where: {
+          timeEntryId: entry.id,
+          employeeId: employee.id,
+          ownerId: employee.ownerId,
+          status: "Pending",
+        },
+        select: { id: true },
+      });
+      if (pendingRequest) {
+        throw new TimeEntryUserError("A change for this time entry is already waiting for manager review.");
+      }
+      await transaction.timeEntryRequest.create({
+        data: {
+          ownerId: employee.ownerId,
+          employeeId: employee.id,
+          timeEntryId: parsed.data.entryId,
+          jobId: entry.jobId,
+          action: "Delete",
+          baseEntryUpdatedAt: entry.updatedAt,
+          pendingKey: createPendingRequestKey(["entry", entry.id]),
+          workedOn: entry.workedOn,
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          deductLunch: entry.deductLunch,
+          lunchMinutes: entry.lunchMinutes,
+          hours: entry.hours,
+          notes: entry.notes,
+        },
+      });
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -602,7 +569,14 @@ export async function employeeDeleteTimeEntryAction(
         message: "A change for this time entry is already waiting for manager review.",
       };
     }
-    throw error;
+    return {
+      success: false,
+      message: getSafeTimeEntryErrorMessage(
+        error,
+        "This shift cannot be deleted. Please try again.",
+        "request deletion",
+      ),
+    };
   }
 
   revalidatePath("/employee-portal/timesheet");
@@ -661,39 +635,68 @@ export async function employeeUpdateTimeEntryRequestAction(
       message: "This request can no longer be edited.",
     };
   }
+  if (!request.workedOn) {
+    return { success: false, message: "This request is missing its work date." };
+  }
+  const requestWorkedOn = request.workedOn;
 
-  let totals: ReturnType<typeof calculateHours>;
+  let totals: ReturnType<typeof calculateShift>;
   let jobId: string | null;
 
   try {
-    totals = calculateHours(parsed.data);
+    totals = calculateShift(parsed.data);
     jobId = await validateOptionalJob(employee.ownerId, parsed.data.jobId);
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Check the time request details.",
+      message: getSafeTimeEntryErrorMessage(error, "Check the time request details.", "validate time request update"),
     };
   }
 
-  const updated = await prisma.timeEntryRequest.updateMany({
-    where: {
-      id: request.id,
-      employeeId: employee.id,
-      ownerId: employee.ownerId,
-      status: "Pending",
-    },
-    data: {
-      startTime: parsed.data.startTime,
-      jobId,
-      endTime: parsed.data.endTime,
-      deductLunch: parsed.data.deductLunch !== false,
-      lunchMinutes: totals.lunchMinutes,
-      hours: totals.hours,
-      notes: emptyToNull(parsed.data.notes),
-    },
-  });
+  let updated = 0;
+  try {
+    updated = await prisma.$transaction(async (transaction) => {
+      await assertTimesheetUnlocked(transaction, employee.ownerId, requestWorkedOn);
+      await assertTimeEntryAvailable(transaction, {
+        employeeId: employee.id,
+        endTime: parsed.data.endTime,
+        excludeEntryId: request.action === "Update" ? (request.timeEntryId ?? undefined) : undefined,
+        hours: Number(totals.hours),
+        ownerId: employee.ownerId,
+        startTime: parsed.data.startTime,
+        workedOn: requestWorkedOn,
+      });
+      const result = await transaction.timeEntryRequest.updateMany({
+        where: {
+          id: request.id,
+          employeeId: employee.id,
+          ownerId: employee.ownerId,
+          status: "Pending",
+        },
+        data: {
+          startTime: parsed.data.startTime,
+          jobId,
+          endTime: parsed.data.endTime,
+          deductLunch: parsed.data.deductLunch !== false,
+          lunchMinutes: totals.lunchMinutes,
+          hours: totals.hours,
+          notes: emptyToNull(parsed.data.notes),
+        },
+      });
+      return result.count;
+    });
+  } catch (error) {
+    return {
+      success: false,
+      message: getSafeTimeEntryErrorMessage(
+        error,
+        "Request could not be updated. Please try again.",
+        "update time request",
+      ),
+    };
+  }
 
-  if (updated.count !== 1) {
+  if (updated !== 1) {
     return {
       success: false,
       message: "This request can no longer be edited.",
@@ -734,14 +737,25 @@ export async function employeeDeleteTimeEntryRequestAction(
     };
   }
 
-  await prisma.timeEntryRequest.deleteMany({
-    where: {
-      id: parsed.data.requestId,
-      employeeId: employee.id,
-      ownerId: employee.ownerId,
-      status: "Pending",
-    },
-  });
+  try {
+    await prisma.timeEntryRequest.deleteMany({
+      where: {
+        id: parsed.data.requestId,
+        employeeId: employee.id,
+        ownerId: employee.ownerId,
+        status: "Pending",
+      },
+    });
+  } catch (error) {
+    return {
+      success: false,
+      message: getSafeTimeEntryErrorMessage(
+        error,
+        "The request could not be canceled. Please try again.",
+        "cancel request",
+      ),
+    };
+  }
 
   revalidatePath("/employee-portal/timesheet");
   revalidatePath("/dashboard/time-tracking");

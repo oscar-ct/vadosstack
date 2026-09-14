@@ -10,7 +10,9 @@ import {
   approveTimeEntryRequestAction,
   createTimeEntryAction,
   deleteTimeEntryAction,
+  lockTimesheetWeekAction,
   rejectTimeEntryRequestAction,
+  unlockTimesheetWeekAction,
   updateTimeEntryAction,
 } from "./actions";
 
@@ -34,25 +36,26 @@ export default async function Page({ searchParams }: PageProps) {
   }
 
   const params = await searchParams;
-  const { monthEnd, monthLabel, monthStart, nextWeek, periodLabel, previousWeek, weekEnd, weekStart } =
-    getTimeTrackingRange(params?.week);
-  const [employees, entries, pendingRequests, jobs] = await Promise.all([
+  const { monthLabel, nextWeek, periodLabel, previousWeek, weekEnd, weekStart } = getTimeTrackingRange(params?.week);
+  const [employees, entries, pendingRequests, jobs, timesheetLock, auditEvents] = await Promise.all([
     prisma.employee.findMany({
       where: {
         ownerId: currentUser.id,
-        active: true,
       },
-      include: {
+      select: {
+        active: true,
+        department: true,
+        email: true,
+        employeeNumber: true,
+        id: true,
+        name: true,
+        phone: true,
         timeEntries: {
-          where: {
-            workedOn: {
-              gte: monthStart,
-              lt: monthEnd,
-            },
-          },
           orderBy: {
             workedOn: "desc",
           },
+          select: { hours: true, workedOn: true },
+          take: 1,
         },
       },
       orderBy: {
@@ -63,7 +66,7 @@ export default async function Page({ searchParams }: PageProps) {
       where: {
         ownerId: currentUser.id,
         workedOn: {
-          gte: weekStart,
+          gte: addDays(weekStart, -1),
           lt: weekEnd,
         },
       },
@@ -95,15 +98,35 @@ export default async function Page({ searchParams }: PageProps) {
       orderBy: {
         requestedAt: "desc",
       },
+      take: 100,
     }),
     prisma.job.findMany({
       where: {
         ownerId: currentUser.id,
       },
-      include: {
-        customer: true,
+      select: {
+        customer: { select: { name: true } },
+        description: true,
+        id: true,
       },
       orderBy: [{ dateBegin: "desc" }, { createdAt: "desc" }],
+      take: 250,
+    }),
+    prisma.timesheetLock.findUnique({
+      where: { ownerId_weekStart: { ownerId: currentUser.id, weekStart } },
+      select: { lockedAt: true },
+    }),
+    prisma.timeEntryAudit.findMany({
+      where: { ownerId: currentUser.id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        action: true,
+        createdAt: true,
+        employee: { select: { employeeNumber: true, name: true } },
+        id: true,
+        source: true,
+      },
+      take: 30,
     }),
   ]);
 
@@ -129,10 +152,15 @@ export default async function Page({ searchParams }: PageProps) {
     : [];
   const currentEntriesById = new Map(currentEntries.map((entry) => [entry.id, entry]));
   const entryRows = entries.map(mapTimeEntry);
+  const weekStartKey = format(weekStart, "yyyy-MM-dd");
+  const carryInEntries = entryRows.filter(
+    (entry) => entry.workedOn < weekStartKey && entry.startTime && entry.endTime && entry.endTime < entry.startTime,
+  );
+  const weekEntryRows = entryRows.filter((entry) => entry.workedOn >= weekStartKey);
   const dayGroups = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(weekStart, index);
     const dateKey = format(date, "yyyy-MM-dd");
-    const dayEntries = entryRows.filter((entry) => entry.workedOn === dateKey);
+    const dayEntries = weekEntryRows.filter((entry) => entry.workedOn === dateKey);
 
     return {
       date: dateKey,
@@ -158,12 +186,17 @@ export default async function Page({ searchParams }: PageProps) {
             lunchMinutes: currentEntry.lunchMinutes,
             notes: currentEntry.notes ?? undefined,
             startTime: currentEntry.startTime ?? undefined,
+            updatedAt: currentEntry.updatedAt.toISOString(),
             workedOn: format(currentEntry.workedOn, "yyyy-MM-dd"),
           }
         : undefined,
       deductLunch: request.deductLunch,
       employeeName: request.employee.name,
       employeeNumber: request.employee.employeeNumber,
+      hasConflict: Boolean(
+        currentEntry &&
+          (!request.baseEntryUpdatedAt || currentEntry.updatedAt.getTime() !== request.baseEntryUpdatedAt.getTime()),
+      ),
       endTime: request.endTime ?? undefined,
       hours: request.hours ? toHours(request.hours) : undefined,
       jobCustomerName: request.job?.customer?.name ?? undefined,
@@ -173,6 +206,7 @@ export default async function Page({ searchParams }: PageProps) {
       notes: request.notes ?? undefined,
       requestedAt: request.requestedAt.toISOString(),
       reviewedAt: request.reviewedAt?.toISOString(),
+      reviewReason: request.reviewReason ?? undefined,
       startTime: request.startTime ?? undefined,
       status: request.status,
       workedOn: request.workedOn ? format(request.workedOn, "yyyy-MM-dd") : undefined,
@@ -182,6 +216,15 @@ export default async function Page({ searchParams }: PageProps) {
   return (
     <TimeTrackingDashboard
       approveTimeEntryRequestAction={approveTimeEntryRequestAction}
+      auditEvents={auditEvents.map((event) => ({
+        action: event.action,
+        createdAt: event.createdAt.toISOString(),
+        employeeName: event.employee.name,
+        employeeNumber: event.employee.employeeNumber,
+        id: event.id,
+        source: event.source,
+      }))}
+      carryInEntries={carryInEntries}
       createTimeEntryAction={createTimeEntryAction}
       dayGroups={dayGroups}
       deleteTimeEntryAction={deleteTimeEntryAction}
@@ -191,6 +234,8 @@ export default async function Page({ searchParams }: PageProps) {
         id: job.id,
         title: job.description,
       }))}
+      isWeekLocked={Boolean(timesheetLock)}
+      lockTimesheetWeekAction={lockTimesheetWeekAction}
       monthLabel={monthLabel}
       nextWeekHref={`/dashboard/time-tracking?week=${nextWeek}`}
       pendingRequests={pendingRequestRows}
@@ -198,7 +243,9 @@ export default async function Page({ searchParams }: PageProps) {
       previousWeekHref={`/dashboard/time-tracking?week=${previousWeek}`}
       rejectTimeEntryRequestAction={rejectTimeEntryRequestAction}
       selectedRequestId={params?.request}
+      unlockTimesheetWeekAction={unlockTimesheetWeekAction}
       updateTimeEntryAction={updateTimeEntryAction}
+      weekStart={format(weekStart, "yyyy-MM-dd")}
     />
   );
 }

@@ -12,14 +12,18 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 
 export function OptionalDatePicker({
+  ariaLabel,
   className,
+  clearable = true,
   id,
   name,
   onChange,
   placeholder = "Select date",
   value,
 }: {
+  ariaLabel?: string;
   className?: string;
+  clearable?: boolean;
   id: string;
   name?: string;
   onChange: (date: Date | undefined) => void;
@@ -34,7 +38,13 @@ export function OptionalDatePicker({
   }, [value]);
 
   function handleSelect(date: Date | undefined) {
-    if (!date || (value && isSameDay(value, date))) {
+    if (!date) return;
+
+    if (value && isSameDay(value, date)) {
+      if (!clearable) {
+        setOpen(false);
+        return;
+      }
       onChange(undefined);
       return;
     }
@@ -54,6 +64,7 @@ export function OptionalDatePicker({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
+            aria-label={ariaLabel}
             id={id}
             type="button"
             variant="outline"
@@ -81,7 +92,7 @@ export function OptionalDatePicker({
               className="w-full p-0"
             />
           </div>
-          {value ? (
+          {clearable && value ? (
             <div className="border-t p-2">
               <Button type="button" variant="ghost" size="sm" className="w-full justify-start" onClick={clearDate}>
                 <X className="size-4" />
