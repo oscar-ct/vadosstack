@@ -15,6 +15,7 @@ function dateToInput(value: Date | null) {
 
 function mapEmployee(
   employee: {
+    accentColor: string;
     id: string;
     employeeNumber: string;
     name: string;
@@ -44,6 +45,7 @@ function mapEmployee(
   const lastEntry = employee.timeEntries[0];
 
   return {
+    accentColor: employee.accentColor,
     id: employee.id,
     employeeNumber: employee.employeeNumber,
     name: employee.name,

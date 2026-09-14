@@ -1,4 +1,5 @@
 export type EmployeeRow = {
+  accentColor: string;
   id: string;
   employeeNumber: string;
   name: string;

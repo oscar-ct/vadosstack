@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
+import { employeeColorKeys, getLeastUsedEmployeeColor } from "@/lib/employee-colors";
 import { isValidOptionalPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
@@ -106,6 +107,10 @@ const updateEmployeeStatusSchema = deleteEmployeeSchema.extend({
   active: z.enum(["true", "false"]).transform((value) => value === "true"),
 });
 
+const updateEmployeeAccentSchema = deleteEmployeeSchema.extend({
+  accentColor: z.enum(employeeColorKeys),
+});
+
 function emptyToNull(value?: string) {
   const text = value?.trim();
   return text ? text : null;
@@ -176,6 +181,14 @@ function revalidateEmployeePaths() {
   revalidatePath("/dashboard/time-tracking");
 }
 
+async function getNextEmployeeAccent(ownerId: string) {
+  const employees = await prisma.employee.findMany({
+    where: { active: true, ownerId },
+    select: { accentColor: true },
+  });
+  return getLeastUsedEmployeeColor(employees.map((employee) => employee.accentColor));
+}
+
 export async function createEmployeeAction(
   _previousState: EmployeeMutationState,
   formData: FormData,
@@ -193,6 +206,7 @@ export async function createEmployeeAction(
   }
 
   const employeeNumber = parsed.data.employeeNumber ?? (await generateEmployeeNumber(currentUser.id));
+  const accentColor = await getNextEmployeeAccent(currentUser.id);
 
   if (await employeeNumberExists(currentUser.id, employeeNumber)) {
     return { success: false, message: "That employee number is already in use." };
@@ -201,6 +215,7 @@ export async function createEmployeeAction(
   await prisma.employee.create({
     data: {
       ownerId: currentUser.id,
+      accentColor,
       employeeNumber,
       name: parsed.data.name,
       email: emptyToNull(parsed.data.email),
@@ -319,6 +334,41 @@ export async function updateEmployeeStatusAction(
     success: true,
     message: parsed.data.active ? "Employee marked active." : "Employee marked inactive.",
   };
+}
+
+export async function updateEmployeeAccentAction(
+  _previousState: EmployeeMutationState,
+  formData: FormData,
+): Promise<EmployeeMutationState> {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return { success: false, message: "You must be signed in to update an employee color." };
+  }
+
+  const parsed = updateEmployeeAccentSchema.safeParse({
+    accentColor: formData.get("accentColor"),
+    employeeId: formData.get("employeeId"),
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: "Select a valid employee color." };
+  }
+
+  try {
+    const result = await prisma.employee.updateMany({
+      where: { id: parsed.data.employeeId, ownerId: currentUser.id },
+      data: { accentColor: parsed.data.accentColor },
+    });
+
+    if (result.count !== 1) return { success: false, message: "This employee is no longer available." };
+  } catch (error) {
+    console.error("[employees] update accent color failed", error);
+    return { success: false, message: "The employee color could not be updated. Please try again." };
+  }
+
+  revalidateEmployeePaths();
+  return { success: true, message: "Employee color updated." };
 }
 
 export async function deleteEmployeeAction(

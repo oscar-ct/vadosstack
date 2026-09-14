@@ -43,6 +43,7 @@ export default async function Page({ searchParams }: PageProps) {
         ownerId: currentUser.id,
       },
       select: {
+        accentColor: true,
         active: true,
         department: true,
         email: true,
@@ -191,6 +192,7 @@ export default async function Page({ searchParams }: PageProps) {
           }
         : undefined,
       deductLunch: request.deductLunch,
+      employeeAccentColor: request.employee.accentColor,
       employeeName: request.employee.name,
       employeeNumber: request.employee.employeeNumber,
       hasConflict: Boolean(

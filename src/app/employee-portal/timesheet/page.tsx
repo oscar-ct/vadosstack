@@ -186,6 +186,7 @@ export default async function Page({ searchParams }: PageProps) {
           }
         : undefined,
       deductLunch: request.deductLunch,
+      employeeAccentColor: employee.accentColor,
       employeeName: employee.name,
       employeeNumber: employee.employeeNumber,
       endTime: request.endTime ?? undefined,

@@ -65,11 +65,13 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { type EmployeeAccent, getEmployeeAccent as getStoredEmployeeAccent } from "@/lib/employee-colors";
 import { cn } from "@/lib/utils";
 
 import type { TimeTrackingMutationState } from "../actions";
 
 export type EmployeeSummary = {
+  accentColor: string;
   active: boolean;
   department?: string;
   id: string;
@@ -103,6 +105,7 @@ export type TimeEntryRequestRow = {
   action: string;
   currentEntry?: TimeEntryReviewSnapshot;
   deductLunch: boolean;
+  employeeAccentColor: string;
   employeeName: string;
   employeeNumber: string;
   hasConflict?: boolean;
@@ -160,39 +163,6 @@ const initialState: TimeTrackingMutationState = {
   success: false,
   message: "",
 };
-
-const employeeAccents = [
-  {
-    dot: "bg-sky-500",
-    fill: "bg-sky-300/80",
-    panel: "border-sky-200 bg-sky-50/80",
-    text: "text-sky-700",
-  },
-  {
-    dot: "bg-emerald-500",
-    fill: "bg-emerald-300/80",
-    panel: "border-emerald-200 bg-emerald-50/80",
-    text: "text-emerald-700",
-  },
-  {
-    dot: "bg-amber-500",
-    fill: "bg-amber-300/80",
-    panel: "border-amber-200 bg-amber-50/80",
-    text: "text-amber-700",
-  },
-  {
-    dot: "bg-rose-500",
-    fill: "bg-rose-300/80",
-    panel: "border-rose-200 bg-rose-50/80",
-    text: "text-rose-700",
-  },
-  {
-    dot: "bg-indigo-500",
-    fill: "bg-indigo-300/80",
-    panel: "border-indigo-200 bg-indigo-50/80",
-    text: "text-indigo-700",
-  },
-];
 
 function formatHours(hours: number) {
   const totalMinutes = Math.round(hours * 60);
@@ -312,10 +282,8 @@ function getTimeEntryChanges(request: TimeEntryRequestRow) {
 }
 
 function getEmployeeAccent(employeeId: string, employees: EmployeeSummary[]) {
-  const employeeIndex = employees.findIndex((employee) => employee.id === employeeId);
-  const index = employeeIndex >= 0 ? employeeIndex : 0;
-
-  return employeeAccents[index % employeeAccents.length];
+  const employee = employees.find((candidate) => candidate.id === employeeId);
+  return getStoredEmployeeAccent(employee?.accentColor, employeeId);
 }
 
 function timeToMinutes(value: string) {
@@ -345,7 +313,7 @@ function TimelineSegmentPopover({
   style,
   updateAction,
 }: {
-  accent: (typeof employeeAccents)[number];
+  accent: EmployeeAccent;
   deleteAction: TimeEntryMutationAction;
   disabled: boolean;
   jobs: JobOption[];
@@ -494,7 +462,7 @@ function DayTimeline({
   segments,
   updateAction,
 }: {
-  accent: (typeof employeeAccents)[number];
+  accent: EmployeeAccent;
   deleteAction: TimeEntryMutationAction;
   disabled: boolean;
   jobs: JobOption[];
@@ -577,7 +545,13 @@ function EmployeeSelectField({ employees }: { employees: EmployeeSummary[] }) {
           <SelectGroup>
             {employees.map((employee) => (
               <SelectItem key={employee.id} value={employee.id}>
-                {employee.name}
+                <span className="flex items-center gap-2">
+                  <span
+                    className={cn("size-2.5 shrink-0 rounded-full", getEmployeeAccent(employee.id, employees).dot)}
+                    aria-hidden="true"
+                  />
+                  <span>{employee.name}</span>
+                </span>
               </SelectItem>
             ))}
           </SelectGroup>
@@ -1032,7 +1006,13 @@ function ReviewTimeRequestDialog({
       </DialogTrigger>
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Review time change</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <span
+              className={cn("size-3 shrink-0 rounded-full", getStoredEmployeeAccent(request.employeeAccentColor).dot)}
+              aria-hidden="true"
+            />
+            Review time change
+          </DialogTitle>
           <DialogDescription>
             {request.employeeName} #{request.employeeNumber} sent a {request.action.toLowerCase()} request on{" "}
             {format(parseISO(request.requestedAt), "MMM d, h:mm a")}.
@@ -1152,6 +1132,13 @@ function PendingTimeRequestsCard({
                   className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 p-2"
                 >
                   <div className="flex items-start justify-between gap-3">
+                    <span
+                      className={cn(
+                        "mt-1 size-2.5 shrink-0 rounded-full",
+                        getStoredEmployeeAccent(request.employeeAccentColor).dot,
+                      )}
+                      aria-hidden="true"
+                    />
                     <div className="min-w-0">
                       <div className="font-medium text-sm">
                         {request.employeeName} #{request.employeeNumber}
@@ -1484,6 +1471,10 @@ function EmployeeRequestRow({
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={cn("size-2.5 shrink-0 rounded-full", getStoredEmployeeAccent(request.employeeAccentColor).dot)}
+              aria-hidden="true"
+            />
             <span className="font-medium text-sm">{request.action} request</span>
             <RequestStatusBadge status={request.status} />
           </div>

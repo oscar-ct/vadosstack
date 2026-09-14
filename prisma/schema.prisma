@@ -846,6 +846,7 @@ model Employee {
   emergencyPhone    String?
   emergencyRelation String?
   notes             String?
+  accentColor       String             @default("sky")
   active            Boolean            @default(true)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt

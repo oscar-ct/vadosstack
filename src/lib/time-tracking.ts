@@ -85,6 +85,7 @@ export function mapTimeEntry(entry: {
 }
 
 export function mapEmployeeSummary(employee: {
+  accentColor: string;
   active: boolean;
   department: string | null;
   id: string;
@@ -100,6 +101,7 @@ export function mapEmployeeSummary(employee: {
   const lastEntry = employee.timeEntries[0];
 
   return {
+    accentColor: employee.accentColor,
     active: employee.active,
     department: employee.department ?? undefined,
     id: employee.id,

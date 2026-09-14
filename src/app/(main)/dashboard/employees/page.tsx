@@ -6,6 +6,7 @@ import { getEmployees } from "./_lib/employee-data";
 import {
   createEmployeeAction,
   deleteEmployeeAction,
+  updateEmployeeAccentAction,
   updateEmployeeAction,
   updateEmployeeStatusAction,
 } from "./actions";
@@ -30,6 +31,7 @@ export default async function Page() {
       deleteAction={deleteEmployeeAction}
       employees={employees}
       updateAction={updateEmployeeAction}
+      updateAccentAction={updateEmployeeAccentAction}
       updateStatusAction={updateEmployeeStatusAction}
     />
   );
