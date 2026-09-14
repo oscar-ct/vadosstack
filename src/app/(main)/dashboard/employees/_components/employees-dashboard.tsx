@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   Trash2,
   UserRound,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -673,10 +674,12 @@ function EmployeeProfileDialog({
 function EmployeeColorPicker({
   action,
   employee,
+  onOpenChange,
   usageCounts,
 }: {
   action: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   employee: EmployeeRow;
+  onOpenChange: (open: boolean) => void;
   usageCounts: Record<string, number>;
 }) {
   const router = useRouter();
@@ -689,8 +692,13 @@ function EmployeeColorPicker({
     setSelectedColor(employee.accentColor);
   }, [employee.accentColor]);
 
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    onOpenChange(nextOpen);
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -707,9 +715,21 @@ function EmployeeColorPicker({
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64" onClick={(event) => event.stopPropagation()}>
         <div className="grid gap-3">
-          <div className="grid gap-1">
-            <div className="font-medium text-sm">Employee color</div>
-            <p className="text-muted-foreground text-xs">Used across employee schedules and summaries.</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="grid gap-1">
+              <div className="font-medium text-sm">Employee color</div>
+              <p className="text-muted-foreground text-xs">Used across employee schedules and summaries.</p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="-mt-1 -mr-1 shrink-0"
+              aria-label="Close color picker"
+              onClick={() => handleOpenChange(false)}
+            >
+              <X aria-hidden="true" />
+            </Button>
           </div>
           <div className="grid grid-cols-4 gap-2">
             {employeeColors.map((color) => {
@@ -729,13 +749,13 @@ function EmployeeColorPicker({
                   disabled={isPending}
                   onClick={() => {
                     if (selected) {
-                      setOpen(false);
+                      handleOpenChange(false);
                       return;
                     }
 
                     const previousColor = selectedColor;
                     setSelectedColor(color.key);
-                    setOpen(false);
+                    handleOpenChange(false);
                     startTransition(async () => {
                       const formData = new FormData();
                       formData.set("employeeId", employee.id);
@@ -839,6 +859,7 @@ export function EmployeesDashboard({
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<"active" | "all" | "inactive">("active");
   const [profileEmployee, setProfileEmployee] = React.useState<EmployeeRow | null>(null);
+  const suppressCardOpenUntil = React.useRef(0);
   const normalizedQuery = query.trim().toLowerCase();
   const activeCount = employees.filter((employee) => employee.active).length;
   const inactiveCount = employees.length - activeCount;
@@ -921,7 +942,10 @@ export function EmployeesDashboard({
                     type="button"
                     className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     aria-label={`View ${employee.name}`}
-                    onClick={() => setProfileEmployee(employee)}
+                    onClick={() => {
+                      if (Date.now() < suppressCardOpenUntil.current) return;
+                      setProfileEmployee(employee);
+                    }}
                   />
                   <CardContent className="pointer-events-none relative z-10 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden p-4">
                     <div className="min-w-0">
@@ -944,6 +968,9 @@ export function EmployeesDashboard({
                         <EmployeeColorPicker
                           action={updateAccentAction}
                           employee={employee}
+                          onOpenChange={(open) => {
+                            if (!open) suppressCardOpenUntil.current = Date.now() + 250;
+                          }}
                           usageCounts={colorUsageCounts}
                         />
                         <EmployeeDialog action={updateAction} deleteAction={deleteAction} employee={employee} />
