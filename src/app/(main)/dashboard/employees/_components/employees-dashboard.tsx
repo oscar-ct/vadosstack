@@ -674,12 +674,10 @@ function EmployeeProfileDialog({
 function EmployeeColorPicker({
   action,
   employee,
-  onPointerDownOutside,
   usageCounts,
 }: {
   action: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   employee: EmployeeRow;
-  onPointerDownOutside: (target: EventTarget | null) => void;
   usageCounts: Record<string, number>;
 }) {
   const router = useRouter();
@@ -712,12 +710,7 @@ function EmployeeColorPicker({
           <ColorPaletteIcon className="size-4" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="w-64"
-        onClick={(event) => event.stopPropagation()}
-        onPointerDownOutside={(event) => onPointerDownOutside(event.detail.originalEvent.target)}
-      >
+      <PopoverContent align="end" className="w-64" onClick={(event) => event.stopPropagation()}>
         <div className="grid gap-3">
           <div className="flex items-start justify-between gap-3">
             <div className="grid gap-1">
@@ -863,7 +856,6 @@ export function EmployeesDashboard({
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<"active" | "all" | "inactive">("active");
   const [profileEmployee, setProfileEmployee] = React.useState<EmployeeRow | null>(null);
-  const suppressedEmployeeCardId = React.useRef<string | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const activeCount = employees.filter((employee) => employee.active).length;
   const inactiveCount = employees.length - activeCount;
@@ -937,26 +929,8 @@ export function EmployeesDashboard({
           {filteredEmployees.length ? (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {filteredEmployees.map((employee) => (
-                <Card
-                  key={employee.id}
-                  className="group relative rounded-lg transition-colors hover:bg-muted/15"
-                  size="sm"
-                >
-                  <button
-                    type="button"
-                    data-employee-card-id={employee.id}
-                    className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    aria-label={`View ${employee.name}`}
-                    onClick={() => {
-                      if (suppressedEmployeeCardId.current === employee.id) {
-                        suppressedEmployeeCardId.current = null;
-                        return;
-                      }
-                      suppressedEmployeeCardId.current = null;
-                      setProfileEmployee(employee);
-                    }}
-                  />
-                  <CardContent className="pointer-events-none relative z-10 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden p-4">
+                <Card key={employee.id} className="gap-0 rounded-lg" size="sm">
+                  <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden p-4">
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
                         <span
@@ -971,19 +945,17 @@ export function EmployeesDashboard({
                       <p className="text-muted-foreground text-xs">#{employee.employeeNumber}</p>
                     </div>
 
-                    <div className="pointer-events-auto flex items-center justify-between gap-3 rounded-md border bg-muted/15 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/15 px-3 py-2">
                       <EmployeeStatusToggle action={updateStatusAction} employee={employee} />
                       <div className="flex items-center gap-2">
                         <EmployeeColorPicker
                           action={updateAccentAction}
                           employee={employee}
-                          onPointerDownOutside={(target) => {
-                            if (!(target instanceof Element)) return;
-                            const card = target.closest<HTMLElement>("[data-employee-card-id]");
-                            suppressedEmployeeCardId.current = card?.dataset.employeeCardId ?? null;
-                          }}
                           usageCounts={colorUsageCounts}
                         />
+                        <Button type="button" variant="outline" size="sm" onClick={() => setProfileEmployee(employee)}>
+                          View
+                        </Button>
                         <EmployeeDialog action={updateAction} deleteAction={deleteAction} employee={employee} />
                       </div>
                     </div>
