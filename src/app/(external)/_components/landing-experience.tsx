@@ -1336,8 +1336,10 @@ export function LandingExperience({ isAuthenticated }: { isAuthenticated: boolea
             <div>
               <Brand inverse />
               <p className="mt-4 max-w-md text-sm text-white/55 leading-6">
-                Field service management software with built-in e-commerce tools for businesses that need the whole
-                operation in view.
+                <span>Field service management software built by</span>
+                <a className={"pl-1 font-semibold hover:underline"} href={"https://www.oscarct.com"}>
+                  Oscar Castro.
+                </a>
               </p>
             </div>
             <nav
