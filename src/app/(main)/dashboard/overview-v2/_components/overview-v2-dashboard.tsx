@@ -10,7 +10,6 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   CircleDollarSign,
-  ListChecks,
   MessagesSquare,
 } from "lucide-react";
 
@@ -212,7 +211,7 @@ export function OverviewV2Dashboard({
             <div className="mt-10 max-w-xs font-medium text-2xl leading-tight tracking-[-0.03em]">
               {liveGreeting}, {displayName}.
             </div>
-            <p className="mt-3 max-w-xs text-white/75 text-sm leading-6">
+            <p className="mt-3 max-w-xs text-sm text-white/75 leading-6">
               {scheduleItems.length
                 ? `${scheduleItems.length} ${scheduleItems.length === 1 ? "job has" : "jobs have"} upcoming dates, ${attentionCount} ${attentionCount === 1 ? "job needs" : "jobs need"} attention, and ${leadFollowUpCount} lead ${leadFollowUpCount === 1 ? "follow-up is" : "follow-ups are"} waiting.`
                 : `No upcoming jobs have dates, ${attentionCount} ${attentionCount === 1 ? "job needs" : "jobs need"} attention, and ${leadFollowUpCount} lead ${leadFollowUpCount === 1 ? "follow-up is" : "follow-ups are"} waiting.`}
@@ -239,8 +238,7 @@ export function OverviewV2Dashboard({
             </div>
 
             <div className="mt-auto flex items-center gap-2 pt-8 text-white/65 text-xs">
-              <span className="size-2 rounded-full bg-emerald-300 shadow-[0_0_0_5px_rgba(255,255,255,0.09)]" />
-              Live workspace · {actionQueue.length} open {actionQueue.length === 1 ? "decision" : "decisions"}
+              {actionQueue.length} open {actionQueue.length === 1 ? "decision" : "decisions"}
             </div>
           </div>
         </aside>
@@ -249,7 +247,7 @@ export function OverviewV2Dashboard({
           <div className="flex flex-col gap-5 border-border border-b pb-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h1 className="mt-2 font-medium text-2xl tracking-[-0.03em] sm:text-3xl">Run the business from here.</h1>
-              <p className="mt-2 text-muted-foreground text-lg">{companyName}</p>
+              <p className="mt-2 text-lg text-muted-foreground">{companyName}</p>
             </div>
 
             <div className="flex w-fit items-center rounded-lg bg-muted p-1">
@@ -337,7 +335,7 @@ export function OverviewV2Dashboard({
                 <Link
                   prefetch={false}
                   href="/dashboard/leads"
-                  className="p-4 transition-colors hover:bg-muted/35 sm:border-r sm:border-border"
+                  className="p-4 transition-colors hover:bg-muted/35 sm:border-border sm:border-r"
                 >
                   <div className="flex items-center gap-2 font-medium text-lg">
                     <MessagesSquare className="size-4 text-cyan-600" />
@@ -417,7 +415,7 @@ export function OverviewV2Dashboard({
               )}
 
               <div className="mt-5 grid border-border border-y sm:grid-cols-3">
-                <div className="p-4 sm:border-r sm:border-border">
+                <div className="p-4 sm:border-border sm:border-r">
                   <div className="flex items-center gap-2 font-medium text-lg">
                     <BanknoteArrowDown className="size-4 text-emerald-600" />
                     {formatCompactCurrency(largestBalance)}
