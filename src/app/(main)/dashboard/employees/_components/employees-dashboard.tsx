@@ -674,12 +674,12 @@ function EmployeeProfileDialog({
 function EmployeeColorPicker({
   action,
   employee,
-  onOpenChange,
+  onPointerDownOutside,
   usageCounts,
 }: {
   action: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   employee: EmployeeRow;
-  onOpenChange: (open: boolean) => void;
+  onPointerDownOutside: (target: EventTarget | null) => void;
   usageCounts: Record<string, number>;
 }) {
   const router = useRouter();
@@ -694,7 +694,6 @@ function EmployeeColorPicker({
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
-    onOpenChange(nextOpen);
   }
 
   return (
@@ -713,7 +712,12 @@ function EmployeeColorPicker({
           <ColorPaletteIcon className="size-4" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-64" onClick={(event) => event.stopPropagation()}>
+      <PopoverContent
+        align="end"
+        className="w-64"
+        onClick={(event) => event.stopPropagation()}
+        onPointerDownOutside={(event) => onPointerDownOutside(event.detail.originalEvent.target)}
+      >
         <div className="grid gap-3">
           <div className="flex items-start justify-between gap-3">
             <div className="grid gap-1">
@@ -859,7 +863,7 @@ export function EmployeesDashboard({
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<"active" | "all" | "inactive">("active");
   const [profileEmployee, setProfileEmployee] = React.useState<EmployeeRow | null>(null);
-  const suppressCardOpenUntil = React.useRef(0);
+  const suppressedEmployeeCardId = React.useRef<string | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const activeCount = employees.filter((employee) => employee.active).length;
   const inactiveCount = employees.length - activeCount;
@@ -940,10 +944,15 @@ export function EmployeesDashboard({
                 >
                   <button
                     type="button"
+                    data-employee-card-id={employee.id}
                     className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     aria-label={`View ${employee.name}`}
                     onClick={() => {
-                      if (Date.now() < suppressCardOpenUntil.current) return;
+                      if (suppressedEmployeeCardId.current === employee.id) {
+                        suppressedEmployeeCardId.current = null;
+                        return;
+                      }
+                      suppressedEmployeeCardId.current = null;
                       setProfileEmployee(employee);
                     }}
                   />
@@ -968,8 +977,10 @@ export function EmployeesDashboard({
                         <EmployeeColorPicker
                           action={updateAccentAction}
                           employee={employee}
-                          onOpenChange={(open) => {
-                            if (!open) suppressCardOpenUntil.current = Date.now() + 250;
+                          onPointerDownOutside={(target) => {
+                            if (!(target instanceof Element)) return;
+                            const card = target.closest<HTMLElement>("[data-employee-card-id]");
+                            suppressedEmployeeCardId.current = card?.dataset.employeeCardId ?? null;
                           }}
                           usageCounts={colorUsageCounts}
                         />
