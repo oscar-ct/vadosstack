@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import Link from "next/link";
 
+import { format } from "date-fns";
 import {
   ArrowRight,
   BanknoteArrowDown,
@@ -11,6 +12,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   MessagesSquare,
+  TriangleAlert,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,17 @@ type WaitingJob = {
   title: string;
 };
 
+type DatedAttentionJob = Omit<WaitingJob, "status"> & {
+  date: string;
+  days: number;
+};
+
+type TimeWarning = {
+  detail: string;
+  href: string;
+  title: string;
+};
+
 type Lens = "jobs" | "money" | "now";
 
 const BRIEFING_TIME_ZONE = "America/Chicago";
@@ -56,12 +69,20 @@ const severityDotClassNames: Record<ManagerActionQueueItem["severity"], string> 
 };
 
 function formatCompactCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    currency: "USD",
-    maximumFractionDigits: value >= 1000 ? 1 : 0,
-    notation: value >= 1000 ? "compact" : "standard",
-    style: "currency",
-  }).format(value);
+  const absoluteValue = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+
+  if (absoluteValue >= 1_000_000) {
+    const millions = Math.round((absoluteValue / 1_000_000) * 10) / 10;
+    return `${sign}$${millions}M`;
+  }
+
+  if (absoluteValue >= 1_000) {
+    const thousands = Math.round((absoluteValue / 1_000) * 10) / 10;
+    return `${sign}$${thousands}K`;
+  }
+
+  return `${sign}$${Math.round(absoluteValue)}`;
 }
 
 function formatCurrency(value: number) {
@@ -149,9 +170,14 @@ export function OverviewV2Dashboard({
   moneyItems,
   onHoldCount,
   openLeadCount,
+  overdueCount,
+  overdueJobs,
   outstandingTotal,
   scheduleItems,
   timeLabel,
+  timeWarning,
+  statusReviewCount,
+  statusReviewJobs,
   unscheduledCount,
   waitingJobs,
 }: {
@@ -165,9 +191,14 @@ export function OverviewV2Dashboard({
   moneyItems: MoneyItem[];
   onHoldCount: number;
   openLeadCount: number;
+  overdueCount: number;
+  overdueJobs: DatedAttentionJob[];
   outstandingTotal: number;
   scheduleItems: ScheduleItem[];
   timeLabel: string;
+  timeWarning?: TimeWarning;
+  statusReviewCount: number;
+  statusReviewJobs: DatedAttentionJob[];
   unscheduledCount: number;
   waitingJobs: WaitingJob[];
 }) {
@@ -178,7 +209,7 @@ export function OverviewV2Dashboard({
   const visibleActions = actionQueue.slice(0, actionLimit);
   const visibleMoneyItems = moneyItems.slice(0, 6);
   const firstAction = actionQueue[0];
-  const attentionCount = unscheduledCount + onHoldCount;
+  const attentionCount = unscheduledCount + onHoldCount + overdueCount + statusReviewCount;
   const largestBalance = moneyItems[0]?.balanceDue ?? 0;
   const unscheduledJobs = waitingJobs.filter((job) => job.status === "Unscheduled");
   const onHoldJobs = waitingJobs.filter((job) => job.status === "On Hold");
@@ -262,6 +293,28 @@ export function OverviewV2Dashboard({
               </LensButton>
             </div>
           </div>
+
+          {timeWarning ? (
+            <Link
+              prefetch={false}
+              href={timeWarning.href}
+              className="group mt-5 flex items-center gap-3 rounded-lg border border-amber-300/70 bg-amber-50 px-4 py-3 text-amber-950 transition-colors hover:bg-amber-100 dark:border-amber-800/70 dark:bg-amber-950/35 dark:text-amber-100 dark:hover:bg-amber-950/55"
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                <TriangleAlert className="size-4.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium text-sm">{timeWarning.title}</span>
+                <span className="mt-0.5 block text-amber-900/70 text-xs dark:text-amber-100/65">
+                  {timeWarning.detail}
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-1 font-medium text-xs">
+                Review time
+                <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </Link>
+          ) : null}
 
           {lens === "now" ? (
             <div>
@@ -355,7 +408,8 @@ export function OverviewV2Dashboard({
                     {attentionCount} need attention
                   </div>
                   <div className="mt-1 text-muted-foreground text-xs">
-                    {unscheduledCount} need dates · {onHoldCount} on hold
+                    {overdueCount} overdue · {statusReviewCount} status review · {unscheduledCount} need dates ·{" "}
+                    {onHoldCount} on hold
                   </div>
                 </Link>
                 <button
@@ -449,6 +503,66 @@ export function OverviewV2Dashboard({
               </div>
 
               <div>
+                <div className="text-[10px] text-rose-700 uppercase tracking-[0.15em] dark:text-rose-300">Overdue</div>
+                {overdueJobs.length ? (
+                  <div className="mt-2 border-border border-t">
+                    {overdueJobs.map((job) => (
+                      <Link
+                        key={job.id}
+                        prefetch={false}
+                        href={job.href}
+                        className="group flex items-center justify-between gap-4 border-border border-b py-4 transition-colors hover:bg-muted/35"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-sm">{job.title}</span>
+                          <span className="mt-1 block truncate text-muted-foreground text-xs">
+                            {job.customerName} · ended {format(new Date(job.date), "MMM d")}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2 font-medium text-rose-700 text-xs dark:text-rose-300">
+                          {job.days}d overdue
+                          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-muted-foreground text-sm">No scheduled jobs are overdue.</p>
+                )}
+              </div>
+
+              <div className="mt-6">
+                <div className="text-[10px] text-amber-700 uppercase tracking-[0.15em] dark:text-amber-300">
+                  Status review
+                </div>
+                {statusReviewJobs.length ? (
+                  <div className="mt-2 border-border border-t">
+                    {statusReviewJobs.map((job) => (
+                      <Link
+                        key={job.id}
+                        prefetch={false}
+                        href={job.href}
+                        className="group flex items-center justify-between gap-4 border-border border-b py-4 transition-colors hover:bg-muted/35"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-sm">{job.title}</span>
+                          <span className="mt-1 block truncate text-muted-foreground text-xs">
+                            {job.customerName} · started {format(new Date(job.date), "MMM d")}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2 font-medium text-amber-700 text-xs dark:text-amber-300">
+                          Update status
+                          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-muted-foreground text-sm">No past-start jobs need a status review.</p>
+                )}
+              </div>
+
+              <div className="mt-6">
                 <div className="text-[10px] text-muted-foreground uppercase tracking-[0.15em]">Needs a date</div>
                 {unscheduledJobs.length ? (
                   <div className="mt-2 border-border border-t">

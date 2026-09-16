@@ -34,6 +34,8 @@ type QueueJob = {
   id: string;
   description: string | null;
   status: string;
+  dateBegin: Date | null;
+  dateEnd: Date | null;
   customerId: string | null;
   finalCost: MoneyValue;
   amountPaid: MoneyValue;
@@ -146,6 +148,12 @@ export function buildManagerActionQueue({
   const onHoldJobs = jobs
     .filter((job) => job.status === "On Hold")
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  const overdueJobs = jobs
+    .filter((job) => job.status === "Scheduled" && job.dateEnd && job.dateEnd < today)
+    .sort((a, b) => (a.dateEnd?.getTime() ?? 0) - (b.dateEnd?.getTime() ?? 0));
+  const jobsNeedingStatusReview = jobs
+    .filter((job) => job.status === "Scheduled" && job.dateBegin && !job.dateEnd && job.dateBegin < today)
+    .sort((a, b) => (a.dateBegin?.getTime() ?? 0) - (b.dateBegin?.getTime() ?? 0));
   const jobsMissingFinalPrice = jobs
     .filter((job) => job.status !== "Cancelled")
     .filter((job) => !job.invoice && job.customerId && money(job.finalCost) <= 0)
@@ -180,6 +188,34 @@ export function buildManagerActionQueue({
     .sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime());
 
   const queue = [
+    ...overdueJobs.map((job) => {
+      const daysOverdue = differenceInCalendarDays(today, job.dateEnd as Date);
+
+      return {
+        id: job.id,
+        type: "Overdue job",
+        title: compactTitle(job.description, "Job is overdue"),
+        detail: `${job.customer?.name ?? "Customer not assigned"} · ended ${format(job.dateEnd as Date, "MMM d")}`,
+        href: `/dashboard/jobs/${job.id}`,
+        priority: "Review now",
+        severity: "rose" as const,
+        value: `${daysOverdue}d overdue`,
+      };
+    }),
+    ...jobsNeedingStatusReview.map((job) => {
+      const daysSinceStart = differenceInCalendarDays(today, job.dateBegin as Date);
+
+      return {
+        id: job.id,
+        type: "Job status",
+        title: compactTitle(job.description, "Job needs a status review"),
+        detail: `${job.customer?.name ?? "Customer not assigned"} · started ${format(job.dateBegin as Date, "MMM d")}`,
+        href: `/dashboard/jobs/${job.id}`,
+        priority: "Update status",
+        severity: "amber" as const,
+        value: `${daysSinceStart}d since start`,
+      };
+    }),
     ...openLeadFollowUps.map((lead) => ({
       id: lead.id,
       type: "Lead",
