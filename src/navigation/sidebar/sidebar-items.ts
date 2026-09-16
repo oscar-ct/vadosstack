@@ -62,7 +62,7 @@ export const sidebarItems: NavGroup[] = [
         icon: CalendarDays,
       },
       {
-        title: "Command Center",
+        title: "Performance",
         url: "/dashboard/command-center",
         icon: ChartNoAxesCombined,
         isNew: true,

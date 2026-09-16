@@ -189,6 +189,7 @@ model EstimateRecord {
   scope               String?
   category            String
   status              String    @default("Draft")
+  decidedAt           DateTime?
   notes               String?
   convertedJobId      String?
   createdAt           DateTime  @default(now())
@@ -204,6 +205,7 @@ model EstimateRecord {
   @@index([customerId])
   @@index([status])
   @@index([createdAt])
+  @@index([ownerId, decidedAt])
   @@map("estimate_records")
 }
 

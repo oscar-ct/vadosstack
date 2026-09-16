@@ -31,6 +31,14 @@ const estimateRecordStatuses = ["Draft", "Ready to Send", "Waiting on Customer",
 const userManagedEstimateStatuses = ["Draft", "Ready to Send", "Waiting on Customer", "Lost"] as const;
 const estimateJobTypes = ["Residential", "Commercial"] as const;
 
+function getEstimateDecidedAt(nextStatus: string, previousStatus?: string, currentDecidedAt?: Date | null) {
+  if (nextStatus !== "Won" && nextStatus !== "Lost") {
+    return null;
+  }
+
+  return previousStatus === nextStatus && currentDecidedAt ? currentDecidedAt : new Date();
+}
+
 const emptyToUndefined = (value: FormDataEntryValue | null) => {
   const text = String(value ?? "").trim();
   return text ? text : undefined;
@@ -804,6 +812,7 @@ export async function createEstimateRecordAction(
           materials: JSON.stringify(materials),
           estimatedTotal: totals.total,
           status: estimate.status,
+          decidedAt: getEstimateDecidedAt(estimate.status),
           scope: estimate.scope || null,
           notes: estimate.notes || null,
         },
@@ -930,6 +939,7 @@ export async function updateEstimateRecordAction(
       select: {
         convertedJobId: true,
         customerId: true,
+        decidedAt: true,
         dateBegin: true,
         dateEnd: true,
         description: true,
@@ -1114,6 +1124,7 @@ export async function updateEstimateRecordAction(
           materialTaxRate: estimate.materialTaxRate ?? "8.25",
           materials: JSON.stringify(materials),
           estimatedTotal: totals.total,
+          decidedAt: getEstimateDecidedAt(estimate.status, existingEstimate.status, existingEstimate.decidedAt),
           scope: estimate.scope || null,
           notes: estimate.notes || null,
         },
@@ -1381,6 +1392,7 @@ export async function updateEstimateStatusAction(
         },
         data: {
           customerId,
+          decidedAt: getEstimateDecidedAt(parsed.data.status, estimate.status, estimate.decidedAt),
           status: parsed.data.status,
         },
       });
@@ -1570,6 +1582,7 @@ export async function convertEstimateToJobAction(
           status: "Waiting on Customer",
         },
         data: {
+          decidedAt: new Date(),
           status: "Won",
           convertedJobId: job.id,
           customerId,
@@ -1680,6 +1693,7 @@ export async function createPrintableEstimateAction(
             },
           },
           data: {
+            decidedAt: null,
             status: "Ready to Send",
           },
         });

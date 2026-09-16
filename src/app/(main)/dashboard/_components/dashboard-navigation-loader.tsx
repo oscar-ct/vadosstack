@@ -2,9 +2,9 @@
 
 import * as React from "react";
 
+import Image from "next/image";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-import { HeartPulse } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -20,6 +20,31 @@ const DashboardNavigationLoaderContext = React.createContext<DashboardNavigation
 
 export function useDashboardNavigationLoader() {
   return React.useContext(DashboardNavigationLoaderContext);
+}
+
+type DashboardNavigationLinkProps = Omit<React.ComponentProps<typeof Link>, "href"> & {
+  href: string;
+};
+
+export function DashboardNavigationLink({ href, onClick, target, ...props }: DashboardNavigationLinkProps) {
+  const { startNavigation } = useDashboardNavigationLoader();
+
+  return (
+    <Link
+      {...props}
+      href={href}
+      target={target}
+      onClick={(event) => {
+        onClick?.(event);
+        if (event.defaultPrevented || !href.startsWith("/dashboard")) return;
+
+        const opensNewTab =
+          target === "_blank" || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+        const destinationPath = href.split(/[?#]/, 1)[0] ?? href;
+        startNavigation(destinationPath, opensNewTab);
+      }}
+    />
+  );
 }
 
 export function DashboardNavigationLoaderProvider({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -87,9 +112,15 @@ function DashboardNavigationLoader() {
       </div>
       <div className="absolute inset-x-0 top-[clamp(7rem,28svh,14rem)] flex justify-center px-4">
         <div className="flex items-center gap-3 rounded-full border bg-background/95 px-4 py-2.5 text-sm shadow-xl ring-1 ring-foreground/5">
-          <span className="relative flex size-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <HeartPulse className="size-4 animate-pulse" />
-            <span className="absolute size-full animate-ping rounded-full bg-primary/15" />
+          <span className="relative flex size-7 items-center justify-center rounded-full bg-primary/10">
+            <Image
+              src="/apple-icon.png"
+              alt=""
+              width={20}
+              height={20}
+              className="relative z-10 size-5 animate-pulse object-contain"
+            />
+            <span className="pointer-events-none absolute size-full animate-ping rounded-full bg-primary/15" />
           </span>
           <span className="font-medium">Loading page</span>
           <span className="flex items-end gap-1" aria-hidden="true">

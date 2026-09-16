@@ -1359,6 +1359,7 @@ export async function deleteJobAction(_previousState: JobMutationState, formData
         },
         data: {
           convertedJobId: null,
+          decidedAt: null,
           status: "Waiting on Customer",
         },
       });

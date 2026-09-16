@@ -378,6 +378,7 @@ export async function emailEstimateAction(
             },
           },
           data: {
+            decidedAt: null,
             status: "Waiting on Customer",
           },
         }),
@@ -513,6 +514,7 @@ export async function deleteEstimateAction(
             },
           },
           data: {
+            decidedAt: null,
             status: "Draft",
           },
         });

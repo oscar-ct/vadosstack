@@ -1,19 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
 
 import { format } from "date-fns";
-import {
-  ArrowRight,
-  Banknote,
-  BriefcaseBusiness,
-  CheckCircle2,
-  CircleDollarSign,
-  Clock3,
-  Gauge,
-  ReceiptText,
-  Users,
-} from "lucide-react";
+import { ArrowRight, Banknote, BriefcaseBusiness, CircleDollarSign, ReceiptText } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
@@ -21,30 +11,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
+import { getEmployeeAccent } from "@/lib/employee-colors";
 import { cn, formatCurrency } from "@/lib/utils";
+
+import { DashboardNavigationLink } from "../../_components/dashboard-navigation-loader";
 
 export type CommandCenterData = {
   companyName: string;
   generatedAt: string;
   totals: {
-    customers: number;
-    leads: number;
-    activeEmployees: number;
-    jobs: number;
-    activeJobs: number;
-    scheduledNext30: number;
-    estimates: number;
-    estimateOutcomeCount: number;
+    openJobs: number;
+    openWorkValue: number;
+    waitingEstimateCount: number;
     waitingEstimateValue: number;
     invoices: number;
-    issuedTotal: number;
-    collectedTotal: number;
     receivablesTotal: number;
-    pendingTimeReviews: number;
-    hoursLogged: number;
-    completionRate: number;
-    estimateWinRate: number;
     collectionRate: number;
   };
   monthlyFlow: Array<{
@@ -54,31 +35,43 @@ export type CommandCenterData = {
     receivable: number;
     hours: number;
   }>;
-  estimateOutcomes: Array<{
-    status: string;
-    count: number;
-    value: number;
-    share: number;
-  }>;
-  topCustomers: Array<{
-    id: string;
-    name: string;
-    revenue: number;
-    jobs: number;
-    balance: number;
-    share: number;
-  }>;
   jobStatus: Array<{
     status: string;
     value: number;
     amount: number;
   }>;
-  serviceMix: Array<{
-    category: string;
-    jobs: number;
-    value: number;
-    share: number;
-  }>;
+  reportingPeriods: Record<
+    6 | 12,
+    {
+      billed: number;
+      collected: number;
+      payments: number;
+      estimateWinRate: number;
+      estimateOutcomes: Array<{
+        status: string;
+        count: number;
+        value: number;
+        share: number;
+      }>;
+      topCustomers: Array<{
+        id: string;
+        customerId: string | null;
+        name: string;
+        revenue: number;
+        invoices: number;
+        balance: number;
+        share: number;
+      }>;
+      employeeHours: Array<{
+        id: string;
+        name: string;
+        active: boolean;
+        accentColor: string;
+        hours: number;
+        share: number;
+      }>;
+    }
+  >;
 };
 
 const cashFlowConfig = {
@@ -91,7 +84,7 @@ const cashFlowConfig = {
     color: "oklch(0.62 0.17 150)",
   },
   receivable: {
-    label: "Receivable",
+    label: "Open balance",
     color: "oklch(0.69 0.18 55)",
   },
 } satisfies ChartConfig;
@@ -99,19 +92,19 @@ const cashFlowConfig = {
 const cashFlowLabels: Record<string, string> = {
   billed: "Billed",
   collected: "Collected",
-  receivable: "Receivable",
+  receivable: "Open balance",
 };
-
-const statusConfig = {
-  value: {
-    label: "Jobs",
-  },
-} satisfies ChartConfig;
 
 const productivityConfig = {
   hours: {
     label: "Hours",
     color: "oklch(0.62 0.2 330)",
+  },
+} satisfies ChartConfig;
+
+const estimateOutcomeConfig = {
+  value: {
+    label: "Value",
   },
 } satisfies ChartConfig;
 
@@ -124,11 +117,13 @@ const statusColors = [
   "oklch(0.52 0.14 25)",
 ];
 
-const estimateOutcomeConfig = {
-  value: {
-    label: "Value",
-  },
-} satisfies ChartConfig;
+const jobStatusColors: Record<string, string> = {
+  Completed: "oklch(0.62 0.17 150)",
+  Scheduled: "oklch(0.58 0.18 232)",
+  Unscheduled: "oklch(0.58 0.03 250)",
+  "On Hold": "oklch(0.69 0.18 55)",
+  Cancelled: "oklch(0.58 0.22 25)",
+};
 
 const estimateOutcomeColors: Record<string, string> = {
   "Waiting on Customer": "oklch(0.58 0.18 232)",
@@ -156,12 +151,16 @@ function KpiCard({
   label,
   value,
   detail,
+  href,
+  linkLabel,
   tone,
 }: {
   icon: typeof CircleDollarSign;
   label: string;
   value: string;
   detail: string;
+  href?: string;
+  linkLabel?: string;
   tone: "cyan" | "emerald" | "amber" | "rose";
 }) {
   const toneClassNames = {
@@ -172,39 +171,56 @@ function KpiCard({
   }[tone];
 
   return (
-    <Card className="min-w-0 gap-5 shadow-xs">
+    <Card className="min-w-0 gap-3 shadow-xs" size="sm">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardDescription>{label}</CardDescription>
-            <CardTitle className="mt-2 text-2xl tabular-nums tracking-normal">{value}</CardTitle>
+            <CardTitle className="mt-2 text-xl tabular-nums tracking-normal sm:text-2xl">{value}</CardTitle>
           </div>
-          <div className={cn("grid size-10 place-items-center rounded-lg ring-1", toneClassNames)}>
-            <Icon className="size-5" />
+          <div className={cn("hidden size-9 place-items-center rounded-lg ring-1 sm:grid", toneClassNames)}>
+            <Icon className="size-4.5" />
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="grid gap-2">
         <p className="text-muted-foreground text-xs">{detail}</p>
+        {href && linkLabel && (
+          <Button asChild variant="link" size="sm" className="h-auto w-fit p-0 text-xs">
+            <DashboardNavigationLink href={href} prefetch={false}>
+              {linkLabel}
+              <ArrowRight className="size-3.5" />
+            </DashboardNavigationLink>
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function InsightPill({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: string }) {
+function ShareBar({ color, label, value }: { color: string; label: string; value: number }) {
+  const safeValue = Math.min(100, Math.max(0, value));
+
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-md border bg-background/70 px-3 py-2">
-      <Icon className="size-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0">
-        <p className="truncate text-muted-foreground text-xs">{label}</p>
-        <p className="truncate font-medium text-sm tabular-nums">{value}</p>
-      </div>
+    <div
+      className="h-2 overflow-hidden rounded-full bg-muted"
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={safeValue}
+    >
+      <div className="h-full rounded-full" style={{ backgroundColor: color, width: `${safeValue}%` }} />
     </div>
   );
 }
 
 export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
-  const hasRevenueData = data.monthlyFlow.some((point) => point.billed || point.collected || point.receivable);
+  const [reportingMonths, setReportingMonths] = useState<6 | 12>(6);
+  const reportingPeriod = data.reportingPeriods[reportingMonths];
+  const cashFlowData = data.monthlyFlow.slice(-reportingMonths);
+  const laborTrendData = data.monthlyFlow.slice(-reportingMonths);
+  const hasRevenueData = cashFlowData.some((point) => point.billed || point.collected || point.receivable);
   const generatedAt = format(new Date(data.generatedAt), "MMM d, h:mm a");
 
   return (
@@ -213,218 +229,186 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
         <div className="grid gap-6 p-5 md:p-6">
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
             <div className="min-w-0">
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="rounded-md">
-                  Command Center
-                </Badge>
-                <Badge variant="secondary" className="rounded-md">
-                  Live company data
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="max-w-full truncate rounded-md">
+                  Business Performance
                 </Badge>
                 <span className="text-muted-foreground text-xs">Updated {generatedAt}</span>
               </div>
-              <h1 className="text-balance font-medium text-3xl leading-tight tracking-normal md:text-4xl">
-                {data.companyName}
-              </h1>
+              <h1 className="text-balance font-medium text-2xl leading-tight tracking-normal">{data.companyName}</h1>
               <p className="mt-3 max-w-3xl text-muted-foreground text-sm leading-6">
-                A single view of cash flow, work in motion, estimate momentum, customer concentration, and operational
-                health across the company.
+                Financial performance, estimate outcomes, customer concentration, and workforce activity.
               </p>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
-              <Button asChild size="sm">
-                <Link prefetch={false} href="/dashboard/jobs">
-                  Open jobs
-                  <ArrowRight />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link prefetch={false} href="/dashboard/estimates">
-                  Review estimates
-                </Link>
-              </Button>
+            <div className="grid gap-1.5 lg:justify-items-end">
+              <span className="font-medium text-muted-foreground text-xs">Reporting period</span>
+              <fieldset className="inline-flex w-fit rounded-md border bg-background p-0.5">
+                <legend className="sr-only">Reporting period</legend>
+                {([6, 12] as const).map((months) => (
+                  <Button
+                    key={months}
+                    type="button"
+                    variant={reportingMonths === months ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-7 px-3 text-xs"
+                    aria-label={`Show the last ${months} months`}
+                    aria-pressed={reportingMonths === months}
+                    onClick={() => setReportingMonths(months)}
+                  >
+                    {months}M
+                  </Button>
+                ))}
+              </fieldset>
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 min-[1200px]:grid-cols-4">
             <KpiCard
               icon={CircleDollarSign}
-              label="Issued revenue"
-              value={formatCompactCurrency(data.totals.issuedTotal)}
-              detail={`${formatCompactCurrency(data.totals.collectedTotal)} collected · ${data.totals.collectionRate}% collection rate`}
+              label={`Collected · ${reportingMonths} months`}
+              value={formatCompactCurrency(reportingPeriod.collected)}
+              detail={`${reportingPeriod.payments} ${reportingPeriod.payments === 1 ? "payment" : "payments"} · ${formatCompactCurrency(reportingPeriod.billed)} billed`}
               tone="emerald"
             />
             <KpiCard
               icon={ReceiptText}
-              label="Open receivables"
+              label="Current open receivables"
               value={formatCompactCurrency(data.totals.receivablesTotal)}
-              detail={`${data.totals.invoices} invoices tracked across the account`}
+              detail={`${data.totals.invoices} invoices total · ${data.totals.collectionRate}% collected all time`}
+              href="/dashboard/invoices"
+              linkLabel="Review invoices"
               tone="rose"
             />
             <KpiCard
               icon={Banknote}
-              label="Waiting estimates"
+              label="Current waiting estimates"
               value={formatCompactCurrency(data.totals.waitingEstimateValue)}
-              detail={`${data.totals.estimateOutcomeCount} customer-decision estimates · ${data.totals.estimateWinRate}% won value`}
+              detail={`${data.totals.waitingEstimateCount} awaiting a customer decision`}
+              href="/dashboard/estimates"
+              linkLabel="Review estimates"
               tone="cyan"
             />
             <KpiCard
-              icon={Clock3}
-              label="Pending reviews"
-              value={String(data.totals.pendingTimeReviews)}
-              detail={`${data.totals.hoursLogged.toLocaleString()} employee hours logged in the last 6 months`}
+              icon={BriefcaseBusiness}
+              label="Current open work value"
+              value={formatCompactCurrency(data.totals.openWorkValue)}
+              detail={`${data.totals.openJobs} ${data.totals.openJobs === 1 ? "open job" : "open jobs"} · excludes completed and cancelled`}
+              href="/dashboard/jobs"
+              linkLabel="View jobs"
               tone="amber"
             />
           </div>
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-12">
-        <Card className="shadow-xs xl:col-span-8">
-          <CardHeader>
-            <CardTitle>Cash flow runway</CardTitle>
-            <CardDescription>Billed, collected, and still receivable over the last 6 months.</CardDescription>
-            <CardAction>
-              <Badge variant="outline" className="rounded-md">
-                {formatCompactCurrency(data.totals.receivablesTotal)} open
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {hasRevenueData ? (
-              <ChartContainer config={cashFlowConfig} className="h-80 w-full">
-                <AreaChart data={data.monthlyFlow} margin={{ left: 0, right: 12, top: 16, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="billedFill" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-billed)" stopOpacity={0.26} />
-                      <stop offset="95%" stopColor="var(--color-billed)" stopOpacity={0.02} />
-                    </linearGradient>
-                    <linearGradient id="collectedFill" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-collected)" stopOpacity={0.22} />
-                      <stop offset="95%" stopColor="var(--color-collected)" stopOpacity={0.01} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={10} />
-                  <YAxis
-                    width={68}
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    tickFormatter={(value) => `$${Number(value) / 1000}k`}
-                  />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        formatter={(value, name) => (
-                          <div className="flex min-w-36 items-center justify-between gap-3">
-                            <span className="text-muted-foreground">{cashFlowLabels[String(name)] ?? name}</span>
-                            <span className="font-medium font-mono tabular-nums">
-                              {formatCompactCurrency(Number(value))}
-                            </span>
-                          </div>
-                        )}
-                      />
-                    }
-                  />
-                  <Area
-                    dataKey="billed"
-                    type="monotone"
-                    fill="url(#billedFill)"
-                    stroke="var(--color-billed)"
-                    strokeWidth={2}
-                  />
-                  <Area
-                    dataKey="collected"
-                    type="monotone"
-                    fill="url(#collectedFill)"
-                    stroke="var(--color-collected)"
-                    strokeWidth={2}
-                  />
-                  <Area
-                    dataKey="receivable"
-                    type="monotone"
-                    fill="transparent"
-                    stroke="var(--color-receivable)"
-                    strokeDasharray="4 4"
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ChartContainer>
-            ) : (
-              <EmptyState label="Create invoices to light up the cash-flow trend." />
-            )}
-          </CardContent>
-        </Card>
+      <Card className="shadow-xs">
+        <CardHeader>
+          <CardTitle>Cash flow</CardTitle>
+          <CardDescription>Last {reportingMonths} months by invoice issue date and payment date.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {hasRevenueData ? (
+            <ChartContainer config={cashFlowConfig} className="h-64 w-full sm:h-80">
+              <AreaChart data={cashFlowData} margin={{ left: 0, right: 12, top: 16, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="billedFill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-billed)" stopOpacity={0.26} />
+                    <stop offset="95%" stopColor="var(--color-billed)" stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="collectedFill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-collected)" stopOpacity={0.22} />
+                    <stop offset="95%" stopColor="var(--color-collected)" stopOpacity={0.01} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={10} />
+                <YAxis
+                  width={68}
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={(value) => `$${Number(value) / 1000}k`}
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value, name, item) => (
+                        <div className="flex min-w-36 items-center justify-between gap-3">
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <span
+                              className="size-2.5 shrink-0 rounded-sm"
+                              style={{ backgroundColor: item.color }}
+                              aria-hidden="true"
+                            />
+                            {cashFlowLabels[String(name)] ?? name}
+                          </span>
+                          <span className="font-medium font-mono tabular-nums">
+                            {formatCompactCurrency(Number(value))}
+                          </span>
+                        </div>
+                      )}
+                    />
+                  }
+                />
+                <Area
+                  dataKey="billed"
+                  type="monotone"
+                  fill="url(#billedFill)"
+                  stroke="var(--color-billed)"
+                  strokeWidth={2}
+                />
+                <Area
+                  dataKey="collected"
+                  type="monotone"
+                  fill="url(#collectedFill)"
+                  stroke="var(--color-collected)"
+                  strokeWidth={2}
+                />
+                <Area
+                  dataKey="receivable"
+                  type="monotone"
+                  fill="transparent"
+                  stroke="var(--color-receivable)"
+                  strokeDasharray="4 4"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ChartContainer>
+          ) : (
+            <EmptyState label="Create invoices to light up the cash-flow trend." />
+          )}
+        </CardContent>
+      </Card>
 
-        <Card className="shadow-xs xl:col-span-4">
-          <CardHeader>
-            <CardTitle>Operating pulse</CardTitle>
-            <CardDescription>How much of the business is moving cleanly.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-              <InsightPill icon={Users} label="Customers" value={data.totals.customers.toLocaleString()} />
-              <InsightPill
-                icon={BriefcaseBusiness}
-                label="Active jobs"
-                value={`${data.totals.activeJobs} live · ${data.totals.scheduledNext30} next 30d`}
-              />
-              <InsightPill
-                icon={Gauge}
-                label="Completed jobs"
-                value={`${data.totals.completionRate}% completion rate`}
-              />
-              <InsightPill
-                icon={CheckCircle2}
-                label="Active employees"
-                value={data.totals.activeEmployees.toLocaleString()}
-              />
-            </div>
-            <Separator />
-            <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground text-sm">Collection health</span>
-                <span className="font-medium text-sm tabular-nums">{data.totals.collectionRate}%</span>
-              </div>
-              <Progress value={data.totals.collectionRate} />
-              <div className="flex justify-between gap-3 text-muted-foreground text-xs">
-                <span>{formatCompactCurrency(data.totals.collectedTotal)} collected</span>
-                <span>{formatCompactCurrency(data.totals.receivablesTotal)} open</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-12">
-        <Card className="min-w-0 shadow-xs xl:col-span-5">
-          <CardHeader>
+      <div className="grid gap-6 min-[1200px]:grid-cols-12">
+        <Card className="min-w-0 shadow-xs min-[1200px]:col-span-5">
+          <CardHeader className="max-sm:has-data-[slot=card-action]:grid-cols-1">
             <CardTitle>Estimate decisions</CardTitle>
             <CardDescription>
-              Customer-facing estimate outcomes, excluding drafts and ready-to-send work.
+              Current waiting pipeline plus decisions recorded during the last {reportingMonths} months.
             </CardDescription>
-            <CardAction>
+            <CardAction className="flex items-center gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:mt-2 max-sm:justify-self-start">
               <Badge variant="outline" className="rounded-md">
-                {data.totals.estimateWinRate}% won value
+                {reportingPeriod.estimateWinRate}% of decided value won
               </Badge>
             </CardAction>
           </CardHeader>
           <CardContent className="grid min-w-0 gap-4">
-            {data.estimateOutcomes.length ? (
+            {reportingPeriod.estimateOutcomes.length ? (
               <>
-                <ChartContainer config={estimateOutcomeConfig} className="mx-auto aspect-square h-56 max-w-56">
+                <ChartContainer config={estimateOutcomeConfig} className="mx-auto aspect-square h-52 max-w-52">
                   <PieChart>
                     <Pie
-                      data={data.estimateOutcomes}
+                      data={reportingPeriod.estimateOutcomes}
                       dataKey="value"
                       cx="50%"
                       cy="50%"
-                      innerRadius={52}
+                      innerRadius={48}
                       nameKey="status"
-                      outerRadius={84}
+                      outerRadius={78}
                       paddingAngle={3}
                     >
-                      {data.estimateOutcomes.map((item) => (
+                      {reportingPeriod.estimateOutcomes.map((item) => (
                         <Cell key={item.status} fill={estimateOutcomeColors[item.status] ?? statusColors[0]} />
                       ))}
                     </Pie>
@@ -445,7 +429,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
                   </PieChart>
                 </ChartContainer>
                 <div className="grid min-w-0 gap-3">
-                  {data.estimateOutcomes.map((item) => (
+                  {reportingPeriod.estimateOutcomes.map((item) => (
                     <div key={item.status} className="grid gap-1.5">
                       <div className="flex items-center justify-between gap-3 text-sm">
                         <span className="flex min-w-0 items-center gap-2">
@@ -454,37 +438,58 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
                             style={{ backgroundColor: estimateOutcomeColors[item.status] ?? statusColors[0] }}
                           />
                           <span className="truncate font-medium">{item.status}</span>
+                          {item.status === "Waiting on Customer" && (
+                            <Badge variant="secondary" className="h-5 shrink-0 rounded-md px-1.5 text-[10px]">
+                              Current
+                            </Badge>
+                          )}
                         </span>
                         <span className="text-muted-foreground tabular-nums">
                           {item.count.toLocaleString()} · {formatCompactCurrency(item.value)}
                         </span>
                       </div>
-                      <Progress value={Math.max(5, item.share)} />
+                      <ShareBar
+                        color={estimateOutcomeColors[item.status] ?? statusColors[0]}
+                        label={`${item.status}: ${item.share}% of estimate value`}
+                        value={item.share}
+                      />
                     </div>
                   ))}
                 </div>
               </>
             ) : (
-              <EmptyState label="Sent estimates will appear here once customers are waiting, won, or lost." />
+              <EmptyState label="Waiting estimates and recorded decisions will appear here." />
             )}
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs xl:col-span-4">
+        <Card className="shadow-xs min-[1200px]:col-span-4">
           <CardHeader>
             <CardTitle>Customer concentration</CardTitle>
-            <CardDescription>Top accounts by job revenue and open balance.</CardDescription>
+            <CardDescription>Top accounts by invoiced value over the last {reportingMonths} months.</CardDescription>
           </CardHeader>
           <CardContent>
-            {data.topCustomers.length ? (
+            {reportingPeriod.topCustomers.length ? (
               <div className="grid gap-3">
-                {data.topCustomers.map((customer, index) => (
+                {reportingPeriod.topCustomers.map((customer, index) => (
                   <div key={customer.id} className="grid gap-2 rounded-md border bg-muted/20 px-3 py-2.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-sm">{customer.name}</p>
+                        {customer.customerId ? (
+                          <DashboardNavigationLink
+                            href={`/dashboard/customers/${customer.customerId}`}
+                            prefetch={false}
+                            className="group inline-flex max-w-full items-center gap-1 font-medium text-sm hover:underline"
+                          >
+                            <span className="truncate">{customer.name}</span>
+                            <ArrowRight className="size-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                          </DashboardNavigationLink>
+                        ) : (
+                          <p className="truncate font-medium text-sm">{customer.name}</p>
+                        )}
                         <p className="text-muted-foreground text-xs">
-                          {customer.jobs} jobs · {customer.share}% of tracked revenue
+                          {customer.invoices} {customer.invoices === 1 ? "invoice" : "invoices"} · {customer.share}% of
+                          billed value
                         </p>
                       </div>
                       <Badge variant="outline" className="rounded-md tabular-nums">
@@ -497,58 +502,42 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
                         {customer.balance ? `${formatCompactCurrency(customer.balance)} open` : "No open balance"}
                       </span>
                     </div>
-                    <Progress value={Math.min(100, Math.max(6, customer.share))} />
+                    <Progress value={customer.share} />
                   </div>
                 ))}
               </div>
             ) : (
-              <EmptyState label="Jobs with customers will populate your customer concentration view." />
+              <EmptyState label={`Invoices will populate this view for the last ${reportingMonths} months.`} />
             )}
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs xl:col-span-3">
+        <Card className="shadow-xs min-[1200px]:col-span-3">
           <CardHeader>
             <CardTitle>Job status mix</CardTitle>
             <CardDescription>Current distribution across your job board.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             {data.jobStatus.length ? (
-              <>
-                <ChartContainer config={statusConfig} className="mx-auto aspect-square h-48 max-w-48">
-                  <PieChart>
-                    <Pie
-                      data={data.jobStatus}
-                      dataKey="value"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={46}
-                      nameKey="status"
-                      outerRadius={74}
-                      paddingAngle={3}
-                    >
-                      {data.jobStatus.map((item, index) => (
-                        <Cell key={item.status} fill={statusColors[index % statusColors.length]} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="status" />} />
-                  </PieChart>
-                </ChartContainer>
-                <div className="grid gap-2">
-                  {data.jobStatus.map((item, index) => (
-                    <div key={item.status} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="size-2.5 shrink-0 rounded-sm"
-                          style={{ backgroundColor: statusColors[index % statusColors.length] }}
-                        />
-                        <span className="truncate">{item.status}</span>
-                      </span>
-                      <span className="text-muted-foreground tabular-nums">{item.value}</span>
+              <div className="grid gap-3">
+                {data.jobStatus.map((item) => {
+                  const totalJobs = data.jobStatus.reduce((total, status) => total + status.value, 0);
+                  const share = totalJobs ? Math.round((item.value / totalJobs) * 100) : 0;
+                  const color = jobStatusColors[item.status] ?? "oklch(0.58 0.03 250)";
+
+                  return (
+                    <div key={item.status} className="grid gap-1.5">
+                      <div className="flex items-center justify-between gap-3 text-xs">
+                        <span className="truncate font-medium">{item.status}</span>
+                        <span className="shrink-0 text-muted-foreground tabular-nums">
+                          {item.value} · {formatCompactCurrency(item.amount)}
+                        </span>
+                      </div>
+                      <ShareBar color={color} label={`${item.status}: ${share}% of jobs`} value={share} />
                     </div>
-                  ))}
-                </div>
-              </>
+                  );
+                })}
+              </div>
             ) : (
               <EmptyState label="Create jobs to see your status distribution." />
             )}
@@ -556,44 +545,69 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-12">
-        <Card className="shadow-xs xl:col-span-7">
+      <div className="grid gap-6 min-[1200px]:grid-cols-12">
+        <Card className="shadow-xs min-[1200px]:col-span-7">
           <CardHeader>
-            <CardTitle>Service mix</CardTitle>
-            <CardDescription>Where job value is coming from by category.</CardDescription>
+            <CardTitle>Employee hours</CardTitle>
+            <CardDescription>
+              Share of logged hours over the last {reportingMonths} months, including inactive employees.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {data.serviceMix.length ? (
+            {reportingPeriod.employeeHours.length ? (
               <div className="grid gap-3">
-                {data.serviceMix.map((item) => (
-                  <div key={item.category} className="grid gap-1.5">
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="truncate font-medium">{item.category}</span>
-                      <span className="text-muted-foreground tabular-nums">{formatCompactCurrency(item.value)}</span>
+                {reportingPeriod.employeeHours.map((employee) => {
+                  const accent = getEmployeeAccent(employee.accentColor, employee.id);
+
+                  return (
+                    <div key={employee.id} className="grid gap-1.5">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className={cn("size-2.5 shrink-0 rounded-full", accent.dot)} aria-hidden="true" />
+                          <span className="truncate font-medium">{employee.name}</span>
+                          {!employee.active && (
+                            <Badge variant="secondary" className="h-5 shrink-0 rounded-md px-1.5 text-[10px]">
+                              Inactive
+                            </Badge>
+                          )}
+                        </span>
+                        <span className="shrink-0 text-muted-foreground tabular-nums">
+                          {employee.hours.toLocaleString()}h
+                        </span>
+                      </div>
+                      <div
+                        className="h-2 overflow-hidden rounded-full bg-muted"
+                        role="progressbar"
+                        aria-label={`${employee.name}: ${employee.share}% of logged hours`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={employee.share}
+                      >
+                        <div
+                          className={cn("h-full rounded-full", accent.fill)}
+                          style={{ width: `${employee.share}%` }}
+                        />
+                      </div>
+                      <span className="text-right text-muted-foreground text-xs">{employee.share}% of total</span>
                     </div>
-                    <Progress value={Math.max(5, item.share)} />
-                    <div className="flex justify-between text-muted-foreground text-xs">
-                      <span>{item.jobs} jobs</span>
-                      <span>{item.share}% share</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
-              <EmptyState label="Categorized jobs will reveal your service mix." />
+              <EmptyState label="Employee time entries will build the hours breakdown." />
             )}
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs xl:col-span-5">
+        <Card className="shadow-xs min-[1200px]:col-span-5">
           <CardHeader>
             <CardTitle>Labor trend</CardTitle>
-            <CardDescription>Approved and entered hours by month.</CardDescription>
+            <CardDescription>Approved and entered hours over the last {reportingMonths} months.</CardDescription>
           </CardHeader>
           <CardContent>
-            {data.monthlyFlow.some((point) => point.hours) ? (
+            {laborTrendData.some((point) => point.hours) ? (
               <ChartContainer config={productivityConfig} className="h-64 w-full">
-                <BarChart data={data.monthlyFlow} margin={{ left: -18, right: 4, top: 8, bottom: 0 }}>
+                <BarChart data={laborTrendData} margin={{ left: -18, right: 4, top: 8, bottom: 0 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={10} />
                   <YAxis tickLine={false} axisLine={false} tickMargin={8} />
@@ -606,18 +620,6 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
             )}
           </CardContent>
         </Card>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 text-sm shadow-xs">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Gauge className="size-4" />
-          Built from live customers, jobs, estimates, invoices, employees, and time requests.
-        </div>
-        <Button asChild variant="ghost" size="sm">
-          <Link prefetch={false} href="/dashboard/overview">
-            Back to overview
-          </Link>
-        </Button>
       </div>
     </div>
   );

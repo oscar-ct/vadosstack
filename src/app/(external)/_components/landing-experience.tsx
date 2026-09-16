@@ -29,18 +29,22 @@ import { APP_CONFIG } from "@/config/app-config";
 import vadosstackLogoSmall from "../../../../media/vadosstack-logo-transparent-small.png";
 
 const heroViews = [
-  { label: "Command Center.", type: "service" },
+  { label: "Business Performance.", type: "service" },
   { label: "Estimate Pipeline.", type: "estimates" },
   { label: "Orders + Inventory.", type: "orders" },
 ] as const;
 
 const productFeatures = [
   {
-    title: "Command Center",
-    eyebrow: "Service operations",
-    heading: "A Service Business Command Center",
-    copy: "See cash flow, work in motion, estimate momentum, customer concentration, and operational health from one service-first dashboard.",
-    bullets: ["Revenue and receivables", "Active jobs and scheduled work", "Estimate and time-review signals"],
+    title: "Business Performance",
+    eyebrow: "Business reporting",
+    heading: "Understand Business Performance",
+    copy: "See financial performance, estimate outcomes, customer concentration, job status, and workforce activity from one focused dashboard.",
+    bullets: [
+      "Cash flow and receivables",
+      "Estimate decisions and customer concentration",
+      "Employee hours and job status",
+    ],
     type: "service",
   },
   {
@@ -191,7 +195,7 @@ const productScreens = {
   service: {
     src: "/landing/vadosstack-command-center.png",
     mobileSrc: "/landing/mobile/vadosstack-command-center-mobile.png",
-    alt: "VadosStack Command Center showing service revenue, receivables, waiting estimates, pending reviews, cash flow, and operating pulse",
+    alt: "VadosStack Business Performance dashboard showing cash flow, estimate decisions, customer concentration, job status, and employee hours",
   },
   timeTracking: {
     src: "/landing/vadosstack-time-tracking.png",
@@ -1255,7 +1259,7 @@ export function LandingExperience({ isAuthenticated }: { isAuthenticated: boolea
               [
                 LayoutDashboard,
                 "Owner-Operators",
-                "A focused command center for the work, the sale, and the next action.",
+                "A focused performance view of financial results, customer activity, and workforce trends.",
               ],
             ].map(([Icon, title, copy]) => {
               const IndustryIcon = Icon as typeof CalendarDays;

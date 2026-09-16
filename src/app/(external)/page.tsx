@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     "lead management software",
     "customer management",
     "field service dashboard",
-    "service business command center",
+    "service business performance dashboard",
     "ecommerce management software",
     "e-commerce operations software",
     "order management software",
@@ -85,7 +85,7 @@ const softwareJsonLd = {
   featureList: [
     "Customer management",
     "Lead management",
-    "Service business command center",
+    "Business performance reporting",
     "Job scheduling",
     "Estimate creation",
     "Invoice generation",
