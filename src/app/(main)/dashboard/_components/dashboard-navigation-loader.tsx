@@ -110,24 +110,19 @@ function DashboardNavigationLoader() {
       <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden bg-border/50">
         <div className="h-full w-1/2 animate-pulse rounded-r-full bg-primary shadow-[0_0_16px_hsl(var(--primary)/0.35)]" />
       </div>
-      <div className="absolute inset-x-0 top-[clamp(7rem,28svh,14rem)] flex justify-center px-4">
-        <div className="flex items-center gap-3 rounded-full border bg-background/95 px-4 py-2.5 text-sm shadow-xl ring-1 ring-foreground/5">
-          <span className="relative flex size-7 items-center justify-center rounded-full bg-primary/10">
+      <div className="absolute inset-x-0 top-[calc(50svh-3rem)] flex -translate-y-1/2 justify-center px-4">
+        <div className="flex min-w-36 flex-col items-center rounded-2xl border bg-background/95 px-5 py-4 text-center text-sm shadow-xl ring-1 ring-foreground/5">
+          <span className="relative flex size-10 items-center justify-center rounded-full bg-primary/10">
             <Image
               src="/apple-icon.png"
               alt=""
-              width={20}
-              height={20}
-              className="relative z-10 size-5 animate-pulse object-contain"
+              width={28}
+              height={28}
+              className="relative z-10 size-7 animate-pulse object-contain"
             />
             <span className="pointer-events-none absolute size-full animate-ping rounded-full bg-primary/15" />
           </span>
-          <span className="font-medium">Loading page</span>
-          <span className="flex items-end gap-1" aria-hidden="true">
-            <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-200ms]" />
-            <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-100ms]" />
-            <span className="size-1.5 animate-bounce rounded-full bg-primary" />
-          </span>
+          <span className="mt-2 font-medium">Loading page...</span>
         </div>
       </div>
     </div>
