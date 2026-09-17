@@ -176,8 +176,9 @@ async function employeeNumberExists(ownerId: string, employeeNumber: string, emp
   });
 }
 
-function revalidateEmployeePaths() {
+function revalidateEmployeePaths(employeeId?: string) {
   revalidatePath("/dashboard/employees");
+  if (employeeId) revalidatePath(`/dashboard/employees/${employeeId}`);
   revalidatePath("/dashboard/time-tracking");
 }
 
@@ -292,7 +293,7 @@ export async function updateEmployeeAction(
     },
   });
 
-  revalidateEmployeePaths();
+  revalidateEmployeePaths(parsed.data.employeeId);
 
   return { success: true, message: "Employee updated." };
 }
@@ -328,7 +329,7 @@ export async function updateEmployeeStatusAction(
     },
   });
 
-  revalidateEmployeePaths();
+  revalidateEmployeePaths(parsed.data.employeeId);
 
   return {
     success: true,
@@ -367,7 +368,7 @@ export async function updateEmployeeAccentAction(
     return { success: false, message: "The employee color could not be updated. Please try again." };
   }
 
-  revalidateEmployeePaths();
+  revalidateEmployeePaths(parsed.data.employeeId);
   return { success: true, message: "Employee color updated." };
 }
 
@@ -414,7 +415,7 @@ export async function deleteEmployeeAction(
     return { success: false, message: "Only inactive employees can be deleted." };
   }
 
-  revalidateEmployeePaths();
+  revalidateEmployeePaths(parsed.data.employeeId);
 
   return { success: true, message: "Employee deleted." };
 }

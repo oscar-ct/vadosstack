@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { format, parseISO } from "date-fns";
@@ -9,9 +10,8 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   Check,
-  DollarSign,
   Mail,
-  MapPin,
+  Pencil,
   Phone,
   Plus,
   Search,
@@ -33,7 +33,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -72,46 +71,6 @@ function formatDate(value?: string) {
 
 function formatHours(hours: number) {
   return `${hours.toFixed(hours % 1 === 0 ? 0 : 1)}h`;
-}
-
-function formatPay(employee: EmployeeRow) {
-  if (!employee.payRate) return employee.payType;
-
-  return `${employee.payType} · $${Number(employee.payRate).toFixed(2)}`;
-}
-
-function formatPayRate(employee: EmployeeRow) {
-  if (!employee.payRate) return "Not set";
-
-  const payPeriod: Record<string, string> = {
-    Hourly: "hour",
-    Salary: "year",
-    "Day Rate": "day",
-    "Piece Rate": "piece",
-  };
-  const amount = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(Number(employee.payRate));
-  const period = payPeriod[employee.payType];
-
-  return period ? `${amount} / ${period}` : amount;
-}
-
-function getInitials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
-
-function getStatusBadgeClass(active: boolean) {
-  return active
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
-    : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-300";
 }
 
 function getSearchText(employee: EmployeeRow) {
@@ -370,15 +329,18 @@ function EmployeeFormFields({ employee }: { employee?: EmployeeRow }) {
   );
 }
 
-function EmployeeDialog({
+export function EmployeeDialog({
   action,
   deleteAction,
   employee,
+  redirectAfterDelete,
 }: {
   action: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   deleteAction?: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   employee?: EmployeeRow;
+  redirectAfterDelete?: string;
 }) {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [state, formAction, isPending] = React.useActionState(action, initialState);
@@ -388,7 +350,8 @@ function EmployeeDialog({
 
     toast.success(state.message || "Employee saved.");
     setOpen(false);
-  }, [state]);
+    router.refresh();
+  }, [router, state]);
 
   return (
     <>
@@ -402,7 +365,8 @@ function EmployeeDialog({
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
             >
-              Edit
+              <Pencil />
+              Edit profile
             </Button>
           ) : (
             <Button type="button" size="sm">
@@ -436,7 +400,7 @@ function EmployeeDialog({
               {employee && deleteAction ? (
                 employee.active ? (
                   <p className="max-w-xs text-muted-foreground text-xs sm:mr-auto">
-                    Only inactive employees can be deleted. Mark this employee inactive first.
+                    Only inactive employees can be deleted
                   </p>
                 ) : (
                   <Button
@@ -471,6 +435,7 @@ function EmployeeDialog({
           employee={employee}
           open={deleteOpen}
           onOpenChange={setDeleteOpen}
+          redirectTo={redirectAfterDelete}
         />
       ) : null}
     </>
@@ -482,12 +447,15 @@ function DeleteEmployeeDialog({
   employee,
   onOpenChange,
   open,
+  redirectTo,
 }: {
   action: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   employee: EmployeeRow;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  redirectTo?: string;
 }) {
+  const router = useRouter();
   const [state, formAction, isPending] = React.useActionState(action, initialState);
 
   React.useEffect(() => {
@@ -495,7 +463,8 @@ function DeleteEmployeeDialog({
 
     toast.success(state.message || "Employee deleted.");
     onOpenChange(false);
-  }, [onOpenChange, state]);
+    if (redirectTo) router.push(redirectTo);
+  }, [onOpenChange, redirectTo, router, state]);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -503,7 +472,7 @@ function DeleteEmployeeDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete employee?</AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently removes {employee.name} and all tracked time data attached to this employee.
+            This permanently removes {employee.name}. Deletion is only available when the employee has no time history.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <form action={formAction}>
@@ -521,157 +490,7 @@ function DeleteEmployeeDialog({
   );
 }
 
-function DetailItem({ label, value }: { label: string; value?: React.ReactNode }) {
-  const displayValue = value === "" ? undefined : value;
-
-  return (
-    <div className="grid gap-1">
-      <div className="text-muted-foreground text-xs">{label}</div>
-      <div className="min-h-5 break-words text-sm">{displayValue ?? "Not set"}</div>
-    </div>
-  );
-}
-
-function EmployeeProfileDialog({
-  employee,
-  onOpenChange,
-}: {
-  employee: EmployeeRow | null;
-  onOpenChange: (open: boolean) => void;
-}) {
-  if (!employee) return null;
-
-  const accent = getEmployeeAccent(employee.accentColor, employee.id);
-
-  return (
-    <Dialog open={!!employee} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-4xl">
-        <DialogHeader className="pr-8">
-          <div className="flex items-start gap-3">
-            <div
-              className={cn(
-                "grid size-12 shrink-0 place-items-center rounded-xl border font-semibold text-sm",
-                accent.panel,
-                accent.text,
-              )}
-              aria-hidden="true"
-            >
-              {getInitials(employee.name)}
-            </div>
-            <div className="grid min-w-0 flex-1 gap-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <DialogTitle>{employee.name}</DialogTitle>
-                <Badge variant="outline" className={getStatusBadgeClass(employee.active)}>
-                  {employee.active ? "Active" : "Inactive"}
-                </Badge>
-              </div>
-              <DialogDescription>Employee #{employee.employeeNumber}</DialogDescription>
-              <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-                <span className={cn("size-2.5 rounded-full", accent.dot)} aria-hidden="true" />
-                {accent.label} employee color
-              </div>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <div className="grid gap-4 pt-1">
-          <section className="grid gap-3 rounded-lg border bg-muted/15 p-4">
-            <div className="flex items-center gap-2 font-medium text-sm">
-              <CalendarDays className="size-4 text-muted-foreground" />
-              Work summary
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <DetailItem label="Lifetime hours" value={formatHours(employee.totalHours)} />
-              <DetailItem
-                label="Last worked"
-                value={employee.lastWorkedOn ? formatDate(employee.lastWorkedOn) : "Never"}
-              />
-              <DetailItem label="Current status" value={employee.active ? "Active" : "Inactive"} />
-            </div>
-          </section>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <section className="grid content-start gap-3 rounded-lg border p-4">
-              <div className="flex items-center gap-2 font-medium text-sm">
-                <BriefcaseBusiness className="size-4 text-muted-foreground" />
-                Employment
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <DetailItem label="Job title" value={employee.jobTitle} />
-                <DetailItem label="Department" value={employee.department} />
-                <DetailItem label="Employment type" value={employee.employmentType} />
-                <DetailItem label="Start date" value={formatDate(employee.startDate)} />
-                <DetailItem label="End date" value={formatDate(employee.endDate)} />
-              </div>
-            </section>
-
-            <section className="grid content-start gap-3 rounded-lg border p-4">
-              <div className="flex items-center gap-2 font-medium text-sm">
-                <DollarSign className="size-4 text-muted-foreground" />
-                Compensation
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <DetailItem label="Pay type" value={employee.payType} />
-                <DetailItem label="Pay rate" value={formatPayRate(employee)} />
-              </div>
-              {!employee.payRate ? (
-                <p className="rounded-md bg-muted/40 px-3 py-2 text-muted-foreground text-xs">
-                  No pay amount has been recorded for this employee.
-                </p>
-              ) : null}
-            </section>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <section className="grid content-start gap-3 rounded-lg border p-4">
-              <div className="flex items-center gap-2 font-medium text-sm">
-                <Mail className="size-4 text-muted-foreground" />
-                Contact
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <DetailItem label="Email" value={employee.email} />
-                <DetailItem label="Phone" value={employee.phone ? formatPhoneNumber(employee.phone) : undefined} />
-              </div>
-              <div className="grid gap-1 border-t pt-3">
-                <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-                  <MapPin className="size-3.5" /> Address
-                </div>
-                <div className="min-h-5 whitespace-pre-wrap text-sm">{employee.address ?? "Not set"}</div>
-              </div>
-            </section>
-
-            <section className="grid content-start gap-3 rounded-lg border p-4">
-              <div className="flex items-center gap-2 font-medium text-sm">
-                <ShieldAlert className="size-4 text-muted-foreground" />
-                Emergency Contact
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <DetailItem label="Name" value={employee.emergencyName} />
-                <DetailItem
-                  label="Phone"
-                  value={employee.emergencyPhone ? formatPhoneNumber(employee.emergencyPhone) : undefined}
-                />
-                <DetailItem label="Relationship" value={employee.emergencyRelation} />
-              </div>
-            </section>
-          </div>
-
-          <section className="grid gap-3 rounded-lg border p-4">
-            <div className="font-medium text-sm">Notes</div>
-            <div className="whitespace-pre-wrap text-sm">{employee.notes ?? "Not set"}</div>
-          </section>
-
-          <div className="grid gap-3 border-t px-1 pt-4 text-muted-foreground sm:grid-cols-2">
-            <DetailItem label="Created" value={format(parseISO(employee.createdAt), "MMM d, yyyy")} />
-            <DetailItem label="Updated" value={format(parseISO(employee.updatedAt), "MMM d, yyyy")} />
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function EmployeeColorPicker({
+export function EmployeeColorPicker({
   action,
   employee,
   usageCounts,
@@ -840,22 +659,17 @@ function EmployeeStatusToggle({
 
 export function EmployeesDashboard({
   createAction,
-  deleteAction,
   employees,
-  updateAction,
   updateAccentAction,
   updateStatusAction,
 }: {
   createAction: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
-  deleteAction: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   employees: EmployeeRow[];
-  updateAction: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   updateAccentAction: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
   updateStatusAction: (state: EmployeeMutationState, formData: FormData) => Promise<EmployeeMutationState>;
 }) {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<"active" | "all" | "inactive">("active");
-  const [profileEmployee, setProfileEmployee] = React.useState<EmployeeRow | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const activeCount = employees.filter((employee) => employee.active).length;
   const inactiveCount = employees.length - activeCount;
@@ -871,12 +685,6 @@ export function EmployeesDashboard({
 
   return (
     <div className="@container/main mx-auto grid w-full max-w-7xl gap-4 md:gap-6">
-      <EmployeeProfileDialog
-        employee={profileEmployee}
-        onOpenChange={(open) => {
-          if (!open) setProfileEmployee(null);
-        }}
-      />
       <Card className="overflow-hidden rounded-lg">
         <CardHeader className="border-b bg-muted/20">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -895,7 +703,16 @@ export function EmployeesDashboard({
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 p-4 md:p-5">
-          <div className="grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="relative w-full md:w-80">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-7 pl-8"
+                placeholder="Search employees..."
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </div>
             <div className="flex min-w-0 flex-wrap gap-2">
               {[
                 { count: employees.length, label: "All", value: "all" as const },
@@ -907,22 +724,13 @@ export function EmployeesDashboard({
                   type="button"
                   variant={status === option.value ? "default" : "outline"}
                   size="sm"
-                  className="h-8"
+                  className="h-7"
                   onClick={() => setStatus(option.value)}
                 >
                   {option.label}
                   <span className="tabular-nums">{option.count}</span>
                 </Button>
               ))}
-            </div>
-            <div className="relative w-full md:w-80">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="h-8 pl-8"
-                placeholder="Search employees..."
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
             </div>
           </div>
 
@@ -953,10 +761,11 @@ export function EmployeesDashboard({
                           employee={employee}
                           usageCounts={colorUsageCounts}
                         />
-                        <Button type="button" variant="outline" size="sm" onClick={() => setProfileEmployee(employee)}>
-                          View
+                        <Button asChild variant="outline" size="sm">
+                          <Link prefetch={false} href={`/dashboard/employees/${employee.id}`}>
+                            View profile
+                          </Link>
                         </Button>
-                        <EmployeeDialog action={updateAction} deleteAction={deleteAction} employee={employee} />
                       </div>
                     </div>
 
@@ -981,21 +790,21 @@ export function EmployeesDashboard({
                       </div>
                     </div>
 
-                    <div className="grid min-w-0 grid-cols-3 gap-2 rounded-md bg-muted/20 p-3 text-sm">
+                    <div className="grid min-w-0 grid-cols-2 gap-2 rounded-md bg-muted/20 p-3 pb-0 text-sm">
                       <div className="grid min-w-0 gap-1">
                         <span className="text-muted-foreground text-xs">Lifetime hours</span>
                         <span className="font-medium tabular-nums">{formatHours(employee.totalHours)}</span>
                       </div>
-                      <div className="grid min-w-0 gap-1">
-                        <span className="text-muted-foreground text-xs">Last</span>
+                      <div className="grid min-w-0 gap-1 text-right">
+                        <span className="text-muted-foreground text-xs">Last Worked</span>
                         <span className="truncate font-medium">
                           {employee.lastWorkedOn ? formatDate(employee.lastWorkedOn) : "Never"}
                         </span>
                       </div>
-                      <div className="grid min-w-0 gap-1">
-                        <span className="text-muted-foreground text-xs">Pay</span>
-                        <span className="truncate font-medium">{formatPay(employee)}</span>
-                      </div>
+                      {/*<div className="grid min-w-0 gap-1">*/}
+                      {/*  <span className="text-muted-foreground text-xs">Pay</span>*/}
+                      {/*  <span className="truncate font-medium">{formatPay(employee)}</span>*/}
+                      {/*</div>*/}
                     </div>
 
                     {employee.emergencyName || employee.emergencyPhone ? (

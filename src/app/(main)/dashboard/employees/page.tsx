@@ -3,13 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 
 import { EmployeesDashboard } from "./_components/employees-dashboard";
 import { getEmployees } from "./_lib/employee-data";
-import {
-  createEmployeeAction,
-  deleteEmployeeAction,
-  updateEmployeeAccentAction,
-  updateEmployeeAction,
-  updateEmployeeStatusAction,
-} from "./actions";
+import { createEmployeeAction, updateEmployeeAccentAction, updateEmployeeStatusAction } from "./actions";
 
 export default async function Page() {
   const currentUser = await getCurrentUser();
@@ -28,9 +22,7 @@ export default async function Page() {
   return (
     <EmployeesDashboard
       createAction={createEmployeeAction}
-      deleteAction={deleteEmployeeAction}
       employees={employees}
-      updateAction={updateEmployeeAction}
       updateAccentAction={updateEmployeeAccentAction}
       updateStatusAction={updateEmployeeStatusAction}
     />

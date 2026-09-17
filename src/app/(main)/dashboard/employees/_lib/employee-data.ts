@@ -106,3 +106,56 @@ export async function getEmployees(ownerId: string) {
 
   return employees.map((employee) => mapEmployee(employee, hoursByEmployee.get(employee.id) ?? 0));
 }
+
+export async function getEmployee(ownerId: string, employeeId: string) {
+  const [employee, hourTotal] = await Promise.all([
+    prisma.employee.findUnique({
+      where: {
+        id_ownerId: {
+          id: employeeId,
+          ownerId,
+        },
+      },
+      include: {
+        timeEntries: {
+          orderBy: {
+            workedOn: "desc",
+          },
+          select: {
+            workedOn: true,
+          },
+          take: 1,
+        },
+      },
+    }),
+    prisma.timeEntry.aggregate({
+      where: {
+        employeeId,
+        ownerId,
+      },
+      _sum: {
+        hours: true,
+      },
+    }),
+  ]);
+
+  if (!employee) return null;
+
+  return mapEmployee(employee, hourTotal._sum.hours ? toHours(hourTotal._sum.hours) : 0);
+}
+
+export async function getEmployeeColorUsageCounts(ownerId: string) {
+  const employees = await prisma.employee.findMany({
+    where: {
+      ownerId,
+    },
+    select: {
+      accentColor: true,
+    },
+  });
+
+  return employees.reduce<Record<string, number>>((counts, employee) => {
+    counts[employee.accentColor] = (counts[employee.accentColor] ?? 0) + 1;
+    return counts;
+  }, {});
+}
