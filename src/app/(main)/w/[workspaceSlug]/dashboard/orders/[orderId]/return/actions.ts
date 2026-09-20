@@ -445,6 +445,7 @@ export async function emailReturnReceiptAction(
     return createEmailReturnReceiptState(false, "Connect Gmail before emailing return receipts.", true);
   }
 
+  let bodyText: string | undefined;
   let subject: string | undefined;
 
   try {
@@ -481,6 +482,7 @@ export async function emailReturnReceiptAction(
     const pdfBuffer = await renderReturnReceiptPdfBuffer(documentData);
     const refreshToken = decryptGoogleToken(googleMailAccount.refreshTokenCipher);
     const accessToken = await refreshGoogleAccessToken(refreshToken);
+    bodyText = submittedEmailContent.text;
     subject = submittedEmailContent.subject;
 
     await sendGmailMessage(accessToken, {
@@ -500,6 +502,7 @@ export async function emailReturnReceiptAction(
 
     await logEmailRecord({
       ...emailRecordBase,
+      bodyText,
       senderEmail: googleMailAccount.email,
       status: "success",
       subject,
@@ -532,6 +535,7 @@ export async function emailReturnReceiptAction(
 
     await logEmailRecord({
       ...emailRecordBase,
+      bodyText,
       errorMessage: message,
       senderEmail: googleMailAccount.email,
       status: "error",

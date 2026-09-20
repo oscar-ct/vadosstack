@@ -352,6 +352,7 @@ export async function sendGeneralEmailAction(
     sentByName: authorization.principal.user.name,
     sentByEmail: authorization.principal.user.email,
     subject: parsed.data.subject,
+    bodyText: parsed.data.text,
   };
 
   if (!googleMailAccount) {

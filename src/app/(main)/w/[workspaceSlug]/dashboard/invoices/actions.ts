@@ -477,6 +477,7 @@ export async function emailInvoiceAction(
     return createEmailInvoiceState(false, "Connect Gmail before emailing invoices.", true);
   }
 
+  let bodyText: string | undefined;
   let subject: string | undefined;
 
   try {
@@ -525,6 +526,7 @@ export async function emailInvoiceAction(
       taxableItemsLabel,
     });
     const pdfFilename = `${invoiceNumber.replace(/[^a-z0-9-]+/gi, "-")}.pdf`;
+    bodyText = submittedEmailContent.text;
     subject = submittedEmailContent.subject;
     const refreshToken = decryptGoogleToken(googleMailAccount.refreshTokenCipher);
     const accessToken = await refreshGoogleAccessToken(refreshToken);
@@ -546,6 +548,7 @@ export async function emailInvoiceAction(
 
     await logEmailRecord({
       ...emailRecordBase,
+      bodyText,
       senderEmail: googleMailAccount.email,
       subject,
       status: "success",
@@ -576,6 +579,7 @@ export async function emailInvoiceAction(
 
     await logEmailRecord({
       ...emailRecordBase,
+      bodyText,
       senderEmail: googleMailAccount.email,
       subject,
       status: "error",

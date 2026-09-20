@@ -1001,6 +1001,7 @@ model EmailRecord {
   sentByName     String?
   sentByEmail    String?
   subject        String?
+  bodyText       String?
   documentTotal  Decimal?
   status         String
   errorMessage   String?

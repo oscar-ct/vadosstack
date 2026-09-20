@@ -586,6 +586,7 @@ export async function sendLeadEmailAction(_previousState: EmailLeadState, formDa
     sentByName: authorization.principal.user.name,
     sentByEmail: authorization.principal.user.email,
     subject: parsed.data.subject,
+    bodyText: parsed.data.message,
   };
 
   if (!lead.email) {

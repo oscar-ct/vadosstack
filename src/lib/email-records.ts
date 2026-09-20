@@ -17,6 +17,7 @@ type LogEmailRecordInput = {
   sentByName?: string | null;
   sentByEmail?: string | null;
   subject?: string | null;
+  bodyText?: string | null;
   status: EmailRecordStatus;
   errorMessage?: string | null;
 };
@@ -39,6 +40,7 @@ export async function logEmailRecord(input: LogEmailRecordInput) {
         sentByName: input.sentByName?.trim() || null,
         sentByEmail: input.sentByEmail?.trim() || null,
         subject: input.subject?.trim() || null,
+        bodyText: input.bodyText?.trim() || null,
         status: input.status,
         errorMessage: input.errorMessage?.trim() || null,
       },

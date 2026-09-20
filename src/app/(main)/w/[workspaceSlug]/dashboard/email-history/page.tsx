@@ -1,24 +1,27 @@
-import { CheckCircle2, Clock3, MailCheck, MailWarning, Send, UserRound } from "lucide-react";
+import type { Prisma } from "@prisma/client";
+import { MailCheck } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
-import { CustomerLink } from "@/components/customer-link";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
-import { cn, formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 
-function formatDate(value: Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    timeZone: "America/Chicago",
-    year: "numeric",
-  }).format(value);
-}
+import { EmailHistoryDashboard, type EmailHistoryItem } from "./_components/email-history-dashboard";
+
+const defaultPageSize = 20;
+const pageSizeOptions = [20, 30, 40, 50] as const;
+
+type EmailHistoryStatus = "all" | "error" | "success";
+
+type PageProps = {
+  searchParams?: Promise<{
+    page?: string;
+    pageSize?: string;
+    q?: string;
+    status?: string;
+  }>;
+};
 
 function formatDocumentType(value: string) {
   if (value === "return-receipt") return "Return receipt";
@@ -26,25 +29,21 @@ function formatDocumentType(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function formatAmount(value: { toNumber: () => number } | null) {
-  return value ? formatCurrency(value.toNumber()) : "No amount";
+function parsePage(value?: string) {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const isSuccess = status === "success";
-
-  return (
-    <Badge
-      variant={isSuccess ? "secondary" : "destructive"}
-      className={cn(isSuccess && "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300")}
-    >
-      {isSuccess ? <CheckCircle2 /> : <MailWarning />}
-      {isSuccess ? "Sent" : "Error"}
-    </Badge>
-  );
+function parsePageSize(value?: string) {
+  const parsed = Number.parseInt(value ?? String(defaultPageSize), 10);
+  return pageSizeOptions.includes(parsed as (typeof pageSizeOptions)[number]) ? parsed : defaultPageSize;
 }
 
-export default async function Page() {
+function parseStatus(value?: string): EmailHistoryStatus {
+  return value === "success" || value === "error" ? value : "all";
+}
+
+export default async function Page({ searchParams }: PageProps) {
   const authorization = await getPermittedDashboardAuthorization("email.history.view");
 
   if (!authorization) {
@@ -55,36 +54,48 @@ export default async function Page() {
       />
     );
   }
-  const workspaceId = authorization.workspaceId;
 
-  const [records, totalCount, successCount, errorCount] = await Promise.all([
-    prisma.emailRecord.findMany({
-      where: {
-        ownerId: workspaceId,
-      },
-      orderBy: {
-        sentAt: "desc",
-      },
-      take: 200,
-    }),
-    prisma.emailRecord.count({
-      where: {
-        ownerId: workspaceId,
-      },
-    }),
-    prisma.emailRecord.count({
-      where: {
-        ownerId: workspaceId,
-        status: "success",
-      },
-    }),
-    prisma.emailRecord.count({
-      where: {
-        ownerId: workspaceId,
-        status: "error",
-      },
-    }),
+  const params = await searchParams;
+  const workspaceId = authorization.workspaceId;
+  const query = params?.q?.trim().slice(0, 120) ?? "";
+  const status = parseStatus(params?.status);
+  const requestedPage = parsePage(params?.page);
+  const pageSize = parsePageSize(params?.pageSize);
+  const filteredWhere: Prisma.EmailRecordWhereInput = {
+    ownerId: workspaceId,
+    ...(status === "all" ? {} : { status }),
+    ...(query
+      ? {
+          OR: [
+            { documentNumber: { contains: query, mode: "insensitive" } },
+            { documentType: { contains: query, mode: "insensitive" } },
+            { recipientName: { contains: query, mode: "insensitive" } },
+            { recipientEmail: { contains: query, mode: "insensitive" } },
+            { sentByName: { contains: query, mode: "insensitive" } },
+            { sentByEmail: { contains: query, mode: "insensitive" } },
+            { senderEmail: { contains: query, mode: "insensitive" } },
+            { subject: { contains: query, mode: "insensitive" } },
+            { bodyText: { contains: query, mode: "insensitive" } },
+            { errorMessage: { contains: query, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+
+  const [totalCount, successCount, errorCount, filteredCount] = await Promise.all([
+    prisma.emailRecord.count({ where: { ownerId: workspaceId } }),
+    prisma.emailRecord.count({ where: { ownerId: workspaceId, status: "success" } }),
+    prisma.emailRecord.count({ where: { ownerId: workspaceId, status: "error" } }),
+    prisma.emailRecord.count({ where: filteredWhere }),
   ]);
+  const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const records = await prisma.emailRecord.findMany({
+    where: filteredWhere,
+    orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  });
 
   const invoiceDocumentIds = records
     .filter((record) => record.documentType === "invoice" && record.documentId)
@@ -97,246 +108,138 @@ export default async function Page() {
       (record) => (record.documentType === "order" || record.documentType === "return-receipt") && record.documentId,
     )
     .map((record) => record.documentId as string);
-  const [invoiceCustomerLinks, estimateCustomerLinks, orderCustomerLinks] = await Promise.all([
+  const leadDocumentIds = records
+    .filter((record) => record.documentType === "lead" && record.documentId)
+    .map((record) => record.documentId as string);
+
+  const [invoices, estimates, orders, leads] = await Promise.all([
     invoiceDocumentIds.length
       ? prisma.invoice.findMany({
-          where: {
-            ownerId: workspaceId,
-            id: {
-              in: invoiceDocumentIds,
-            },
-          },
-          select: {
-            customerId: true,
-            id: true,
-          },
+          where: { id: { in: invoiceDocumentIds }, ownerId: workspaceId },
+          select: { customerId: true, id: true },
         })
       : [],
     estimateDocumentIds.length
       ? prisma.estimate.findMany({
-          where: {
-            ownerId: workspaceId,
-            id: {
-              in: estimateDocumentIds,
-            },
-          },
-          select: {
-            customerId: true,
-            id: true,
-          },
+          where: { id: { in: estimateDocumentIds }, ownerId: workspaceId },
+          select: { customerId: true, id: true },
         })
       : [],
     orderDocumentIds.length
       ? prisma.order.findMany({
-          where: {
-            ownerId: workspaceId,
-            id: {
-              in: orderDocumentIds,
-            },
-          },
+          where: { id: { in: orderDocumentIds }, ownerId: workspaceId },
           select: {
             customerId: true,
             id: true,
+            returns: { select: { returnNumber: true } },
           },
         })
       : [],
+    leadDocumentIds.length
+      ? prisma.lead.findMany({
+          where: { id: { in: leadDocumentIds }, ownerId: workspaceId },
+          select: { customerId: true, id: true },
+        })
+      : [],
   ]);
-  const invoiceCustomerIdByDocumentId = new Map(
-    invoiceCustomerLinks.map((invoice) => [invoice.id, invoice.customerId]),
-  );
-  const estimateCustomerIdByDocumentId = new Map(
-    estimateCustomerLinks.map((estimate) => [estimate.id, estimate.customerId]),
-  );
-  const orderCustomerIdByDocumentId = new Map(orderCustomerLinks.map((order) => [order.id, order.customerId]));
+
+  const invoiceCustomerIdByDocumentId = new Map(invoices.map((record) => [record.id, record.customerId]));
+  const estimateCustomerIdByDocumentId = new Map(estimates.map((record) => [record.id, record.customerId]));
+  const orderCustomerIdByDocumentId = new Map(orders.map((record) => [record.id, record.customerId]));
+  const leadCustomerIdByDocumentId = new Map(leads.map((record) => [record.id, record.customerId]));
+  const canViewInvoices = can(authorization.membership, "invoices.view");
+  const canViewEstimates = can(authorization.membership, "estimates.view");
+  const canViewOrders = can(authorization.membership, "orders.view");
+  const canManageReturns = can(authorization.membership, "orders.returns.manage");
+  const canViewLeads = can(authorization.membership, "leads.view");
 
   function getRecordCustomerId(record: (typeof records)[number]) {
     if (!record.documentId) return undefined;
     if (record.documentType === "invoice") return invoiceCustomerIdByDocumentId.get(record.documentId) ?? undefined;
     if (record.documentType === "estimate") return estimateCustomerIdByDocumentId.get(record.documentId) ?? undefined;
+    if (record.documentType === "lead") return leadCustomerIdByDocumentId.get(record.documentId) ?? undefined;
     if (record.documentType === "order" || record.documentType === "return-receipt") {
       return orderCustomerIdByDocumentId.get(record.documentId) ?? undefined;
     }
     return undefined;
   }
 
+  function getDocumentHref(record: (typeof records)[number]) {
+    if (!record.documentId) return undefined;
+    if (record.documentType === "invoice" && canViewInvoices && invoices.some(({ id }) => id === record.documentId)) {
+      return `/dashboard/invoices/${record.documentId}`;
+    }
+    if (
+      record.documentType === "estimate" &&
+      canViewEstimates &&
+      estimates.some(({ id }) => id === record.documentId)
+    ) {
+      return `/dashboard/estimates/${record.documentId}`;
+    }
+    if (record.documentType === "order" && canViewOrders && orders.some(({ id }) => id === record.documentId)) {
+      return `/dashboard/orders/${record.documentId}/edit`;
+    }
+    if (
+      record.documentType === "return-receipt" &&
+      canManageReturns &&
+      orders.some(
+        (order) =>
+          order.id === record.documentId &&
+          order.returns.some(({ returnNumber }) => !record.documentNumber || returnNumber === record.documentNumber),
+      )
+    ) {
+      return `/dashboard/orders/${record.documentId}/return`;
+    }
+    if (record.documentType === "lead" && canViewLeads && leads.some(({ id }) => id === record.documentId)) {
+      return `/dashboard/leads/${record.documentId}`;
+    }
+    return undefined;
+  }
+
+  const historyItems: EmailHistoryItem[] = records.map((record) => ({
+    id: record.id,
+    bodyText: record.bodyText ?? undefined,
+    customerId: getRecordCustomerId(record) ?? undefined,
+    documentHref: getDocumentHref(record),
+    documentNumber: record.documentNumber ?? formatDocumentType(record.documentType),
+    documentTotal: record.documentTotal ? formatCurrency(record.documentTotal.toNumber()) : "No amount",
+    documentType: formatDocumentType(record.documentType),
+    errorMessage: record.errorMessage ?? undefined,
+    recipientEmail: record.recipientEmail ?? undefined,
+    recipientName: record.recipientName ?? undefined,
+    senderEmail: record.senderEmail ?? undefined,
+    sentAt: record.sentAt.toISOString(),
+    sentByEmail: record.sentByEmail ?? undefined,
+    sentByName: record.sentByName ?? undefined,
+    status: record.status === "success" ? "success" : "error",
+    subject: record.subject ?? undefined,
+  }));
+
   return (
-    <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <div className="grid min-w-0 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border bg-card p-4 text-card-foreground">
-          <div className="flex items-center justify-between gap-3">
-            <p className="font-medium text-muted-foreground text-sm">Total emails</p>
-            <Send className="size-4 text-muted-foreground" />
+    <Card className="min-w-0">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 leading-none">
+          <span className="text-lg">Email History</span>
+          <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <MailCheck className="size-4 text-muted-foreground" />
           </div>
-          <p className="mt-2 font-semibold text-2xl tracking-tight">{totalCount}</p>
-        </div>
-        <div className="rounded-lg border bg-card p-4 text-card-foreground">
-          <div className="flex items-center justify-between gap-3">
-            <p className="font-medium text-muted-foreground text-sm">Successful</p>
-            <CheckCircle2 className="size-4 text-emerald-600" />
-          </div>
-          <p className="mt-2 font-semibold text-2xl tracking-tight">{successCount}</p>
-        </div>
-        <div className="rounded-lg border bg-card p-4 text-card-foreground">
-          <div className="flex items-center justify-between gap-3">
-            <p className="font-medium text-muted-foreground text-sm">Needs attention</p>
-            <MailWarning className="size-4 text-destructive" />
-          </div>
-          <p className="mt-2 font-semibold text-2xl tracking-tight">{errorCount}</p>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 leading-none">
-            <span className="text-lg">Email History</span>
-            <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <MailCheck className="size-4 text-muted-foreground" />
-            </div>
-          </CardTitle>
-          <CardDescription>Recent document email attempts, including successful sends and errors.</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {records.length ? (
-            <>
-              <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
-                <Table>
-                  <TableHeader className="bg-muted/15">
-                    <TableRow>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Record</TableHead>
-                      <TableHead>Recipient</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Sent by</TableHead>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Message</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {records.map((record) => {
-                      const customerId = getRecordCustomerId(record);
-
-                      return (
-                        <TableRow key={record.id}>
-                          <TableCell>
-                            <StatusBadge status={record.status} />
-                          </TableCell>
-                          <TableCell>
-                            <div className="truncate font-medium">
-                              {record.documentNumber ?? formatDocumentType(record.documentType)}
-                            </div>
-                            <div className="text-muted-foreground text-xs">
-                              {formatDocumentType(record.documentType)}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <CustomerLink
-                              customerId={customerId}
-                              name={record.recipientName}
-                              fallback="No name"
-                              className="block max-w-48 truncate font-medium"
-                            />
-                            <div className="max-w-48 truncate text-muted-foreground text-xs">
-                              {record.recipientEmail || "No email"}
-                            </div>
-                          </TableCell>
-                          <TableCell className="truncate font-medium">{formatAmount(record.documentTotal)}</TableCell>
-                          <TableCell className="max-w-52">
-                            <div className="truncate font-medium">
-                              {record.sentByName || record.sentByEmail || "Legacy record"}
-                            </div>
-                            <div className="truncate text-muted-foreground text-xs">
-                              {record.senderEmail ? `via ${record.senderEmail}` : record.sentByEmail || "Not connected"}
-                            </div>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-muted-foreground">
-                            {formatDate(record.sentAt)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="max-w-72 truncate text-muted-foreground">
-                              {record.status === "success"
-                                ? record.subject || "Email sent"
-                                : record.errorMessage || "Send failed"}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="space-y-3 md:hidden">
-                {records.map((record) => {
-                  const customerId = getRecordCustomerId(record);
-
-                  return (
-                    <div
-                      key={record.id}
-                      className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-background p-3"
-                    >
-                      <div className="flex min-w-0 items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium leading-6">
-                            {record.documentNumber ?? formatDocumentType(record.documentType)}
-                          </div>
-                          <div className="text-muted-foreground text-xs">{formatDocumentType(record.documentType)}</div>
-                        </div>
-                        <StatusBadge status={record.status} />
-                      </div>
-
-                      <div className="grid min-w-0 gap-2 text-sm">
-                        <div className="flex min-w-0 items-start gap-2">
-                          <UserRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0">
-                            <CustomerLink
-                              customerId={customerId}
-                              name={record.recipientName}
-                              fallback="No name"
-                              className="block truncate font-medium"
-                            />
-                            <div className="truncate text-muted-foreground text-xs">
-                              {record.recipientEmail || "No email"}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                          <Send className="size-4 shrink-0" />
-                          <span className="truncate">
-                            {record.sentByName || record.sentByEmail || "Legacy record"}
-                            {record.senderEmail ? ` via ${record.senderEmail}` : ""}
-                          </span>
-                        </div>
-                        <div className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
-                          <span className="font-medium text-muted-foreground text-xs uppercase">Amount</span>
-                          <span className="shrink-0 font-semibold">{formatAmount(record.documentTotal)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Clock3 className="size-4 shrink-0" />
-                          <span>{formatDate(record.sentAt)}</span>
-                        </div>
-                      </div>
-
-                      <div className="rounded-md bg-muted/50 px-3 py-2 text-muted-foreground text-sm">
-                        {record.status === "success"
-                          ? record.subject || "Email sent"
-                          : record.errorMessage || "Send failed"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            <div className="flex min-h-56 flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center">
-              <MailCheck className="size-10 text-muted-foreground" />
-              <h2 className="mt-3 font-semibold text-base">No emailed records yet</h2>
-              <p className="mt-1 max-w-md text-muted-foreground text-sm">
-                Sent estimates, invoices, and orders will appear here with the delivery result, recipient, and time.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        </CardTitle>
+        <CardDescription>Search sent messages, inspect delivery errors, and open related records.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden pt-0">
+        <EmailHistoryDashboard
+          errorCount={errorCount}
+          filteredCount={filteredCount}
+          initialQuery={query}
+          initialStatus={status}
+          page={page}
+          pageSize={pageSize}
+          records={historyItems}
+          successCount={successCount}
+          totalCount={totalCount}
+          totalPages={totalPages}
+        />
+      </CardContent>
+    </Card>
   );
 }

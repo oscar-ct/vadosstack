@@ -617,6 +617,7 @@ export async function emailOrderAction(_previousState: EmailOrderState, formData
     return createEmailOrderState(false, "Connect Gmail before emailing orders.", true);
   }
 
+  let bodyText: string | undefined;
   let subject: string | undefined;
 
   try {
@@ -653,6 +654,7 @@ export async function emailOrderAction(_previousState: EmailOrderState, formData
     const pdfBuffer = await renderOrderPdfBuffer(documentData);
     const refreshToken = decryptGoogleToken(googleMailAccount.refreshTokenCipher);
     const accessToken = await refreshGoogleAccessToken(refreshToken);
+    bodyText = submittedEmailContent.text;
     subject = submittedEmailContent.subject;
 
     await sendGmailMessage(accessToken, {
@@ -672,6 +674,7 @@ export async function emailOrderAction(_previousState: EmailOrderState, formData
 
     await logEmailRecord({
       ...emailRecordBase,
+      bodyText,
       senderEmail: googleMailAccount.email,
       subject,
       status: "success",
@@ -702,6 +705,7 @@ export async function emailOrderAction(_previousState: EmailOrderState, formData
 
     await logEmailRecord({
       ...emailRecordBase,
+      bodyText,
       senderEmail: googleMailAccount.email,
       subject,
       status: "error",
