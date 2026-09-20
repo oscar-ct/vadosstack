@@ -4,10 +4,10 @@ import { redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { hashAccountConfirmationToken } from "@/lib/account-confirmation";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentPrincipal, getPrincipalDashboardDestination } from "@/lib/authorization";
+import { createOwnerWorkspaceForUser } from "@/lib/authorization/provision-workspace";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
-import { getWorkspaceHomePath } from "@/lib/workspace-mode";
 
 import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 
@@ -80,7 +80,7 @@ async function confirmAccount(token: string): Promise<ConfirmationState> {
       return "exists";
     }
 
-    await tx.user.create({
+    const user = await tx.user.create({
       data: {
         authProviders: ["email"],
         companyAddress: pendingAccount.companyAddress,
@@ -92,6 +92,7 @@ async function confirmAccount(token: string): Promise<ConfirmationState> {
         workspaceMode: pendingAccount.workspaceMode,
       },
     });
+    await createOwnerWorkspaceForUser(tx, user);
 
     return "success";
   });
@@ -100,10 +101,10 @@ async function confirmAccount(token: string): Promise<ConfirmationState> {
 }
 
 export default async function ConfirmAccountPage({ searchParams }: ConfirmAccountPageProps) {
-  const user = await getCurrentUser();
+  const principal = await getCurrentPrincipal();
 
-  if (user) {
-    redirect(getWorkspaceHomePath(user.workspaceMode));
+  if (principal) {
+    redirect(getPrincipalDashboardDestination(principal));
   }
 
   const params = await searchParams;

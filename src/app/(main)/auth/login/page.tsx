@@ -3,8 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Separator } from "@/components/ui/separator";
-import { getCurrentUser } from "@/lib/auth";
-import { getWorkspaceHomePath } from "@/lib/workspace-mode";
+import { getCurrentPrincipal, getPrincipalDashboardDestination } from "@/lib/authorization";
 
 import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 import { AuthDatabaseWarmup } from "../_components/auth-database-warmup";
@@ -34,17 +33,21 @@ type LoginPageProps = {
     confirm?: string | string[];
     google_error?: string | string[];
     reset?: string | string[];
+    returnTo?: string | string[];
   }>;
 };
 
 export default async function LoginV1({ searchParams }: LoginPageProps) {
-  const user = await getCurrentUser();
+  const params = await searchParams;
+  const rawReturnTo = Array.isArray(params?.returnTo) ? params.returnTo[0] : params?.returnTo;
+  const returnTo = rawReturnTo?.startsWith("/") && !rawReturnTo.startsWith("//") ? rawReturnTo : undefined;
+  const principal = await getCurrentPrincipal();
 
-  if (user) {
-    redirect(getWorkspaceHomePath(user.workspaceMode));
+  if (principal) {
+    if (returnTo) redirect(returnTo);
+    redirect(getPrincipalDashboardDestination(principal));
   }
 
-  const params = await searchParams;
   const googleError = Array.isArray(params?.google_error) ? params.google_error[0] : params?.google_error;
   const googleErrorMessage = googleError ? googleErrorMessages[googleError] : null;
   const resetStatus = Array.isArray(params?.reset) ? params.reset[0] : params?.reset;
@@ -95,7 +98,7 @@ export default async function LoginV1({ searchParams }: LoginPageProps) {
               <span>or</span>
               <Separator className="flex-1" />
             </div>
-            <LoginForm action={loginAction} />
+            <LoginForm action={loginAction} returnTo={returnTo} />
             <p className="text-center text-muted-foreground text-xs">
               Don&apos;t have an account?{" "}
               <Link prefetch={false} href="/register" className="text-primary">

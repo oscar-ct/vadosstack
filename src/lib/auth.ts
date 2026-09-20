@@ -3,7 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { prisma, withTransientPrismaReadRetry } from "@/lib/prisma";
 import { parseWorkspaceMode, type WorkspaceMode } from "@/lib/workspace-mode";
 
 import { createHash, randomBytes } from "node:crypto";
@@ -106,35 +106,37 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     return null;
   }
 
-  const session = await prisma.session.findUnique({
-    where: {
-      tokenHash: hashSessionToken(sessionToken),
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          companyName: true,
-          companyAddress: true,
-          companyEmail: true,
-          companyPhone: true,
-          estimateValidDays: true,
-          estimateMessageEnabled: true,
-          estimateMessageAlign: true,
-          estimateMessageText: true,
-          email: true,
-          invoiceDueDays: true,
-          invoiceMessageEnabled: true,
-          invoiceMessageAlign: true,
-          invoiceMessageText: true,
-          orderMessageText: true,
-          workspaceMode: true,
-          admin: true,
+  const session = await withTransientPrismaReadRetry(() =>
+    prisma.session.findUnique({
+      where: {
+        tokenHash: hashSessionToken(sessionToken),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            companyName: true,
+            companyAddress: true,
+            companyEmail: true,
+            companyPhone: true,
+            estimateValidDays: true,
+            estimateMessageEnabled: true,
+            estimateMessageAlign: true,
+            estimateMessageText: true,
+            email: true,
+            invoiceDueDays: true,
+            invoiceMessageEnabled: true,
+            invoiceMessageAlign: true,
+            invoiceMessageText: true,
+            orderMessageText: true,
+            workspaceMode: true,
+            admin: true,
+          },
         },
       },
-    },
-  });
+    }),
+  );
 
   if (!session || session.expiresAt <= new Date()) {
     return null;
@@ -151,15 +153,17 @@ export async function refreshCurrentSession() {
     return false;
   }
 
-  const session = await prisma.session.findUnique({
-    where: {
-      tokenHash: hashSessionToken(sessionToken),
-    },
-    select: {
-      expiresAt: true,
-      id: true,
-    },
-  });
+  const session = await withTransientPrismaReadRetry(() =>
+    prisma.session.findUnique({
+      where: {
+        tokenHash: hashSessionToken(sessionToken),
+      },
+      select: {
+        expiresAt: true,
+        id: true,
+      },
+    }),
+  );
 
   if (!session || session.expiresAt <= new Date()) {
     if (session) {
@@ -201,14 +205,18 @@ export async function refreshCurrentSession() {
 export async function createUserSession(userId: string, remember = false) {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + (remember ? THIRTY_DAYS_IN_MS : ONE_DAY_IN_MS));
+  const lastLoginAt = new Date();
 
-  await prisma.session.create({
-    data: {
-      tokenHash: hashSessionToken(token),
-      userId,
-      expiresAt,
-    },
-  });
+  await prisma.$transaction([
+    prisma.session.create({
+      data: {
+        tokenHash: hashSessionToken(token),
+        userId,
+        expiresAt,
+      },
+    }),
+    prisma.user.update({ where: { id: userId }, data: { lastLoginAt } }),
+  ]);
 
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions(expiresAt));
@@ -217,14 +225,18 @@ export async function createUserSession(userId: string, remember = false) {
 export async function createUserSessionResponse(userId: string, response: NextResponse, remember = false) {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + (remember ? THIRTY_DAYS_IN_MS : ONE_DAY_IN_MS));
+  const lastLoginAt = new Date();
 
-  await prisma.session.create({
-    data: {
-      tokenHash: hashSessionToken(token),
-      userId,
-      expiresAt,
-    },
-  });
+  await prisma.$transaction([
+    prisma.session.create({
+      data: {
+        tokenHash: hashSessionToken(token),
+        userId,
+        expiresAt,
+      },
+    }),
+    prisma.user.update({ where: { id: userId }, data: { lastLoginAt } }),
+  ]);
 
   response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions(expiresAt));
 }
@@ -242,4 +254,5 @@ export async function clearCurrentSession() {
   }
 
   cookieStore.delete(SESSION_COOKIE_NAME);
+  cookieStore.delete("vados-active-workspace-client");
 }

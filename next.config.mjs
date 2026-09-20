@@ -86,11 +86,6 @@ const nextConfig = {
         permanent: true,
       },
       {
-        source: "/dashboard",
-        destination: "/dashboard/overview",
-        permanent: false,
-      },
-      {
         source: "/auth/login",
         destination: "/login",
         permanent: true,

@@ -3,7 +3,7 @@ import { addDays, addMonths, format, isValid, parse, startOfDay, startOfMonth, s
 import type {
   EmployeeSummary,
   TimeEntryRow,
-} from "@/app/(main)/dashboard/time-tracking/_components/time-tracking-dashboard";
+} from "@/app/(main)/w/[workspaceSlug]/dashboard/time-tracking/_components/time-tracking-dashboard";
 
 export function toHours(value: { toString: () => string }) {
   return Number(value.toString());
@@ -89,10 +89,8 @@ export function mapEmployeeSummary(employee: {
   active: boolean;
   department: string | null;
   id: string;
-  email: string | null;
   employeeNumber: string;
   name: string;
-  phone: string | null;
   timeEntries: Array<{
     hours: { toString: () => string };
     workedOn: Date;
@@ -105,11 +103,9 @@ export function mapEmployeeSummary(employee: {
     active: employee.active,
     department: employee.department ?? undefined,
     id: employee.id,
-    email: employee.email ?? undefined,
     employeeNumber: employee.employeeNumber,
     lastWorkedOn: lastEntry ? format(lastEntry.workedOn, "yyyy-MM-dd") : undefined,
     name: employee.name,
-    phone: employee.phone ?? undefined,
     totalHours: employee.timeEntries.reduce((total, entry) => total + toHours(entry.hours), 0),
   };
 }

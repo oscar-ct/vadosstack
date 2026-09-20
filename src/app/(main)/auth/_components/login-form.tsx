@@ -20,8 +20,10 @@ const initialState: AuthFormState = {
 
 export function LoginForm({
   action,
+  returnTo,
 }: {
   action: (state: AuthFormState, formData: FormData) => Promise<AuthFormState>;
+  returnTo?: string;
 }) {
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const [email, setEmail] = React.useState("");
@@ -31,6 +33,7 @@ export function LoginForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-4" noValidate>
+      {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       <FieldGroup className="gap-4">
         <Field className="gap-1.5">
           <FieldLabel htmlFor="login-email">Email Address</FieldLabel>

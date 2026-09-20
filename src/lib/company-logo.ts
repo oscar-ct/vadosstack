@@ -1,26 +1,37 @@
 import { prisma } from "@/lib/prisma";
 import { getR2PublicUrl } from "@/lib/r2";
+import { getWorkspaceDashboardPath } from "@/lib/workspace-path";
 
 const fallbackCompanyLogoSrc = "/dashboard/company-logo?fallback=1";
 
-export async function getCompanyLogoSrc(userId: string) {
-  const user = await prisma.user.findUnique({
+export async function getCompanyLogoSrc(workspaceId: string, workspaceSlug?: string) {
+  const fallbackSrc = workspaceSlug
+    ? `${getWorkspaceDashboardPath(workspaceSlug, "/dashboard/company-logo")}?fallback=1`
+    : fallbackCompanyLogoSrc;
+  const workspace = await prisma.workspace.findUnique({
     where: {
-      id: userId,
+      id: workspaceId,
     },
     select: {
       companyLogoDataUrl: true,
       companyLogoKey: true,
+      legacyOwner: {
+        select: {
+          companyLogoDataUrl: true,
+          companyLogoKey: true,
+        },
+      },
     },
   });
+  const logo = workspace?.companyLogoKey || workspace?.companyLogoDataUrl ? workspace : workspace?.legacyOwner;
 
-  if (user?.companyLogoKey) {
+  if (logo?.companyLogoKey) {
     try {
-      return getR2PublicUrl(user.companyLogoKey) ?? fallbackCompanyLogoSrc;
+      return getR2PublicUrl(logo.companyLogoKey) ?? fallbackSrc;
     } catch {
-      return fallbackCompanyLogoSrc;
+      return fallbackSrc;
     }
   }
 
-  return user?.companyLogoDataUrl ?? fallbackCompanyLogoSrc;
+  return logo?.companyLogoDataUrl ?? fallbackSrc;
 }

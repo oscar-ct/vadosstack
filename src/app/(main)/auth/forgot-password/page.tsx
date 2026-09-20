@@ -2,18 +2,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth";
-import { getWorkspaceHomePath } from "@/lib/workspace-mode";
+import { getCurrentPrincipal, getPrincipalDashboardDestination } from "@/lib/authorization";
 
 import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 import { ForgotPasswordForm } from "../_components/forgot-password-form";
 import { requestPasswordResetAction } from "../actions";
 
 export default async function ForgotPasswordPage() {
-  const user = await getCurrentUser();
+  const principal = await getCurrentPrincipal();
 
-  if (user) {
-    redirect(getWorkspaceHomePath(user.workspaceMode));
+  if (principal) {
+    redirect(getPrincipalDashboardDestination(principal));
   }
 
   return (

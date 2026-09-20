@@ -1,5 +1,6 @@
-import customersData from "../app/(main)/dashboard/customers/_components/data.json";
+import customersData from "../app/(main)/w/[workspaceSlug]/dashboard/customers/_components/data.json";
 import { prisma } from "../lib/prisma";
+import { resolveOwnedWorkspaceByEmail } from "./lib/resolve-owned-workspace";
 
 type CustomerSeedRow = {
   city: string;
@@ -19,24 +20,12 @@ const ownerEmail = process.env.SEED_OWNER_EMAIL?.trim().toLowerCase();
 async function main() {
   const customers = customersData as CustomerSeedRow[];
   if (!ownerEmail) throw new Error("Set SEED_OWNER_EMAIL before seeding customers.");
-  const owner = await prisma.user.findUnique({
-    where: {
-      email: ownerEmail,
-    },
-    select: {
-      id: true,
-    },
-  });
+  const workspace = await resolveOwnedWorkspaceByEmail(ownerEmail);
 
-  if (!owner) {
-    throw new Error("Run the auth setup before seeding customers.");
-  }
-
-  await prisma.user.update({
-    where: { id: owner.id },
+  await prisma.workspace.update({
+    where: { id: workspace.id },
     data: {
-      name: "Demo Workspace Owner",
-      companyName: "BluePeak Service & Supply",
+      name: "BluePeak Service & Supply",
       companyAddress: "4100 Demo Way, Austin, TX 78701",
       companyEmail: "hello@bluepeak-demo.example.com",
       companyPhone: "(512) 555-0142",
@@ -48,7 +37,7 @@ async function main() {
     const row = await prisma.customer.upsert({
       where: {
         ownerId_email: {
-          ownerId: owner.id,
+          ownerId: workspace.id,
           email: customer.email,
         },
       },
@@ -61,7 +50,7 @@ async function main() {
       },
       create: {
         id: customer.id,
-        ownerId: owner.id,
+        ownerId: workspace.id,
         name: customer.name,
         email: customer.email,
         billingStatus: customer.billing,

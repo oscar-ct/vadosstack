@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
 
-import { mockInventoryItems } from "../app/(main)/dashboard/inventory/_lib/mock-inventory";
+import { mockInventoryItems } from "../app/(main)/w/[workspaceSlug]/dashboard/inventory/_lib/mock-inventory";
 import { prisma } from "../lib/prisma";
+import { resolveOwnedWorkspaceByEmail } from "./lib/resolve-owned-workspace";
 
 const ownerEmail = process.env.SEED_OWNER_EMAIL?.trim().toLowerCase();
 const seedOrderNumbers = [
@@ -248,19 +249,7 @@ function getSnapshot(customer?: {
 
 async function main() {
   if (!ownerEmail) throw new Error("Set SEED_OWNER_EMAIL before seeding e-commerce data.");
-  const owner = await prisma.user.findUnique({
-    where: {
-      email: ownerEmail,
-    },
-    select: {
-      id: true,
-      orderMessageText: true,
-    },
-  });
-
-  if (!owner) {
-    throw new Error("Run setup:auth before seeding e-commerce data.");
-  }
+  const workspace = await resolveOwnedWorkspaceByEmail(ownerEmail);
 
   const categories = new Map<string, string>();
   const locations = new Map<string, string>();
@@ -269,13 +258,13 @@ async function main() {
     const category = await prisma.inventoryCategory.upsert({
       where: {
         ownerId_name: {
-          ownerId: owner.id,
+          ownerId: workspace.id,
           name,
         },
       },
       update: {},
       create: {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         name,
       },
       select: {
@@ -289,13 +278,13 @@ async function main() {
     const location = await prisma.inventoryLocation.upsert({
       where: {
         ownerId_name: {
-          ownerId: owner.id,
+          ownerId: workspace.id,
           name,
         },
       },
       update: {},
       create: {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         name,
       },
       select: {
@@ -309,7 +298,7 @@ async function main() {
     await prisma.inventoryItem.upsert({
       where: {
         ownerId_sku: {
-          ownerId: owner.id,
+          ownerId: workspace.id,
           sku: item.sku,
         },
       },
@@ -334,7 +323,7 @@ async function main() {
       },
       create: {
         id: item.id,
-        ownerId: owner.id,
+        ownerId: workspace.id,
         categoryId: categories.get(item.category) ?? null,
         locationId: locations.get(item.location) ?? null,
         sku: item.sku,
@@ -358,7 +347,7 @@ async function main() {
 
   const oldOrders = await prisma.order.findMany({
     where: {
-      ownerId: owner.id,
+      ownerId: workspace.id,
       orderNumber: {
         in: seedOrderNumbers,
       },
@@ -370,7 +359,7 @@ async function main() {
 
   await prisma.inventoryStockMovement.deleteMany({
     where: {
-      ownerId: owner.id,
+      ownerId: workspace.id,
       OR: [
         {
           orderId: {
@@ -385,7 +374,7 @@ async function main() {
   });
   await prisma.order.deleteMany({
     where: {
-      ownerId: owner.id,
+      ownerId: workspace.id,
       orderNumber: {
         in: seedOrderNumbers,
       },
@@ -394,7 +383,7 @@ async function main() {
 
   const customers = await prisma.customer.findMany({
     where: {
-      ownerId: owner.id,
+      ownerId: workspace.id,
     },
     include: {
       addresses: {
@@ -424,7 +413,7 @@ async function main() {
         ? await prisma.inventoryItem.findUnique({
             where: {
               ownerId_sku: {
-                ownerId: owner.id,
+                ownerId: workspace.id,
                 sku: seedItem.inventorySku,
               },
             },
@@ -462,7 +451,7 @@ async function main() {
 
     const order = await prisma.order.create({
       data: {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         customerId: customer?.id ?? null,
         orderNumber: seedOrder.orderNumber,
         paymentStatus: seedOrder.paymentStatus,
@@ -481,14 +470,14 @@ async function main() {
         taxAmount: toDecimal(taxAmount),
         discountAmount: toDecimal(discountAmount),
         total: toDecimal(total),
-        footerMessage: owner.orderMessageText,
+        footerMessage: workspace.orderMessageText,
       },
     });
 
     for (const item of preparedItems) {
       const orderItem = await prisma.orderItem.create({
         data: {
-          ownerId: owner.id,
+          ownerId: workspace.id,
           orderId: order.id,
           inventoryItemId: item.inventoryItem?.id ?? null,
           sku: item.sku,
@@ -515,7 +504,7 @@ async function main() {
         });
         await prisma.inventoryStockMovement.create({
           data: {
-            ownerId: owner.id,
+            ownerId: workspace.id,
             inventoryItemId: item.inventoryItem.id,
             orderId: order.id,
             orderItemId: orderItem.id,

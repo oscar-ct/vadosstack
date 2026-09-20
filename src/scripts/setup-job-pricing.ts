@@ -33,7 +33,7 @@ async function main() {
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'job_payments_ownerId_fkey') THEN
         ALTER TABLE "job_payments"
         ADD CONSTRAINT "job_payments_ownerId_fkey"
-        FOREIGN KEY ("ownerId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        FOREIGN KEY ("ownerId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       END IF;
     END
     $$;

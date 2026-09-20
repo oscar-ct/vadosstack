@@ -2,8 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth";
-import { getWorkspaceHomePath } from "@/lib/workspace-mode";
+import { getCurrentPrincipal, getPrincipalDashboardDestination } from "@/lib/authorization";
 
 import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 import { ResetPasswordForm } from "../_components/reset-password-form";
@@ -16,10 +15,10 @@ type ResetPasswordPageProps = {
 };
 
 export default async function ResetPasswordPage({ searchParams }: ResetPasswordPageProps) {
-  const user = await getCurrentUser();
+  const principal = await getCurrentPrincipal();
 
-  if (user) {
-    redirect(getWorkspaceHomePath(user.workspaceMode));
+  if (principal) {
+    redirect(getPrincipalDashboardDestination(principal));
   }
 
   const params = await searchParams;

@@ -7,7 +7,7 @@ import { addDays, format, subDays } from "date-fns";
 import {
   type TimeEntryRequestRow,
   TimeTrackingDashboard,
-} from "@/app/(main)/dashboard/time-tracking/_components/time-tracking-dashboard";
+} from "@/app/(main)/w/[workspaceSlug]/dashboard/time-tracking/_components/time-tracking-dashboard";
 import { prisma } from "@/lib/prisma";
 import { getTimeTrackingRange, mapEmployeeSummary, mapTimeEntry, toHours } from "@/lib/time-tracking";
 

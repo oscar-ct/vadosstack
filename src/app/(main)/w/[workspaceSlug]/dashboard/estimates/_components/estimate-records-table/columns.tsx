@@ -1,0 +1,186 @@
+"use client";
+"use no memo";
+
+import type { ColumnDef } from "@tanstack/react-table";
+import { format, parseISO } from "date-fns";
+import { MailWarning, Pencil } from "lucide-react";
+
+import { CustomerLink } from "@/components/customer-link";
+import { PermissionDisabledButton } from "@/components/permission-disabled-button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+
+import type { EstimateRecordRow } from "../schema";
+
+function formatMoney(value?: string) {
+  return value ? `$${Number(value).toFixed(2)}` : "$0.00";
+}
+
+function estimateStatusClassName(status: string) {
+  if (status === "Won") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900";
+  if (status === "Lost") return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900";
+  if (status === "Ready to Send") return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900";
+  if (status === "Waiting on Customer") return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900";
+  return "bg-muted-foreground/10 text-muted-foreground";
+}
+
+function nextActionLabel(status: string) {
+  if (status === "Draft") return "Continue estimate";
+  if (status === "Ready to Send") return "Send estimate";
+  if (status === "Waiting on Customer") return "Convert or mark lost";
+  if (status === "Won") return "View job";
+  if (status === "Lost") return "Reopen if needed";
+  return "Review";
+}
+
+export function getEstimateRecordsColumns({
+  canEdit,
+  canSelect,
+  onEditEstimate,
+}: {
+  canEdit: boolean;
+  canSelect: boolean;
+  onEditEstimate: (estimate: EstimateRecordRow) => void;
+}): ColumnDef<EstimateRecordRow>[] {
+  return [
+    ...(canSelect
+      ? [
+          {
+            id: "select",
+            header: ({ table }) => (
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
+                  onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                  aria-label="Select all estimates on this page"
+                />
+              </div>
+            ),
+            cell: ({ row }) => (
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  checked={row.getIsSelected()}
+                  onCheckedChange={(value) => row.toggleSelected(!!value)}
+                  aria-label={`Select ${row.original.description}`}
+                />
+              </div>
+            ),
+            enableHiding: false,
+          } satisfies ColumnDef<EstimateRecordRow>,
+        ]
+      : []),
+    {
+      accessorKey: "createdAt",
+      header: "Date",
+      sortUndefined: "last",
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-sm">{format(parseISO(row.original.createdAt), "MMM d, yyyy")}</span>
+      ),
+    },
+    {
+      accessorKey: "customerName",
+      header: "Customer",
+      cell: ({ row }) => (
+        <div className="min-w-0">
+          <CustomerLink
+            customerId={row.original.customerId}
+            fallback="No customer or lead"
+            name={row.original.customerName ?? row.original.leadName}
+            className="block truncate font-medium text-sm"
+          />
+          {!row.original.customerEmail ? (
+            <span className="mt-1 flex w-fit items-center gap-1.5 text-amber-700 text-xs dark:text-amber-300">
+              <MailWarning className="size-3 shrink-0" />
+              No email
+            </span>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "description",
+      header: "Service",
+      cell: ({ row }) => (
+        <div className="grid min-w-0 gap-1.5">
+          <span className="truncate font-medium text-sm leading-none">{row.original.description}</span>
+          <span className="max-w-72 truncate text-muted-foreground text-xs leading-none">
+            {row.original.scope ?? ""}
+          </span>
+        </div>
+      ),
+      enableHiding: false,
+    },
+    {
+      accessorKey: "estimatedTotal",
+      header: () => <div className="text-left">Value</div>,
+      cell: ({ row }) => (
+        <div className="whitespace-nowrap text-left text-sm tabular-nums">
+          {formatMoney(row.original.estimatedTotal)}
+        </div>
+      ),
+      sortingFn: (rowA, rowB) => Number(rowA.original.estimatedTotal ?? 0) - Number(rowB.original.estimatedTotal ?? 0),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      filterFn: "equalsString",
+      cell: ({ row }) => (
+        <div className="grid min-w-[6.5rem] gap-1">
+          <Badge
+            variant="outline"
+            className={`${estimateStatusClassName(row.original.status)} w-fit whitespace-nowrap`}
+          >
+            {row.original.status}
+          </Badge>
+          <span className="max-w-28 truncate px-1 text-muted-foreground text-xs">
+            {nextActionLabel(row.original.status)}
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: "actions",
+      header: () => <div className="sr-only">Actions</div>,
+      cell: ({ row }) => (
+        <div className="flex justify-end">
+          {canEdit ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onEditEstimate(row.original);
+              }}
+              aria-label={`Edit ${row.original.description}`}
+            >
+              <Pencil />
+            </Button>
+          ) : (
+            <PermissionDisabledButton
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              reason="Your role can view estimates but cannot edit them."
+              aria-label={`Edit ${row.original.description} unavailable`}
+            >
+              <Pencil />
+            </PermissionDisabledButton>
+          )}
+        </div>
+      ),
+      enableHiding: false,
+    },
+    {
+      id: "search",
+      accessorFn: (row) =>
+        [row.description, row.customerName, row.leadName, row.status, row.category, row.estimatedTotal]
+          .filter(Boolean)
+          .join(" "),
+      filterFn: "includesString",
+      enableHiding: true,
+    },
+  ];
+}

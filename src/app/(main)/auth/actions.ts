@@ -16,12 +16,13 @@ import {
   getDisplayName,
   refreshCurrentSession,
 } from "@/lib/auth";
+import { getUserDashboardDestination } from "@/lib/authorization";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { createPasswordResetToken, createPasswordResetUrl, hashPasswordResetToken } from "@/lib/password-reset";
 import { prisma } from "@/lib/prisma";
 import { AUTH_RATE_LIMIT_MESSAGE, consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
 import { resend } from "@/lib/resend";
-import { getWorkspaceHomePath, parseWorkspaceMode, workspaceModes } from "@/lib/workspace-mode";
+import { workspaceModes } from "@/lib/workspace-mode";
 
 const PASSWORD_RESET_SUCCESS_MESSAGE =
   "If a password account exists for that email, we sent a reset link with instructions.";
@@ -39,6 +40,7 @@ const loginSchema = z.object({
   email: z.string().trim().email("Enter a valid email address."),
   password: z.string().min(1, "Password is required."),
   remember: z.coerce.boolean().optional(),
+  returnTo: z.string().trim().optional(),
 });
 
 const registerSchema = z
@@ -76,6 +78,7 @@ export async function loginAction(_previousState: AuthFormState, formData: FormD
     email: formData.get("email"),
     password: formData.get("password"),
     remember: formData.get("remember"),
+    returnTo: formData.get("returnTo") || undefined,
   });
 
   if (!parsed.success) {
@@ -110,7 +113,10 @@ export async function loginAction(_previousState: AuthFormState, formData: FormD
   }
 
   await createUserSession(user.id, parsed.data.remember);
-  redirect(getWorkspaceHomePath(parseWorkspaceMode(user.workspaceMode)));
+  if (parsed.data.returnTo?.startsWith("/") && !parsed.data.returnTo.startsWith("//")) {
+    redirect(parsed.data.returnTo);
+  }
+  redirect(await getUserDashboardDestination(user.id));
 }
 
 export async function registerAction(_previousState: AuthFormState, formData: FormData): Promise<AuthFormState> {

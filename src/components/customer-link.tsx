@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
 import { cn } from "@/lib/utils";
 
 export function CustomerLink({

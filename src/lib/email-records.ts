@@ -13,6 +13,9 @@ type LogEmailRecordInput = {
   recipientName?: string | null;
   recipientEmail?: string | null;
   senderEmail?: string | null;
+  sentByUserId?: string | null;
+  sentByName?: string | null;
+  sentByEmail?: string | null;
   subject?: string | null;
   status: EmailRecordStatus;
   errorMessage?: string | null;
@@ -32,6 +35,9 @@ export async function logEmailRecord(input: LogEmailRecordInput) {
         recipientName: input.recipientName?.trim() || null,
         recipientEmail: input.recipientEmail?.trim() || null,
         senderEmail: input.senderEmail?.trim() || null,
+        sentByUserId: input.sentByUserId ?? null,
+        sentByName: input.sentByName?.trim() || null,
+        sentByEmail: input.sentByEmail?.trim() || null,
         subject: input.subject?.trim() || null,
         status: input.status,
         errorMessage: input.errorMessage?.trim() || null,

@@ -1,0 +1,202 @@
+"use client";
+
+import * as React from "react";
+
+import { CircleCheckBig, RotateCcw, Trash2, UserRound, XCircle } from "lucide-react";
+import { toast } from "sonner";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+
+import type { LeadRow } from "../_lib/lead-data";
+import type { LeadMutationState } from "../actions";
+
+const initialState: LeadMutationState = {
+  success: false,
+  message: "",
+};
+
+function SubmitButton({
+  children,
+  className,
+  icon,
+  isPending,
+  variant = "outline",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  icon: React.ReactNode;
+  isPending: boolean;
+  variant?: "default" | "destructive" | "outline";
+}) {
+  return (
+    <Button type="submit" size="sm" variant={variant} disabled={isPending} className={className}>
+      {icon}
+      {children}
+    </Button>
+  );
+}
+
+export function LeadStatusButton({
+  action,
+  lead,
+  status,
+}: {
+  action: (state: LeadMutationState, formData: FormData) => Promise<LeadMutationState>;
+  lead: LeadRow;
+  status: "New" | "In Progress" | "Won" | "Lost";
+}) {
+  const router = useRouter();
+  const [state, formAction, isPending] = React.useActionState(action, initialState);
+
+  React.useEffect(() => {
+    if (!state.success) return;
+    toast.success(state.message || "Lead updated.");
+    router.refresh();
+  }, [router, state]);
+
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="id" value={lead.id} />
+      <input type="hidden" name="status" value={status} />
+      <SubmitButton
+        icon={
+          status === "New" || status === "In Progress" ? (
+            <RotateCcw />
+          ) : status === "Won" ? (
+            <CircleCheckBig />
+          ) : (
+            <XCircle />
+          )
+        }
+        isPending={isPending}
+        variant={status === "Lost" ? "destructive" : status === "Won" ? "default" : "outline"}
+      >
+        {status === "New" || status === "In Progress" ? "Reopen lead" : status === "Won" ? "Mark won" : "Mark lost"}
+      </SubmitButton>
+    </form>
+  );
+}
+
+export function ConvertLeadButton({
+  action,
+  lead,
+}: {
+  action: (state: LeadMutationState, formData: FormData) => Promise<LeadMutationState>;
+  lead: LeadRow;
+}) {
+  const router = useRouter();
+  const [state, formAction, isPending] = React.useActionState(action, initialState);
+
+  React.useEffect(() => {
+    if (!state.success) return;
+    toast.success(state.message || "Lead converted.");
+    if (state.redirectTo) {
+      router.push(state.redirectTo);
+      router.refresh();
+    }
+  }, [router, state]);
+
+  if (lead.customerId) {
+    return null;
+  }
+
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="id" value={lead.id} />
+      <SubmitButton icon={<UserRound />} isPending={isPending} className="w-full sm:w-auto">
+        Convert to customer
+      </SubmitButton>
+    </form>
+  );
+}
+
+export function DeleteLeadButton({
+  action,
+  lead,
+  onOpenChange,
+  open: controlledOpen,
+  showTrigger = true,
+}: {
+  action: (state: LeadMutationState, formData: FormData) => Promise<LeadMutationState>;
+  lead: LeadRow;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+  showTrigger?: boolean;
+}) {
+  const formRef = React.useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const [state, formAction, isPending] = React.useActionState(action, initialState);
+  const open = controlledOpen ?? internalOpen;
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      setInternalOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [onOpenChange],
+  );
+
+  React.useEffect(() => {
+    if (!state.success) return;
+    handleOpenChange(false);
+    toast.success(state.message || "Lead deleted.");
+    if (state.redirectTo) {
+      router.push(state.redirectTo);
+      router.refresh();
+    }
+  }, [handleOpenChange, router, state]);
+
+  return (
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
+      {showTrigger ? (
+        <AlertDialogTrigger asChild>
+          <Button type="button" size="sm" variant="destructive">
+            <Trash2 />
+            Delete
+          </Button>
+        </AlertDialogTrigger>
+      ) : null}
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete lead?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This removes {lead.name} from the lead pipeline. Linked customers, estimates, jobs, and invoices are not
+            deleted.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <form ref={formRef} action={formAction}>
+          <input type="hidden" name="id" value={lead.id} />
+        </form>
+
+        {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={isPending}
+            onClick={(event) => {
+              event.preventDefault();
+              formRef.current?.requestSubmit();
+            }}
+          >
+            {isPending ? "Deleting..." : "Delete lead"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}

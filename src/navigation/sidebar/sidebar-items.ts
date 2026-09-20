@@ -3,6 +3,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   ChartNoAxesCombined,
+  KeyRound,
   ListTodo,
   type LucideIcon,
   MailCheck,
@@ -27,6 +28,7 @@ export interface NavSubItem {
   newTab?: boolean;
   isNew?: boolean;
   adminOnly?: boolean;
+  disabledReason?: string;
 }
 
 export interface NavMainItem {
@@ -38,6 +40,7 @@ export interface NavMainItem {
   newTab?: boolean;
   isNew?: boolean;
   adminOnly?: boolean;
+  disabledReason?: string;
 }
 
 export interface NavGroup {
@@ -110,6 +113,12 @@ export const sidebarItems: NavGroup[] = [
         url: "/dashboard/services",
         icon: PackageCheck,
       },
+    ],
+  },
+  {
+    id: 4,
+    label: "People",
+    items: [
       {
         title: "Time Tracking",
         url: "/dashboard/time-tracking",
@@ -166,6 +175,12 @@ export const sidebarItems: NavGroup[] = [
     id: 7,
     label: "Admin",
     items: [
+      {
+        title: "Roles & Permissions",
+        url: "/dashboard/roles",
+        icon: KeyRound,
+        isNew: true,
+      },
       {
         title: "Users",
         url: "/dashboard/admin/users",

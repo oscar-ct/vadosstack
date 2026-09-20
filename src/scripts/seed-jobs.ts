@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { resolveOwnedWorkspaceByEmail } from "./lib/resolve-owned-workspace";
 
 type DemoMaterial = { description: string; price: string };
 
@@ -153,11 +154,10 @@ function calculateFinalCost(job: DemoJob) {
 
 async function main() {
   if (!ownerEmail) throw new Error("Set SEED_OWNER_EMAIL before seeding jobs.");
-  const owner = await prisma.user.findUnique({ where: { email: ownerEmail }, select: { id: true } });
-  if (!owner) throw new Error("No account matches SEED_OWNER_EMAIL.");
+  const workspace = await resolveOwnedWorkspaceByEmail(ownerEmail);
 
   const customers = await prisma.customer.findMany({
-    where: { ownerId: owner.id },
+    where: { ownerId: workspace.id },
     include: { addresses: true },
     orderBy: { joinedAt: "asc" },
   });
@@ -170,7 +170,7 @@ async function main() {
       ? `${address.line1}, ${address.city}, ${address.state} ${address.postalCode}`
       : null;
     const existing = await prisma.job.findFirst({
-      where: { ownerId: owner.id, description: job.description },
+      where: { ownerId: workspace.id, description: job.description },
       select: { id: true },
     });
     const data = {
@@ -192,7 +192,7 @@ async function main() {
     };
 
     if (existing) await prisma.job.update({ where: { id: existing.id }, data });
-    else await prisma.job.create({ data: { ownerId: owner.id, description: job.description, ...data } });
+    else await prisma.job.create({ data: { ownerId: workspace.id, description: job.description, ...data } });
   }
 
   console.info(`Seeded ${jobs.length} fictional jobs.`);

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { getCurrentUser } from "@/lib/auth";
+import { can, getCurrentPrincipal, type WorkspaceMembershipSummary } from "@/lib/authorization";
+import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
 import { exchangeGoogleCodeForAccessToken, getGoogleOAuthConfig, getGoogleUserInfo } from "@/lib/google-auth";
 import {
   encryptGoogleToken,
@@ -12,10 +13,11 @@ import { prisma } from "@/lib/prisma";
 
 function createRedirect(request: NextRequest, status: "connected" | "error", value: string) {
   const returnTo = request.cookies.get(GOOGLE_MAIL_RETURN_TO_COOKIE_NAME)?.value;
-  const redirectUrl = new URL(
-    returnTo?.startsWith("/dashboard/") ? returnTo : "/dashboard/invoices",
-    request.nextUrl.origin,
-  );
+  const safeReturnTo =
+    returnTo && (/^\/dashboard(?:\/|$)/.test(returnTo) || /^\/w\/[a-z0-9-]+\/dashboard(?:\/|$)/.test(returnTo))
+      ? returnTo
+      : "/dashboard/invoices";
+  const redirectUrl = new URL(safeReturnTo, request.nextUrl.origin);
 
   redirectUrl.searchParams.set(status === "connected" ? "gmail_connected" : "gmail_error", value);
 
@@ -28,11 +30,26 @@ function clearOAuthCookies(response: NextResponse) {
   return response;
 }
 
-export async function GET(request: NextRequest) {
-  const currentUser = await getCurrentUser();
+function getReturnToMembership(memberships: readonly WorkspaceMembershipSummary[], returnTo?: string) {
+  const workspaceSlug = returnTo?.match(/^\/w\/([a-z0-9-]+)\/dashboard(?:\/|$)/)?.[1];
 
-  if (!currentUser) {
+  return workspaceSlug
+    ? memberships.find((membership) => membership.workspaceSlug === workspaceSlug)
+    : memberships.find((membership) => can(membership, "email.account.manage"));
+}
+
+export async function GET(request: NextRequest) {
+  const principal = await getCurrentPrincipal();
+
+  if (!principal) {
     return clearOAuthCookies(NextResponse.redirect(new URL("/login", request.nextUrl.origin)));
+  }
+
+  const returnTo = request.cookies.get(GOOGLE_MAIL_RETURN_TO_COOKIE_NAME)?.value;
+  const membership = getReturnToMembership(principal.memberships, returnTo);
+
+  if (!membership || !can(membership, "email.account.manage")) {
+    return clearOAuthCookies(createRedirect(request, "error", "permission"));
   }
 
   const config = getGoogleOAuthConfig(request, "/api/auth/google/mail/callback");
@@ -63,7 +80,7 @@ export async function GET(request: NextRequest) {
       return clearOAuthCookies(createRedirect(request, "error", "unverified"));
     }
 
-    if (email !== currentUser.email.toLowerCase()) {
+    if (email !== principal.user.email.toLowerCase()) {
       return clearOAuthCookies(createRedirect(request, "error", "mismatch"));
     }
 
@@ -77,14 +94,14 @@ export async function GET(request: NextRequest) {
 
     await prisma.googleMailAccount.upsert({
       where: {
-        userId: currentUser.id,
+        workspaceId: membership.workspaceId,
       },
       create: {
         email,
         googleSubject: userInfo.sub,
         refreshTokenCipher: encryptGoogleToken(tokenResponse.refresh_token),
         scopes: grantedScopes,
-        userId: currentUser.id,
+        workspaceId: membership.workspaceId,
       },
       update: {
         email,
@@ -92,6 +109,15 @@ export async function GET(request: NextRequest) {
         refreshTokenCipher: encryptGoogleToken(tokenResponse.refresh_token),
         scopes: grantedScopes,
       },
+    });
+    await recordAuthorizationAuditEvent({
+      workspaceId: membership.workspaceId,
+      actorUserId: principal.user.id,
+      membershipId: membership.id,
+      action: "email.account.connect",
+      targetType: "GoogleMailAccount",
+      targetId: membership.workspaceId,
+      metadata: { email },
     });
 
     return clearOAuthCookies(createRedirect(request, "connected", "1"));

@@ -147,7 +147,7 @@ async function main() {
     .$executeRawUnsafe(`
     ALTER TABLE "employees"
       ADD CONSTRAINT "employees_ownerId_fkey"
-      FOREIGN KEY ("ownerId") REFERENCES "users"("id")
+      FOREIGN KEY ("ownerId") REFERENCES "workspaces"("id")
       ON DELETE CASCADE ON UPDATE CASCADE
   `)
     .catch(() => undefined);
@@ -155,7 +155,7 @@ async function main() {
     .$executeRawUnsafe(`
     ALTER TABLE "time_entries"
       ADD CONSTRAINT "time_entries_ownerId_fkey"
-      FOREIGN KEY ("ownerId") REFERENCES "users"("id")
+      FOREIGN KEY ("ownerId") REFERENCES "workspaces"("id")
       ON DELETE CASCADE ON UPDATE CASCADE
   `)
     .catch(() => undefined);
@@ -171,7 +171,7 @@ async function main() {
     .$executeRawUnsafe(`
     ALTER TABLE "time_entry_requests"
       ADD CONSTRAINT "time_entry_requests_ownerId_fkey"
-      FOREIGN KEY ("ownerId") REFERENCES "users"("id")
+      FOREIGN KEY ("ownerId") REFERENCES "workspaces"("id")
       ON DELETE CASCADE ON UPDATE CASCADE
   `)
     .catch(() => undefined);

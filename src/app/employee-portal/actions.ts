@@ -18,6 +18,7 @@ import {
   timeEntryIdSchema,
 } from "@/lib/time-entry-rules";
 import { assertTimeEntryAvailable, assertTimesheetUnlocked } from "@/lib/time-entry-server";
+import { revalidateWorkspacePath } from "@/lib/workspace-revalidation";
 
 import { createHash, randomBytes } from "node:crypto";
 
@@ -78,6 +79,18 @@ function emptyToNull(value?: string) {
 
 function formString(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value : undefined;
+}
+
+async function revalidateManagerTimePaths(ownerId: string) {
+  const workspace = await prisma.workspace.findUnique({
+    where: { legacyOwnerId: ownerId },
+    select: { slug: true },
+  });
+
+  if (!workspace) return;
+
+  revalidateWorkspacePath(workspace.slug, "/dashboard/time-tracking");
+  revalidateWorkspacePath(workspace.slug, "/dashboard/overview");
 }
 
 async function validateOptionalJob(ownerId: string, jobId?: string | null) {
@@ -350,8 +363,7 @@ export async function employeeCreateTimeEntryAction(
   }
 
   revalidatePath("/employee-portal/timesheet");
-  revalidatePath("/dashboard/time-tracking");
-  revalidatePath("/dashboard/overview");
+  await revalidateManagerTimePaths(employee.ownerId);
 
   return {
     success: true,
@@ -479,8 +491,7 @@ export async function employeeUpdateTimeEntryAction(
   }
 
   revalidatePath("/employee-portal/timesheet");
-  revalidatePath("/dashboard/time-tracking");
-  revalidatePath("/dashboard/overview");
+  await revalidateManagerTimePaths(employee.ownerId);
 
   return {
     success: true,
@@ -580,8 +591,7 @@ export async function employeeDeleteTimeEntryAction(
   }
 
   revalidatePath("/employee-portal/timesheet");
-  revalidatePath("/dashboard/time-tracking");
-  revalidatePath("/dashboard/overview");
+  await revalidateManagerTimePaths(employee.ownerId);
 
   return {
     success: true,
@@ -704,8 +714,7 @@ export async function employeeUpdateTimeEntryRequestAction(
   }
 
   revalidatePath("/employee-portal/timesheet");
-  revalidatePath("/dashboard/time-tracking");
-  revalidatePath("/dashboard/overview");
+  await revalidateManagerTimePaths(employee.ownerId);
 
   return {
     success: true,
@@ -758,8 +767,7 @@ export async function employeeDeleteTimeEntryRequestAction(
   }
 
   revalidatePath("/employee-portal/timesheet");
-  revalidatePath("/dashboard/time-tracking");
-  revalidatePath("/dashboard/overview");
+  await revalidateManagerTimePaths(employee.ownerId);
 
   return {
     success: true,

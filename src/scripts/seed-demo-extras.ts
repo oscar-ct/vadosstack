@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../lib/prisma";
+import { resolveOwnedWorkspaceByEmail } from "./lib/resolve-owned-workspace";
 
 const ownerEmail = process.env.SEED_OWNER_EMAIL?.trim().toLowerCase();
 const money = (value: number) => new Prisma.Decimal(value.toFixed(2));
@@ -35,11 +36,10 @@ const timeEntries = [
 
 async function main() {
   if (!ownerEmail) throw new Error("Set SEED_OWNER_EMAIL before seeding demo extras.");
-  const owner = await prisma.user.findUnique({ where: { email: ownerEmail }, select: { id: true } });
-  if (!owner) throw new Error("No account matches SEED_OWNER_EMAIL.");
+  const workspace = await resolveOwnedWorkspaceByEmail(ownerEmail);
 
-  await prisma.task.deleteMany({ where: { ownerId: owner.id, lead: { email: { endsWith: "@example.com" } } } });
-  await prisma.lead.deleteMany({ where: { ownerId: owner.id, email: { endsWith: "@example.com" } } });
+  await prisma.task.deleteMany({ where: { ownerId: workspace.id, lead: { email: { endsWith: "@example.com" } } } });
+  await prisma.lead.deleteMany({ where: { ownerId: workspace.id, email: { endsWith: "@example.com" } } });
 
   const rows = [];
   for (const [index, fixture] of leads.entries()) {
@@ -47,7 +47,7 @@ async function main() {
     rows.push(
       await prisma.lead.create({
         data: {
-          ownerId: owner.id,
+          ownerId: workspace.id,
           name,
           email,
           phone: `(512) 555-${String(120 + index).padStart(4, "0")}`,
@@ -67,7 +67,7 @@ async function main() {
   await prisma.task.createMany({
     data: [
       {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         leadId: rows[0].id,
         title: "Call new HVAC lead",
         location: rows[0].serviceLocation,
@@ -75,7 +75,7 @@ async function main() {
         priority: "High",
       },
       {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         leadId: rows[2].id,
         title: "Prepare electrical estimate",
         location: rows[2].serviceLocation,
@@ -83,7 +83,7 @@ async function main() {
         priority: "High",
       },
       {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         leadId: rows[1].id,
         title: "Confirm plumbing walkthrough",
         location: rows[1].serviceLocation,
@@ -94,13 +94,13 @@ async function main() {
 
   await prisma.estimateRecord.deleteMany({
     where: {
-      ownerId: owner.id,
+      ownerId: workspace.id,
       notes: "Fictional estimate created for VadosStack product screenshots.",
     },
   });
 
   const customers = await prisma.customer.findMany({
-    where: { ownerId: owner.id },
+    where: { ownerId: workspace.id },
     orderBy: { joinedAt: "asc" },
     take: 6,
   });
@@ -111,7 +111,7 @@ async function main() {
 
     await prisma.estimateRecord.create({
       data: {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         customerId: customer?.id,
         description,
         serviceLocation: customer ? `${100 + index} Demo Service Rd, Austin, TX 78701` : null,
@@ -129,20 +129,24 @@ async function main() {
   }
 
   const existingEmployees = await prisma.employee.findMany({
-    where: { ownerId: owner.id, employeeNumber: { in: [...demoEmployeeNumbers] } },
+    where: { ownerId: workspace.id, employeeNumber: { in: [...demoEmployeeNumbers] } },
     select: { id: true },
   });
   const existingEmployeeIds = existingEmployees.map((employee) => employee.id);
 
-  await prisma.timeEntryRequest.deleteMany({ where: { ownerId: owner.id, employeeId: { in: existingEmployeeIds } } });
-  await prisma.timeEntry.deleteMany({ where: { ownerId: owner.id, employeeId: { in: existingEmployeeIds } } });
-  await prisma.employee.deleteMany({ where: { ownerId: owner.id, employeeNumber: { in: [...demoEmployeeNumbers] } } });
+  await prisma.timeEntryRequest.deleteMany({
+    where: { ownerId: workspace.id, employeeId: { in: existingEmployeeIds } },
+  });
+  await prisma.timeEntry.deleteMany({ where: { ownerId: workspace.id, employeeId: { in: existingEmployeeIds } } });
+  await prisma.employee.deleteMany({
+    where: { ownerId: workspace.id, employeeNumber: { in: [...demoEmployeeNumbers] } },
+  });
 
   const employeeRows = new Map<string, { id: string }>();
   for (const [employeeNumber, name, email, jobTitle] of employees) {
     const employee = await prisma.employee.create({
       data: {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         employeeNumber,
         name,
         email,
@@ -157,7 +161,7 @@ async function main() {
   }
 
   const jobs = await prisma.job.findMany({
-    where: { ownerId: owner.id },
+    where: { ownerId: workspace.id },
     orderBy: { dateBegin: "asc" },
     take: 8,
   });
@@ -169,7 +173,7 @@ async function main() {
 
     await prisma.timeEntry.create({
       data: {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         employeeId: employee.id,
         jobId: jobs[index % jobs.length]?.id,
         workedOn: new Date(`${workedOn}T12:00:00-05:00`),
@@ -187,7 +191,7 @@ async function main() {
   if (reviewEmployee) {
     await prisma.timeEntryRequest.create({
       data: {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         employeeId: reviewEmployee.id,
         jobId: jobs[0]?.id,
         action: "Create",
@@ -204,14 +208,14 @@ async function main() {
 
   await prisma.invoice.deleteMany({
     where: {
-      ownerId: owner.id,
+      ownerId: workspace.id,
       invoiceNumber: { startsWith: "DEMO-INV-" },
     },
   });
 
   const invoiceJobs = await prisma.job.findMany({
     where: {
-      ownerId: owner.id,
+      ownerId: workspace.id,
       status: { in: ["Completed", "On Hold"] },
     },
     include: {
@@ -228,7 +232,7 @@ async function main() {
 
     await prisma.invoice.create({
       data: {
-        ownerId: owner.id,
+        ownerId: workspace.id,
         invoiceNumber: `DEMO-INV-${String(index + 1).padStart(3, "0")}`,
         jobId: job.id,
         customerId: job.customerId,

@@ -1,8 +1,7 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth";
-import { getWorkspaceHomePath } from "@/lib/workspace-mode";
+import { getCurrentPrincipal, getPrincipalDashboardDestination } from "@/lib/authorization";
 
 import vadosstackLogoSmall from "../../../../../media/vadosstack-logo-transparent-small.png";
 import { AuthDatabaseWarmup } from "../_components/auth-database-warmup";
@@ -10,10 +9,10 @@ import { RegisterCard } from "../_components/register-card";
 import { registerAction } from "../actions";
 
 export default async function RegisterV1() {
-  const user = await getCurrentUser();
+  const principal = await getCurrentPrincipal();
 
-  if (user) {
-    redirect(getWorkspaceHomePath(user.workspaceMode));
+  if (principal) {
+    redirect(getPrincipalDashboardDestination(principal));
   }
 
   return (

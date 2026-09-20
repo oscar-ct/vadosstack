@@ -36,7 +36,7 @@ async function main() {
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'estimate_records_ownerId_fkey') THEN
         ALTER TABLE "estimate_records"
         ADD CONSTRAINT "estimate_records_ownerId_fkey"
-        FOREIGN KEY ("ownerId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        FOREIGN KEY ("ownerId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       END IF;
     END
     $$;

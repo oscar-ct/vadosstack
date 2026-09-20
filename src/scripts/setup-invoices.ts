@@ -46,7 +46,7 @@ async function main() {
     .$executeRawUnsafe(`
     ALTER TABLE "invoices"
       ADD CONSTRAINT "invoices_ownerId_fkey"
-      FOREIGN KEY ("ownerId") REFERENCES "users"("id")
+      FOREIGN KEY ("ownerId") REFERENCES "workspaces"("id")
       ON DELETE CASCADE ON UPDATE CASCADE
   `)
     .catch(() => undefined);

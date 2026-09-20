@@ -1,10 +1,9 @@
-import { redirect } from "next/navigation";
+import { redirectLegacyDashboard } from "./_lib/redirect-legacy-dashboard";
 
-import { getCurrentUser } from "@/lib/auth";
-import { getWorkspaceHomePath } from "@/lib/workspace-mode";
-
-export default async function Page() {
-  const currentUser = await getCurrentUser();
-
-  redirect(getWorkspaceHomePath(currentUser?.workspaceMode ?? "both"));
+export default async function LegacyDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return redirectLegacyDashboard("/dashboard", searchParams);
 }

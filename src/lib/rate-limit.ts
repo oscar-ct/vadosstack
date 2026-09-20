@@ -15,7 +15,9 @@ type RateLimitAction =
   | "login"
   | "password-reset"
   | "register"
-  | "reset-password";
+  | "reset-password"
+  | "workspace-invitation"
+  | "workspace-invitation-resend";
 
 type RateLimitRule = {
   limit: number;
@@ -46,6 +48,14 @@ const RATE_LIMIT_RULES: Record<RateLimitAction, RateLimitRule> = {
   "reset-password": {
     limit: 5,
     windowMs: FIFTEEN_MINUTES_IN_MS,
+  },
+  "workspace-invitation": {
+    limit: 15,
+    windowMs: ONE_HOUR_IN_MS,
+  },
+  "workspace-invitation-resend": {
+    limit: 5,
+    windowMs: ONE_HOUR_IN_MS,
   },
 };
 

@@ -1,11 +1,33 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+
 @import "shadcn/tailwind.css";
 
 /* Theme preset styles: these override CSS variables based on the selected data-theme-preset */
 @import "../styles/presets/brutalist.css";
 @import "../styles/presets/soft-pop.css";
 @import "../styles/presets/tangerine.css";
+
+@keyframes workspace-loading-progress {
+  from {
+    transform: translateX(-120%);
+  }
+
+  to {
+    transform: translateX(350%);
+  }
+}
+
+.workspace-loading-bar {
+  animation: workspace-loading-progress 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-loading-bar {
+    animation: none;
+    width: 100%;
+  }
+}
 
 @custom-variant dark (&:is(.dark *));
 

@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { createUserSessionResponse, getDisplayName } from "@/lib/auth";
+import { getUserDashboardDestination } from "@/lib/authorization";
+import { createOwnerWorkspaceForUser } from "@/lib/authorization/provision-workspace";
 import {
   exchangeGoogleCodeForAccessToken,
   GOOGLE_OAUTH_STATE_COOKIE_NAME,
@@ -9,7 +11,6 @@ import {
 } from "@/lib/google-auth";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
-import { getWorkspaceHomePath, parseWorkspaceMode } from "@/lib/workspace-mode";
 
 import { randomBytes } from "node:crypto";
 
@@ -85,21 +86,23 @@ export async function GET(request: NextRequest) {
                 },
               },
         })
-      : await prisma.user.create({
-          data: {
-            authProviders: ["google"],
-            companyAddress: null,
-            companyName: getGoogleWorkspaceName({ email, hd: userInfo.hd, name: userInfo.name }),
-            companyEmail: email,
-            email,
-            name: userInfo.name || getDisplayName({ email }),
-            passwordHash: hashPassword(randomBytes(32).toString("hex")),
-          },
+      : await prisma.$transaction(async (tx) => {
+          const createdUser = await tx.user.create({
+            data: {
+              authProviders: ["google"],
+              companyAddress: null,
+              companyName: getGoogleWorkspaceName({ email, hd: userInfo.hd, name: userInfo.name }),
+              companyEmail: email,
+              email,
+              name: userInfo.name || getDisplayName({ email }),
+              passwordHash: hashPassword(randomBytes(32).toString("hex")),
+            },
+          });
+          await createOwnerWorkspaceForUser(tx, createdUser);
+          return createdUser;
         });
 
-    const response = NextResponse.redirect(
-      new URL(getWorkspaceHomePath(parseWorkspaceMode(user.workspaceMode)), request.nextUrl.origin),
-    );
+    const response = NextResponse.redirect(new URL(await getUserDashboardDestination(user.id), request.nextUrl.origin));
     await createUserSessionResponse(user.id, response, true);
 
     return clearOAuthState(response);

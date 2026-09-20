@@ -1,3 +1,4 @@
+import { createOwnerWorkspaceForUser } from "../lib/authorization/provision-workspace";
 import { hashPassword } from "../lib/password";
 import { prisma } from "../lib/prisma";
 
@@ -84,9 +85,46 @@ async function ensureUser() {
   });
 }
 
-async function backfillOwnership(userId: string) {
-  await prisma.$executeRawUnsafe(`UPDATE "customers" SET "ownerId" = $1 WHERE "ownerId" IS NULL`, userId);
-  await prisma.$executeRawUnsafe(`UPDATE "jobs" SET "ownerId" = $1 WHERE "ownerId" IS NULL`, userId);
+async function backfillOwnership(workspaceId: string) {
+  await prisma.$executeRawUnsafe(`UPDATE "customers" SET "ownerId" = $1 WHERE "ownerId" IS NULL`, workspaceId);
+  await prisma.$executeRawUnsafe(`UPDATE "jobs" SET "ownerId" = $1 WHERE "ownerId" IS NULL`, workspaceId);
+}
+
+async function ensureOwnedWorkspace(user: Awaited<ReturnType<typeof ensureUser>>) {
+  const existingMembership = await prisma.workspaceMembership.findFirst({
+    where: {
+      userId: user.id,
+      status: "Active",
+      role: {
+        systemKey: "OWNER",
+      },
+    },
+    orderBy: [{ joinedAt: "asc" }, { id: "asc" }],
+    select: {
+      workspaceId: true,
+    },
+  });
+
+  if (existingMembership) {
+    return existingMembership.workspaceId;
+  }
+
+  const existingWorkspace = await prisma.workspace.findUnique({
+    where: { id: user.id },
+    select: { id: true },
+  });
+
+  if (existingWorkspace) {
+    throw new Error(
+      "The setup user already has a workspace but no active Owner membership. Repair the workspace foundation before running setup:auth.",
+    );
+  }
+
+  const result = await prisma.$transaction((tx) =>
+    createOwnerWorkspaceForUser(tx, user, { auditSource: "setup_auth" }),
+  );
+
+  return result.workspace.id;
 }
 
 async function ensureConstraints() {
@@ -100,7 +138,7 @@ async function ensureConstraints() {
       ) THEN
         ALTER TABLE "customers"
         ADD CONSTRAINT "customers_ownerId_fkey"
-        FOREIGN KEY ("ownerId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        FOREIGN KEY ("ownerId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       END IF;
     END
     $$;
@@ -114,7 +152,7 @@ async function ensureConstraints() {
       ) THEN
         ALTER TABLE "jobs"
         ADD CONSTRAINT "jobs_ownerId_fkey"
-        FOREIGN KEY ("ownerId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        FOREIGN KEY ("ownerId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       END IF;
     END
     $$;
@@ -139,7 +177,8 @@ async function ensureConstraints() {
 async function main() {
   await ensureTables();
   const user = await ensureUser();
-  await backfillOwnership(user.id);
+  const workspaceId = await ensureOwnedWorkspace(user);
+  await backfillOwnership(workspaceId);
   await ensureConstraints();
 }
 

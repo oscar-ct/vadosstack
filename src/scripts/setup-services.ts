@@ -51,7 +51,7 @@ async function main() {
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'service_templates_ownerId_fkey') THEN
         ALTER TABLE "service_templates"
         ADD CONSTRAINT "service_templates_ownerId_fkey"
-        FOREIGN KEY ("ownerId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        FOREIGN KEY ("ownerId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       END IF;
     END
     $$;
@@ -67,13 +67,13 @@ async function main() {
     `CREATE INDEX IF NOT EXISTS "service_templates_category_idx" ON "service_templates"("category")`,
   );
 
-  const users = await prisma.user.findMany({ select: { id: true } });
+  const workspaces = await prisma.workspace.findMany({ select: { id: true } });
 
-  for (const user of users) {
+  for (const workspace of workspaces) {
     for (const service of examples) {
       const existing = await prisma.serviceTemplate.findFirst({
         where: {
-          ownerId: user.id,
+          ownerId: workspace.id,
           title: service.title,
         },
         select: {
@@ -85,7 +85,7 @@ async function main() {
 
       await prisma.serviceTemplate.create({
         data: {
-          ownerId: user.id,
+          ownerId: workspace.id,
           title: service.title,
           description: service.description,
           category: service.category,
