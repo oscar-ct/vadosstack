@@ -82,7 +82,7 @@ const productFeatures = [
   {
     title: "Inventory + Pulse",
     eyebrow: "Commerce visibility",
-    heading: "Inventory and Commerce Pulse",
+    heading: "Inventory and Commerce Analytics",
     copy: "Track stock movement, low inventory, product sales, returns, fulfillment, and product performance alongside the service business.",
     bullets: ["Stock and reorder signals", "Sales and return reporting", "Top products and inventory health"],
     type: "analytics",
@@ -135,7 +135,7 @@ const faqs = [
   {
     question: "Can service businesses also manage orders and inventory?",
     answer:
-      "Yes. VadosStack includes e-commerce tools for orders, fulfillment, inventory, returns, refunds, stock movement, and Commerce Pulse reporting when the business also sells products or parts.",
+      "Yes. VadosStack includes e-commerce tools for orders, fulfillment, inventory, returns, refunds, stock movement, and Commerce Analytics reporting when the business also sells products or parts.",
   },
 ] as const;
 
@@ -236,7 +236,7 @@ const productScreens = {
   analytics: {
     src: "/landing/vadosstack-commerce-pulse.png",
     mobileSrc: "/landing/mobile/vadosstack-commerce-pulse-mobile.png",
-    alt: "VadosStack Commerce Pulse dashboard showing sales, orders, top products, and inventory health",
+    alt: "VadosStack Commerce Analytics dashboard showing sales, orders, top products, and inventory health",
   },
 } as const;
 

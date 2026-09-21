@@ -137,7 +137,7 @@ export const sidebarItems: NavGroup[] = [
     label: "E-commerce",
     items: [
       {
-        title: "Commerce Pulse",
+        title: "Commerce Analytics",
         url: "/dashboard/commerce-pulse",
         icon: Activity,
         isNew: true,

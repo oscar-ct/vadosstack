@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { Activity } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getPermittedDashboardAuthorization } from "@/lib/authorization";
@@ -37,9 +38,14 @@ export default async function Page({ searchParams }: PageProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-3xl leading-none tracking-tight">Commerce Pulse</h1>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="grid max-w-2xl gap-2">
+          <h1 className="flex items-center gap-2 font-medium text-xl leading-none">
+            <span>Commerce Analytics</span>
+            <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <Activity className="size-4" />
+            </span>
+          </h1>
           <p className="text-muted-foreground text-sm">{formattedDate}</p>
         </div>
 

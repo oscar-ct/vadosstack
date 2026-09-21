@@ -134,7 +134,7 @@ const faqJsonLd = {
       name: "Can service businesses also manage orders and inventory?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes. VadosStack includes e-commerce tools for orders, fulfillment, inventory, returns, refunds, stock movement, and Commerce Pulse reporting when the business also sells products or parts.",
+        text: "Yes. VadosStack includes e-commerce tools for orders, fulfillment, inventory, returns, refunds, stock movement, and Commerce Analytics reporting when the business also sells products or parts.",
       },
     },
   ],

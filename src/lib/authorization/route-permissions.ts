@@ -4,7 +4,7 @@ const DASHBOARD_ROUTE_PERMISSIONS = [
   ["/dashboard/roles", "roles.manage", "Roles & Permissions"],
   ["/dashboard/email-templates", "email.templates.manage", "Email Templates"],
   ["/dashboard/email-history", "email.history.view", "Email History"],
-  ["/dashboard/commerce-pulse", "commerce.performance.view", "Commerce Pulse"],
+  ["/dashboard/commerce-pulse", "commerce.performance.view", "Commerce Analytics"],
   ["/dashboard/time-tracking", "time.view", "Time Tracking"],
   ["/dashboard/command-center", "dashboard.performance.view", "Performance"],
   ["/dashboard/employees", "employees.view", "Employees"],
