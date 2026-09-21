@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentDashboardAuthorization } from "@/lib/authorization";
-import { isMainPlatformAdministrator } from "@/lib/platform-admin";
+import { hasMainPlatformAdministrator, isMainPlatformAdministrator } from "@/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { getWorkspaceDashboardPath } from "@/lib/workspace-path";
 
@@ -42,6 +42,10 @@ function refreshUsersConsole(workspaceSlug: string) {
   revalidatePath(getWorkspaceDashboardPath(workspaceSlug, "/dashboard/admin/users"));
 }
 
+function refreshWorkspaceLayout(workspaceSlug: string) {
+  revalidatePath(getWorkspaceDashboardPath(workspaceSlug, "/dashboard"), "layout");
+}
+
 export async function suspendWorkspaceAction(
   _state: WorkspaceEnforcementActionState,
   formData: FormData,
@@ -60,13 +64,28 @@ export async function suspendWorkspaceAction(
   try {
     const actor = await requirePlatformAdministrator();
     const now = new Date();
+    let suspendedWorkspaceSlug = "";
     await prisma.$transaction(async (tx) => {
       const workspace = await tx.workspace.findUnique({
         where: { id: parsed.data.workspaceId },
-        select: { id: true, name: true, status: true },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          status: true,
+          memberships: {
+            where: { role: { systemKey: "OWNER" } },
+            select: { user: { select: { admin: true, email: true } } },
+          },
+        },
       });
       if (!workspace) throw new Error("WORKSPACE_NOT_FOUND");
       if (workspace.status === "Suspended") throw new Error("WORKSPACE_ALREADY_SUSPENDED");
+      if (hasMainPlatformAdministrator(workspace.memberships.map((membership) => membership.user))) {
+        throw new Error("FOUNDER_WORKSPACE_PROTECTED");
+      }
+
+      suspendedWorkspaceSlug = workspace.slug;
 
       await tx.workspace.update({
         where: { id: workspace.id },
@@ -91,13 +110,18 @@ export async function suspendWorkspaceAction(
       });
     });
     refreshUsersConsole(parsed.data.workspaceSlug);
+    refreshWorkspaceLayout(suspendedWorkspaceSlug);
     return { message: "Workspace suspended. Access is blocked for every member.", success: true, submittedAt };
   } catch (error) {
     console.error("Workspace suspension failed.", error);
-    const message =
-      error instanceof Error && error.message === "WORKSPACE_ALREADY_SUSPENDED"
-        ? "This workspace is already suspended."
-        : "The workspace could not be suspended. Please try again.";
+    const message = (() => {
+      if (!(error instanceof Error)) return "The workspace could not be suspended. Please try again.";
+      if (error.message === "WORKSPACE_ALREADY_SUSPENDED") return "This workspace is already suspended.";
+      if (error.message === "FOUNDER_WORKSPACE_PROTECTED") {
+        return "The founder workspace is protected and cannot be suspended.";
+      }
+      return "The workspace could not be suspended. Please try again.";
+    })();
     return { message, success: false, submittedAt };
   }
 }
@@ -122,11 +146,13 @@ export async function reactivateWorkspaceAction(
 
   try {
     const actor = await requirePlatformAdministrator();
+    let reactivatedWorkspaceSlug = "";
     await prisma.$transaction(async (tx) => {
       const workspace = await tx.workspace.findUnique({
         where: { id: parsed.data.workspaceId },
         select: {
           id: true,
+          slug: true,
           status: true,
           suspendedAt: true,
           suspendedByUserId: true,
@@ -136,6 +162,8 @@ export async function reactivateWorkspaceAction(
       });
       if (!workspace) throw new Error("WORKSPACE_NOT_FOUND");
       if (workspace.status !== "Suspended") throw new Error("WORKSPACE_NOT_SUSPENDED");
+
+      reactivatedWorkspaceSlug = workspace.slug;
 
       await tx.workspace.update({
         where: { id: workspace.id },
@@ -165,6 +193,7 @@ export async function reactivateWorkspaceAction(
       });
     });
     refreshUsersConsole(parsed.data.workspaceSlug);
+    refreshWorkspaceLayout(reactivatedWorkspaceSlug);
     return { message: "Workspace reactivated. Member access has been restored.", success: true, submittedAt };
   } catch (error) {
     console.error("Workspace reactivation failed.", error);

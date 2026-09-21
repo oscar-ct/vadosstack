@@ -341,13 +341,13 @@ export function EmailHistoryDashboard({
             <Table className="min-w-[56rem] table-fixed">
               <TableHeader className="bg-muted/20">
                 <TableRow>
+                  <TableHead className="w-[8%]">Status</TableHead>
                   <TableHead className="w-[12%]">Document</TableHead>
                   <TableHead className="w-[18%]">Recipient</TableHead>
                   <TableHead className="w-[24%]">Subject</TableHead>
                   <TableHead className="w-[11%] text-right">Amount</TableHead>
                   <TableHead className="w-[16%]">Sent by</TableHead>
                   <TableHead className="w-[13%]">Sent at</TableHead>
-                  <TableHead className="w-[8%]">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -370,6 +370,9 @@ export function EmailHistoryDashboard({
                       setSelectedRecord(record);
                     }}
                   >
+                    <TableCell className="min-w-0 max-w-20 overflow-hidden">
+                      <StatusBadge status={record.status} />
+                    </TableCell>
                     <TableCell className="min-w-0 max-w-40 overflow-hidden">
                       <DocumentLink record={record} />
                       <div className="text-muted-foreground text-xs">{record.documentType}</div>
@@ -408,9 +411,6 @@ export function EmailHistoryDashboard({
                     </TableCell>
                     <TableCell className="overflow-hidden text-muted-foreground">
                       <span className="block truncate">{formatDate(record.sentAt)}</span>
-                    </TableCell>
-                    <TableCell className="overflow-hidden">
-                      <StatusBadge status={record.status} />
                     </TableCell>
                   </TableRow>
                 ))}

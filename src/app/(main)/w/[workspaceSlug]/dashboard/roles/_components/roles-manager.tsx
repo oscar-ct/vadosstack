@@ -758,7 +758,7 @@ export function RolesManager({
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <Table className="min-w-[960px]">
                 <TableHeader className="bg-muted/20">
                   <TableRow className="hover:bg-transparent">
@@ -839,6 +839,81 @@ export function RolesManager({
                   ))}
                 </TableBody>
               </Table>
+            </div>
+
+            <div className="grid gap-4 p-3 md:hidden">
+              {roleGroups.map((group) => (
+                <section key={group.key} className="grid gap-2">
+                  <div className="flex items-center gap-2 px-1 font-medium text-muted-foreground text-xs">
+                    <span>{group.label}</span>
+                    <span className="rounded-full border bg-background px-1.5 py-0.5">{group.roles.length}</span>
+                  </div>
+                  <div className="grid gap-2">
+                    {group.roles.map((role) => {
+                      const permissionBadges = rolePermissionBadges(role);
+                      return (
+                        <button
+                          key={role.id}
+                          type="button"
+                          onClick={() => setEditingRole(role)}
+                          aria-label={
+                            role.systemKey === "OWNER" || role.systemKey === "ADMIN"
+                              ? `View ${role.name} permissions`
+                              : `Edit ${role.name}`
+                          }
+                          className="grid min-w-0 gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <span className="flex min-w-0 items-start justify-between gap-3">
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium">{role.name}</span>
+                              <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                                <Badge variant={role.isProtected ? "secondary" : "outline"} className="font-normal">
+                                  {role.isProtected ? "System" : "Custom"}
+                                </Badge>
+                                <Badge variant="outline" className="font-normal">
+                                  {accessLevelLabel(role)}
+                                </Badge>
+                              </span>
+                            </span>
+                            <Pencil className="size-4 shrink-0 text-muted-foreground" />
+                          </span>
+                          <span className="grid grid-cols-2 gap-3 text-sm">
+                            <span>
+                              <span className="block text-muted-foreground text-xs">Users</span>
+                              <span className="mt-0.5 block tabular-nums">{role.memberCount.toLocaleString()}</span>
+                            </span>
+                            <span>
+                              <span className="block text-muted-foreground text-xs">Last updated</span>
+                              <span className="mt-0.5 block">{format(parseISO(role.updatedAt), "MMM d, yyyy")}</span>
+                            </span>
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-muted-foreground text-xs">Permission sets</span>
+                            <span className="mt-1.5 flex flex-wrap gap-1.5">
+                              {permissionBadges.length ? (
+                                <>
+                                  {permissionBadges.slice(0, 4).map((label) => (
+                                    <Badge key={label} variant="outline" className="max-w-40 truncate font-normal">
+                                      {label}
+                                    </Badge>
+                                  ))}
+                                  {permissionBadges.length > 4 ? (
+                                    <span className="self-center text-muted-foreground text-xs">
+                                      +{permissionBadges.length - 4}
+                                    </span>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">No permission sets</span>
+                              )}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
 
             {!visibleRoles.length ? (

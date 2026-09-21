@@ -6,17 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { formatDistanceToNow } from "date-fns";
 import type { LucideIcon } from "lucide-react";
-import {
-  Building2,
-  CalendarDays,
-  Eye,
-  KeyRound,
-  Search,
-  ShieldAlert,
-  ShieldCheck,
-  UserRoundCheck,
-  Users,
-} from "lucide-react";
+import { Building2, CalendarDays, KeyRound, Search, ShieldAlert, UserRoundCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -36,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { formatPhoneNumber } from "@/lib/phone";
 
 import { reactivateWorkspaceAction, suspendWorkspaceAction, type WorkspaceEnforcementActionState } from "../actions";
 
@@ -43,7 +34,13 @@ export type AdminWorkspaceRecord = {
   id: string;
   name: string;
   slug: string;
+  companyAddress: string | null;
+  companyEmail: string | null;
+  companyPhone: string | null;
+  estimateValidDays: number;
+  invoiceDueDays: number;
   status: string;
+  suspensionProtected: boolean;
   roleName: string;
   roleSystemKey: string | null;
   joinedAt: string;
@@ -51,6 +48,13 @@ export type AdminWorkspaceRecord = {
   suspensionReasonCode: string | null;
   suspensionNote: string | null;
   memberCount: number;
+  customerCount: number;
+  jobCount: number;
+  estimateCount: number;
+  invoiceCount: number;
+  gmailSenderEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
   latestEvent: {
     action: string;
     actorName: string;
@@ -193,7 +197,7 @@ function UserDetails({
 }: Readonly<{ user: AdminUserRecord; consoleWorkspaceSlug: string; onOpenChange: (open: boolean) => void }>) {
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{user.name ?? "Unnamed user"}</DialogTitle>
           <DialogDescription>{user.email}</DialogDescription>
@@ -236,6 +240,51 @@ function UserDetails({
                       {workspace.memberCount} {workspace.memberCount === 1 ? "member" : "members"} · Joined{" "}
                       {new Date(workspace.joinedAt).toLocaleDateString()}
                     </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {[
+                        ["Customers", workspace.customerCount],
+                        ["Jobs", workspace.jobCount],
+                        ["Estimates", workspace.estimateCount],
+                        ["Invoices", workspace.invoiceCount],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-md bg-muted/50 px-3 py-2">
+                          <p className="text-muted-foreground text-xs">{label}</p>
+                          <p className="mt-0.5 font-medium tabular-nums">{Number(value).toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <dl className="mt-3 grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <dt className="text-muted-foreground text-xs">Company email</dt>
+                        <dd className="truncate">{workspace.companyEmail?.trim() || "Not set"}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-muted-foreground text-xs">Company phone</dt>
+                        <dd>{workspace.companyPhone ? formatPhoneNumber(workspace.companyPhone) : "Not set"}</dd>
+                      </div>
+                      <div className="min-w-0 sm:col-span-2">
+                        <dt className="text-muted-foreground text-xs">Company address</dt>
+                        <dd className="truncate">{workspace.companyAddress?.trim() || "Not set"}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-muted-foreground text-xs">Gmail sending</dt>
+                        <dd className="truncate">{workspace.gmailSenderEmail || "Not connected"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground text-xs">Document terms</dt>
+                        <dd>
+                          Estimate: {workspace.estimateValidDays} days · Invoice: {workspace.invoiceDueDays} days
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground text-xs">Workspace created</dt>
+                        <dd>{new Date(workspace.createdAt).toLocaleDateString()}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground text-xs">Last updated</dt>
+                        <dd>{new Date(workspace.updatedAt).toLocaleDateString()}</dd>
+                      </div>
+                    </dl>
                     {workspace.status === "Suspended" ? (
                       <p className="mt-2 rounded-md bg-destructive/5 p-2 text-destructive text-xs">
                         {workspace.suspensionNote || "No internal suspension note recorded."}
@@ -248,7 +297,13 @@ function UserDetails({
                       </p>
                     ) : null}
                   </div>
-                  <WorkspaceControl workspace={workspace} consoleWorkspaceSlug={consoleWorkspaceSlug} />
+                  {workspace.suspensionProtected && workspace.status !== "Suspended" ? (
+                    <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                      Protected
+                    </Badge>
+                  ) : (
+                    <WorkspaceControl workspace={workspace} consoleWorkspaceSlug={consoleWorkspaceSlug} />
+                  )}
                 </div>
               ))
             ) : (
@@ -306,12 +361,13 @@ export function UsersAdminDashboard({
 
   return (
     <div className="@container/main grid gap-4 md:gap-6">
-      <div className="grid gap-1">
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <ShieldCheck className="size-4" />
-          Platform administration
-        </div>
-        <h1 className="text-2xl tracking-tight">Users</h1>
+      <div className="grid max-w-2xl gap-2">
+        <h1 className="flex items-center gap-2 font-medium text-lg leading-none">
+          <span>Users</span>
+          <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <Users className="size-4" />
+          </span>
+        </h1>
         <p className="max-w-2xl text-muted-foreground text-sm">
           Review account access and enforce workspace-level policy decisions without affecting a person’s other
           businesses.
@@ -335,7 +391,7 @@ export function UsersAdminDashboard({
       <section className="overflow-hidden rounded-xl border bg-card">
         <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -354,69 +410,130 @@ export function UsersAdminDashboard({
             <NativeSelectOption value="no-workspace">No workspace</NativeSelectOption>
           </NativeSelect>
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Workspaces</TableHead>
-              <TableHead>Sign-in</TableHead>
-              <TableHead>Last activity</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredUsers.map((user) => {
-              const status = getUserStatus(user);
-              return (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="grid gap-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{user.name || "Unnamed user"}</span>
-                        {user.admin ? <Badge variant="secondary">Platform admin</Badge> : null}
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Status</TableHead>
+                <TableHead>User</TableHead>
+                <TableHead>Workspaces</TableHead>
+                <TableHead>Sign-in</TableHead>
+                <TableHead>Last activity</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredUsers.map((user) => {
+                const status = getUserStatus(user);
+                return (
+                  <TableRow
+                    key={user.id}
+                    tabIndex={0}
+                    aria-label={`View account for ${user.name || user.email}`}
+                    className="cursor-pointer focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    onClick={() => setSelectedUser(user)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      setSelectedUser(user);
+                    }}
+                  >
+                    <TableCell>{statusBadge(status)}</TableCell>
+                    <TableCell>
+                      <div className="grid gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{user.name || "Unnamed user"}</span>
+                          {user.admin ? <Badge variant="secondary">Platform admin</Badge> : null}
+                        </div>
+                        <span className="text-muted-foreground text-xs">{user.email}</span>
                       </div>
-                      <span className="text-muted-foreground text-xs">{user.email}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="grid gap-0.5">
-                      <span>{user.workspaces.length.toLocaleString()}</span>
-                      <span className="max-w-52 truncate text-muted-foreground text-xs">
-                        {user.workspaces.map((workspace) => workspace.name).join(", ") || "None"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {user.authProviders.map((provider) => (
-                        <Badge key={provider} variant="outline" className="capitalize">
-                          <KeyRound className="size-3" />
-                          {provider}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>{relativeDate(user.lastLoginAt)}</TableCell>
-                  <TableCell>{statusBadge(status)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => setSelectedUser(user)}>
-                      <Eye />
-                      View account
-                    </Button>
+                    </TableCell>
+                    <TableCell>
+                      <div className="grid gap-0.5">
+                        <span>{user.workspaces.length.toLocaleString()}</span>
+                        <span className="max-w-52 truncate text-muted-foreground text-xs">
+                          {user.workspaces.map((workspace) => workspace.name).join(", ") || "None"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {user.authProviders.map((provider) => (
+                          <Badge key={provider} variant="outline" className="capitalize">
+                            <KeyRound className="size-3" />
+                            {provider}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>{relativeDate(user.lastLoginAt)}</TableCell>
+                  </TableRow>
+                );
+              })}
+              {!filteredUsers.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-28 text-center text-muted-foreground">
+                    No users match these filters.
                   </TableCell>
                 </TableRow>
-              );
-            })}
-            {!filteredUsers.length ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-28 text-center text-muted-foreground">
-                  No users match these filters.
-                </TableCell>
-              </TableRow>
-            ) : null}
-          </TableBody>
-        </Table>
+              ) : null}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="grid gap-3 border-t p-3 md:hidden">
+          {filteredUsers.map((user) => {
+            const status = getUserStatus(user);
+            return (
+              <button
+                key={user.id}
+                type="button"
+                onClick={() => setSelectedUser(user)}
+                className="grid min-w-0 gap-3 rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`View account for ${user.name || user.email}`}
+              >
+                <span className="flex min-w-0 items-start justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="truncate font-medium">{user.name || "Unnamed user"}</span>
+                      {user.admin ? <Badge variant="secondary">Platform admin</Badge> : null}
+                    </span>
+                    <span className="mt-0.5 block truncate text-muted-foreground text-xs">{user.email}</span>
+                  </span>
+                  <span className="shrink-0">{statusBadge(status)}</span>
+                </span>
+                <span className="grid grid-cols-2 gap-3 text-sm">
+                  <span className="min-w-0">
+                    <span className="block text-muted-foreground text-xs">Workspaces</span>
+                    <span className="mt-0.5 block truncate">
+                      {user.workspaces.length.toLocaleString()} ·{" "}
+                      {user.workspaces.map((workspace) => workspace.name).join(", ") || "None"}
+                    </span>
+                  </span>
+                  <span>
+                    <span className="block text-muted-foreground text-xs">Last activity</span>
+                    <span className="mt-0.5 block">{relativeDate(user.lastLoginAt)}</span>
+                  </span>
+                </span>
+                <span className="flex flex-wrap gap-1">
+                  {user.authProviders.length ? (
+                    user.authProviders.map((provider) => (
+                      <Badge key={provider} variant="outline" className="capitalize">
+                        <KeyRound className="size-3" />
+                        {provider}
+                      </Badge>
+                    ))
+                  ) : (
+                    <Badge variant="outline">Unknown sign-in</Badge>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+          {!filteredUsers.length ? (
+            <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground text-sm">
+              No users match these filters.
+            </div>
+          ) : null}
+        </div>
         <div className="border-t px-4 py-3 text-muted-foreground text-sm">
           Showing {filteredUsers.length.toLocaleString()} of {users.length.toLocaleString()} users
         </div>

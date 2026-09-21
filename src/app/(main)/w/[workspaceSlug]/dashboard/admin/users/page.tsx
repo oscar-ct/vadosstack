@@ -3,7 +3,7 @@ import { ShieldCheck } from "lucide-react";
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { getCurrentUser } from "@/lib/auth";
-import { isMainPlatformAdministrator } from "@/lib/platform-admin";
+import { hasMainPlatformAdministrator, isMainPlatformAdministrator } from "@/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 
 import { type AdminUserRecord, UsersAdminDashboard } from "./_components/users-admin-dashboard";
@@ -55,11 +55,31 @@ export default async function Page({ params }: Readonly<{ params: Promise<{ work
               id: true,
               name: true,
               slug: true,
+              companyAddress: true,
+              companyEmail: true,
+              companyPhone: true,
+              estimateValidDays: true,
+              invoiceDueDays: true,
               status: true,
               suspendedAt: true,
               suspensionReasonCode: true,
               suspensionNote: true,
-              _count: { select: { memberships: { where: { status: "Active" } } } },
+              createdAt: true,
+              updatedAt: true,
+              googleMailAccount: { select: { email: true } },
+              _count: {
+                select: {
+                  customers: true,
+                  estimates: true,
+                  invoices: true,
+                  jobs: true,
+                  memberships: { where: { status: "Active" } },
+                },
+              },
+              memberships: {
+                where: { role: { systemKey: "OWNER" } },
+                select: { user: { select: { admin: true, email: true } } },
+              },
               enforcementEvents: {
                 orderBy: { createdAt: "desc" },
                 take: 1,
@@ -91,7 +111,15 @@ export default async function Page({ params }: Readonly<{ params: Promise<{ work
         id: membership.workspace.id,
         name: membership.workspace.name,
         slug: membership.workspace.slug,
+        companyAddress: membership.workspace.companyAddress,
+        companyEmail: membership.workspace.companyEmail,
+        companyPhone: membership.workspace.companyPhone,
+        estimateValidDays: membership.workspace.estimateValidDays,
+        invoiceDueDays: membership.workspace.invoiceDueDays,
         status: membership.workspace.status,
+        suspensionProtected: hasMainPlatformAdministrator(
+          membership.workspace.memberships.map((ownerMembership) => ownerMembership.user),
+        ),
         roleName: membership.role.name,
         roleSystemKey: membership.role.systemKey,
         joinedAt: membership.joinedAt.toISOString(),
@@ -99,6 +127,13 @@ export default async function Page({ params }: Readonly<{ params: Promise<{ work
         suspensionReasonCode: membership.workspace.suspensionReasonCode,
         suspensionNote: membership.workspace.suspensionNote,
         memberCount: membership.workspace._count.memberships,
+        customerCount: membership.workspace._count.customers,
+        jobCount: membership.workspace._count.jobs,
+        estimateCount: membership.workspace._count.estimates,
+        invoiceCount: membership.workspace._count.invoices,
+        gmailSenderEmail: membership.workspace.googleMailAccount?.email ?? null,
+        createdAt: membership.workspace.createdAt.toISOString(),
+        updatedAt: membership.workspace.updatedAt.toISOString(),
         latestEvent: latestEvent
           ? {
               action: latestEvent.action,
