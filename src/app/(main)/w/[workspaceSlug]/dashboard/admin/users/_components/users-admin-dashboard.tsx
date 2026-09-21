@@ -362,7 +362,7 @@ export function UsersAdminDashboard({
   return (
     <div className="@container/main grid gap-4 md:gap-6">
       <div className="grid max-w-2xl gap-2">
-        <h1 className="flex items-center gap-2 font-medium text-lg leading-none">
+        <h1 className="flex items-center gap-2 font-medium text-xl leading-none">
           <span>Users</span>
           <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
             <Users className="size-4" />

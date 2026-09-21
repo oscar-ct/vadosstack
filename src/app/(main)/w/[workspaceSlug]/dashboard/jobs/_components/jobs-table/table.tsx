@@ -424,8 +424,6 @@ export function JobsTable({
             table.getRowModel().rows.map((row) => {
               const amountDue = getAmountDueDisplay(row.original);
               const billingState = getJobBillingState(row.original);
-              // const rowNumber =
-              //   table.getState().pagination.pageIndex * table.getState().pagination.pageSize + index + 1;
 
               return (
                 <Card
@@ -450,7 +448,6 @@ export function JobsTable({
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          {/*<span className="text-muted-foreground text-xs tabular-nums">#{rowNumber}</span>*/}
                           <div className="line-clamp-2 min-w-0 font-medium text-sm">{row.original.description}</div>
                         </div>
                         <CustomerLink

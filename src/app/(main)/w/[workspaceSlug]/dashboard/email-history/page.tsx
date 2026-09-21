@@ -219,7 +219,7 @@ export default async function Page({ searchParams }: PageProps) {
     <Card className="min-w-0">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 leading-none">
-          <span className="text-lg">Email History</span>
+          <span className="text-xl">Email History</span>
           <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
             <MailCheck className="size-4 text-muted-foreground" />
           </div>

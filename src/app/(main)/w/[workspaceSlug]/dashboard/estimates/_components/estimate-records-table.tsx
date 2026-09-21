@@ -269,15 +269,6 @@ export function EstimateRecordsTable({
     <>
       <div className="grid gap-4">
         <div className="grid gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className={"pt-2"}>
-              <h2 className="font-semibold text-sm">Estimate pipeline</h2>
-              <p className="text-muted-foreground text-xs">Move each estimate from draft to customer decision.</p>
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => updateStatusFilter("all")}>
-              All estimates
-            </Button>
-          </div>
           <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))] sm:[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
             {pipelineCounts.map((stage) => {
               const isActive = statusFilter === stage.status;

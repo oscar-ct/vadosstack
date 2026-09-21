@@ -30,7 +30,7 @@ export function JobsOverview({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 leading-none">
-          <span className="text-lg">Jobs</span>
+          <span className="text-xl">Jobs</span>
           <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
             <BriefcaseBusiness className="size-4 text-muted-foreground" />
           </div>

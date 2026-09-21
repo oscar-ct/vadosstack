@@ -3,7 +3,19 @@
 import * as React from "react";
 
 import { format, isBefore, startOfToday } from "date-fns";
-import { ArrowUpDown, CalendarDays, Flame, ReceiptText, Search, SlidersHorizontal, Tag } from "lucide-react";
+import {
+  ArrowUpDown,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Flame,
+  ReceiptText,
+  Search,
+  SlidersHorizontal,
+  Tag,
+} from "lucide-react";
 
 import { CustomerLink } from "@/components/customer-link";
 import { Badge } from "@/components/ui/badge";
@@ -123,6 +135,8 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
   const [priorityFilter, setPriorityFilter] = React.useState("all");
   const [followUpFilter, setFollowUpFilter] = React.useState<FollowUpFilter>("all");
   const [sortValue, setSortValue] = React.useState<SortValue>("follow-up");
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(20);
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const hasFilters =
     Boolean(normalizedQuery) ||
@@ -156,6 +170,16 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
         return leadDateTime(right.createdAt) - leadDateTime(left.createdAt);
       });
   }, [followUpFilter, leads, normalizedQuery, priorityFilter, sortValue, statusFilter, today]);
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const firstResult = filteredLeads.length ? (currentPage - 1) * pageSize + 1 : 0;
+  const lastResult = Math.min(currentPage * pageSize, filteredLeads.length);
+  const paginatedLeads = filteredLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  function updateFilter<T>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) {
+    setter(value);
+    setPage(1);
+  }
 
   function resetFilters() {
     setSearchQuery("");
@@ -163,6 +187,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
     setPriorityFilter("all");
     setFollowUpFilter("all");
     setSortValue("follow-up");
+    setPage(1);
   }
 
   function openLead(href: string) {
@@ -180,7 +205,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                 className="h-9 rounded-[min(var(--radius-md),12px)] pl-8 md:h-7"
                 placeholder="Search leads..."
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(event) => updateFilter(setSearchQuery, event.target.value)}
               />
             </div>
             <div className="md:hidden">
@@ -199,7 +224,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                   <div className="grid gap-4 px-4">
                     <div className="grid gap-2">
                       <Label htmlFor="leads-mobile-status">Status</Label>
-                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <Select value={statusFilter} onValueChange={(value) => updateFilter(setStatusFilter, value)}>
                         <SelectTrigger id="leads-mobile-status" className="w-full">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
@@ -216,7 +241,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="leads-mobile-priority">Priority</Label>
-                      <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                      <Select value={priorityFilter} onValueChange={(value) => updateFilter(setPriorityFilter, value)}>
                         <SelectTrigger id="leads-mobile-priority" className="w-full">
                           <SelectValue placeholder="Priority" />
                         </SelectTrigger>
@@ -235,7 +260,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                       <Label htmlFor="leads-mobile-follow-up">Follow-up</Label>
                       <Select
                         value={followUpFilter}
-                        onValueChange={(value) => setFollowUpFilter(value as FollowUpFilter)}
+                        onValueChange={(value) => updateFilter(setFollowUpFilter, value as FollowUpFilter)}
                       >
                         <SelectTrigger id="leads-mobile-follow-up" className="w-full">
                           <SelectValue placeholder="Follow-up" />
@@ -253,7 +278,10 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="leads-mobile-sort">Sort</Label>
-                      <Select value={sortValue} onValueChange={(value) => setSortValue(value as SortValue)}>
+                      <Select
+                        value={sortValue}
+                        onValueChange={(value) => updateFilter(setSortValue, value as SortValue)}
+                      >
                         <SelectTrigger id="leads-mobile-sort" className="w-full">
                           <SelectValue placeholder="Sort" />
                         </SelectTrigger>
@@ -291,7 +319,10 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup value={statusFilter} onValueChange={setStatusFilter}>
+                  <DropdownMenuRadioGroup
+                    value={statusFilter}
+                    onValueChange={(value) => updateFilter(setStatusFilter, value)}
+                  >
                     {statusOptions.map((option) => (
                       <DropdownMenuRadioItem key={option.value} value={option.value}>
                         {option.label}
@@ -308,7 +339,10 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup value={priorityFilter} onValueChange={setPriorityFilter}>
+                  <DropdownMenuRadioGroup
+                    value={priorityFilter}
+                    onValueChange={(value) => updateFilter(setPriorityFilter, value)}
+                  >
                     {priorityOptions.map((option) => (
                       <DropdownMenuRadioItem key={option.value} value={option.value}>
                         {option.label}
@@ -327,7 +361,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                 <DropdownMenuContent align="start">
                   <DropdownMenuRadioGroup
                     value={followUpFilter}
-                    onValueChange={(value) => setFollowUpFilter(value as FollowUpFilter)}
+                    onValueChange={(value) => updateFilter(setFollowUpFilter, value as FollowUpFilter)}
                   >
                     {followUpOptions.map((option) => (
                       <DropdownMenuRadioItem key={option.value} value={option.value}>
@@ -345,7 +379,10 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup value={sortValue} onValueChange={(value) => setSortValue(value as SortValue)}>
+                  <DropdownMenuRadioGroup
+                    value={sortValue}
+                    onValueChange={(value) => updateFilter(setSortValue, value as SortValue)}
+                  >
                     {sortOptions.map((option) => (
                       <DropdownMenuRadioItem key={option.value} value={option.value}>
                         {option.label}
@@ -362,9 +399,6 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
             </div>
           </div>
         </div>
-        <div className="px-1 text-muted-foreground text-xs sm:text-sm">
-          Showing {filteredLeads.length} of {leads.length} {leads.length === 1 ? "lead" : "leads"}.
-        </div>
       </div>
 
       <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
@@ -380,8 +414,8 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredLeads.length ? (
-              filteredLeads.map((lead) => {
+            {paginatedLeads.length ? (
+              paginatedLeads.map((lead) => {
                 const href = `/dashboard/leads/${lead.id}`;
                 const followUpOverdue =
                   lead.followUpAt &&
@@ -496,8 +530,8 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
       </div>
 
       <div className="grid gap-3 md:hidden">
-        {filteredLeads.length ? (
-          filteredLeads.map((lead) => {
+        {paginatedLeads.length ? (
+          paginatedLeads.map((lead) => {
             const href = `/dashboard/leads/${lead.id}`;
             const followUpOverdue =
               lead.followUpAt &&
@@ -585,6 +619,94 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
           </div>
         )}
       </div>
+
+      {filteredLeads.length ? (
+        <div className="flex flex-col gap-3 border-t px-1 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="hidden flex-1 text-muted-foreground text-sm lg:block">
+            Showing{" "}
+            <span className="font-medium text-foreground tabular-nums">
+              {firstResult}–{lastResult}
+            </span>{" "}
+            of <span className="font-medium text-foreground tabular-nums">{filteredLeads.length}</span> leads
+          </p>
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-8 lg:w-fit">
+            <div className="hidden items-center gap-2 lg:flex">
+              <Label htmlFor="leads-rows-per-page" className="font-medium text-sm">
+                Rows per page
+              </Label>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger id="leads-rows-per-page" size="sm" className="w-20">
+                  <SelectValue placeholder={pageSize} />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  <SelectGroup>
+                    {[20, 30, 40, 50].map((option) => (
+                      <SelectItem key={option} value={String(option)}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-center font-medium text-sm sm:w-fit">
+              Page {currentPage} of {totalPages}
+            </div>
+            <div className="flex items-center justify-center gap-2 sm:ml-auto lg:ml-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="hidden size-8 lg:flex"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(1)}
+              >
+                <span className="sr-only">Go to first page</span>
+                <ChevronsLeft className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-8"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                <span className="sr-only">Go to previous page</span>
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-8"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                <span className="sr-only">Go to next page</span>
+                <ChevronRight className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="hidden size-8 lg:flex"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage(totalPages)}
+              >
+                <span className="sr-only">Go to last page</span>
+                <ChevronsRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

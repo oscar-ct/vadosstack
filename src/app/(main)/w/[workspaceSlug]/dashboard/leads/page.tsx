@@ -48,40 +48,15 @@ export default async function Page() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <div className="grid grid-cols-3 divide-x overflow-hidden rounded-lg border bg-card md:hidden">
-        <MobileStat label="Open" value={summary.open} />
-        <MobileStat label="Follow-up" value={summary.needsFollowUp} />
-        <MobileStat label="Won" value={summary.won} />
-      </div>
-
-      <div className="hidden min-w-0 grid-cols-2 gap-3 md:grid xl:grid-cols-4">
-        <StatCard
-          icon={<UsersRound className="size-4 text-muted-foreground" />}
-          label="Total leads"
-          value={summary.total}
-        />
-        <StatCard
-          icon={<CircleDotDashed className="size-4 text-amber-600" />}
-          label="Open leads"
-          value={summary.open}
-        />
-        <StatCard icon={<UserRoundCheck className="size-4 text-emerald-600" />} label="Won" value={summary.won} />
-        <StatCard
-          icon={<BellRing className="size-4 text-sky-600" />}
-          label="Needs follow-up"
-          value={summary.needsFollowUp}
-        />
-      </div>
-
       <Card className="rounded-lg">
-        <CardHeader className="gap-2 pb-3 sm:gap-4 sm:pb-6">
+        <CardHeader>
           <CardTitle className="flex items-center gap-2 leading-none">
-            <span className="text-lg">Leads</span>
+            <span className="text-xl">Leads</span>
             <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <UsersRound className="size-4" />
             </div>
           </CardTitle>
-          <CardDescription className="hidden sm:block">
+          <CardDescription>
             Track inquiries before they become customers, estimates, jobs, or lost opportunities.
           </CardDescription>
           <CardAction>
@@ -91,7 +66,32 @@ export default async function Page() {
             />
           </CardAction>
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden pt-0">
+          <div className="grid grid-cols-3 divide-x overflow-hidden rounded-lg border bg-card md:hidden">
+            <MobileStat label="Open" value={summary.open} />
+            <MobileStat label="Follow-up" value={summary.needsFollowUp} />
+            <MobileStat label="Won" value={summary.won} />
+          </div>
+
+          <div className="hidden min-w-0 grid-cols-2 gap-3 md:grid xl:grid-cols-4">
+            <StatCard
+              icon={<UsersRound className="size-4 text-muted-foreground" />}
+              label="Total leads"
+              value={summary.total}
+            />
+            <StatCard
+              icon={<CircleDotDashed className="size-4 text-amber-600" />}
+              label="Open leads"
+              value={summary.open}
+            />
+            <StatCard icon={<UserRoundCheck className="size-4 text-emerald-600" />} label="Won" value={summary.won} />
+            <StatCard
+              icon={<BellRing className="size-4 text-sky-600" />}
+              label="Needs follow-up"
+              value={summary.needsFollowUp}
+            />
+          </div>
+
           {leads.length ? (
             <LeadsTable leads={leads} />
           ) : (

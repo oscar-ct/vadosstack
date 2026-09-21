@@ -1971,7 +1971,7 @@ export function TimeTrackingDashboard({
     <div className="grid gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="grid max-w-2xl gap-2">
-          <h1 className="flex items-center gap-2 font-semibold text-lg leading-none">
+          <h1 className="flex items-center gap-2 font-semibold text-xl leading-none">
             <span>Time Tracking</span>
             <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <Clock3 className="size-4" />

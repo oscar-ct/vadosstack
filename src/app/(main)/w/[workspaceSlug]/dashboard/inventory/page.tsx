@@ -58,7 +58,7 @@ export default async function Page() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="grid max-w-2xl gap-2">
             <CardTitle className="flex items-center gap-2 leading-none">
-              <span className="text-lg">Inventory</span>
+              <span className="text-xl">Inventory</span>
               <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <Boxes className="size-4 text-muted-foreground" />
               </div>

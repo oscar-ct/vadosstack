@@ -100,20 +100,6 @@ export function getJobsColumns({
       enableHiding: false,
     },
     {
-      id: "rowNumber",
-      header: "#",
-      cell: ({ row, table }) => {
-        const currentRows = table.getRowModel().rows;
-        const visibleIndex = currentRows.findIndex((currentRow) => currentRow.id === row.id);
-        const { pageIndex, pageSize } = table.getState().pagination;
-        const rowNumber = pageIndex * pageSize + visibleIndex + 1;
-
-        return <span className="text-muted-foreground text-sm tabular-nums">{rowNumber}</span>;
-      },
-      enableSorting: false,
-      enableHiding: false,
-    },
-    {
       accessorKey: "createdAt",
       header: "Created",
       cell: () => null,

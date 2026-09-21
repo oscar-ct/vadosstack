@@ -640,7 +640,7 @@ export function RolesManager({
     <div className="@container/main mx-auto grid w-full max-w-[96rem] gap-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="grid max-w-2xl gap-2">
-          <h1 className="flex items-center gap-2 font-medium text-lg leading-none">
+          <h1 className="flex items-center gap-2 font-medium text-xl leading-none">
             <span>Roles & Permissions</span>
             <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <KeyRound className="size-4" />
