@@ -229,7 +229,7 @@ export function OverviewV2Dashboard({
   return (
     <div className="mx-auto w-full max-w-[1500px] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <div className="grid min-h-[calc(100svh-7rem)] lg:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.55fr)]">
-        <aside className="relative overflow-hidden bg-gradient-to-br from-violet-700 via-indigo-700 to-blue-600 p-6 text-white sm:p-7">
+        <aside className="relative overflow-hidden bg-gradient-to-br from-violet-700 via-indigo-700 to-blue-600 p-6 text-white dark:from-violet-950 dark:via-indigo-950 dark:to-blue-950 sm:p-7">
           <div className="pointer-events-none absolute top-40 -right-28 size-60 rounded-full border-[44px] border-white/10" />
           <div className="pointer-events-none absolute -top-24 -left-20 size-56 rounded-full bg-fuchsia-400/20 blur-3xl" />
           <div className="relative flex h-full min-h-[540px] flex-col">

@@ -39,7 +39,7 @@ export default async function Page() {
   const windowStart = startOfYear(today);
   const windowEnd = endOfYear(addDays(today, 365));
 
-  const [jobs, tasks, invoices, customers, leads, unscheduledJobCount] = await Promise.all([
+  const [jobs, tasks, invoices, customers, leads] = await Promise.all([
     can(membership, "jobs.view")
       ? prisma.job.findMany({
           where: {
@@ -159,14 +159,6 @@ export default async function Page() {
           },
         })
       : Promise.resolve([]),
-    can(membership, "jobs.view")
-      ? prisma.job.count({
-          where: {
-            ownerId: workspaceId,
-            status: "Unscheduled",
-          },
-        })
-      : Promise.resolve(0),
   ]);
 
   const events: CalendarDashboardEvent[] = [
@@ -249,7 +241,6 @@ export default async function Page() {
       updateTaskAction={updateCalendarTaskAction}
       contacts={taskContacts}
       events={events}
-      unscheduledJobCount={unscheduledJobCount}
     />
   );
 }

@@ -2,11 +2,62 @@
 @import "tw-animate-css";
 
 @import "shadcn/tailwind.css";
+@import "@fullcalendar/react/skeleton.css";
 
 /* Theme preset styles: these override CSS variables based on the selected data-theme-preset */
 @import "../styles/presets/brutalist.css";
 @import "../styles/presets/soft-pop.css";
 @import "../styles/presets/tangerine.css";
+
+.vados-event-calendar,
+body > [role="dialog"][class*="fc-forma-"] {
+  --fc-forma-primary: var(--primary);
+  --fc-forma-primary-foreground: var(--primary-foreground);
+  --fc-forma-primary-over: color-mix(in oklab, var(--primary) 90%, var(--background));
+  --fc-forma-primary-down: color-mix(in oklab, var(--primary) 82%, var(--background));
+  --fc-forma-event: var(--primary);
+  --fc-forma-event-contrast: var(--primary-foreground);
+  --fc-forma-background-event: var(--primary);
+  --fc-forma-highlight: color-mix(in oklab, var(--primary) 12%, transparent);
+  --fc-forma-background: var(--card);
+  --fc-forma-faint: color-mix(in oklab, var(--muted) 45%, transparent);
+  --fc-forma-muted: var(--muted);
+  --fc-forma-strong: color-mix(in oklab, var(--muted) 70%, var(--foreground));
+  --fc-forma-stronger: color-mix(in oklab, var(--muted) 62%, var(--foreground));
+  --fc-forma-strongest: color-mix(in oklab, var(--muted) 54%, var(--foreground));
+  --fc-forma-foreground: var(--foreground);
+  --fc-forma-faint-foreground: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+  --fc-forma-muted-foreground: var(--muted-foreground);
+  --fc-forma-border: var(--border);
+  --fc-forma-muted-border: color-mix(in oklab, var(--border) 82%, var(--background));
+  --fc-forma-strong-border: color-mix(in oklab, var(--border) 65%, var(--foreground));
+  --fc-forma-ring-color: var(--ring);
+  font-family: var(--font-sans);
+}
+
+.vados-event-calendar [class*="fc-forma-"],
+body > [role="dialog"][class*="fc-forma-"] [class*="fc-forma-"] {
+  font-family: inherit;
+}
+
+.vados-event-calendar [role="gridcell"] {
+  min-width: 0;
+}
+
+.vados-event-calendar [role="grid"] {
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
+}
+
+.vados-event-calendar [role="rowgroup"]:has([role="columnheader"]) {
+  border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 767px) {
+  .vados-event-calendar {
+    font-size: 13px;
+  }
+}
 
 @keyframes workspace-loading-progress {
   from {

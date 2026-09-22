@@ -3,28 +3,24 @@
 import * as React from "react";
 
 import {
-  addMonths,
-  eachDayOfInterval,
-  endOfDay,
-  endOfMonth,
-  endOfWeek,
-  format,
-  isSameMonth,
-  isToday,
-  parseISO,
-  startOfDay,
-  startOfMonth,
-  startOfToday,
-  startOfWeek,
-} from "date-fns";
+  type DateClickInfo,
+  type DatesSetInfo,
+  type EventClickInfo,
+  type EventInput,
+  useCalendarController,
+} from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/react/daygrid";
+import interactionPlugin from "@fullcalendar/react/interaction";
+import { addDays, differenceInCalendarDays, endOfMonth, format, parseISO, startOfMonth, startOfToday } from "date-fns";
 import { enGB } from "date-fns/locale";
 import {
-  ArrowLeft,
-  ArrowRight,
   BriefcaseBusiness,
   CalendarDays,
+  Calendar as CalendarIcon,
   Check,
   CheckSquare,
+  ChevronLeft,
+  ChevronRight,
   ChevronsUpDown,
   MapPin,
   MoreVertical,
@@ -32,8 +28,10 @@ import {
   Plus,
   ReceiptText,
   Trash2,
+  XIcon,
 } from "lucide-react";
 
+import { EventCalendarViews } from "@/components/calendar/event-calendar-views";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
 import {
   AlertDialog,
@@ -46,8 +44,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   Dialog,
@@ -64,11 +62,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
 import { toDateInputValue } from "@/lib/date-only";
@@ -105,6 +103,8 @@ const eventTypes = [
   { value: "task", label: "Tasks", icon: CheckSquare },
   { value: "invoice", label: "Invoices", icon: ReceiptText },
 ] as const;
+
+const calendarPlugins = [dayGridPlugin, interactionPlugin];
 
 const eventPalette = [
   {
@@ -171,20 +171,6 @@ function getEventEndDate(event: CalendarDashboardEvent) {
   return event.endDate ? parseISO(event.endDate) : getEventDate(event);
 }
 
-function eventOccursOnDay(event: CalendarDashboardEvent, day: Date) {
-  const dayStart = startOfDay(day);
-  const dayEnd = endOfDay(day);
-
-  return getEventDate(event) <= dayEnd && getEventEndDate(event) >= dayStart;
-}
-
-function eventOccursInMonth(event: CalendarDashboardEvent, month: Date) {
-  const monthStart = startOfMonth(month);
-  const monthEnd = endOfMonth(month);
-
-  return getEventDate(event) <= monthEnd && getEventEndDate(event) >= monthStart;
-}
-
 function formatMoney(value?: string) {
   if (!value) return undefined;
   const amount = Number(value);
@@ -216,8 +202,8 @@ function getCalendarDisplayName(event: CalendarDashboardEvent) {
 
 type TaskAction = (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
 
-function getTaskDateValue(event?: CalendarDashboardEvent) {
-  if (!event?.date) return new Date();
+function getTaskDateValue(event?: CalendarDashboardEvent, initialDate?: Date) {
+  if (!event?.date) return initialDate ?? new Date();
   return parseISO(event.date);
 }
 
@@ -436,14 +422,22 @@ function TaskContactPicker({
   );
 }
 
-function TaskFormFields({ contacts, event }: { contacts: CalendarDashboardContact[]; event?: CalendarDashboardEvent }) {
+function TaskFormFields({
+  contacts,
+  event,
+  initialDate,
+}: {
+  contacts: CalendarDashboardContact[];
+  event?: CalendarDashboardEvent;
+  initialDate?: Date;
+}) {
   const initialContactValue = event?.leadId
     ? `lead:${event.leadId}`
     : event?.customerId
       ? `customer:${event.customerId}`
       : "";
   const [selectedContact, setSelectedContact] = React.useState(initialContactValue);
-  const [scheduledFor, setScheduledFor] = React.useState(() => getTaskDateValue(event));
+  const [scheduledFor, setScheduledFor] = React.useState(() => getTaskDateValue(event, initialDate));
   const [kind, id] = selectedContact.split(":");
 
   return (
@@ -519,6 +513,7 @@ function CalendarEventCard({
   updateTaskAction,
   compact = false,
   linked = true,
+  showDate = false,
 }: {
   canManage: boolean;
   contacts: CalendarDashboardContact[];
@@ -527,6 +522,7 @@ function CalendarEventCard({
   updateTaskAction: TaskAction;
   compact?: boolean;
   linked?: boolean;
+  showDate?: boolean;
 }) {
   const Icon = getEventIcon(event.type);
   const amount = formatMoney(event.amount);
@@ -560,6 +556,15 @@ function CalendarEventCard({
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
         <span className={cn("mt-1 size-2 shrink-0 rounded-full", palette.dot)} />
+        {showDate ? (
+          <span className="inline-flex items-center gap-1">
+            <CalendarDays className="size-3" />
+            {format(getEventDate(event), "EEE, MMM d")}
+            {event.endDate && getEventEndDate(event).getTime() !== getEventDate(event).getTime()
+              ? ` – ${format(getEventEndDate(event), "MMM d")}`
+              : null}
+          </span>
+        ) : null}
         <span>{getEventLabel(event.type)}</span>
         <span>{event.status}</span>
         {event.location ? (
@@ -602,88 +607,48 @@ function CalendarEventPill({ event }: { event: CalendarDashboardEvent }) {
   );
 }
 
-function CalendarEventPreviewHoverCard({
-  canManage,
-  contacts,
-  deleteTaskAction,
-  event,
-  updateTaskAction,
-}: {
-  canManage: boolean;
-  contacts: CalendarDashboardContact[];
-  deleteTaskAction: TaskAction;
-  event: CalendarDashboardEvent;
-  updateTaskAction: TaskAction;
-}) {
-  return (
-    <HoverCard closeDelay={120} openDelay={150}>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs hover:bg-accent"
-        >
-          <CalendarEventPill event={event} />
-        </button>
-      </HoverCardTrigger>
-      <HoverCardContent align="start" className="w-[min(22rem,calc(100vw-2rem))] p-2.5">
-        <div className="grid gap-2">
-          <CalendarEventCard
-            canManage={canManage}
-            contacts={contacts}
-            deleteTaskAction={deleteTaskAction}
-            event={event}
-            updateTaskAction={updateTaskAction}
-            compact
-            linked={false}
-          />
-          {event.href ? (
-            <Button asChild size="sm" className="justify-self-end">
-              <Link prefetch={false} href={event.href}>
-                {getEventViewLabel(event.type)}
-              </Link>
-            </Button>
-          ) : null}
-        </div>
-      </HoverCardContent>
-    </HoverCard>
-  );
-}
-
 const initialTaskState: CalendarTaskMutationState = {
   success: false,
   message: "",
 };
 
-function CreateTaskDialog({ action, contacts }: { action: TaskAction; contacts: CalendarDashboardContact[] }) {
+function CreateTaskDialog({
+  action,
+  contacts,
+  initialDate,
+  onOpenChange,
+  open,
+}: {
+  action: TaskAction;
+  contacts: CalendarDashboardContact[];
+  initialDate: Date;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
-  const [open, setOpen] = React.useState(false);
   const [state, formAction, isPending] = React.useActionState(action, initialTaskState);
 
   React.useEffect(() => {
     if (!state.success) return;
 
     formRef.current?.reset();
-    setOpen(false);
+    onOpenChange(false);
     router.refresh();
-  }, [router, state]);
+  }, [onOpenChange, router, state]);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button type="button" size="sm" onClick={() => setOpen(true)}>
-        <Plus />
-        New task
-      </Button>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New calendar task</DialogTitle>
           <DialogDescription>Add a site visit, follow-up, reminder, or other scheduled task.</DialogDescription>
         </DialogHeader>
         <form ref={formRef} action={formAction} className="grid gap-4">
-          <TaskFormFields contacts={contacts} />
+          <TaskFormFields key={toDateInputValue(initialDate)} contacts={contacts} initialDate={initialDate} />
           {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
           <DialogFooter>
-            <Button type="button" variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" disabled={isPending} onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
@@ -814,28 +779,55 @@ function TaskActionsMenu({
   );
 }
 
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
+function CalendarEventDialog({
+  canManage,
+  contacts,
+  deleteTaskAction,
+  event,
+  onOpenChange,
+  updateTaskAction,
 }: {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-  detail: string;
+  canManage: boolean;
+  contacts: CalendarDashboardContact[];
+  deleteTaskAction: TaskAction;
+  event: CalendarDashboardEvent | null;
+  onOpenChange: (open: boolean) => void;
+  updateTaskAction: TaskAction;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-3 shadow-sm">
-      <div className="flex items-center gap-2 text-muted-foreground text-xs">
-        <span className="grid size-7 place-items-center rounded-md bg-muted">
-          <Icon className="size-3.5" />
-        </span>
-        {label}
-      </div>
-      <div className="mt-3 font-medium text-2xl leading-none">{value}</div>
-      <div className="mt-1 text-muted-foreground text-xs">{detail}</div>
-    </div>
+    <Dialog open={Boolean(event)} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{event ? getEventLabel(event.type) : "Calendar event"}</DialogTitle>
+          <DialogDescription>Details for this scheduled item.</DialogDescription>
+        </DialogHeader>
+        {event ? (
+          <div className="grid gap-3">
+            <CalendarEventCard
+              canManage={canManage}
+              contacts={contacts}
+              deleteTaskAction={deleteTaskAction}
+              event={event}
+              updateTaskAction={updateTaskAction}
+              linked={false}
+            />
+            {event.notes ? (
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm leading-6">
+                <div className="mb-1 font-medium">Notes</div>
+                <p className="whitespace-pre-wrap text-muted-foreground">{event.notes}</p>
+              </div>
+            ) : null}
+            {event.href ? (
+              <Button asChild className="justify-self-end">
+                <Link prefetch={false} href={event.href}>
+                  {getEventViewLabel(event.type)}
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -846,7 +838,6 @@ export function CalendarDashboard({
   deleteTaskAction,
   events,
   updateTaskAction,
-  unscheduledJobCount,
 }: {
   canManage: boolean;
   contacts: CalendarDashboardContact[];
@@ -854,12 +845,21 @@ export function CalendarDashboard({
   deleteTaskAction: TaskAction;
   events: CalendarDashboardEvent[];
   updateTaskAction: TaskAction;
-  unscheduledJobCount: number;
 }) {
+  const controller = useCalendarController();
   const today = startOfToday();
-  const [month, setMonth] = React.useState(() => startOfMonth(today));
+  const initialStart = startOfMonth(today);
+  const initialEnd = addDays(endOfMonth(today), 1);
+  const [dateInfo, setDateInfo] = React.useState(() => ({
+    days: differenceInCalendarDays(initialEnd, initialStart),
+    end: initialEnd,
+    start: initialStart,
+    title: format(today, "MMMM yyyy"),
+  }));
   const [activeTypes, setActiveTypes] = React.useState<CalendarDashboardEvent["type"][]>(["job", "task", "invoice"]);
-
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [createDate, setCreateDate] = React.useState(today);
+  const [selectedEvent, setSelectedEvent] = React.useState<CalendarDashboardEvent | null>(null);
   const visibleEvents = React.useMemo(
     () =>
       events
@@ -867,272 +867,208 @@ export function CalendarDashboard({
         .sort((a, b) => getEventDate(a).getTime() - getEventDate(b).getTime()),
     [activeTypes, events],
   );
-  const monthEvents = React.useMemo(
-    () => visibleEvents.filter((event) => eventOccursInMonth(event, month)),
-    [month, visibleEvents],
-  );
-  const mobileEventGroups = React.useMemo(() => {
-    const groupedEvents = new Map<string, CalendarDashboardEvent[]>();
-    const monthDays = eachDayOfInterval({
-      start: startOfMonth(month),
-      end: endOfMonth(month),
-    });
-
-    for (const day of monthDays) {
-      const dayEvents = monthEvents.filter((event) => eventOccursOnDay(event, day));
-
-      if (dayEvents.length) {
-        groupedEvents.set(format(day, "yyyy-MM-dd"), dayEvents);
-      }
-    }
-
-    return [...groupedEvents.entries()].map(([date, groupEvents]) => ({
-      date,
-      events: groupEvents,
-    }));
-  }, [month, monthEvents]);
-  const monthListEvents = monthEvents;
-  const calendarDays = React.useMemo(
+  const rangeEvents = React.useMemo(
     () =>
-      eachDayOfInterval({
-        start: startOfWeek(startOfMonth(month)),
-        end: endOfWeek(endOfMonth(month)),
-      }),
-    [month],
+      visibleEvents.filter((event) => getEventDate(event) < dateInfo.end && getEventEndDate(event) >= dateInfo.start),
+    [dateInfo.end, dateInfo.start, visibleEvents],
   );
+  const eventById = React.useMemo(() => new Map(events.map((event) => [event.id, event])), [events]);
+  const fullCalendarEvents = React.useMemo<EventInput[]>(
+    () =>
+      visibleEvents.map((event) => ({
+        allDay: true,
+        classNames: [`vados-calendar-event-${event.type}`],
+        end: event.endDate ? format(addDays(getEventEndDate(event), 1), "yyyy-MM-dd") : undefined,
+        id: event.id,
+        start: event.date,
+        title: getCalendarDisplayName(event),
+      })),
+    [visibleEvents],
+  );
+  const selectedCalendar = activeTypes.length === 3 ? "all" : activeTypes.length === 1 ? activeTypes[0] : "custom";
 
-  const monthJobs = monthEvents.filter((event) => event.type === "job");
-  const monthTasks = monthEvents.filter((event) => event.type === "task");
-  const monthInvoices = monthEvents.filter((event) => event.type === "invoice");
-  const invoiceDueTotal = monthInvoices.reduce((total, event) => total + Number(event.amount ?? 0), 0);
-
-  function toggleType(type: CalendarDashboardEvent["type"]) {
-    setActiveTypes((current) =>
-      current.includes(type) ? current.filter((item) => item !== type) : [...current, type],
-    );
+  function handleDatesSet(info: DatesSetInfo) {
+    setDateInfo({
+      days: differenceInCalendarDays(info.view.currentEnd, info.view.currentStart),
+      end: info.view.currentEnd,
+      start: info.view.currentStart,
+      title: info.view.title,
+    });
   }
 
-  function eventsForDay(day: Date) {
-    return monthEvents.filter((event) => eventOccursOnDay(event, day));
+  function handleDateClick(info: DateClickInfo) {
+    if (!canManage) return;
+    setCreateDate(info.date);
+    setCreateOpen(true);
+  }
+
+  function handleEventClick(info: EventClickInfo) {
+    info.jsEvent.preventDefault();
+    setSelectedEvent(eventById.get(info.event.id) ?? null);
   }
 
   return (
     <div className="mx-auto grid w-full max-w-[1500px] gap-5">
-      <section className="overflow-hidden rounded-lg border bg-card shadow-sm">
-        <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:p-6">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md border bg-muted px-2.5 py-1 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-                Calendar
-              </span>
-              <span className="rounded-md border bg-background px-2.5 py-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-                {format(month, "MMMM yyyy")}
-              </span>
-            </div>
-            <h1 className="mt-5 font-medium text-3xl leading-tight">Schedule overview</h1>
-            <p className="mt-2 max-w-2xl text-muted-foreground text-sm leading-6">
-              Jobs, tasks, and invoice due dates in one calendar view.
+      <section className="min-w-0 overflow-hidden rounded-lg bg-card">
+        <div className="flex flex-col gap-4 rounded-t-lg border border-b-0 bg-muted/20 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 shrink-0 flex-col gap-1">
+            <h1 className="font-medium text-lg leading-none">{dateInfo.title}</h1>
+            <p className="text-muted-foreground text-sm">
+              {dateInfo.days} days · {rangeEvents.length} events
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={selectedCalendar}
+              onValueChange={(value) => {
+                if (value === "all") setActiveTypes(["job", "task", "invoice"]);
+                else if (value !== "custom") setActiveTypes([value as CalendarDashboardEvent["type"]]);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-44">
+                <CalendarIcon />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectGroup>
+                  <SelectItem value="all">All events</SelectItem>
+                  {selectedCalendar === "custom" ? <SelectItem value="custom">Custom filters</SelectItem> : null}
+                  {eventTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+
+            <ButtonGroup>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                aria-label="Previous date range"
+                onClick={() => controller.prev()}
+              >
+                <ChevronLeft />
+              </Button>
+              <Button type="button" variant="outline" onClick={() => controller.today()}>
+                Today
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                aria-label="Next date range"
+                onClick={() => controller.next()}
+              >
+                <ChevronRight />
+              </Button>
+            </ButtonGroup>
+
             {canManage ? (
-              <CreateTaskDialog action={createTaskAction} contacts={contacts} />
-            ) : (
-              <PermissionDisabledButton size="sm" reason="Your role can view the calendar but cannot create tasks.">
+              <Button
+                type="button"
+                onClick={() => {
+                  setCreateDate(today);
+                  setCreateOpen(true);
+                }}
+              >
                 <Plus />
-                New task
+                Add event
+              </Button>
+            ) : (
+              <PermissionDisabledButton reason="Your role can view the calendar but cannot create tasks.">
+                <Plus />
+                Add event
               </PermissionDisabledButton>
             )}
-            <Button type="button" variant="outline" size="sm" onClick={() => setMonth(addMonths(month, -1))}>
-              <ArrowLeft />
-              Previous
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setMonth(startOfMonth(today))}>
-              Today
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setMonth(addMonths(month, 1))}>
-              Next
-              <ArrowRight />
-            </Button>
           </div>
+        </div>
+
+        <EventCalendarViews
+          controller={controller}
+          initialView="dayGridMonth"
+          plugins={calendarPlugins}
+          events={fullCalendarEvents}
+          nowIndicator
+          height="auto"
+          displayEventTime={false}
+          dayMaxEvents={3}
+          moreLinkClick="popover"
+          popoverCloseContent={() => <XIcon className="size-5 text-muted-foreground" />}
+          selectable={canManage}
+          dateClick={handleDateClick}
+          eventClick={handleEventClick}
+          eventContent={(info) => {
+            const event = eventById.get(info.event.id);
+            return event ? (
+              <div className="flex min-w-0 items-center gap-1.5 px-1 py-0.5 text-xs">
+                <CalendarEventPill event={event} />
+              </div>
+            ) : (
+              <span className="truncate">{info.event.title}</span>
+            );
+          }}
+          eventDidMount={(info) => {
+            const event = eventById.get(info.event.id);
+            if (event) info.el.title = `${event.title} · ${event.customerName}`;
+          }}
+          datesSet={handleDatesSet}
+        />
+      </section>
+
+      <section className="overflow-hidden rounded-lg border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-4 py-3">
+          <div>
+            <h2 className="font-medium text-base">{dateInfo.title} schedule</h2>
+            <p className="mt-0.5 text-muted-foreground text-sm">
+              {rangeEvents.length} visible event{rangeEvents.length === 1 ? "" : "s"}
+            </p>
+          </div>
+        </div>
+        <div className="p-4">
+          {rangeEvents.length ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {rangeEvents.map((event) => (
+                <CalendarEventCard
+                  canManage={canManage}
+                  key={event.id}
+                  contacts={contacts}
+                  deleteTaskAction={deleteTaskAction}
+                  event={event}
+                  updateTaskAction={updateTaskAction}
+                  compact
+                  showDate
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-center text-muted-foreground text-sm">
+              Nothing scheduled in this date range with the active filter.
+            </div>
+          )}
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          icon={BriefcaseBusiness}
-          label="Jobs this month"
-          value={`${monthJobs.length}`}
-          detail={`${unscheduledJobCount} unscheduled jobs`}
-        />
-        <SummaryCard
-          icon={CheckSquare}
-          label="Tasks this month"
-          value={`${monthTasks.length}`}
-          detail="Open scheduled tasks"
-        />
-        <SummaryCard
-          icon={ReceiptText}
-          label="Invoices due"
-          value={`${monthInvoices.length}`}
-          detail={`${formatMoney(invoiceDueTotal.toFixed(2)) ?? "$0.00"} balance due`}
-        />
-        <SummaryCard
-          icon={CalendarDays}
-          label="Visible events"
-          value={`${monthEvents.length}`}
-          detail="Based on the active filters"
-        />
-      </section>
-
-      <section className="flex flex-wrap items-center gap-2">
-        {eventTypes.map((type) => {
-          const Icon = type.icon;
-          const active = activeTypes.includes(type.value);
-
-          return (
-            <Button
-              key={type.value}
-              type="button"
-              variant={active ? "default" : "outline"}
-              size="sm"
-              onClick={() => toggleType(type.value)}
-            >
-              <Icon />
-              {type.label}
-            </Button>
-          );
-        })}
-      </section>
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="hidden overflow-hidden md:block">
-          <CardHeader className="border-b">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <CalendarDays className="size-4 text-muted-foreground" />
-              {format(month, "MMMM yyyy")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="grid grid-cols-7 border-b bg-muted/20 text-center font-medium text-muted-foreground text-xs">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                <div key={day} className="border-r p-2 last:border-r-0">
-                  {day}
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7">
-              {calendarDays.map((day) => {
-                const dayEvents = eventsForDay(day);
-
-                return (
-                  <div
-                    key={day.toISOString()}
-                    className={cn(
-                      "min-h-32 border-r border-b p-2 last:border-r-0",
-                      !isSameMonth(day, month) && "bg-muted/20 text-muted-foreground",
-                      isToday(day) && "bg-cyan-50/60 dark:bg-cyan-500/5",
-                    )}
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span
-                        className={cn(
-                          "grid size-7 place-items-center rounded-md text-xs",
-                          isToday(day) && "bg-cyan-600 font-medium text-white",
-                        )}
-                      >
-                        {format(day, "d")}
-                      </span>
-                      {dayEvents.length ? (
-                        <span className="text-[11px] text-muted-foreground">{dayEvents.length}</span>
-                      ) : null}
-                    </div>
-                    <div className="grid gap-1.5">
-                      {dayEvents.slice(0, 3).map((event) => (
-                        <CalendarEventPreviewHoverCard
-                          canManage={canManage}
-                          key={event.id}
-                          contacts={contacts}
-                          deleteTaskAction={deleteTaskAction}
-                          event={event}
-                          updateTaskAction={updateTaskAction}
-                        />
-                      ))}
-                      {dayEvents.length > 3 ? (
-                        <span className="px-1.5 text-[11px] text-muted-foreground">+{dayEvents.length - 3} more</span>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="md:hidden">
-          <CardHeader className="border-b">
-            <CardTitle className="text-base">{format(month, "MMMM yyyy")}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 pt-4">
-            {mobileEventGroups.length ? (
-              mobileEventGroups.map((group) => (
-                <div key={group.date} className="grid gap-2">
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="font-medium text-foreground">{format(parseISO(group.date), "EEE, MMM d")}</span>
-                    <span className="text-muted-foreground">
-                      {group.events.length} event{group.events.length === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                  <div className="grid gap-2">
-                    {group.events.map((event) => (
-                      <CalendarEventCard
-                        canManage={canManage}
-                        key={event.id}
-                        contacts={contacts}
-                        deleteTaskAction={deleteTaskAction}
-                        event={event}
-                        updateTaskAction={updateTaskAction}
-                        compact
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-lg border bg-muted/20 p-6 text-center text-muted-foreground text-sm">
-                No events match the active filters for this month.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <aside className="hidden gap-5 md:grid xl:content-start">
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle className="text-base">{format(month, "MMMM")} schedule</CardTitle>
-            </CardHeader>
-            <CardContent className="grid max-h-[760px] gap-2 overflow-y-auto pt-4">
-              {monthListEvents.length ? (
-                monthListEvents.map((event) => (
-                  <CalendarEventCard
-                    canManage={canManage}
-                    key={event.id}
-                    contacts={contacts}
-                    deleteTaskAction={deleteTaskAction}
-                    event={event}
-                    updateTaskAction={updateTaskAction}
-                    compact
-                  />
-                ))
-              ) : (
-                <div className="rounded-lg border bg-muted/20 p-4 text-muted-foreground text-sm">
-                  Nothing scheduled this month with the active filters.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </aside>
-      </div>
+      <CreateTaskDialog
+        action={createTaskAction}
+        contacts={contacts}
+        initialDate={createDate}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+      />
+      <CalendarEventDialog
+        canManage={canManage}
+        contacts={contacts}
+        deleteTaskAction={deleteTaskAction}
+        event={selectedEvent}
+        onOpenChange={(open) => {
+          if (!open) setSelectedEvent(null);
+        }}
+        updateTaskAction={updateTaskAction}
+      />
     </div>
   );
 }
