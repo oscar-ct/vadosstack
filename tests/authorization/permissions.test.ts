@@ -50,6 +50,15 @@ describe("permission registry", () => {
     }
   });
 
+  it("denies every permission when the individual membership is suspended", () => {
+    for (const systemKey of ["OWNER", "ADMIN", null]) {
+      const suspended = { ...role(systemKey, PERMISSION_KEYS), membershipStatus: "Suspended" };
+      for (const permission of PERMISSION_KEYS) {
+        expect(can(suspended, permission), `${systemKey ?? "custom"}: ${permission}`).toBe(false);
+      }
+    }
+  });
+
   it("ships an Admin role with every registered permission but without Owner identity", () => {
     const admin = DEFAULT_ROLE_TEMPLATES.find((template) => template.systemKey === "ADMIN");
 
@@ -194,6 +203,16 @@ describe("permission-aware landing pages", () => {
         ...role("OWNER", []),
         workspaceMode: "both",
         workspaceStatus: "Suspended",
+      }),
+    ).toBe("/dashboard/overview");
+  });
+
+  it("uses a stable display route for a suspended membership", () => {
+    expect(
+      getMembershipLandingPath({
+        ...role("ADMIN", []),
+        membershipStatus: "Suspended",
+        workspaceMode: "both",
       }),
     ).toBe("/dashboard/overview");
   });

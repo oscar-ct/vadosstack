@@ -25,6 +25,7 @@ import {
   authorizeWorkspace,
   authorizeWorkspaceSlug,
   getCurrentPrincipal,
+  getUserAuthorizationVersion,
   WorkspaceAccessDeniedError,
 } from "@/lib/authorization/authorize";
 
@@ -47,6 +48,8 @@ function membership({
 }) {
   return {
     id: `membership-${workspaceId}`,
+    status: "Active",
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     workspaceId,
     employeeId: null,
     workspace: {
@@ -55,6 +58,7 @@ function membership({
       name: workspaceSlug,
       workspaceMode: "both",
       status: "Active",
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
       suspendedAt: null,
       suspensionReasonCode: null,
       suspendedUntil: null,
@@ -64,6 +68,7 @@ function membership({
       workspaceId,
       name: systemKey === "OWNER" ? "Owner" : "Custom",
       systemKey,
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
       permissions: permissionKeys.map((permissionKey) => ({ permissionKey })),
     },
   };
@@ -100,10 +105,52 @@ describe("workspace principal resolution", () => {
       expect.objectContaining({
         where: {
           userId: "user-a",
-          status: "Active",
+          status: { in: ["Active", "Suspended"] },
         },
       }),
     );
+  });
+
+  it("keeps suspended memberships visible while denying their permissions", async () => {
+    mocks.memberships.mockResolvedValue([
+      {
+        ...membership({ workspaceId: "workspace-a", workspaceSlug: "business-a", permissionKeys: ["jobs.view"] }),
+        status: "Suspended",
+      },
+    ]);
+
+    const principal = await getCurrentPrincipal();
+
+    expect(principal?.memberships[0]).toMatchObject({
+      membershipStatus: "Suspended",
+      workspaceId: "workspace-a",
+    });
+    await expect(authorizeWorkspace("workspace-a", "jobs.view")).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+  });
+
+  it("changes the authorization version when a member's assigned role changes", async () => {
+    const original = membership({
+      workspaceId: "workspace-a",
+      workspaceSlug: "business-a",
+      permissionKeys: ["jobs.view"],
+    });
+    mocks.memberships.mockResolvedValue([original]);
+    const before = await getUserAuthorizationVersion("user-a");
+
+    mocks.memberships.mockResolvedValue([
+      {
+        ...original,
+        role: {
+          ...original.role,
+          id: "role-time-manager",
+          updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+        },
+        updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+      },
+    ]);
+    const after = await getUserAuthorizationVersion("user-a");
+
+    expect(after).not.toBe(before);
   });
 
   it("allows a permission only in the membership that owns it", async () => {

@@ -30,7 +30,7 @@ export default async function Page() {
     );
   }
 
-  const [roles, memberships, invitations, employees, auditEvents] = await Promise.all([
+  const [roles, memberships, invitations, employees, auditEvents, workspace] = await Promise.all([
     prisma.workspaceRole.findMany({
       where: { workspaceId: authorization.workspaceId },
       orderBy: [{ systemKey: "asc" }, { name: "asc" }],
@@ -89,7 +89,13 @@ export default async function Page() {
         targetType: true,
       },
     }),
+    prisma.workspace.findUniqueOrThrow({
+      where: { id: authorization.workspaceId },
+      select: { id: true, legacyOwnerId: true },
+    }),
   ]);
+
+  const workspaceOwnerId = workspace.legacyOwnerId ?? workspace.id;
 
   return (
     <RolesManager
@@ -120,6 +126,7 @@ export default async function Page() {
         .filter((membership) => membership.status === "Active")
         .map((membership) => ({
           id: membership.id,
+          isWorkspaceOwner: membership.user.id === workspaceOwnerId,
           joinedAt: membership.joinedAt.toISOString(),
           roleId: membership.roleId,
           user: membership.user,
@@ -140,6 +147,7 @@ export default async function Page() {
         .filter((membership) => membership.status === "Removed")
         .map((membership) => ({
           id: membership.id,
+          isWorkspaceOwner: membership.user.id === workspaceOwnerId,
           joinedAt: membership.joinedAt.toISOString(),
           removedAt: membership.updatedAt.toISOString(),
           roleId: membership.roleId,
@@ -150,6 +158,7 @@ export default async function Page() {
         .map((membership) => ({
           changedAt: membership.updatedAt.toISOString(),
           id: membership.id,
+          isWorkspaceOwner: membership.user.id === workspaceOwnerId,
           joinedAt: membership.joinedAt.toISOString(),
           roleId: membership.roleId,
           user: membership.user,

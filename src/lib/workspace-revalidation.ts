@@ -2,6 +2,6 @@ import { revalidatePath } from "next/cache";
 
 import { scopeWorkspacePath } from "@/lib/workspace-path";
 
-export function revalidateWorkspacePath(workspaceSlug: string, dashboardPath: string) {
-  revalidatePath(scopeWorkspacePath(workspaceSlug, dashboardPath));
+export function revalidateWorkspacePath(workspaceSlug: string, dashboardPath: string, type?: "layout" | "page") {
+  revalidatePath(scopeWorkspacePath(workspaceSlug, dashboardPath), type);
 }

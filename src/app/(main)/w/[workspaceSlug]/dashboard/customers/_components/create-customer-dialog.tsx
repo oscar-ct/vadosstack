@@ -169,7 +169,7 @@ export function CreateCustomerDialog({
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="customer-email">Email</Label>
-                <Input id="customer-email" name="email" type="email" placeholder="jane@example.com" required />
+                <Input id="customer-email" name="email" type="email" placeholder="jane@example.com" />
               </div>
             </div>
 

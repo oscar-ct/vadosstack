@@ -16,7 +16,7 @@ import {
   getDisplayName,
   refreshCurrentSession,
 } from "@/lib/auth";
-import { getUserDashboardDestination } from "@/lib/authorization";
+import { getUserAuthorizationVersion, getUserDashboardDestination } from "@/lib/authorization";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { createPasswordResetToken, createPasswordResetUrl, hashPasswordResetToken } from "@/lib/password-reset";
 import { prisma } from "@/lib/prisma";
@@ -442,4 +442,9 @@ export async function getSignedInUser() {
 
 export async function refreshSessionAction() {
   return refreshCurrentSession();
+}
+
+export async function getAuthorizationVersionAction() {
+  const user = await getCurrentUser();
+  return user ? getUserAuthorizationVersion(user.id) : null;
 }

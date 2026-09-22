@@ -11,6 +11,7 @@ export {
   getCurrentDashboardAuthorization,
   getCurrentPrincipal,
   getPermittedDashboardAuthorization,
+  getUserAuthorizationVersion,
   requireCurrentPrincipal,
   WorkspaceAccessDeniedError,
   type WorkspaceMembershipSummary,

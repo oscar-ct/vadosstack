@@ -23,6 +23,7 @@ const dashboardLandingCandidates = [
 
 export function getMembershipLandingPath(
   membership: Pick<WorkspaceMembershipSummary, "permissions" | "roleSystemKey" | "workspaceMode"> & {
+    membershipStatus?: string;
     workspaceStatus?: string;
   },
 ) {
@@ -30,7 +31,7 @@ export function getMembershipLandingPath(
 
   // Suspended workspaces still need a stable route so their layout can render the
   // suspension notice. Authorization remains denied by `can`; no page data loads.
-  if (membership.workspaceStatus === "Suspended") {
+  if (membership.membershipStatus === "Suspended" || membership.workspaceStatus === "Suspended") {
     return "/dashboard/overview";
   }
 

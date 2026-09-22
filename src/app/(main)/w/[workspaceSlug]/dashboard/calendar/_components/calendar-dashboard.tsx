@@ -95,6 +95,7 @@ export type CalendarDashboardContact = {
   id: string;
   kind: "customer" | "lead";
   label: string;
+  locations?: string[];
   meta?: string;
 };
 
@@ -438,7 +439,20 @@ function TaskFormFields({
       : "";
   const [selectedContact, setSelectedContact] = React.useState(initialContactValue);
   const [scheduledFor, setScheduledFor] = React.useState(() => getTaskDateValue(event, initialDate));
+  const [location, setLocation] = React.useState(event?.location ?? "");
   const [kind, id] = selectedContact.split(":");
+  const selectedCustomer = contacts.find(
+    (contact) => contact.kind === "customer" && `customer:${contact.id}` === selectedContact,
+  );
+  const savedLocations = selectedCustomer?.locations ?? [];
+  const locationOptions =
+    location && !savedLocations.includes(location) ? [location, ...savedLocations] : savedLocations;
+
+  function handleContactSelect(value: string) {
+    setSelectedContact(value);
+    const contact = contacts.find((candidate) => `${candidate.kind}:${candidate.id}` === value);
+    setLocation(contact?.kind === "customer" ? (contact.locations?.[0] ?? "") : "");
+  }
 
   return (
     <>
@@ -481,16 +495,37 @@ function TaskFormFields({
       </div>
       <div className="grid gap-2">
         <Label htmlFor="calendar-task-contact">Customer or lead</Label>
-        <TaskContactPicker contacts={contacts} selectedValue={selectedContact} onSelect={setSelectedContact} />
+        <TaskContactPicker contacts={contacts} selectedValue={selectedContact} onSelect={handleContactSelect} />
       </div>
       <div className="grid gap-2">
         <Label htmlFor={`calendar-task-location-${event?.recordId ?? "new"}`}>Location</Label>
-        <Input
-          id={`calendar-task-location-${event?.recordId ?? "new"}`}
-          name="location"
-          placeholder="Optional"
-          defaultValue={event?.location ?? ""}
-        />
+        {savedLocations.length ? (
+          <Select name="location" value={location} onValueChange={setLocation}>
+            <SelectTrigger id={`calendar-task-location-${event?.recordId ?? "new"}`} className="w-full">
+              <MapPin className="size-4 text-muted-foreground" />
+              <SelectValue placeholder="Select a saved address" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {locationOptions.map((savedLocation, index) => (
+                  <SelectItem key={savedLocation} value={savedLocation}>
+                    {index === 0 && savedLocation === location && !savedLocations.includes(savedLocation)
+                      ? `Current: ${savedLocation}`
+                      : savedLocation}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            id={`calendar-task-location-${event?.recordId ?? "new"}`}
+            name="location"
+            placeholder="Optional"
+            value={location}
+            onChange={(inputEvent) => setLocation(inputEvent.target.value)}
+          />
+        )}
       </div>
       <div className="grid gap-2">
         <Label htmlFor={`calendar-task-notes-${event?.recordId ?? "new"}`}>Notes</Label>
@@ -510,6 +545,7 @@ function CalendarEventCard({
   contacts,
   deleteTaskAction,
   event,
+  onOpen,
   updateTaskAction,
   compact = false,
   linked = true,
@@ -519,6 +555,7 @@ function CalendarEventCard({
   contacts: CalendarDashboardContact[];
   deleteTaskAction: TaskAction;
   event: CalendarDashboardEvent;
+  onOpen?: () => void;
   updateTaskAction: TaskAction;
   compact?: boolean;
   linked?: boolean;
@@ -578,6 +615,25 @@ function CalendarEventCard({
   );
 
   if (!event.href || !linked) {
+    if (event.type === "task" && linked && onOpen) {
+      return (
+        <div
+          className={cn(
+            "relative grid gap-2 rounded-lg border bg-card p-3 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
+            compact && "p-2.5",
+          )}
+        >
+          <button
+            type="button"
+            aria-label={`View task: ${event.title}`}
+            className="absolute inset-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onOpen}
+          />
+          <div className="pointer-events-none grid gap-2">{content}</div>
+        </div>
+      );
+    }
+
     return <div className={cn("grid gap-2 rounded-lg border bg-card p-3 text-sm", compact && "p-2.5")}>{content}</div>;
   }
 
@@ -727,7 +783,7 @@ function TaskActionsMenu({
   const [menuOpen, setMenuOpen] = React.useState(false);
 
   return (
-    <div className="flex items-center">
+    <div className="pointer-events-auto relative z-10 flex items-center">
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button
@@ -794,14 +850,77 @@ function CalendarEventDialog({
   onOpenChange: (open: boolean) => void;
   updateTaskAction: TaskAction;
 }) {
+  const isTask = event?.type === "task";
+
   return (
     <Dialog open={Boolean(event)} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-md">
+      <DialogContent
+        className={cn(
+          "max-h-[calc(100svh-1rem)] w-[calc(100vw-1rem)] overflow-y-auto",
+          isTask ? "sm:max-w-2xl" : "sm:max-w-md",
+        )}
+      >
         <DialogHeader>
-          <DialogTitle>{event ? getEventLabel(event.type) : "Calendar event"}</DialogTitle>
-          <DialogDescription>Details for this scheduled item.</DialogDescription>
+          <DialogTitle>{isTask ? "Task details" : event ? getEventLabel(event.type) : "Calendar event"}</DialogTitle>
+          <DialogDescription>
+            {isTask ? "Complete information for this scheduled task." : "Details for this scheduled item."}
+          </DialogDescription>
         </DialogHeader>
-        {event ? (
+        {event && isTask ? (
+          <div className="grid gap-5">
+            <div className="flex items-start justify-between gap-4 border-b pb-5">
+              <div className="flex min-w-0 items-start gap-3">
+                <span
+                  className={cn(
+                    "mt-0.5 grid size-10 shrink-0 place-items-center rounded-lg border",
+                    getEventPalette(event).tone,
+                  )}
+                >
+                  <CheckSquare className="size-5" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="whitespace-pre-wrap break-words font-medium text-xl leading-7">{event.title}</h3>
+                  <p className="mt-1 text-muted-foreground text-sm">{event.customerName}</p>
+                </div>
+              </div>
+              <TaskActionsMenu
+                canManage={canManage}
+                contacts={contacts}
+                deleteAction={deleteTaskAction}
+                event={event}
+                updateAction={updateTaskAction}
+              />
+            </div>
+
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border bg-muted/20 p-4">
+                <dt className="text-muted-foreground text-xs uppercase tracking-wide">Scheduled for</dt>
+                <dd className="mt-1.5 flex items-center gap-2 font-medium text-sm">
+                  <CalendarDays className="size-4 text-muted-foreground" />
+                  {format(getEventDate(event), "EEEE, MMMM d, yyyy")}
+                </dd>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-4">
+                <dt className="text-muted-foreground text-xs uppercase tracking-wide">Priority</dt>
+                <dd className="mt-1.5 font-medium text-sm">{event.status}</dd>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-4 sm:col-span-2">
+                <dt className="text-muted-foreground text-xs uppercase tracking-wide">Location</dt>
+                <dd className="mt-1.5 flex items-start gap-2 text-sm">
+                  <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <span className="whitespace-pre-wrap break-words">{event.location ?? "No location added"}</span>
+                </dd>
+              </div>
+            </dl>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <div className="font-medium text-sm">Notes</div>
+              <p className="mt-2 whitespace-pre-wrap break-words text-muted-foreground text-sm leading-6">
+                {event.notes ?? "No notes added."}
+              </p>
+            </div>
+          </div>
+        ) : event ? (
           <div className="grid gap-3">
             <CalendarEventCard
               canManage={canManage}
@@ -856,7 +975,7 @@ export function CalendarDashboard({
     start: initialStart,
     title: format(today, "MMMM yyyy"),
   }));
-  const [activeTypes, setActiveTypes] = React.useState<CalendarDashboardEvent["type"][]>(["job", "task", "invoice"]);
+  const [activeTypes, setActiveTypes] = React.useState<CalendarDashboardEvent["type"][]>(["task"]);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [createDate, setCreateDate] = React.useState(today);
   const [selectedEvent, setSelectedEvent] = React.useState<CalendarDashboardEvent | null>(null);
@@ -976,12 +1095,12 @@ export function CalendarDashboard({
                 }}
               >
                 <Plus />
-                Add event
+                Add task
               </Button>
             ) : (
               <PermissionDisabledButton reason="Your role can view the calendar but cannot create tasks.">
                 <Plus />
-                Add event
+                Add task
               </PermissionDisabledButton>
             )}
           </div>
@@ -1038,6 +1157,7 @@ export function CalendarDashboard({
                   contacts={contacts}
                   deleteTaskAction={deleteTaskAction}
                   event={event}
+                  onOpen={event.type === "task" ? () => setSelectedEvent(event) : undefined}
                   updateTaskAction={updateTaskAction}
                   compact
                   showDate

@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { useRouter } from "next/navigation";
+
 import { format, parseISO } from "date-fns";
 import {
   ChevronLeft,
@@ -392,22 +394,38 @@ function ResendInvitationButton({ action, invitationId }: { action: RoleAction; 
 }
 
 function MemberRoleSelect({ action, member, roles }: { action: RoleAction; member: Member; roles: Role[] }) {
+  const router = useRouter();
   const [state, formAction, pending] = React.useActionState(action, initialState);
+  const [selectedRoleId, setSelectedRoleId] = React.useState(member.roleId);
+
   React.useEffect(() => {
-    if (state.message) (state.success ? toast.success : toast.error)(state.message);
-  }, [state]);
+    setSelectedRoleId(member.roleId);
+  }, [member.roleId]);
+
+  React.useEffect(() => {
+    if (!state.message) return;
+
+    (state.success ? toast.success : toast.error)(state.message);
+    if (state.success) router.refresh();
+    else setSelectedRoleId(member.roleId);
+  }, [member.roleId, router, state]);
+
+  const availableRoles = roles.filter((role) => role.systemKey !== "OWNER" || role.id === member.roleId);
 
   return (
     <form action={formAction}>
       <input type="hidden" name="membershipId" value={member.id} />
       <NativeSelect
         name="roleId"
-        defaultValue={member.roleId}
-        disabled={pending || roles.find((role) => role.id === member.roleId)?.systemKey === "OWNER"}
-        onChange={(event) => event.currentTarget.form?.requestSubmit()}
+        value={selectedRoleId}
+        disabled={pending || member.isWorkspaceOwner}
+        onChange={(event) => {
+          setSelectedRoleId(event.currentTarget.value);
+          event.currentTarget.form?.requestSubmit();
+        }}
         className="min-w-40"
       >
-        {roles.map((role) => (
+        {availableRoles.map((role) => (
           <option key={role.id} value={role.id}>
             {role.name}
           </option>
@@ -518,6 +536,7 @@ function InviteMemberDialog({
 
 type Member = {
   id: string;
+  isWorkspaceOwner: boolean;
   joinedAt: string;
   roleId: string;
   user: { email: string; id: string; name: string | null };

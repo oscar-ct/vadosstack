@@ -220,6 +220,17 @@ export default async function Page() {
         id: customer.id,
         kind: "customer" as const,
         label: customer.name,
+        locations: Array.from(
+          new Set(
+            customer.addresses
+              .map((address) =>
+                [address.line1, address.line2, address.city, address.state, address.postalCode]
+                  .filter(Boolean)
+                  .join(", "),
+              )
+              .filter(Boolean),
+          ),
+        ),
         meta: [customer.email, addressSummary].filter(Boolean).join(" - ") || "Customer",
       };
     }),

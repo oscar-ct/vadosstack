@@ -38,6 +38,7 @@ function membership(...permissions: PermissionKey[]): WorkspaceMembershipSummary
   return {
     employeeId: null,
     id: "membership-a",
+    membershipStatus: "Active",
     permissions: new Set(permissions),
     roleId: "role-a",
     roleName: "Custom",

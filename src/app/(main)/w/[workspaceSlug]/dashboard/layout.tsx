@@ -32,6 +32,7 @@ import {
   DashboardNavigationContent,
   DashboardNavigationLoaderProvider,
 } from "./_components/dashboard-navigation-loader";
+import { MembershipSuspendedState } from "./_components/membership-suspended-state";
 import { SessionKeepalive } from "./_components/session-keepalive";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
@@ -132,17 +133,25 @@ export default async function Layout({
       requestContext.dashboardPath === "/dashboard/admin/users",
   );
 
-  if (activeWorkspace?.status === "Suspended" && !isFounderUsersConsole) {
+  const availableWorkspaces =
+    principal?.memberships.filter(
+      (membership) =>
+        membership.workspaceId !== activeWorkspace?.id &&
+        membership.membershipStatus === "Active" &&
+        membership.workspaceStatus === "Active",
+    ) ?? [];
+
+  if (activeMembership?.membershipStatus === "Suspended") {
     return (
-      <WorkspaceSuspendedState
-        workspaceName={activeWorkspace.name}
-        availableWorkspaces={
-          principal?.memberships.filter(
-            (membership) => membership.workspaceId !== activeWorkspace.id && membership.workspaceStatus === "Active",
-          ) ?? []
-        }
+      <MembershipSuspendedState
+        workspaceName={activeWorkspace?.name ?? activeMembership.workspaceName}
+        availableWorkspaces={availableWorkspaces}
       />
     );
+  }
+
+  if (activeWorkspace?.status === "Suspended" && !isFounderUsersConsole) {
+    return <WorkspaceSuspendedState workspaceName={activeWorkspace.name} availableWorkspaces={availableWorkspaces} />;
   }
 
   const activeWorkspaceMode = parseWorkspaceMode(activeWorkspace?.workspaceMode);
@@ -302,7 +311,7 @@ export default async function Layout({
     >
       <DashboardNavigationLoaderProvider>
         <WorkspacePathProvider workspaceSlug={workspaceSlug ?? requestedWorkspaceSlug}>
-          <SessionKeepalive />
+          <SessionKeepalive authorizationVersion={principal.authorizationVersion} />
           {currentUser && workspaceSlug ? (
             <WorkspaceModeGuard mode={activeWorkspaceMode} workspaceSlug={workspaceSlug} />
           ) : null}
@@ -345,7 +354,7 @@ export default async function Layout({
                         `${getWorkspaceDashboardPath(membership.workspaceSlug, "/dashboard/company-logo")}?fallback=1`,
                       name: membership.workspaceName,
                       roleName: membership.roleName,
-                      status: membership.workspaceStatus,
+                      status: membership.membershipStatus === "Suspended" ? "Suspended" : membership.workspaceStatus,
                       url: getWorkspaceDashboardPath(membership.workspaceSlug, getMembershipLandingPath(membership)),
                     })),
                   }
@@ -385,7 +394,7 @@ export default async function Layout({
                           `${getWorkspaceDashboardPath(membership.workspaceSlug, "/dashboard/company-logo")}?fallback=1`,
                         name: membership.workspaceName,
                         roleName: membership.roleName,
-                        status: membership.workspaceStatus,
+                        status: membership.membershipStatus === "Suspended" ? "Suspended" : membership.workspaceStatus,
                         url: getWorkspaceDashboardPath(membership.workspaceSlug, getMembershipLandingPath(membership)),
                       })) ?? []
                     }

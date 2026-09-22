@@ -50,10 +50,6 @@ const customerDetailsSchema = z.object({
 });
 
 const createCustomerSchema = customerDetailsSchema.extend({
-  email: z.preprocess((value) => {
-    const email = String(value ?? "").trim();
-    return email;
-  }, z.string().min(1, "Email is required.").email("Enter a valid email address.")),
   phone: z
     .string()
     .trim()

@@ -6,10 +6,15 @@ import { isPermissionKey } from "./permissions";
 import { getMembershipLandingPath } from "./workspace-landing";
 
 function selectDefaultMembership<
-  T extends Pick<WorkspaceMembershipSummary, "roleSystemKey" | "workspaceId"> & { workspaceStatus?: string },
+  T extends Pick<WorkspaceMembershipSummary, "roleSystemKey" | "workspaceId"> & {
+    membershipStatus?: string;
+    workspaceStatus?: string;
+  },
 >(memberships: readonly T[], userId: string) {
   const activeMemberships = memberships.filter(
-    (membership) => !membership.workspaceStatus || membership.workspaceStatus === "Active",
+    (membership) =>
+      (!membership.membershipStatus || membership.membershipStatus === "Active") &&
+      (!membership.workspaceStatus || membership.workspaceStatus === "Active"),
   );
   return (
     activeMemberships.find((membership) => membership.workspaceId === userId && membership.roleSystemKey === "OWNER") ??
@@ -35,9 +40,10 @@ export async function getUserDashboardDestination(userId: string) {
     select: {
       workspaceMode: true,
       workspaceMemberships: {
-        where: { status: "Active" },
+        where: { status: { in: ["Active", "Suspended"] } },
         orderBy: [{ joinedAt: "asc" }, { id: "asc" }],
         select: {
+          status: true,
           workspaceId: true,
           workspace: { select: { slug: true, workspaceMode: true, status: true } },
           role: {
@@ -54,6 +60,7 @@ export async function getUserDashboardDestination(userId: string) {
   if (!user) return "/login";
 
   const memberships = user.workspaceMemberships.map((membership) => ({
+    membershipStatus: membership.status,
     workspaceId: membership.workspaceId,
     workspaceSlug: membership.workspace.slug,
     workspaceMode: membership.workspace.workspaceMode,

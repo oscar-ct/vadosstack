@@ -2,7 +2,7 @@ import { addHours, differenceInCalendarDays, format, startOfToday } from "date-f
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getDisplayName } from "@/lib/auth";
-import { can, getCurrentDashboardAuthorization } from "@/lib/authorization";
+import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { calculateOutstandingBalance, toMoneyNumber } from "@/lib/customer-billing";
 import { prisma } from "@/lib/prisma";
 import { getTimeTrackingRange } from "@/lib/time-tracking";
@@ -11,7 +11,7 @@ import { getManagerActionQueue } from "../_lib/manager-action-queue";
 import { OverviewV2Dashboard } from "./_components/overview-v2-dashboard";
 
 export default async function Page() {
-  const authorization = await getCurrentDashboardAuthorization();
+  const authorization = await getPermittedDashboardAuthorization("dashboard.overview.view");
 
   if (!authorization) {
     return (

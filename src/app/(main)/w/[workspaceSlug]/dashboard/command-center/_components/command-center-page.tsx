@@ -1,7 +1,7 @@
 import { isBefore } from "date-fns";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
-import { can, getCurrentDashboardAuthorization, type WorkspaceMembershipSummary } from "@/lib/authorization";
+import { can, getPermittedDashboardAuthorization, type WorkspaceMembershipSummary } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
 import { formatUtcMonthShort, getUtcMonthKey, startOfUtcMonth } from "@/lib/reporting-month";
 
@@ -299,7 +299,7 @@ export async function getCommandCenterData(
 }
 
 export default async function Page() {
-  const authorization = await getCurrentDashboardAuthorization();
+  const authorization = await getPermittedDashboardAuthorization("dashboard.performance.view");
 
   if (!authorization) {
     return (

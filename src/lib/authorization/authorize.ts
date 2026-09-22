@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 import { isPermissionKey, PERMISSION_KEYS, type PermissionKey } from "./permissions";
 import { getDashboardRequestContext } from "./request-context";
+import { createHash } from "node:crypto";
 
 export class AuthenticationRequiredError extends Error {
   constructor() {
@@ -22,6 +23,7 @@ export class WorkspaceAccessDeniedError extends Error {
 
 export type WorkspaceMembershipSummary = {
   id: string;
+  membershipStatus: string;
   workspaceId: string;
   workspaceSlug: string;
   workspaceName: string;
@@ -38,6 +40,7 @@ export type WorkspaceMembershipSummary = {
 };
 
 export type CurrentPrincipal = {
+  authorizationVersion: string;
   user: CurrentUser;
   memberships: readonly WorkspaceMembershipSummary[];
 };
@@ -60,6 +63,58 @@ const toPermissionSet = (systemKey: string | null, permissionKeys: string[]) => 
   return new Set(permissionKeys.filter(isPermissionKey));
 };
 
+type AuthorizationVersionRecord = {
+  id: string;
+  status: string;
+  updatedAt: Date;
+  workspaceId: string;
+  role: { id: string; updatedAt: Date; workspaceId: string };
+  workspace: { id: string; status: string; updatedAt: Date };
+};
+
+function createAuthorizationVersion(records: readonly AuthorizationVersionRecord[]) {
+  const value = records
+    .map((record) => [
+      record.id,
+      record.status,
+      record.updatedAt.toISOString(),
+      record.workspaceId,
+      record.role.id,
+      record.role.updatedAt.toISOString(),
+      record.workspace.id,
+      record.workspace.status,
+      record.workspace.updatedAt.toISOString(),
+    ])
+    .sort(([left], [right]) => left.localeCompare(right));
+
+  return createHash("sha256").update(JSON.stringify(value)).digest("base64url");
+}
+
+export async function getUserAuthorizationVersion(userId: string) {
+  const memberships = await prisma.workspaceMembership.findMany({
+    where: {
+      userId,
+      status: { in: ["Active", "Suspended"] },
+    },
+    orderBy: { id: "asc" },
+    select: {
+      id: true,
+      status: true,
+      updatedAt: true,
+      workspaceId: true,
+      role: { select: { id: true, updatedAt: true, workspaceId: true } },
+      workspace: { select: { id: true, status: true, updatedAt: true } },
+    },
+  });
+
+  return createAuthorizationVersion(
+    memberships.filter(
+      (membership) =>
+        membership.workspace.id === membership.workspaceId && membership.role.workspaceId === membership.workspaceId,
+    ),
+  );
+}
+
 export const getCurrentPrincipal = cache(async (): Promise<CurrentPrincipal | null> => {
   const user = await getCurrentUser();
 
@@ -70,11 +125,13 @@ export const getCurrentPrincipal = cache(async (): Promise<CurrentPrincipal | nu
   const memberships = await prisma.workspaceMembership.findMany({
     where: {
       userId: user.id,
-      status: "Active",
+      status: { in: ["Active", "Suspended"] },
     },
     orderBy: [{ joinedAt: "asc" }, { id: "asc" }],
     select: {
       id: true,
+      status: true,
+      updatedAt: true,
       workspaceId: true,
       employeeId: true,
       workspace: {
@@ -84,6 +141,7 @@ export const getCurrentPrincipal = cache(async (): Promise<CurrentPrincipal | nu
           name: true,
           workspaceMode: true,
           status: true,
+          updatedAt: true,
           suspendedAt: true,
           suspensionReasonCode: true,
           suspendedUntil: true,
@@ -95,6 +153,7 @@ export const getCurrentPrincipal = cache(async (): Promise<CurrentPrincipal | nu
           workspaceId: true,
           name: true,
           systemKey: true,
+          updatedAt: true,
           permissions: {
             select: {
               permissionKey: true,
@@ -105,32 +164,34 @@ export const getCurrentPrincipal = cache(async (): Promise<CurrentPrincipal | nu
     },
   });
 
+  const validMemberships = memberships.filter(
+    (membership) =>
+      membership.workspace.id === membership.workspaceId && membership.role.workspaceId === membership.workspaceId,
+  );
+
   return {
+    authorizationVersion: createAuthorizationVersion(validMemberships),
     user,
-    memberships: memberships
-      .filter(
-        (membership) =>
-          membership.workspace.id === membership.workspaceId && membership.role.workspaceId === membership.workspaceId,
-      )
-      .map((membership) => ({
-        id: membership.id,
-        workspaceId: membership.workspaceId,
-        workspaceSlug: membership.workspace.slug,
-        workspaceName: membership.workspace.name,
-        workspaceMode: membership.workspace.workspaceMode,
-        workspaceStatus: membership.workspace.status,
-        workspaceSuspendedAt: membership.workspace.suspendedAt,
-        workspaceSuspensionReasonCode: membership.workspace.suspensionReasonCode,
-        workspaceSuspendedUntil: membership.workspace.suspendedUntil,
-        roleId: membership.role.id,
-        roleName: membership.role.name,
-        roleSystemKey: membership.role.systemKey,
-        employeeId: membership.employeeId,
-        permissions: toPermissionSet(
-          membership.role.systemKey,
-          membership.role.permissions.map((permission) => permission.permissionKey),
-        ),
-      })),
+    memberships: validMemberships.map((membership) => ({
+      id: membership.id,
+      membershipStatus: membership.status,
+      workspaceId: membership.workspaceId,
+      workspaceSlug: membership.workspace.slug,
+      workspaceName: membership.workspace.name,
+      workspaceMode: membership.workspace.workspaceMode,
+      workspaceStatus: membership.workspace.status,
+      workspaceSuspendedAt: membership.workspace.suspendedAt,
+      workspaceSuspensionReasonCode: membership.workspace.suspensionReasonCode,
+      workspaceSuspendedUntil: membership.workspace.suspendedUntil,
+      roleId: membership.role.id,
+      roleName: membership.role.name,
+      roleSystemKey: membership.role.systemKey,
+      employeeId: membership.employeeId,
+      permissions: toPermissionSet(
+        membership.role.systemKey,
+        membership.role.permissions.map((permission) => permission.permissionKey),
+      ),
+    })),
   };
 });
 
@@ -146,10 +207,15 @@ export async function requireCurrentPrincipal() {
 
 export function can(
   membership: Pick<WorkspaceMembershipSummary, "permissions" | "roleSystemKey"> & {
+    membershipStatus?: string;
     workspaceStatus?: string;
   },
   permission: PermissionKey,
 ) {
+  if (membership.membershipStatus && membership.membershipStatus !== "Active") {
+    return false;
+  }
+
   if (membership.workspaceStatus && membership.workspaceStatus !== "Active") {
     return false;
   }

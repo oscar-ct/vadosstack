@@ -45,6 +45,7 @@ function errorState(message: string): RoleActionState {
 
 function refreshRoles(workspaceSlug: string) {
   revalidateWorkspacePath(workspaceSlug, "/dashboard/roles");
+  revalidateWorkspacePath(workspaceSlug, "/dashboard", "layout");
 }
 
 async function sendWorkspaceInvitationEmail({
@@ -253,7 +254,13 @@ export async function updateMemberRoleAction(_state: RoleActionState, formData: 
   const [membership, role] = await Promise.all([
     prisma.workspaceMembership.findFirst({
       where: { id: membershipId.data, workspaceId: authorization.workspaceId },
-      select: { id: true, userId: true, role: { select: { systemKey: true } } },
+      select: {
+        id: true,
+        roleId: true,
+        userId: true,
+        role: { select: { systemKey: true } },
+        workspace: { select: { id: true, legacyOwnerId: true } },
+      },
     }),
     prisma.workspaceRole.findFirst({
       where: { id: roleId.data, workspaceId: authorization.workspaceId },
@@ -261,7 +268,11 @@ export async function updateMemberRoleAction(_state: RoleActionState, formData: 
     }),
   ]);
   if (!membership || !role) return errorState("Member or role could not be found.");
-  if (membership.role.systemKey === "OWNER") return errorState("The workspace owner's role cannot be reassigned.");
+  const workspaceOwnerId = membership.workspace.legacyOwnerId ?? membership.workspace.id;
+  if (membership.userId === workspaceOwnerId) return errorState("The workspace owner's role cannot be reassigned.");
+  if (role.systemKey === "OWNER") {
+    return errorState("Owner access cannot be assigned from the role selector. Use a dedicated ownership transfer.");
+  }
 
   const targetCanManageRoles =
     role.systemKey === "OWNER" || role.permissions.some((item) => item.permissionKey === "roles.manage");
@@ -282,7 +293,7 @@ export async function updateMemberRoleAction(_state: RoleActionState, formData: 
         action: "membership.role.update",
         targetType: "WorkspaceMembership",
         targetId: membership.id,
-        metadata: { roleId: role.id },
+        metadata: { previousRoleId: membership.roleId, roleId: role.id },
       },
       tx,
     );

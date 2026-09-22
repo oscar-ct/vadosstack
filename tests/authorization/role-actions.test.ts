@@ -193,6 +193,69 @@ describe("role and membership action authorization", () => {
     );
   });
 
+  it("does not allow the Owner role to be assigned from the generic role selector", async () => {
+    mocks.prisma.workspaceMembership.findFirst.mockResolvedValue({
+      id: "admin-membership",
+      roleId: "admin-role",
+      userId: "admin-user",
+      role: { systemKey: "ADMIN" },
+      workspace: { id: "workspace-a", legacyOwnerId: "owner-user" },
+    });
+    mocks.prisma.workspaceRole.findFirst.mockResolvedValue({
+      id: "owner-role",
+      systemKey: "OWNER",
+      permissions: [],
+    });
+
+    const result = await updateMemberRoleAction(
+      initialState,
+      formData({ membershipId: "admin-membership", roleId: "owner-role" }),
+    );
+
+    expect(result.message).toMatch(/Owner access cannot be assigned/);
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps the canonical owner immutable but allows an accidental duplicate owner to be repaired", async () => {
+    const adminRole = {
+      id: "admin-role",
+      systemKey: "ADMIN",
+      permissions: [{ permissionKey: "roles.manage" }],
+    };
+    mocks.prisma.workspaceRole.findFirst.mockResolvedValue(adminRole);
+    mocks.prisma.workspaceMembership.findFirst
+      .mockResolvedValueOnce({
+        id: "canonical-owner-membership",
+        roleId: "owner-role",
+        userId: "owner-user",
+        role: { systemKey: "OWNER" },
+        workspace: { id: "workspace-a", legacyOwnerId: "owner-user" },
+      })
+      .mockResolvedValueOnce({
+        id: "duplicate-owner-membership",
+        roleId: "owner-role",
+        userId: "admin-user",
+        role: { systemKey: "OWNER" },
+        workspace: { id: "workspace-a", legacyOwnerId: "owner-user" },
+      });
+
+    const canonicalResult = await updateMemberRoleAction(
+      initialState,
+      formData({ membershipId: "canonical-owner-membership", roleId: "admin-role" }),
+    );
+    const repairResult = await updateMemberRoleAction(
+      initialState,
+      formData({ membershipId: "duplicate-owner-membership", roleId: "admin-role" }),
+    );
+
+    expect(canonicalResult.message).toBe("The workspace owner's role cannot be reassigned.");
+    expect(repairResult).toEqual({ message: "Member role updated.", success: true });
+    expect(mocks.transactionClient.workspaceMembership.update).toHaveBeenCalledWith({
+      where: { id: "duplicate-owner-membership" },
+      data: { roleId: "admin-role" },
+    });
+  });
+
   it("prevents removing the owner or the acting member", async () => {
     mocks.prisma.workspaceMembership.findFirst
       .mockResolvedValueOnce({
