@@ -83,6 +83,8 @@ function formData(values: Record<string, string>) {
 describe("role and membership action authorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("RESEND_API_KEY", "test-api-key");
+    vi.stubEnv("RESEND_WORKSPACE_INVITATION_TEMPLATE_ID", "workspace-invitation-template");
     mocks.getAuthorization.mockResolvedValue(authorization);
     mocks.audit.mockResolvedValue(undefined);
     mocks.getRateLimitIp.mockResolvedValue("127.0.0.1");
@@ -334,6 +336,32 @@ describe("role and membership action authorization", () => {
     expect(mocks.resend).not.toHaveBeenCalled();
   });
 
+  it("sends new invitations with the configured Resend template variables", async () => {
+    mocks.prisma.workspaceRole.findFirst.mockResolvedValue({ id: "role-a", name: "Manager" });
+    mocks.prisma.workspaceMembership.findFirst.mockResolvedValue(null);
+    mocks.transactionClient.workspaceInvitation.create.mockResolvedValue({ id: "invitation-new" });
+
+    const result = await inviteWorkspaceMemberAction(
+      initialState,
+      formData({ email: "member@example.com", roleId: "role-a" }),
+    );
+
+    expect(result).toEqual({ message: "Invitation sent.", success: true });
+    expect(mocks.resend).toHaveBeenCalledWith({
+      from: "VadosStack <support@vadosstack.com>",
+      tags: [{ name: "category", value: "workspace-invitation" }],
+      template: {
+        id: "workspace-invitation-template",
+        variables: {
+          COMPANY_NAME: "Business A",
+          INVITATION_LINK: expect.stringContaining("/accept-invitation?token="),
+          ROLE: "Manager",
+        },
+      },
+      to: "member@example.com",
+    });
+  });
+
   it("rotates an active invitation only after the replacement email is sent", async () => {
     mocks.prisma.workspaceInvitation.findFirst.mockResolvedValue({
       email: "member@example.com",
@@ -352,7 +380,19 @@ describe("role and membership action authorization", () => {
       "member@example.com",
       "127.0.0.1",
     ]);
-    expect(mocks.resend).toHaveBeenCalledOnce();
+    expect(mocks.resend).toHaveBeenCalledWith({
+      from: "VadosStack <support@vadosstack.com>",
+      tags: [{ name: "category", value: "workspace-invitation" }],
+      template: {
+        id: "workspace-invitation-template",
+        variables: {
+          COMPANY_NAME: "Business A",
+          INVITATION_LINK: expect.stringContaining("/accept-invitation?token="),
+          ROLE: "Manager",
+        },
+      },
+      to: "member@example.com",
+    });
     expect(mocks.transactionClient.workspaceInvitation.update).toHaveBeenCalledWith({
       where: { id: "invitation-old" },
       data: { revokedAt: expect.any(Date) },

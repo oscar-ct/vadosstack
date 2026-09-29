@@ -30,6 +30,7 @@ function principal(memberships: WorkspaceMembershipSummary[]): CurrentPrincipal 
     memberships,
     user: {
       admin: false,
+      authProviders: ["email"],
       companyAddress: null,
       companyEmail: null,
       companyName: "Member Business",
