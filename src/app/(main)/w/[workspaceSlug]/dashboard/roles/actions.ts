@@ -9,7 +9,6 @@ import {
   type PermissionKey,
 } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
-import { escapeHtml } from "@/lib/email-content";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
 import { resend } from "@/lib/resend";
@@ -59,13 +58,29 @@ async function sendWorkspaceInvitationEmail({
   roleName: string;
   workspaceName: string;
 }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const templateId = process.env.RESEND_WORKSPACE_INVITATION_TEMPLATE_ID;
+
+  if (!apiKey || !templateId) {
+    console.error("Workspace invitation email is not configured.");
+    return {
+      data: null,
+      error: { message: "Workspace invitation email is not configured." },
+    };
+  }
+
   return resend.emails.send({
     from: "VadosStack <support@vadosstack.com>",
     to: email,
-    subject: `You're invited to ${workspaceName}`,
-    html: `<p>You have been invited to join <strong>${escapeHtml(workspaceName)}</strong> as ${escapeHtml(roleName)}.</p><p><a href="${escapeHtml(invitationUrl)}">Accept invitation</a></p><p>This secure link expires in 7 days.</p>`,
-    text: `You have been invited to join ${workspaceName} as ${roleName}. Accept the invitation: ${invitationUrl}\n\nThis secure link expires in 7 days.`,
     tags: [{ name: "category", value: "workspace-invitation" }],
+    template: {
+      id: templateId,
+      variables: {
+        COMPANY_NAME: workspaceName,
+        INVITATION_LINK: invitationUrl,
+        ROLE: roleName,
+      },
+    },
   });
 }
 
