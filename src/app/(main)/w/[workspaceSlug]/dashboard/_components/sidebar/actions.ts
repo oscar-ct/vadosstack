@@ -1,7 +1,10 @@
 "use server";
 
+import { redirect } from "next/navigation";
+
 import { z } from "zod";
 
+import { clearCurrentSession } from "@/lib/auth";
 import { getCurrentPrincipal, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
 import { updateWorkspaceNameAndSlug } from "@/lib/authorization/workspace-slug";
@@ -13,9 +16,11 @@ import {
   refreshGoogleAccessToken,
   sendGmailMessage,
 } from "@/lib/google-mail";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import { isValidOptionalPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { deleteR2Object, uploadR2Object } from "@/lib/r2";
+import { AUTH_RATE_LIMIT_MESSAGE, consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
 import { workspaceModes } from "@/lib/workspace-mode";
 import { revalidateWorkspacePath } from "@/lib/workspace-revalidation";
 
@@ -32,6 +37,11 @@ export type AccountProfileState = {
   message: string;
 };
 
+export type ChangePasswordState = {
+  success: boolean;
+  message: string;
+};
+
 export type GeneralEmailState = {
   success: boolean;
   message: string;
@@ -42,6 +52,21 @@ export type GeneralEmailState = {
 const accountProfileSchema = z.object({
   name: z.string().trim().min(1, "Account name is required.").max(120, "Account name is too long."),
 });
+
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password."),
+    newPassword: z.string().min(8, "New password must be at least 8 characters."),
+    confirmPassword: z.string().min(8, "Confirm your new password."),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "New passwords do not match.",
+    path: ["confirmPassword"],
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: "Choose a new password that is different from your current password.",
+    path: ["newPassword"],
+  });
 
 const emailRecipientSchema = z
   .string()
@@ -623,4 +648,89 @@ export async function updateAccountProfileAction(
     success: true,
     message: "Account profile updated.",
   };
+}
+
+export async function changePasswordAction(
+  _previousState: ChangePasswordState,
+  formData: FormData,
+): Promise<ChangePasswordState> {
+  const principal = await getCurrentPrincipal();
+
+  if (!principal) {
+    return {
+      success: false,
+      message: "You must be signed in to change your password.",
+    };
+  }
+
+  const parsed = changePasswordSchema.safeParse({
+    currentPassword: formData.get("currentPassword"),
+    newPassword: formData.get("newPassword"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message ?? "Check your password details and try again.",
+    };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: {
+      id: principal.user.id,
+    },
+    select: {
+      authProviders: true,
+      passwordHash: true,
+    },
+  });
+
+  if (!user?.authProviders.includes("email")) {
+    return {
+      success: false,
+      message: "This account signs in with Google and does not have a password to change.",
+    };
+  }
+
+  const ip = await getRateLimitIp();
+  const allowed = await consumeRateLimit("change-password", [ip, principal.user.id]);
+
+  if (!allowed) {
+    return {
+      success: false,
+      message: AUTH_RATE_LIMIT_MESSAGE,
+    };
+  }
+
+  if (!verifyPassword(parsed.data.currentPassword, user.passwordHash)) {
+    return {
+      success: false,
+      message: "Current password is incorrect.",
+    };
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: {
+        id: principal.user.id,
+      },
+      data: {
+        passwordHash: hashPassword(parsed.data.newPassword),
+      },
+    }),
+    prisma.passwordResetToken.deleteMany({
+      where: {
+        userId: principal.user.id,
+      },
+    }),
+    prisma.session.deleteMany({
+      where: {
+        userId: principal.user.id,
+      },
+    }),
+  ]);
+
+  await clearCurrentSession();
+  redirect("/login?password=changed");
 }

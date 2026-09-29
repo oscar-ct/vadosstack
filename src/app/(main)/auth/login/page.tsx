@@ -23,6 +23,10 @@ const resetMessages: Record<string, string> = {
   success: "Your password has been reset. You can now sign in with your new password.",
 };
 
+const passwordMessages: Record<string, string> = {
+  changed: "Your password has been changed and all active sessions were signed out. Sign in with your new password.",
+};
+
 const confirmMessages: Record<string, string> = {
   exists: "That account has already been confirmed. You can sign in now.",
   success: "Your account has been confirmed. You can now sign in.",
@@ -32,6 +36,7 @@ type LoginPageProps = {
   searchParams?: Promise<{
     confirm?: string | string[];
     google_error?: string | string[];
+    password?: string | string[];
     reset?: string | string[];
     returnTo?: string | string[];
   }>;
@@ -52,6 +57,8 @@ export default async function LoginV1({ searchParams }: LoginPageProps) {
   const googleErrorMessage = googleError ? googleErrorMessages[googleError] : null;
   const resetStatus = Array.isArray(params?.reset) ? params.reset[0] : params?.reset;
   const resetMessage = resetStatus ? resetMessages[resetStatus] : null;
+  const passwordStatus = Array.isArray(params?.password) ? params.password[0] : params?.password;
+  const passwordMessage = passwordStatus ? passwordMessages[passwordStatus] : null;
   const confirmStatus = Array.isArray(params?.confirm) ? params.confirm[0] : params?.confirm;
   const confirmMessage = confirmStatus ? confirmMessages[confirmStatus] : null;
 
@@ -85,6 +92,11 @@ export default async function LoginV1({ searchParams }: LoginPageProps) {
             {resetMessage ? (
               <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-emerald-700 text-sm">
                 {resetMessage}
+              </p>
+            ) : null}
+            {passwordMessage ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-emerald-700 text-sm">
+                {passwordMessage}
               </p>
             ) : null}
             {confirmMessage ? (

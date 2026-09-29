@@ -325,6 +325,7 @@ export default async function Layout({
               currentUser && activeWorkspace && activeMembership && principal
                 ? {
                     name: currentUser.name ?? currentUser.email,
+                    authProviders: currentUser.authProviders,
                     companyName: activeWorkspace.name,
                     companyAddress: activeWorkspace.companyAddress,
                     companyEmail: activeWorkspace.companyEmail,

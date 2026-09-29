@@ -15,6 +15,7 @@ const THIRTY_DAYS_IN_MS = 30 * ONE_DAY_IN_MS;
 export type CurrentUser = {
   id: string;
   name: string | null;
+  authProviders: string[];
   companyName: string;
   companyAddress: string | null;
   companyEmail: string | null;
@@ -50,6 +51,7 @@ function hashSessionToken(token: string) {
 function toCurrentUser(user: {
   id: string;
   name: string | null;
+  authProviders: string[];
   companyName: string;
   companyAddress: string | null;
   companyEmail: string | null;
@@ -70,6 +72,7 @@ function toCurrentUser(user: {
   return {
     id: user.id,
     name: user.name,
+    authProviders: user.authProviders,
     companyName: user.companyName,
     companyAddress: user.companyAddress,
     companyEmail: user.companyEmail,
@@ -116,6 +119,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
           select: {
             id: true,
             name: true,
+            authProviders: true,
             companyName: true,
             companyAddress: true,
             companyEmail: true,

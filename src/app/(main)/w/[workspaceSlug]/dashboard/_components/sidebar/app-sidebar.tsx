@@ -44,6 +44,7 @@ export function AppSidebar({
   pendingTimeReviewCount: number;
   currentUser: {
     name: string;
+    authProviders: string[];
     companyName: string;
     companyAddress: string | null;
     companyEmail: string | null;
