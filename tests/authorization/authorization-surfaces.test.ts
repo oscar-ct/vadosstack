@@ -94,7 +94,7 @@ describe("dashboard authorization surface", () => {
     }
 
     expect(source(join(dashboardRoot, "time-tracking/_components/time-tracking-dashboard.tsx"))).toContain(
-      "disabled={!canExport || !entries.length}",
+      "disabled={!canExport || (!entries.length && !filteredNoWorkDays.length)}",
     );
   });
 

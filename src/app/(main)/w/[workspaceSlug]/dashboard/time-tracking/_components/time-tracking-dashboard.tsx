@@ -5,6 +5,7 @@ import * as React from "react";
 import { addDays, format, parseISO } from "date-fns";
 import {
   AlertTriangle,
+  CalendarX2,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -65,6 +66,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Textarea } from "@/components/ui/textarea";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
 import { type EmployeeAccent, getEmployeeAccent as getStoredEmployeeAccent } from "@/lib/employee-colors";
+import { getNoWorkDayReasonLabel, noWorkDayReasons } from "@/lib/no-work-days";
 import { cn } from "@/lib/utils";
 
 import type { TimeTrackingMutationState } from "../actions";
@@ -94,6 +96,19 @@ export type TimeEntryRow = {
   lunchMinutes: number;
   notes?: string;
   startTime?: string;
+  workedOn: string;
+};
+
+export type NoWorkDayRow = {
+  employeeId: string;
+  employeeName: string;
+  employeeNumber: string;
+  id: string;
+  jobCustomerName?: string;
+  jobId?: string;
+  jobTitle?: string;
+  notes?: string;
+  reason: string;
   workedOn: string;
 };
 
@@ -504,6 +519,30 @@ function DayTimeline({
   );
 }
 
+function EmptyDayTimeline() {
+  return (
+    <div
+      className="relative h-5 overflow-hidden rounded-md border border-border/70 bg-muted/50"
+      role="img"
+      aria-label="No hours worked"
+    >
+      {Array.from({ length: 23 }, (_, index) => {
+        const hour = index + 1;
+        return (
+          <span
+            key={hour}
+            className={cn(
+              "pointer-events-none absolute inset-y-0 border-l",
+              hour % 6 === 0 ? "border-foreground/15" : "border-foreground/6",
+            )}
+            style={{ left: `${(hour / 24) * 100}%` }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function TimelineScale() {
   return (
     <div className="flex justify-between px-0.5 text-[10px] text-muted-foreground" aria-hidden="true">
@@ -516,7 +555,13 @@ function TimelineScale() {
   );
 }
 
-function EmployeeSelectField({ employees }: { employees: EmployeeSummary[] }) {
+function EmployeeSelectField({
+  defaultEmployeeId,
+  employees,
+}: {
+  defaultEmployeeId?: string;
+  employees: EmployeeSummary[];
+}) {
   if (employees.length === 1) {
     const employee = employees[0];
 
@@ -534,7 +579,7 @@ function EmployeeSelectField({ employees }: { employees: EmployeeSummary[] }) {
   return (
     <div className="grid gap-2">
       <Label htmlFor="time-entry-employee">Employee</Label>
-      <Select name="employeeId" required>
+      <Select name="employeeId" defaultValue={defaultEmployeeId} required>
         <SelectTrigger id="time-entry-employee" className="w-full">
           <SelectValue placeholder="Select employee" />
         </SelectTrigger>
@@ -591,6 +636,8 @@ function AddHoursDialog({
   date,
   employees,
   jobs,
+  onOpenChange,
+  open: controlledOpen,
   requiresApproval = false,
   trigger,
 }: {
@@ -598,13 +645,17 @@ function AddHoursDialog({
   date: string;
   employees: EmployeeSummary[];
   jobs: JobOption[];
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
   requiresApproval?: boolean;
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
 }) {
-  const [open, setOpen] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
   const [deductLunch, setDeductLunch] = React.useState(true);
   const [state, setState] = React.useState(initialState);
   const [isPending, startTransition] = React.useTransition();
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -626,7 +677,7 @@ function AddHoursDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Log hours</DialogTitle>
@@ -698,6 +749,444 @@ function AddHoursDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function NoWorkDayDialog({
+  action,
+  date,
+  employees,
+  jobs,
+  onOpenChange,
+  open: controlledOpen,
+  trigger,
+}: {
+  action: TimeEntryMutationAction;
+  date: string;
+  employees: EmployeeSummary[];
+  jobs: JobOption[];
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+  trigger?: React.ReactNode;
+}) {
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const [state, setState] = React.useState(initialState);
+  const [isPending, startTransition] = React.useTransition();
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    startTransition(async () => {
+      const result = await action(initialState, formData);
+      setState(result);
+      if (result.success) {
+        form.reset();
+        setOpen(false);
+        toast.success(result.message || "No-work day recorded.");
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Record a no-work day</DialogTitle>
+          <DialogDescription>
+            Explain why no hours were worked on {format(parseISO(date), "EEEE, MMM d")}. This does not add paid hours.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          <input type="hidden" name="workedOn" value={date} />
+          <EmployeeSelectField employees={employees} />
+          <div className="grid gap-2">
+            <Label htmlFor={`no-work-reason-${date}`}>Reason</Label>
+            <Select name="reason" required>
+              <SelectTrigger id={`no-work-reason-${date}`} className="w-full">
+                <SelectValue placeholder="Select a reason" />
+              </SelectTrigger>
+              <SelectContent>
+                {noWorkDayReasons.map((reason) => (
+                  <SelectItem key={reason.value} value={reason.value}>
+                    {reason.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <JobSelectField jobs={jobs} />
+          <div className="grid gap-2">
+            <Label htmlFor={`no-work-notes-${date}`}>Explanation</Label>
+            <Textarea
+              id={`no-work-notes-${date}`}
+              name="notes"
+              maxLength={1000}
+              placeholder="Optional details for the time record..."
+            />
+          </div>
+          {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Saving..." : "Record no-work day"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditNoWorkDayDialog({
+  action,
+  deleteAction,
+  disabled = false,
+  employees,
+  jobs,
+  record,
+  trigger,
+}: {
+  action: TimeEntryMutationAction;
+  deleteAction?: TimeEntryMutationAction;
+  disabled?: boolean;
+  employees: EmployeeSummary[];
+  jobs: JobOption[];
+  record: NoWorkDayRow;
+  trigger?: React.ReactNode;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [state, setState] = React.useState(initialState);
+  const [isPending, startTransition] = React.useTransition();
+
+  React.useEffect(() => {
+    if (open) setState(initialState);
+  }, [open]);
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    startTransition(async () => {
+      const result = await action(initialState, formData);
+      setState(result);
+      if (result.success) {
+        setOpen(false);
+        toast.success(result.message || "No-work day updated.");
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {trigger ?? (
+          <Button type="button" size="icon-sm" variant="ghost" disabled={disabled}>
+            <Pencil />
+            <span className="sr-only">Edit {record.employeeName} no-work day</span>
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit no-work day</DialogTitle>
+          <DialogDescription>Update the reason, date, job, or explanation for this record.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          <input type="hidden" name="noWorkDayId" value={record.id} />
+          <EmployeeSelectField defaultEmployeeId={record.employeeId} employees={employees} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor={`no-work-date-${record.id}`}>Date</Label>
+              <Input
+                id={`no-work-date-${record.id}`}
+                name="workedOn"
+                type="date"
+                defaultValue={record.workedOn}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor={`no-work-reason-edit-${record.id}`}>Reason</Label>
+              <Select name="reason" defaultValue={record.reason} required>
+                <SelectTrigger id={`no-work-reason-edit-${record.id}`} className="w-full">
+                  <SelectValue placeholder="Select a reason" />
+                </SelectTrigger>
+                <SelectContent>
+                  {noWorkDayReasons.map((reason) => (
+                    <SelectItem key={reason.value} value={reason.value}>
+                      {reason.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <JobSelectField defaultJobId={record.jobId} jobs={jobs} />
+          <div className="grid gap-2">
+            <Label htmlFor={`no-work-notes-edit-${record.id}`}>Explanation</Label>
+            <Textarea
+              id={`no-work-notes-edit-${record.id}`}
+              name="notes"
+              maxLength={1000}
+              defaultValue={record.notes ?? ""}
+              placeholder="Optional details for the time record..."
+            />
+          </div>
+          {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+          <DialogFooter>
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              {deleteAction ? <DeleteNoWorkDayButton action={deleteAction} record={record} /> : <span />}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isPending || disabled}>
+                  {isPending ? "Saving..." : "Save changes"}
+                </Button>
+              </div>
+            </div>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function NoWorkDayTimeline({
+  deleteAction,
+  disabled,
+  employees,
+  jobs,
+  record,
+  updateAction,
+}: {
+  deleteAction?: TimeEntryMutationAction;
+  disabled: boolean;
+  employees: EmployeeSummary[];
+  jobs: JobOption[];
+  record: NoWorkDayRow;
+  updateAction?: TimeEntryMutationAction;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const pinned = React.useRef(false);
+  const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(
+    () => () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    },
+    [],
+  );
+
+  function cancelClose() {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }
+
+  function showPreview() {
+    cancelClose();
+    setOpen(true);
+  }
+
+  function scheduleClose() {
+    cancelClose();
+    if (pinned.current) return;
+    closeTimer.current = setTimeout(() => setOpen(false), 140);
+  }
+
+  return (
+    <div className="relative">
+      <EmptyDayTimeline />
+      <Popover
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) pinned.current = false;
+        }}
+      >
+        <PopoverAnchor asChild>
+          <button
+            type="button"
+            className="absolute inset-0 cursor-pointer rounded-md bg-transparent outline-none transition-colors hover:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            aria-label={`View ${record.employeeName}'s no-work day details`}
+            onMouseEnter={showPreview}
+            onMouseLeave={scheduleClose}
+            onFocus={showPreview}
+            onBlur={scheduleClose}
+            onClick={() => {
+              cancelClose();
+              pinned.current = !pinned.current;
+              setOpen(pinned.current);
+            }}
+          />
+        </PopoverAnchor>
+        <PopoverContent
+          side="top"
+          align="center"
+          className="w-72"
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-1.5 font-medium">
+                <CalendarX2 className="size-4 text-muted-foreground" /> No work
+              </div>
+              <div className="text-muted-foreground text-xs">
+                {record.employeeName} · {format(parseISO(record.workedOn), "EEEE, MMM d")}
+              </div>
+            </div>
+            <Badge variant="secondary" className="shrink-0">
+              {getNoWorkDayReasonLabel(record.reason)}
+            </Badge>
+          </div>
+          <div className="grid gap-1 rounded-md bg-muted/50 p-2 text-xs">
+            <div className="font-medium">0 hours recorded</div>
+            {record.jobTitle ? (
+              <div className="text-muted-foreground">
+                {formatJobLabel({ customerName: record.jobCustomerName, title: record.jobTitle })}
+              </div>
+            ) : null}
+            {record.notes ? (
+              <div className="text-muted-foreground">{record.notes}</div>
+            ) : (
+              <div className="text-muted-foreground">No additional explanation provided.</div>
+            )}
+          </div>
+          {updateAction ? (
+            <div className="flex justify-end">
+              <EditNoWorkDayDialog
+                action={updateAction}
+                deleteAction={deleteAction}
+                disabled={disabled}
+                employees={employees}
+                jobs={jobs}
+                record={record}
+                trigger={
+                  <Button type="button" size="sm" disabled={disabled}>
+                    <Pencil /> Edit no-work day
+                  </Button>
+                }
+              />
+            </div>
+          ) : null}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+function DayEntryActions({
+  createNoWorkDayAction,
+  createTimeEntryAction,
+  date,
+  disabled,
+  employees,
+  jobs,
+  requiresApproval,
+}: {
+  createNoWorkDayAction: TimeEntryMutationAction;
+  createTimeEntryAction: TimeEntryMutationAction;
+  date: string;
+  disabled: boolean;
+  employees: EmployeeSummary[];
+  jobs: JobOption[];
+  requiresApproval: boolean;
+}) {
+  const [mode, setMode] = React.useState<"hours" | "no-work" | null>(null);
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" size="sm" variant="outline" disabled={disabled}>
+            <Plus /> Add entry
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onSelect={() => setMode("hours")}>
+            <Clock3 /> Log hours
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setMode("no-work")}>
+            <CalendarX2 /> No-work day
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AddHoursDialog
+        action={createTimeEntryAction}
+        date={date}
+        employees={employees}
+        jobs={jobs}
+        onOpenChange={(open) => setMode(open ? "hours" : null)}
+        open={mode === "hours"}
+        requiresApproval={requiresApproval}
+      />
+      <NoWorkDayDialog
+        action={createNoWorkDayAction}
+        date={date}
+        employees={employees}
+        jobs={jobs}
+        onOpenChange={(open) => setMode(open ? "no-work" : null)}
+        open={mode === "no-work"}
+      />
+    </>
+  );
+}
+
+function DeleteNoWorkDayButton({ action, record }: { action: TimeEntryMutationAction; record: NoWorkDayRow }) {
+  const [open, setOpen] = React.useState(false);
+  const [state, setState] = React.useState(initialState);
+  const [isPending, startTransition] = React.useTransition();
+
+  function handleDelete() {
+    const formData = new FormData();
+    formData.set("noWorkDayId", record.id);
+    startTransition(async () => {
+      const result = await action(initialState, formData);
+      setState(result);
+      if (result.success) {
+        setOpen(false);
+        toast.success(result.message || "No-work day removed.");
+      }
+    });
+  }
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          variant="destructive"
+          size="icon-sm"
+          aria-label={`Remove ${record.employeeName} no-work day`}
+        >
+          <Trash2 />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove this no-work day?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {record.employeeName} will return to having no explanation recorded for this date.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+          <Button type="button" variant="destructive" onClick={handleDelete} disabled={isPending}>
+            {isPending ? "Removing..." : "Remove"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -1679,9 +2168,11 @@ export function TimeTrackingDashboard({
   carryInEntries = [],
   canExport = false,
   canManage = true,
+  createNoWorkDayAction,
   createTimeEntryAction,
   dayGroups,
   deleteEmployeeTimeRequestAction,
+  deleteNoWorkDayAction,
   deleteTimeEntryAction,
   employeeLogoutAction,
   employeeTimeRequests = [],
@@ -1692,6 +2183,7 @@ export function TimeTrackingDashboard({
   lockTimesheetWeekAction,
   monthLabel,
   nextWeekHref,
+  noWorkDays = [],
   pendingRequests = [],
   periodLabel,
   previousWeekHref,
@@ -1702,6 +2194,7 @@ export function TimeTrackingDashboard({
   selectedRequestId,
   showEmployeeControls = true,
   updateEmployeeTimeRequestAction,
+  updateNoWorkDayAction,
   updateTimeEntryAction,
   unlockTimesheetWeekAction,
   weekStart,
@@ -1714,6 +2207,7 @@ export function TimeTrackingDashboard({
   carryInEntries?: TimeEntryRow[];
   canExport?: boolean;
   canManage?: boolean;
+  createNoWorkDayAction?: TimeEntryMutationAction;
   createTimeEntryAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   createEmployeeAction?: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   dayGroups: DayGroup[];
@@ -1722,6 +2216,7 @@ export function TimeTrackingDashboard({
     formData: FormData,
   ) => Promise<TimeTrackingMutationState>;
   deleteEmployeeAction?: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
+  deleteNoWorkDayAction?: TimeEntryMutationAction;
   deleteTimeEntryAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   employeeLogoutAction?: () => Promise<void>;
   employeeTimeRequests?: TimeEntryRequestRow[];
@@ -1735,6 +2230,7 @@ export function TimeTrackingDashboard({
     formData: FormData,
   ) => Promise<TimeTrackingMutationState>;
   nextWeekHref: string;
+  noWorkDays?: NoWorkDayRow[];
   pendingRequests?: TimeEntryRequestRow[];
   periodLabel: string;
   previousWeekHref: string;
@@ -1751,6 +2247,7 @@ export function TimeTrackingDashboard({
     state: TimeTrackingMutationState,
     formData: FormData,
   ) => Promise<TimeTrackingMutationState>;
+  updateNoWorkDayAction?: TimeEntryMutationAction;
   updateEmployeeAction?: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   updateTimeEntryAction: (state: TimeTrackingMutationState, formData: FormData) => Promise<TimeTrackingMutationState>;
   unlockTimesheetWeekAction?: (
@@ -1789,6 +2286,15 @@ export function TimeTrackingDashboard({
       (!attentionOnly || entryNeedsAttention(entry))
     );
   });
+  const filteredNoWorkDays = noWorkDays.filter((record) => {
+    const employee = employees.find((candidate) => candidate.id === record.employeeId);
+    return (
+      (employeeFilter === "all" || record.employeeId === employeeFilter) &&
+      (jobFilter === "all" || (jobFilter === "none" ? !record.jobId : record.jobId === jobFilter)) &&
+      (departmentFilter === "all" || (employee?.department ?? "Unassigned") === departmentFilter) &&
+      !attentionOnly
+    );
+  });
   const overnightContinuations = new Map<string, TimeEntryRow[]>();
   for (const entry of [...carryInEntries, ...entries]) {
     if (employeeFilter !== "all" && entry.employeeId !== employeeFilter) {
@@ -1810,10 +2316,12 @@ export function TimeTrackingDashboard({
     return {
       ...group,
       entries: filteredEntries,
+      noWorkDays: filteredNoWorkDays.filter((record) => record.workedOn === group.date),
       totalHours: filteredEntries.reduce((total, entry) => total + entry.hours, 0),
     };
   });
   const weekHours = entries.reduce((total, entry) => total + entry.hours, 0);
+  const noWorkDayCount = filteredNoWorkDays.length;
   const activeEmployees = employees.filter((employee) => employee.active);
   const activeEmployeesWithHours = activeEmployees.filter(
     (employee) => (employeeWeekTotals.get(employee.id) ?? 0) > 0,
@@ -1927,6 +2435,7 @@ export function TimeTrackingDashboard({
     const csvCell = (value: string | number | undefined) => `"${String(value ?? "").replaceAll('"', '""')}"`;
     const rows = [
       [
+        "Record type",
         "Date",
         "Employee",
         "Employee ID",
@@ -1937,11 +2446,13 @@ export function TimeTrackingDashboard({
         "Lunch minutes",
         "Hours",
         "Job",
+        "No-work reason",
         "Notes",
       ],
       ...entries.map((entry) => {
         const employee = employees.find((candidate) => candidate.id === entry.employeeId);
         return [
+          "Hours",
           entry.workedOn,
           entry.employeeName,
           entry.employeeNumber,
@@ -1952,7 +2463,26 @@ export function TimeTrackingDashboard({
           entry.deductLunch ? entry.lunchMinutes : 0,
           entry.hours.toFixed(2),
           entry.jobTitle ? formatJobLabel({ customerName: entry.jobCustomerName, title: entry.jobTitle }) : "",
+          "",
           entry.notes,
+        ];
+      }),
+      ...filteredNoWorkDays.map((record) => {
+        const employee = employees.find((candidate) => candidate.id === record.employeeId);
+        return [
+          "No-work day",
+          record.workedOn,
+          record.employeeName,
+          record.employeeNumber,
+          employee?.department,
+          "",
+          "",
+          "No",
+          0,
+          0,
+          record.jobTitle ? formatJobLabel({ customerName: record.jobCustomerName, title: record.jobTitle }) : "",
+          getNoWorkDayReasonLabel(record.reason),
+          record.notes,
         ];
       }),
     ];
@@ -2009,7 +2539,10 @@ export function TimeTrackingDashboard({
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuLabel>Report actions</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem disabled={!canExport || !entries.length} onSelect={exportCsv}>
+                <DropdownMenuItem
+                  disabled={!canExport || (!entries.length && !filteredNoWorkDays.length)}
+                  onSelect={exportCsv}
+                >
                   <Download /> Export filtered CSV
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => window.print()}>
@@ -2028,7 +2561,7 @@ export function TimeTrackingDashboard({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className={cn("grid gap-3", showEmployeeControls ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2")}>
         <Card>
           <CardContent className="grid gap-1 p-4">
             <span className="text-muted-foreground text-xs">
@@ -2049,6 +2582,17 @@ export function TimeTrackingDashboard({
             ) : null}
           </CardContent>
         </Card>
+        {showEmployeeControls ? (
+          <Card>
+            <CardContent className="grid gap-1 p-4">
+              <span className="text-muted-foreground text-xs">No-work records</span>
+              <span className="font-semibold text-2xl">{noWorkDayCount}</span>
+              <span className="text-muted-foreground text-xs">
+                {noWorkDayCount === 1 ? "1 explained day" : `${noWorkDayCount} explained days`} for this week
+              </span>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
 
       <div
@@ -2106,8 +2650,8 @@ export function TimeTrackingDashboard({
                         <DialogHeader>
                           <DialogTitle>Filter weekly hours</DialogTitle>
                           <DialogDescription>
-                            Showing {entries.length} of {allEntries.length} entries · {formatHours(weekHours)}. Filters
-                            also apply to CSV exports.
+                            Showing {entries.length} of {allEntries.length} hour entries and {noWorkDayCount} no-work
+                            records · {formatHours(weekHours)}. Filters also apply to CSV exports.
                           </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 sm:grid-cols-2">
@@ -2272,16 +2816,35 @@ export function TimeTrackingDashboard({
                     <div className="grid gap-1">
                       <div className="font-medium text-sm">{format(parseISO(group.date), "EEEE, MMM d")}</div>
                       <div className="text-muted-foreground text-xs">
-                        {timelineRows.length
-                          ? `${group.entries.length} saved ${group.entries.length === 1 ? "entry" : "entries"}`
-                          : "No hours logged"}
+                        {group.entries.length || group.noWorkDays.length
+                          ? [
+                              group.entries.length
+                                ? `${group.entries.length} hour ${group.entries.length === 1 ? "entry" : "entries"}`
+                                : null,
+                              group.noWorkDays.length
+                                ? `${group.noWorkDays.length} no-work ${group.noWorkDays.length === 1 ? "record" : "records"}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")
+                          : "No activity recorded"}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary" className="bg-background/80">
                         {formatHours(group.totalHours)}
                       </Badge>
-                      {canManage ? (
+                      {canManage && createNoWorkDayAction ? (
+                        <DayEntryActions
+                          createNoWorkDayAction={createNoWorkDayAction}
+                          createTimeEntryAction={createTimeEntryAction}
+                          date={group.date}
+                          disabled={!activeEmployees.length || isWeekLocked}
+                          employees={activeEmployees}
+                          jobs={jobs}
+                          requiresApproval={requiresManagerApproval}
+                        />
+                      ) : canManage ? (
                         <AddHoursDialog
                           action={createTimeEntryAction}
                           date={group.date}
@@ -2290,8 +2853,7 @@ export function TimeTrackingDashboard({
                           requiresApproval={requiresManagerApproval}
                           trigger={
                             <Button size="sm" variant="outline" disabled={!activeEmployees.length || isWeekLocked}>
-                              <Plus />
-                              Add hours
+                              <Plus /> Add hours
                             </Button>
                           }
                         />
@@ -2356,6 +2918,58 @@ export function TimeTrackingDashboard({
                               segments={row.segments}
                               updateAction={updateTimeEntryAction}
                             />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {group.noWorkDays.length ? (
+                    <div className="grid gap-2">
+                      {group.noWorkDays.map((record) => {
+                        return (
+                          <div
+                            key={record.id}
+                            className="grid gap-2 rounded-lg border bg-muted/30 p-2 text-muted-foreground"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className="size-2.5 shrink-0 rounded-full bg-muted-foreground/45"
+                                  aria-hidden="true"
+                                />
+                                <div className="flex flex-wrap items-baseline gap-1.5">
+                                  <span className="font-medium text-foreground/80 text-sm">{record.employeeName}</span>
+                                  <span className="text-[11px]">#{record.employeeNumber}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Badge
+                                  variant="outline"
+                                  className="h-5 gap-1 bg-background/70 px-1.5 font-medium text-xs text-foreground/70 tracking-wide"
+                                >
+                                  <CalendarX2 className="size-3" /> No work - {getNoWorkDayReasonLabel(record.reason)}
+                                </Badge>
+                                <span className="font-medium text-xs">0h</span>
+                              </div>
+                            </div>
+                            <NoWorkDayTimeline
+                              deleteAction={isWeekLocked ? undefined : deleteNoWorkDayAction}
+                              disabled={isWeekLocked ? true : !canManage}
+                              employees={activeEmployees}
+                              jobs={jobs}
+                              record={record}
+                              updateAction={updateNoWorkDayAction}
+                            />
+                            {record.jobTitle || record.notes ? (
+                              <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 text-xs">
+                                {record.jobTitle ? (
+                                  <span>
+                                    {formatJobLabel({ customerName: record.jobCustomerName, title: record.jobTitle })}
+                                  </span>
+                                ) : null}
+                                {record.notes ? <span>{record.notes}</span> : null}
+                              </div>
+                            ) : null}
                           </div>
                         );
                       })}

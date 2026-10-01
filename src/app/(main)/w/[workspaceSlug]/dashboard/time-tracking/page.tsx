@@ -5,14 +5,21 @@ import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
 import { getTimeTrackingRange, mapEmployeeSummary, mapTimeEntry, toHours } from "@/lib/time-tracking";
 
-import { type TimeEntryRequestRow, TimeTrackingDashboard } from "./_components/time-tracking-dashboard";
+import {
+  type NoWorkDayRow,
+  type TimeEntryRequestRow,
+  TimeTrackingDashboard,
+} from "./_components/time-tracking-dashboard";
 import {
   approveTimeEntryRequestAction,
+  createNoWorkDayAction,
   createTimeEntryAction,
+  deleteNoWorkDayAction,
   deleteTimeEntryAction,
   lockTimesheetWeekAction,
   rejectTimeEntryRequestAction,
   unlockTimesheetWeekAction,
+  updateNoWorkDayAction,
   updateTimeEntryAction,
 } from "./actions";
 
@@ -56,7 +63,7 @@ export default async function Page({ searchParams }: PageProps) {
 
   const params = await searchParams;
   const { monthLabel, nextWeek, periodLabel, previousWeek, weekEnd, weekStart } = getTimeTrackingRange(params?.week);
-  const [employees, entries, pendingRequests, jobs, timesheetLock, auditEvents] = await Promise.all([
+  const [employees, entries, noWorkDays, pendingRequests, jobs, timesheetLock, auditEvents] = await Promise.all([
     prisma.employee.findMany({
       where: {
         ownerId: workspaceId,
@@ -95,6 +102,17 @@ export default async function Page({ searchParams }: PageProps) {
       orderBy: {
         workedOn: "asc",
       },
+    }),
+    prisma.noWorkDay.findMany({
+      where: {
+        ownerId: workspaceId,
+        workedOn: { gte: weekStart, lt: weekEnd },
+      },
+      include: {
+        employee: true,
+        job: canViewJobs ? { include: { customer: true } } : false,
+      },
+      orderBy: [{ workedOn: "asc" }, { employee: { name: "asc" } }],
     }),
     canApproveTime
       ? prisma.timeEntryRequest.findMany({
@@ -183,6 +201,21 @@ export default async function Page({ searchParams }: PageProps) {
     };
   });
   const employeeSummaries = employees.map(mapEmployeeSummary);
+  const noWorkDayRows: NoWorkDayRow[] = noWorkDays.map((record) => {
+    const job = getVisibleJobDetails(record.job, canViewJobs);
+    return {
+      employeeId: record.employeeId,
+      employeeName: record.employee.name,
+      employeeNumber: record.employee.employeeNumber,
+      id: record.id,
+      jobCustomerName: job?.customer?.name ?? undefined,
+      jobId: job?.id,
+      jobTitle: job?.description,
+      notes: record.notes ?? undefined,
+      reason: record.reason,
+      workedOn: format(record.workedOn, "yyyy-MM-dd"),
+    };
+  });
   const pendingRequestRows: TimeEntryRequestRow[] = pendingRequests.map((request) => {
     const currentEntry = request.timeEntryId ? currentEntriesById.get(request.timeEntryId) : undefined;
     const currentJob = getVisibleJobDetails(currentEntry?.job, canViewJobs);
@@ -244,9 +277,11 @@ export default async function Page({ searchParams }: PageProps) {
       carryInEntries={carryInEntries}
       canExport={canExport}
       canManage={canManageTime}
+      createNoWorkDayAction={canManageTime ? createNoWorkDayAction : undefined}
       createTimeEntryAction={createTimeEntryAction}
       dayGroups={dayGroups}
       deleteTimeEntryAction={deleteTimeEntryAction}
+      deleteNoWorkDayAction={canManageTime ? deleteNoWorkDayAction : undefined}
       employees={employeeSummaries}
       jobs={jobs.map((job) => ({
         customerName: job.customer?.name ?? undefined,
@@ -257,12 +292,14 @@ export default async function Page({ searchParams }: PageProps) {
       lockTimesheetWeekAction={canLockTime ? lockTimesheetWeekAction : undefined}
       monthLabel={monthLabel}
       nextWeekHref={`/dashboard/time-tracking?week=${nextWeek}`}
+      noWorkDays={noWorkDayRows}
       pendingRequests={pendingRequestRows}
       periodLabel={periodLabel}
       previousWeekHref={`/dashboard/time-tracking?week=${previousWeek}`}
       rejectTimeEntryRequestAction={canApproveTime ? rejectTimeEntryRequestAction : undefined}
       selectedRequestId={params?.request}
       unlockTimesheetWeekAction={canLockTime ? unlockTimesheetWeekAction : undefined}
+      updateNoWorkDayAction={canManageTime ? updateNoWorkDayAction : undefined}
       updateTimeEntryAction={updateTimeEntryAction}
       weekStart={format(weekStart, "yyyy-MM-dd")}
     />

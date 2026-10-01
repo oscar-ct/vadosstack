@@ -4,7 +4,7 @@ import { addDays, format, startOfWeek } from "date-fns";
 import { TimeEntryUserError } from "@/lib/time-entry-errors";
 import { getShiftInterval } from "@/lib/time-entry-rules";
 
-type TimeEntryGuardClient = Pick<Prisma.TransactionClient, "$executeRaw" | "timeEntry" | "timesheetLock">;
+type TimeEntryGuardClient = Pick<Prisma.TransactionClient, "$executeRaw" | "noWorkDay" | "timeEntry" | "timesheetLock">;
 
 export async function lockEmployeeTimeEntries(client: TimeEntryGuardClient, ownerId: string, employeeId: string) {
   await client.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`employee:${ownerId}:${employeeId}`}))`);
@@ -47,6 +47,20 @@ export async function assertTimeEntryAvailable(
   },
 ) {
   await lockEmployeeTimeEntries(client, input.ownerId, input.employeeId);
+  const noWorkDay = await client.noWorkDay.findUnique({
+    where: {
+      ownerId_employeeId_workedOn: {
+        employeeId: input.employeeId,
+        ownerId: input.ownerId,
+        workedOn: input.workedOn,
+      },
+    },
+    select: { id: true },
+  });
+  if (noWorkDay) {
+    throw new TimeEntryUserError("Remove the employee's no-work record before logging hours for this date.");
+  }
+
   const candidates = await client.timeEntry.findMany({
     where: {
       employeeId: input.employeeId,

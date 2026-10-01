@@ -48,8 +48,10 @@ import {
 } from "@/app/(main)/w/[workspaceSlug]/dashboard/jobs/actions";
 import {
   approveTimeEntryRequestAction,
+  createNoWorkDayAction,
   createTimeEntryAction,
   lockTimesheetWeekAction,
+  updateNoWorkDayAction,
 } from "@/app/(main)/w/[workspaceSlug]/dashboard/time-tracking/actions";
 
 const initialState = { message: "", success: false };
@@ -76,6 +78,8 @@ describe("mutation permission denials", () => {
     ["delete a job", "jobs.delete", () => deleteJobAction(initialState, new FormData())],
     ["record a payment", "invoices.record_payment", () => createJobPaymentAction(initialState, new FormData())],
     ["create time", "time.manage", () => createTimeEntryAction(initialState, new FormData())],
+    ["record a no-work day", "time.manage", () => createNoWorkDayAction(initialState, new FormData())],
+    ["update a no-work day", "time.manage", () => updateNoWorkDayAction(initialState, new FormData())],
     ["approve time", "time.approve", () => approveTimeEntryRequestAction(initialState, new FormData())],
     ["lock a week", "time.lock", () => lockTimesheetWeekAction(initialState, new FormData())],
   ])("denies an attempt to %s before database access", async (_label, permission, action) => {

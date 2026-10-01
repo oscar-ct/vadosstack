@@ -70,6 +70,7 @@ model Job {
   payments            JobPayment[]
   timeEntries         TimeEntry[]
   timeEntryRequests   TimeEntryRequest[]
+  noWorkDays          NoWorkDay[]
   tasks               Task[]
 
   @@unique([id, ownerId])
@@ -347,6 +348,7 @@ model Workspace {
   timeEntries                TimeEntry[]
   timeEntryRequests          TimeEntryRequest[]
   timeEntryAudits            TimeEntryAudit[]
+  noWorkDays                 NoWorkDay[]
   timesheetLocks             TimesheetLock[]
   employeeSessions           EmployeeSession[]
   googleMailAccount          GoogleMailAccount?
@@ -1197,6 +1199,7 @@ model Employee {
   timeEntries          TimeEntry[]
   timeEntryRequests    TimeEntryRequest[]
   timeEntryAudits      TimeEntryAudit[]
+  noWorkDays           NoWorkDay[]
   sessions             EmployeeSession[]
   workspaceMembership  WorkspaceMembership?
   workspaceInvitations WorkspaceInvitation[]
@@ -1236,6 +1239,28 @@ model TimeEntry {
   @@index([ownerId, workedOn])
   @@index([ownerId, employeeId, workedOn])
   @@map("time_entries")
+}
+
+model NoWorkDay {
+  id         String    @id @default(cuid())
+  ownerId    String
+  employeeId String
+  jobId      String?
+  workedOn   DateTime
+  reason     String
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  owner      Workspace @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  job        Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, employeeId, workedOn])
+  @@index([ownerId, workedOn])
+  @@index([employeeId, workedOn])
+  @@index([jobId])
+  @@map("no_work_days")
 }
 
 model TimeEntryRequest {

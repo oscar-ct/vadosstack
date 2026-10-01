@@ -4,6 +4,7 @@ import { startOfWeek } from "date-fns";
 import { z } from "zod";
 
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { noWorkDayReasonValues } from "@/lib/no-work-days";
 import { isValidOptionalPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { getSafeTimeEntryErrorMessage, TimeEntryUserError } from "@/lib/time-entry-errors";
@@ -59,6 +60,22 @@ const updateTimeEntrySchema = timeEntryFieldsSchema.extend({
 
 const deleteTimeEntrySchema = z.object({
   entryId: initialRequiredString,
+});
+
+const createNoWorkDaySchema = z.object({
+  employeeId: timeEntryIdSchema,
+  jobId: z.string().trim().max(64).optional(),
+  notes: z.string().trim().max(1000, "Notes must be 1,000 characters or fewer.").optional(),
+  reason: z.enum(noWorkDayReasonValues),
+  workedOn: managerWorkDateSchema,
+});
+
+const deleteNoWorkDaySchema = z.object({
+  noWorkDayId: timeEntryIdSchema,
+});
+
+const updateNoWorkDaySchema = createNoWorkDaySchema.extend({
+  noWorkDayId: timeEntryIdSchema,
 });
 
 const reviewTimeEntryRequestSchema = z.object({
@@ -428,6 +445,287 @@ export async function createTimeEntryAction(
     success: true,
     message: "Hours logged.",
   };
+}
+
+export async function createNoWorkDayAction(
+  _previousState: TimeTrackingMutationState,
+  formData: FormData,
+): Promise<TimeTrackingMutationState> {
+  const authorization = await getPermittedDashboardAuthorization("time.manage");
+  if (!authorization) {
+    return { success: false, message: "You do not have permission to record no-work days." };
+  }
+
+  const workspaceId = authorization.workspaceId;
+  const actorId = authorization.principal.user.id;
+  const canViewJobs = can(authorization.membership, "jobs.view");
+  const parsed = createNoWorkDaySchema.safeParse({
+    employeeId: formData.get("employeeId"),
+    jobId: formString(formData.get("jobId")),
+    notes: formString(formData.get("notes")),
+    reason: formData.get("reason"),
+    workedOn: formData.get("workedOn"),
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Check the no-work day details." };
+  }
+  if (emptyToNull(parsed.data.jobId) && !canViewJobs) {
+    return { success: false, message: "You do not have permission to associate this record with a job." };
+  }
+
+  const employee = await prisma.employee.findUnique({
+    where: { id_ownerId: { id: parsed.data.employeeId, ownerId: workspaceId } },
+    select: { active: true, id: true },
+  });
+  if (!employee?.active) {
+    return { success: false, message: "Select an active employee from your account." };
+  }
+
+  try {
+    const jobId = await validateOptionalJob(workspaceId, parsed.data.jobId);
+    const workedOn = parseWorkDate(parsed.data.workedOn);
+
+    await prisma.$transaction(async (transaction) => {
+      await assertTimesheetUnlocked(transaction, workspaceId, workedOn);
+      await lockEmployeeTimeEntries(transaction, workspaceId, parsed.data.employeeId);
+
+      const [existingHours, existingNoWorkDay] = await Promise.all([
+        transaction.timeEntry.findFirst({
+          where: { employeeId: parsed.data.employeeId, ownerId: workspaceId, workedOn },
+          select: { id: true },
+        }),
+        transaction.noWorkDay.findUnique({
+          where: {
+            ownerId_employeeId_workedOn: {
+              employeeId: parsed.data.employeeId,
+              ownerId: workspaceId,
+              workedOn,
+            },
+          },
+          select: { id: true },
+        }),
+      ]);
+
+      if (existingHours) {
+        throw new TimeEntryUserError("This employee already has hours logged for the selected date.");
+      }
+      if (existingNoWorkDay) {
+        throw new TimeEntryUserError("A no-work record already exists for this employee and date.");
+      }
+
+      const noWorkDay = await transaction.noWorkDay.create({
+        data: {
+          employeeId: parsed.data.employeeId,
+          jobId,
+          notes: emptyToNull(parsed.data.notes),
+          ownerId: workspaceId,
+          reason: parsed.data.reason,
+          workedOn,
+        },
+      });
+      await transaction.timeEntryAudit.create({
+        data: {
+          action: "No-work day added",
+          actorId,
+          afterSnapshot: {
+            jobId: noWorkDay.jobId,
+            notes: noWorkDay.notes,
+            reason: noWorkDay.reason,
+            workedOn: noWorkDay.workedOn.toISOString(),
+          },
+          employeeId: noWorkDay.employeeId,
+          ownerId: workspaceId,
+          source: "Manager",
+        },
+      });
+    });
+  } catch (error) {
+    return {
+      success: false,
+      message: getSafeTimeEntryErrorMessage(error, "The no-work day could not be saved.", "create no-work day"),
+    };
+  }
+
+  revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/time-tracking");
+  return { success: true, message: "No-work day recorded." };
+}
+
+export async function deleteNoWorkDayAction(
+  _previousState: TimeTrackingMutationState,
+  formData: FormData,
+): Promise<TimeTrackingMutationState> {
+  const authorization = await getPermittedDashboardAuthorization("time.manage");
+  if (!authorization) {
+    return { success: false, message: "You do not have permission to remove no-work days." };
+  }
+
+  const parsed = deleteNoWorkDaySchema.safeParse({ noWorkDayId: formData.get("noWorkDayId") });
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Select a no-work day." };
+  }
+
+  const workspaceId = authorization.workspaceId;
+  const actorId = authorization.principal.user.id;
+  try {
+    await prisma.$transaction(async (transaction) => {
+      const noWorkDay = await transaction.noWorkDay.findUnique({
+        where: { id_ownerId: { id: parsed.data.noWorkDayId, ownerId: workspaceId } },
+      });
+      if (!noWorkDay) throw new TimeEntryUserError("This no-work record is no longer available.");
+
+      await assertTimesheetUnlocked(transaction, workspaceId, noWorkDay.workedOn);
+      await lockEmployeeTimeEntries(transaction, workspaceId, noWorkDay.employeeId);
+      await transaction.noWorkDay.delete({
+        where: { id_ownerId: { id: noWorkDay.id, ownerId: workspaceId } },
+      });
+      await transaction.timeEntryAudit.create({
+        data: {
+          action: "No-work day removed",
+          actorId,
+          beforeSnapshot: {
+            jobId: noWorkDay.jobId,
+            notes: noWorkDay.notes,
+            reason: noWorkDay.reason,
+            workedOn: noWorkDay.workedOn.toISOString(),
+          },
+          employeeId: noWorkDay.employeeId,
+          ownerId: workspaceId,
+          source: "Manager",
+        },
+      });
+    });
+  } catch (error) {
+    return {
+      success: false,
+      message: getSafeTimeEntryErrorMessage(error, "The no-work day could not be removed.", "delete no-work day"),
+    };
+  }
+
+  revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/time-tracking");
+  return { success: true, message: "No-work day removed." };
+}
+
+export async function updateNoWorkDayAction(
+  _previousState: TimeTrackingMutationState,
+  formData: FormData,
+): Promise<TimeTrackingMutationState> {
+  const authorization = await getPermittedDashboardAuthorization("time.manage");
+  if (!authorization) {
+    return { success: false, message: "You do not have permission to update no-work days." };
+  }
+
+  const parsed = updateNoWorkDaySchema.safeParse({
+    employeeId: formData.get("employeeId"),
+    jobId: formString(formData.get("jobId")),
+    notes: formString(formData.get("notes")),
+    noWorkDayId: formData.get("noWorkDayId"),
+    reason: formData.get("reason"),
+    workedOn: formData.get("workedOn"),
+  });
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Check the no-work day details." };
+  }
+
+  const workspaceId = authorization.workspaceId;
+  const actorId = authorization.principal.user.id;
+  const canViewJobs = can(authorization.membership, "jobs.view");
+  if (emptyToNull(parsed.data.jobId) && !canViewJobs) {
+    return { success: false, message: "You do not have permission to associate this record with a job." };
+  }
+
+  const employee = await prisma.employee.findUnique({
+    where: { id_ownerId: { id: parsed.data.employeeId, ownerId: workspaceId } },
+    select: { active: true, id: true },
+  });
+  if (!employee?.active) {
+    return { success: false, message: "Select an active employee from your account." };
+  }
+
+  try {
+    const jobId = await validateOptionalJob(workspaceId, parsed.data.jobId);
+    const workedOn = parseWorkDate(parsed.data.workedOn);
+
+    await prisma.$transaction(async (transaction) => {
+      const existing = await transaction.noWorkDay.findUnique({
+        where: { id_ownerId: { id: parsed.data.noWorkDayId, ownerId: workspaceId } },
+      });
+      if (!existing) throw new TimeEntryUserError("This no-work record is no longer available.");
+
+      const datesToLock = Array.from(
+        new Map([existing.workedOn, workedOn].map((date) => [date.getTime(), date])).values(),
+      ).sort((left, right) => left.getTime() - right.getTime());
+      for (const date of datesToLock) await assertTimesheetUnlocked(transaction, workspaceId, date);
+
+      const employeesToLock = Array.from(new Set([existing.employeeId, parsed.data.employeeId])).sort();
+      for (const employeeId of employeesToLock) {
+        await lockEmployeeTimeEntries(transaction, workspaceId, employeeId);
+      }
+
+      const [existingHours, duplicate] = await Promise.all([
+        transaction.timeEntry.findFirst({
+          where: { employeeId: parsed.data.employeeId, ownerId: workspaceId, workedOn },
+          select: { id: true },
+        }),
+        transaction.noWorkDay.findUnique({
+          where: {
+            ownerId_employeeId_workedOn: {
+              employeeId: parsed.data.employeeId,
+              ownerId: workspaceId,
+              workedOn,
+            },
+          },
+          select: { id: true },
+        }),
+      ]);
+      if (existingHours) {
+        throw new TimeEntryUserError("This employee already has hours logged for the selected date.");
+      }
+      if (duplicate && duplicate.id !== existing.id) {
+        throw new TimeEntryUserError("A no-work record already exists for this employee and date.");
+      }
+
+      const updated = await transaction.noWorkDay.update({
+        where: { id_ownerId: { id: existing.id, ownerId: workspaceId } },
+        data: {
+          employeeId: parsed.data.employeeId,
+          jobId,
+          notes: emptyToNull(parsed.data.notes),
+          reason: parsed.data.reason,
+          workedOn,
+        },
+      });
+      await transaction.timeEntryAudit.create({
+        data: {
+          action: "No-work day updated",
+          actorId,
+          afterSnapshot: {
+            jobId: updated.jobId,
+            notes: updated.notes,
+            reason: updated.reason,
+            workedOn: updated.workedOn.toISOString(),
+          },
+          beforeSnapshot: {
+            jobId: existing.jobId,
+            notes: existing.notes,
+            reason: existing.reason,
+            workedOn: existing.workedOn.toISOString(),
+          },
+          employeeId: updated.employeeId,
+          ownerId: workspaceId,
+          source: "Manager",
+        },
+      });
+    });
+  } catch (error) {
+    return {
+      success: false,
+      message: getSafeTimeEntryErrorMessage(error, "The no-work day could not be updated.", "update no-work day"),
+    };
+  }
+
+  revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/time-tracking");
+  return { success: true, message: "No-work day updated." };
 }
 
 export async function updateTimeEntryAction(
