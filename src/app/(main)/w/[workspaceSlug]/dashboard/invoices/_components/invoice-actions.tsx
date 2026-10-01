@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { CircleDollarSign, Download, FilePenLine, Mail, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { CircleDollarSign, Download, FilePenLine, History, Mail, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { EmailDeliveryResult, type EmailDeliveryResultValue } from "@/components/email-delivery-result";
@@ -249,12 +249,6 @@ export function InvoiceActions({
             Email
           </Button>
         ) : null}
-        <Button asChild size="sm" className="hidden sm:inline-flex">
-          <Link href={`/dashboard/invoices/${invoiceId}/pdf`} download={`${invoiceNumber}.pdf`} prefetch={false}>
-            <Download />
-            Download
-          </Link>
-        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="outline" size="sm" className="gap-1.5">
@@ -270,10 +264,10 @@ export function InvoiceActions({
                 Email invoice
               </DropdownMenuItem>
             ) : null}
-            <DropdownMenuItem asChild className="sm:hidden">
+            <DropdownMenuItem asChild>
               <Link href={`/dashboard/invoices/${invoiceId}/pdf`} download={`${invoiceNumber}.pdf`} prefetch={false}>
                 <Download />
-                Download
+                Download invoice
               </Link>
             </DropdownMenuItem>
             {canEditJob ? (
@@ -506,6 +500,7 @@ export function ManageInvoiceDialogButton({
   invoice: InvoiceTableItem;
 }) {
   const [open, setOpen] = React.useState(false);
+  const paid = Number(invoice.balanceDue) <= 0;
 
   return (
     <>
@@ -515,11 +510,13 @@ export function ManageInvoiceDialogButton({
         size="sm"
         onClick={() => setOpen(true)}
         className={
-          "border-emerald-200 bg-emerald-50 px-2 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950"
+          paid
+            ? undefined
+            : "border-emerald-200 bg-emerald-50 px-2 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950"
         }
       >
-        <CircleDollarSign />
-        Manage
+        {paid ? <History /> : <CircleDollarSign />}
+        {paid ? "Payment history" : "Pay"}
       </Button>
       <InvoiceDetailsDialog
         createJobPaymentAction={createJobPaymentAction}

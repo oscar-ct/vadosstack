@@ -3,6 +3,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   ChartNoAxesCombined,
+  CreditCard,
   KeyRound,
   ListTodo,
   type LucideIcon,
@@ -107,6 +108,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Invoices",
         url: "/dashboard/invoices",
         icon: ReceiptText,
+      },
+      {
+        title: "Payments",
+        url: "/dashboard/payments",
+        icon: CreditCard,
+        isNew: true,
       },
       {
         title: "Services",

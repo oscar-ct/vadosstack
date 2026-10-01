@@ -82,26 +82,170 @@ model Job {
 }
 
 model JobPayment {
-  id              String    @id @default(cuid())
-  ownerId         String
-  jobId           String
-  paidOn          DateTime  @default(now())
-  amount          Decimal
-  paymentType     String    @default("deposit")
-  method          String
-  referenceNumber String?
-  description     String
-  notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  owner           Workspace @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  job             Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id                   String           @id @default(cuid())
+  ownerId              String
+  jobId                String
+  invoiceId            String?
+  paidOn               DateTime         @default(now())
+  amount               Decimal
+  refundedAmount       Decimal          @default(0)
+  feeAmount            Decimal?
+  applicationFeeAmount Decimal          @default(0)
+  currency             String           @default("USD")
+  paymentType          String           @default("deposit")
+  provider             String           @default("manual")
+  status               String           @default("succeeded")
+  method               String
+  methodType           String?
+  referenceNumber      String?
+  externalPaymentId    String?
+  idempotencyKey       String?
+  failureCode          String?
+  failureMessage       String?
+  description          String
+  notes                String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  owner                Workspace        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  job                  Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  invoice              Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  refunds              PaymentRefund[]
+  disputes             PaymentDispute[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, provider, externalPaymentId])
+  @@unique([ownerId, idempotencyKey])
+  @@index([ownerId])
+  @@index([jobId])
+  @@index([invoiceId])
+  @@index([ownerId, status])
+  @@index([paidOn])
+  @@map("job_payments")
+}
+
+model PaymentProviderConnection {
+  id                   String    @id @default(cuid())
+  ownerId              String
+  provider             String
+  externalAccountId    String
+  accountType          String    @default("unknown")
+  status               String    @default("pending")
+  chargesEnabled       Boolean   @default(false)
+  payoutsEnabled       Boolean   @default(false)
+  encryptedCredentials String?
+  credentialKeyVersion Int?
+  connectedAt          DateTime?
+  disconnectedAt       DateTime?
+  lastSyncedAt         DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  owner                Workspace @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, provider])
+  @@unique([provider, externalAccountId])
+  @@index([ownerId, status])
+  @@map("payment_provider_connections")
+}
+
+model InvoicePaymentLink {
+  id             String    @id @default(cuid())
+  ownerId        String
+  invoiceId      String
+  tokenHash      String    @unique
+  tokenCipher    String?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  lastAccessedAt DateTime?
+  accessCount    Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  owner          Workspace @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  invoice        Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@unique([id, ownerId])
   @@index([ownerId])
-  @@index([jobId])
-  @@index([paidOn])
-  @@map("job_payments")
+  @@index([invoiceId])
+  @@index([expiresAt])
+  @@map("invoice_payment_links")
+}
+
+model PaymentRefund {
+  id               String     @id @default(cuid())
+  ownerId          String
+  paymentId        String
+  provider         String
+  externalRefundId String?
+  amount           Decimal
+  currency         String     @default("USD")
+  status           String     @default("pending")
+  reason           String?
+  failureCode      String?
+  failureMessage   String?
+  refundedAt       DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  owner            Workspace  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  payment          JobPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, provider, externalRefundId])
+  @@index([paymentId])
+  @@index([ownerId, status])
+  @@map("payment_refunds")
+}
+
+model PaymentDispute {
+  id                String     @id @default(cuid())
+  ownerId           String
+  paymentId         String
+  provider          String
+  externalDisputeId String
+  amount            Decimal
+  currency          String     @default("USD")
+  status            String
+  reason            String?
+  evidenceDueAt     DateTime?
+  openedAt          DateTime
+  closedAt          DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  owner             Workspace  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  payment           JobPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, provider, externalDisputeId])
+  @@index([paymentId])
+  @@index([ownerId, status])
+  @@map("payment_disputes")
+}
+
+model PaymentWebhookEvent {
+  id                  String     @id @default(cuid())
+  ownerId             String?
+  provider            String
+  externalEventId     String
+  eventType           String
+  providerObjectId    String?
+  payloadHash         String
+  rawPayload          String?    @db.Text
+  status              String     @default("received")
+  attemptCount        Int        @default(0)
+  receivedAt          DateTime   @default(now())
+  lastAttemptAt       DateTime?
+  processingStartedAt DateTime?
+  nextAttemptAt       DateTime?
+  processedAt         DateTime?
+  lastError           String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  owner               Workspace? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalEventId])
+  @@index([ownerId])
+  @@index([provider, status])
+  @@index([provider, status, nextAttemptAt])
+  @@index([receivedAt])
+  @@map("payment_webhook_events")
 }
 
 model User {
@@ -145,72 +289,77 @@ model User {
 }
 
 model Workspace {
-  id                        String                      @id @default(cuid())
-  slug                      String                      @unique
-  name                      String
-  companyAddress            String?
-  companyEmail              String?
-  companyPhone              String?
-  companyLogoDataUrl        String?
-  companyLogoKey            String?
-  companyLogoType           String?
-  estimateValidDays         Int                         @default(15)
-  estimateMessageEnabled    Boolean                     @default(true)
-  estimateMessageAlign      String                      @default("left")
-  estimateMessageText       String
-  invoiceDueDays            Int                         @default(15)
-  invoiceMessageEnabled     Boolean                     @default(false)
-  invoiceMessageAlign       String                      @default("left")
-  invoiceMessageText        String
-  orderMessageText          String
-  workspaceMode             String                      @default("both")
-  status                    String                      @default("Active")
-  suspendedAt               DateTime?
-  suspendedByUserId         String?
-  suspensionReasonCode      String?
-  suspensionNote            String?
-  suspendedUntil            DateTime?
-  legacyOwnerId             String?                     @unique
-  createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime                    @updatedAt
-  legacyOwner               User?                       @relation("LegacyWorkspaceOwner", fields: [legacyOwnerId], references: [id], onDelete: SetNull)
-  suspendedBy               User?                       @relation("WorkspaceSuspendedBy", fields: [suspendedByUserId], references: [id], onDelete: SetNull)
-  memberships               WorkspaceMembership[]
-  roles                     WorkspaceRole[]
-  invitations               WorkspaceInvitation[]
-  authorizationEvents       AuthorizationAuditEvent[]
-  enforcementEvents         WorkspaceEnforcementEvent[]
-  slugAliases               WorkspaceSlugAlias[]
-  customers                 Customer[]
-  leads                     Lead[]
-  jobs                      Job[]
-  jobPayments               JobPayment[]
-  invoices                  Invoice[]
-  estimates                 Estimate[]
-  estimateRecords           EstimateRecord[]
-  documentSequences         DocumentSequence[]
-  documentNumberAssignments DocumentNumberAssignment[]
-  documentNumberEvents      DocumentNumberEvent[]
-  emailRecords              EmailRecord[]
-  emailTemplates            EmailTemplate[]
-  serviceTemplates          ServiceTemplate[]
-  employees                 Employee[]
-  timeEntries               TimeEntry[]
-  timeEntryRequests         TimeEntryRequest[]
-  timeEntryAudits           TimeEntryAudit[]
-  timesheetLocks            TimesheetLock[]
-  employeeSessions          EmployeeSession[]
-  googleMailAccount         GoogleMailAccount?
-  tasks                     Task[]
-  inventoryCategories       InventoryCategory[]
-  inventorySettings         InventorySettings?
-  inventoryLocations        InventoryLocation[]
-  inventoryItems            InventoryItem[]
-  inventoryStockMovements   InventoryStockMovement[]
-  orders                    Order[]
-  orderItems                OrderItem[]
-  orderReturns              OrderReturn[]
-  orderReturnItems          OrderReturnItem[]
+  id                         String                      @id @default(cuid())
+  slug                       String                      @unique
+  name                       String
+  companyAddress             String?
+  companyEmail               String?
+  companyPhone               String?
+  companyLogoDataUrl         String?
+  companyLogoKey             String?
+  companyLogoType            String?
+  estimateValidDays          Int                         @default(15)
+  estimateMessageEnabled     Boolean                     @default(true)
+  estimateMessageAlign       String                      @default("left")
+  estimateMessageText        String
+  invoiceDueDays             Int                         @default(15)
+  invoiceMessageEnabled      Boolean                     @default(false)
+  invoiceMessageAlign        String                      @default("left")
+  invoiceMessageText         String
+  orderMessageText           String
+  workspaceMode              String                      @default("both")
+  status                     String                      @default("Active")
+  suspendedAt                DateTime?
+  suspendedByUserId          String?
+  suspensionReasonCode       String?
+  suspensionNote             String?
+  suspendedUntil             DateTime?
+  legacyOwnerId              String?                     @unique
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  legacyOwner                User?                       @relation("LegacyWorkspaceOwner", fields: [legacyOwnerId], references: [id], onDelete: SetNull)
+  suspendedBy                User?                       @relation("WorkspaceSuspendedBy", fields: [suspendedByUserId], references: [id], onDelete: SetNull)
+  memberships                WorkspaceMembership[]
+  roles                      WorkspaceRole[]
+  invitations                WorkspaceInvitation[]
+  authorizationEvents        AuthorizationAuditEvent[]
+  enforcementEvents          WorkspaceEnforcementEvent[]
+  slugAliases                WorkspaceSlugAlias[]
+  customers                  Customer[]
+  leads                      Lead[]
+  jobs                       Job[]
+  jobPayments                JobPayment[]
+  paymentProviderConnections PaymentProviderConnection[]
+  invoicePaymentLinks        InvoicePaymentLink[]
+  paymentRefunds             PaymentRefund[]
+  paymentDisputes            PaymentDispute[]
+  paymentWebhookEvents       PaymentWebhookEvent[]
+  invoices                   Invoice[]
+  estimates                  Estimate[]
+  estimateRecords            EstimateRecord[]
+  documentSequences          DocumentSequence[]
+  documentNumberAssignments  DocumentNumberAssignment[]
+  documentNumberEvents       DocumentNumberEvent[]
+  emailRecords               EmailRecord[]
+  emailTemplates             EmailTemplate[]
+  serviceTemplates           ServiceTemplate[]
+  employees                  Employee[]
+  timeEntries                TimeEntry[]
+  timeEntryRequests          TimeEntryRequest[]
+  timeEntryAudits            TimeEntryAudit[]
+  timesheetLocks             TimesheetLock[]
+  employeeSessions           EmployeeSession[]
+  googleMailAccount          GoogleMailAccount?
+  tasks                      Task[]
+  inventoryCategories        InventoryCategory[]
+  inventorySettings          InventorySettings?
+  inventoryLocations         InventoryLocation[]
+  inventoryItems             InventoryItem[]
+  inventoryStockMovements    InventoryStockMovement[]
+  orders                     Order[]
+  orderItems                 OrderItem[]
+  orderReturns               OrderReturn[]
+  orderReturnItems           OrderReturnItem[]
 
   @@index([name])
   @@index([status])
@@ -465,9 +614,9 @@ model Task {
 }
 
 model Invoice {
-  id                  String    @id @default(cuid())
+  id                  String               @id @default(cuid())
   ownerId             String
-  jobId               String    @unique
+  jobId               String               @unique
   invoiceNumber       String?
   customerId          String?
   customerName        String?
@@ -483,22 +632,24 @@ model Invoice {
   servicePostalCode   String?
   dateBegin           DateTime?
   dateEnd             DateTime?
-  laborCost           Decimal   @default(0)
-  materialTaxRate     Decimal   @default(0)
-  materials           String    @default("[]")
-  materialsSubtotal   Decimal   @default(0)
-  materialTaxAmount   Decimal   @default(0)
-  finalCost           Decimal   @default(0)
-  depositPaid         Decimal   @default(0)
-  amountPaid          Decimal   @default(0)
-  balanceDue          Decimal   @default(0)
+  laborCost           Decimal              @default(0)
+  materialTaxRate     Decimal              @default(0)
+  materials           String               @default("[]")
+  materialsSubtotal   Decimal              @default(0)
+  materialTaxAmount   Decimal              @default(0)
+  finalCost           Decimal              @default(0)
+  depositPaid         Decimal              @default(0)
+  amountPaid          Decimal              @default(0)
+  balanceDue          Decimal              @default(0)
   paymentStatus       String
   jobStatus           String
-  issuedAt            DateTime  @default(now())
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  owner               Workspace @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  job                 Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  issuedAt            DateTime             @default(now())
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  owner               Workspace            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  job                 Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  payments            JobPayment[]
+  paymentLinks        InvoicePaymentLink[]
 
   @@unique([id, ownerId])
   @@unique([ownerId, invoiceNumber])

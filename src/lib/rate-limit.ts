@@ -15,6 +15,7 @@ type RateLimitAction =
   | "employee-login"
   | "login"
   | "password-reset"
+  | "payment-checkout"
   | "register"
   | "reset-password"
   | "workspace-invitation"
@@ -45,6 +46,10 @@ const RATE_LIMIT_RULES: Record<RateLimitAction, RateLimitRule> = {
   "password-reset": {
     limit: 3,
     windowMs: ONE_HOUR_IN_MS,
+  },
+  "payment-checkout": {
+    limit: 8,
+    windowMs: FIFTEEN_MINUTES_IN_MS,
   },
   register: {
     limit: 3,

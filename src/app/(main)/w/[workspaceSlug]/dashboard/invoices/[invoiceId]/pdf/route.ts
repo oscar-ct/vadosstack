@@ -6,6 +6,7 @@ import { getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { normalizeDocumentMessageAlign, renderDocumentMessage } from "@/lib/document-messages";
 import { formatDocumentNumber } from "@/lib/document-number";
+import { getPaymentDisplayMethod, getPaymentDisplayReference } from "@/lib/payments/presentation";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
@@ -78,6 +79,7 @@ export async function GET(
       job: {
         include: {
           payments: {
+            where: { status: { in: ["succeeded", "partially_refunded"] } },
             orderBy: [{ paidOn: "asc" }, { createdAt: "asc" }],
           },
         },
@@ -146,7 +148,11 @@ export async function GET(
     materialTaxRate: invoice.materialTaxRate,
     materials: parseInvoiceMaterials(invoice.materials),
     materialsSubtotal: invoice.materialsSubtotal,
-    payments: invoice.job.payments,
+    payments: invoice.job.payments.map((payment) => ({
+      ...payment,
+      method: getPaymentDisplayMethod(payment),
+      referenceNumber: getPaymentDisplayReference(payment),
+    })),
     serviceLocation,
     taxableItemsLabel,
   });

@@ -28,9 +28,37 @@ NEXT_PUBLIC_SITE_URL="http://localhost:3000"
 GOOGLE_CLIENT_ID="YOUR_GOOGLE_CLIENT_ID"
 GOOGLE_CLIENT_SECRET="YOUR_GOOGLE_CLIENT_SECRET"
 GOOGLE_TOKEN_ENCRYPTION_KEY="A_LONG_RANDOM_SECRET"
+PAYMENT_LINK_ENCRYPTION_KEY="A_DIFFERENT_LONG_RANDOM_SECRET"
+PAYMENT_APPLICATION_FEE_BASIS_POINTS="0"
+PAYMENT_APPLICATION_FEE_FIXED_CENTS="0"
+STRIPE_SECRET_KEY=""
+STRIPE_WEBHOOK_SECRET=""
+STRIPE_CONNECTED_ACCOUNT_COUNTRY="US"
 ```
 
 `DATABASE_URL` is required by Prisma. `NEXT_PUBLIC_SITE_URL` is used for public metadata, sitemap, robots, and SEO URLs. In production, set it to the deployed domain.
+
+Payment application fees default to zero. `PAYMENT_APPLICATION_FEE_BASIS_POINTS` sets the percentage in basis
+points (`250` is 2.5%), while `PAYMENT_APPLICATION_FEE_FIXED_CENTS` adds an optional fixed amount in cents. A fee
+configuration that is invalid or greater than the payment fails closed instead of creating a charge.
+
+`PAYMENT_LINK_ENCRYPTION_KEY` encrypts recoverable customer payment-link tokens at rest. Production requires a dedicated,
+stable value; changing it prevents staff from copying previously created links, although their one-way hashes continue
+to validate links already shared with customers. Development and tests may fall back to `AUTH_SECRET`, then
+`STRIPE_SECRET_KEY`.
+
+`CRON_SECRET` protects scheduled maintenance routes. `/api/cron/payments` runs every ten minutes to retry durable Stripe
+webhook events and reconcile recent Stripe payments with VadosStack's ledger.
+
+Stripe uses one platform secret and one Connect webhook secret for the deployment. Each workspace stores only its
+Stripe connected-account ID. Register `/api/webhooks/stripe` as a Connect webhook endpoint; never place an individual
+company's Stripe secret key in VadosStack. Subscribe to `account.updated`, the four `checkout.session.*` events used by
+Checkout, `charge.refunded`, `refund.created`, `refund.updated`, `refund.failed`, and the `charge.dispute.*` lifecycle
+events.
+
+Workspace onboarding uses full-dashboard Standard connected accounts and direct charges. The connected company is the
+merchant of record, pays Stripe processing fees, and manages its Stripe account directly. VadosStack's application fee
+remains independently configurable and defaults to zero.
 
 For Google sign-in, create an OAuth 2.0 Client ID in Google Cloud and add this authorized redirect URI for local development:
 

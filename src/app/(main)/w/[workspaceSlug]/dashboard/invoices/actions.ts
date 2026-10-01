@@ -24,6 +24,12 @@ import {
   refreshGoogleAccessToken,
   sendGmailMessage,
 } from "@/lib/google-mail";
+import { createPaymentLinkUrl } from "@/lib/payments/payment-link-token";
+import {
+  createInvoicePaymentLink,
+  getOrCreateInvoicePaymentLink,
+  revokeInvoicePaymentLink,
+} from "@/lib/payments/payment-links";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
@@ -63,7 +69,83 @@ type EmailInvoiceState = {
   submittedAt?: number;
 };
 
+export type PaymentLinkMutationState = {
+  success: boolean;
+  message: string;
+  linkId?: string;
+  paymentUrl?: string;
+};
+
 class InvoiceActionError extends Error {}
+
+const createPaymentLinkSchema = z.object({
+  invoiceId: z.string().trim().min(1, "Invoice is required."),
+});
+
+const revokePaymentLinkSchema = z.object({
+  invoiceId: z.string().trim().min(1, "Invoice is required."),
+  linkId: z.string().trim().min(1, "Payment link is required."),
+});
+
+export async function createInvoicePaymentLinkAction(
+  _previousState: PaymentLinkMutationState,
+  formData: FormData,
+): Promise<PaymentLinkMutationState> {
+  const authorization = await getPermittedDashboardAuthorization("invoices.send");
+  if (!authorization) return { success: false, message: "You do not have permission to share invoices." };
+
+  const parsed = createPaymentLinkSchema.safeParse({ invoiceId: formData.get("invoiceId") });
+  if (!parsed.success) return { success: false, message: parsed.error.issues[0]?.message ?? "Select an invoice." };
+
+  try {
+    const link = await createInvoicePaymentLink({
+      workspaceId: authorization.workspaceId,
+      invoiceId: parsed.data.invoiceId,
+      audit: {
+        actorUserId: authorization.principal.user.id,
+        membershipId: authorization.membership.id,
+      },
+    });
+    revalidateWorkspacePath(authorization.membership.workspaceSlug, `/dashboard/invoices/${link.invoiceId}`);
+    return {
+      success: true,
+      message: "Payment link ready.",
+      linkId: link.id,
+      paymentUrl: createPaymentLinkUrl(link.token),
+    };
+  } catch (error) {
+    console.error("Invoice payment link creation failed.", error);
+    return { success: false, message: "Payment link could not be created. Please try again." };
+  }
+}
+
+export async function revokeInvoicePaymentLinkAction(
+  _previousState: PaymentLinkMutationState,
+  formData: FormData,
+): Promise<PaymentLinkMutationState> {
+  const authorization = await getPermittedDashboardAuthorization("invoices.send");
+  if (!authorization) return { success: false, message: "You do not have permission to share invoices." };
+
+  const parsed = revokePaymentLinkSchema.safeParse({
+    invoiceId: formData.get("invoiceId"),
+    linkId: formData.get("linkId"),
+  });
+  if (!parsed.success) return { success: false, message: parsed.error.issues[0]?.message ?? "Select a payment link." };
+
+  const revoked = await revokeInvoicePaymentLink({
+    workspaceId: authorization.workspaceId,
+    invoiceId: parsed.data.invoiceId,
+    linkId: parsed.data.linkId,
+    audit: {
+      actorUserId: authorization.principal.user.id,
+      membershipId: authorization.membership.id,
+    },
+  });
+  if (!revoked) return { success: false, message: "Payment link could not be found." };
+
+  revalidateWorkspacePath(authorization.membership.workspaceSlug, `/dashboard/invoices/${parsed.data.invoiceId}`);
+  return { success: true, message: "Payment link disabled." };
+}
 
 function createEmailInvoiceState(success: boolean, message: string, reconnectRequired = false): EmailInvoiceState {
   return {
@@ -413,6 +495,7 @@ export async function emailInvoiceAction(
         job: {
           include: {
             payments: {
+              where: { status: { in: ["succeeded", "partially_refunded"] } },
               orderBy: [{ paidOn: "asc" }, { createdAt: "asc" }],
             },
           },
@@ -426,7 +509,14 @@ export async function emailInvoiceAction(
     }),
     prisma.workspace.findUnique({
       where: { id: workspaceId },
-      include: { legacyOwner: { select: { email: true } } },
+      include: {
+        legacyOwner: { select: { email: true } },
+        paymentProviderConnections: {
+          where: { provider: "stripe" },
+          select: { accountType: true, chargesEnabled: true, status: true },
+          take: 1,
+        },
+      },
     }),
   ]);
 
@@ -494,6 +584,27 @@ export async function emailInvoiceAction(
       invoiceNumber,
     });
     const submittedEmailContent = getSubmittedEmailContent(formData, emailContent);
+    let emailHtml = submittedEmailContent.html;
+    let emailText = submittedEmailContent.text;
+    const stripeConnection = workspace.paymentProviderConnections[0];
+    if (
+      Number(invoice.balanceDue) > 0 &&
+      stripeConnection?.accountType === "standard" &&
+      stripeConnection.status === "active" &&
+      stripeConnection.chargesEnabled
+    ) {
+      const paymentLink = await getOrCreateInvoicePaymentLink({
+        workspaceId,
+        invoiceId: invoice.id,
+        audit: {
+          actorUserId: authorization.principal.user.id,
+          membershipId: authorization.membership.id,
+        },
+      });
+      const paymentUrl = createPaymentLinkUrl(paymentLink.token);
+      emailText = `${emailText}\n\nPay this invoice securely: ${paymentUrl}`;
+      emailHtml = `${emailHtml}<p style="margin:24px 0"><a href="${paymentUrl}" style="display:inline-block;border-radius:8px;background:#111827;color:#ffffff;padding:12px 18px;text-decoration:none;font-weight:600">Pay invoice securely</a></p>`;
+    }
     const serviceLocation = formatServiceAddress(invoice);
     const pdfBuffer = await renderInvoicePdfBuffer({
       amountPaid: invoice.amountPaid,
@@ -540,9 +651,9 @@ export async function emailInvoiceAction(
         },
       ],
       from: googleMailAccount.email,
-      html: submittedEmailContent.html,
+      html: emailHtml,
       subject: submittedEmailContent.subject,
-      text: submittedEmailContent.text,
+      text: emailText,
       to: invoice.customerEmail,
     });
 

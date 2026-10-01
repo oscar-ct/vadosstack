@@ -32,6 +32,7 @@ export default async function Page() {
         job: {
           include: {
             payments: {
+              where: { status: { in: ["succeeded", "partially_refunded"] } },
               orderBy: [{ paidOn: "desc" }, { createdAt: "desc" }],
             },
           },

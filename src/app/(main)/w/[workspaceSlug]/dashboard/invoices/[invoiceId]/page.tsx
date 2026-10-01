@@ -19,6 +19,12 @@ import {
 } from "@/lib/document-messages";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
+import { recoverInvoicePaymentLinkUrl } from "@/lib/payments/payment-links";
+import {
+  formatPaymentReference,
+  getPaymentDisplayMethod,
+  getPaymentDisplayReference,
+} from "@/lib/payments/presentation";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
@@ -27,6 +33,7 @@ import { parsePricingItems } from "../../jobs/_components/pricing-items";
 import { createJobPaymentAction, deleteJobPaymentAction } from "../../jobs/actions";
 import { InvoiceActions, ManageInvoiceDialogButton } from "../_components/invoice-actions";
 import type { InvoiceTableItem } from "../_components/invoices-table";
+import { PaymentLinkDialog } from "../_components/payment-link-dialog";
 import { deleteInvoiceAction, emailInvoiceAction, updateInvoiceNumberAction } from "../actions";
 
 type InvoiceMaterial = {
@@ -165,9 +172,15 @@ export default async function Page({
       },
     },
     include: {
+      paymentLinks: {
+        where: { revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
       job: {
         include: {
           payments: {
+            where: { status: { in: ["succeeded", "partially_refunded"] } },
             orderBy: [{ paidOn: "asc" }, { createdAt: "asc" }],
           },
         },
@@ -191,7 +204,14 @@ export default async function Page({
     }),
     prisma.workspace.findUnique({
       where: { id: workspaceId },
-      include: { legacyOwner: { select: { email: true } } },
+      include: {
+        legacyOwner: { select: { email: true } },
+        paymentProviderConnections: {
+          where: { provider: "stripe" },
+          select: { accountType: true, chargesEnabled: true, status: true },
+          take: 1,
+        },
+      },
     }),
   ]);
   if (!workspace) notFound();
@@ -262,7 +282,11 @@ export default async function Page({
       ? "1fr 5.5rem 5.5rem 5rem"
       : "1fr 5rem";
   const returnTotal = returnMaterials.reduce((total, material) => total + Number(material.price || 0), 0);
-  const payments = invoice.job.payments;
+  const payments = invoice.job.payments.map((payment) => ({
+    ...payment,
+    method: getPaymentDisplayMethod(payment),
+    referenceNumber: getPaymentDisplayReference(payment),
+  }));
   const laborSubtotal = Number(invoice.laborCost);
   const materialsSubtotal = Number(invoice.materialsSubtotal);
   const subtotal = laborSubtotal + materialsSubtotal;
@@ -314,7 +338,7 @@ export default async function Page({
     amountPaid: invoice.amountPaid.toString(),
     balanceDue: invoice.balanceDue.toString(),
     total: invoice.finalCost.toString(),
-    payments: invoice.job.payments.map((payment) => ({
+    payments: payments.map((payment) => ({
       id: payment.id,
       paidOn: payment.paidOn.toISOString(),
       amount: payment.amount.toString(),
@@ -356,13 +380,34 @@ export default async function Page({
     <div className="mx-auto grid gap-4 md:h-[calc(100svh-6rem)] md:max-w-5xl md:grid-rows-[auto_minmax(0,1fr)] md:overflow-hidden print:h-auto print:max-w-none print:gap-0 print:overflow-visible print:p-0 print:text-[10px]">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <BackButton fallbackHref={backHref} />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           {canRecordPayment ? (
             <ManageInvoiceDialogButton
               createJobPaymentAction={createJobPaymentAction}
               deleteJobPaymentAction={deleteJobPaymentAction}
               invoice={managedInvoice}
             />
+          ) : null}
+          {canSendInvoice && Number(invoice.balanceDue) > 0 ? (
+            <PaymentLinkDialog
+              invoiceId={invoice.id}
+              existingLink={
+                invoice.paymentLinks[0]
+                  ? {
+                      id: invoice.paymentLinks[0].id,
+                      createdAt: invoice.paymentLinks[0].createdAt.toISOString(),
+                      paymentUrl: recoverInvoicePaymentLinkUrl(invoice.paymentLinks[0].tokenCipher),
+                    }
+                  : null
+              }
+              stripeReady={workspace.paymentProviderConnections.some(
+                (connection) =>
+                  connection.accountType === "standard" && connection.status === "active" && connection.chargesEnabled,
+              )}
+            />
+          ) : null}
+          {canRecordPayment || (canSendInvoice && Number(invoice.balanceDue) > 0) ? (
+            <div aria-hidden className="mx-0.5 hidden h-5 w-px bg-border sm:block" />
           ) : null}
           <InvoiceActions
             action={emailInvoiceAction}
@@ -745,7 +790,9 @@ export default async function Page({
                         <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-muted-foreground">
                           <span>{formatShortDate(payment.paidOn)}</span>
                           <span>{payment.method}</span>
-                          <span>Ref #{payment.referenceNumber ?? "-"}</span>
+                          <span title={payment.referenceNumber ?? undefined}>
+                            Ref #{formatPaymentReference(payment.referenceNumber) ?? "-"}
+                          </span>
                         </div>
                       </div>
                       <div className="shrink-0 font-semibold tabular-nums">{formatMoney(payment.amount)}</div>
@@ -759,7 +806,7 @@ export default async function Page({
               )}
             </div>
             <div className="hidden overflow-hidden rounded-md border md:block print:block print:border-neutral-300">
-              <div className="grid grid-cols-[5.5rem_1fr_5rem_5rem_5.5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100">
+              <div className="grid grid-cols-[5.5rem_1fr_5rem_7rem_5.5rem] gap-2 border-b bg-muted/20 px-2 py-1.5 font-medium text-xs print:border-neutral-300 print:bg-neutral-100">
                 <span>Date</span>
                 <span>Description</span>
                 <span>Method</span>
@@ -770,12 +817,14 @@ export default async function Page({
                 payments.map((payment) => (
                   <div
                     key={payment.id}
-                    className="grid grid-cols-[5.5rem_1fr_5rem_5rem_5.5rem] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 print:border-neutral-200"
+                    className="grid grid-cols-[5.5rem_1fr_5rem_7rem_5.5rem] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 print:border-neutral-200"
                   >
                     <span>{formatShortDate(payment.paidOn)}</span>
                     <span>{payment.description}</span>
                     <span className="text-muted-foreground">{payment.method}</span>
-                    <span className="text-muted-foreground">{payment.referenceNumber ?? "-"}</span>
+                    <span className="truncate text-muted-foreground" title={payment.referenceNumber ?? undefined}>
+                      {formatPaymentReference(payment.referenceNumber) ?? "-"}
+                    </span>
                     <span className="text-right font-medium tabular-nums">{formatMoney(payment.amount)}</span>
                   </div>
                 ))

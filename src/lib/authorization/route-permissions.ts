@@ -11,6 +11,7 @@ const DASHBOARD_ROUTE_PERMISSIONS = [
   ["/dashboard/estimates", "estimates.view", "Estimates"],
   ["/dashboard/inventory", "inventory.view", "Inventory"],
   ["/dashboard/customers", "customers.view", "Customers"],
+  ["/dashboard/payments", "payments.view", "Payments"],
   ["/dashboard/invoices", "invoices.view", "Invoices"],
   ["/dashboard/calendar", "calendar.view", "Calendar"],
   ["/dashboard/services", "services.view", "Services"],

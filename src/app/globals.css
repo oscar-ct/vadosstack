@@ -293,6 +293,32 @@ These serve as the fallback; there is no separate default.css file. */
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
+
+  [data-public-invoice] {
+    width: 111.111% !important;
+    max-width: none !important;
+    box-sizing: border-box !important;
+    transform-origin: top left !important;
+    zoom: 0.9;
+    border-color: #a3a3a3 !important;
+  }
+
+  [data-public-invoice] *,
+  [data-public-invoice]::before,
+  [data-public-invoice]::after {
+    border-color: #d4d4d4 !important;
+  }
+
+  [data-public-invoice] [data-print-keep],
+  [data-public-invoice] header {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  [data-public-invoice] [data-print-keep] > * {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
 }
 
 @layer utilities {

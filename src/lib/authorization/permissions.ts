@@ -50,6 +50,9 @@ export const PERMISSION_GROUPS = [
       { key: "invoices.delete", label: "Delete invoices" },
       { key: "invoices.send", label: "Send invoices" },
       { key: "invoices.record_payment", label: "Record invoice payments" },
+      { key: "payments.view", label: "View payments" },
+      { key: "payments.refund", label: "Issue payment refunds" },
+      { key: "payments.settings.manage", label: "Manage payment providers" },
       { key: "services.view", label: "View services" },
       { key: "services.manage", label: "Manage services" },
     ],
@@ -121,6 +124,7 @@ const SERVICE_PERMISSION_PREFIXES = [
   "invoices.",
   "jobs.",
   "leads.",
+  "payments.",
   "services.",
 ] as const;
 
@@ -184,6 +188,7 @@ export const DEFAULT_ROLE_TEMPLATES = [
         permission.startsWith("estimates.") ||
         permission.startsWith("jobs.") ||
         permission.startsWith("invoices.") ||
+        permission === "payments.view" ||
         permission === "services.view" ||
         permission === "employees.view" ||
         permission === "time.view" ||

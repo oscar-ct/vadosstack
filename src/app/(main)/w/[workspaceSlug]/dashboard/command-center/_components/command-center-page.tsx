@@ -2,6 +2,7 @@ import { isBefore } from "date-fns";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { can, getPermittedDashboardAuthorization, type WorkspaceMembershipSummary } from "@/lib/authorization";
+import { getNetPaymentMinorUnits } from "@/lib/payments/domain";
 import { prisma } from "@/lib/prisma";
 import { formatUtcMonthShort, getUtcMonthKey, startOfUtcMonth } from "@/lib/reporting-month";
 
@@ -15,6 +16,20 @@ const JOB_STATUSES = ["Completed", "Scheduled", "Unscheduled", "On Hold", "Cance
 function money(value: { toString(): string } | number | string | null | undefined) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function netPaymentMoney(payment: {
+  amount: { toString(): string };
+  refundedAmount: { toString(): string };
+  status: string;
+}) {
+  return (
+    getNetPaymentMinorUnits({
+      amount: payment.amount.toString(),
+      refundedAmount: payment.refundedAmount.toString(),
+      status: payment.status,
+    }) / 100
+  );
 }
 
 function percent(part: number, total: number) {
@@ -95,10 +110,16 @@ export async function getCommandCenterData(
       : Promise.resolve([]),
     canViewInvoices
       ? prisma.jobPayment.findMany({
-          where: { ownerId, paidOn: { gte: twelveMonthStart } },
+          where: {
+            ownerId,
+            paidOn: { gte: twelveMonthStart },
+            status: { in: ["succeeded", "partially_refunded"] },
+          },
           select: {
             amount: true,
             paidOn: true,
+            refundedAmount: true,
+            status: true,
           },
         })
       : Promise.resolve([]),
@@ -145,7 +166,7 @@ export async function getCommandCenterData(
     return {
       month: formatUtcMonthShort(monthStart),
       billed: Math.round(monthInvoices.reduce((total, invoice) => total + money(invoice.finalCost), 0)),
-      collected: Math.round(monthPayments.reduce((total, payment) => total + money(payment.amount), 0)),
+      collected: Math.round(monthPayments.reduce((total, payment) => total + netPaymentMoney(payment), 0)),
       receivable: Math.round(monthInvoices.reduce((total, invoice) => total + money(invoice.balanceDue), 0)),
       hours: Math.round(monthEntries.reduce((total, entry) => total + money(entry.hours), 0) * 10) / 10,
     };
@@ -266,7 +287,7 @@ export async function getCommandCenterData(
 
     return {
       billed: Math.round(periodInvoices.reduce((total, invoice) => total + money(invoice.finalCost), 0)),
-      collected: Math.round(periodPayments.reduce((total, payment) => total + money(payment.amount), 0)),
+      collected: Math.round(periodPayments.reduce((total, payment) => total + netPaymentMoney(payment), 0)),
       payments: periodPayments.length,
       estimateWinRate: percent(wonEstimateValue, decidedEstimateValue),
       estimateOutcomes,

@@ -10,6 +10,8 @@ import {
   deriveJobPaymentStatus,
 } from "@/lib/customer-billing";
 import { parseDateInput } from "@/lib/date-only";
+import { getNetPaymentMinorUnits, minorUnitsToDecimalMoney } from "@/lib/payments/domain";
+import { expireStripeCheckoutSessionsAfterManualPayment } from "@/lib/payments/stripe-checkout-sessions";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress, getServiceAddressPayload, type ServiceAddressFields } from "@/lib/service-address";
@@ -535,30 +537,50 @@ async function syncCustomerBillingStatus(customerId: string | null | undefined, 
 }
 
 async function getJobPaidTotal(jobId: string) {
-  const paymentTotals = await prisma.jobPayment.aggregate({
+  const payments = await prisma.jobPayment.findMany({
     where: {
       jobId,
+      status: { in: ["succeeded", "partially_refunded"] },
     },
-    _sum: {
-      amount: true,
-    },
+    select: { amount: true, refundedAmount: true, status: true },
   });
 
-  return Number(paymentTotals._sum.amount ?? 0).toFixed(2);
+  return minorUnitsToDecimalMoney(
+    payments.reduce(
+      (total, payment) =>
+        total +
+        getNetPaymentMinorUnits({
+          amount: payment.amount.toString(),
+          refundedAmount: payment.refundedAmount.toString(),
+          status: payment.status,
+        }),
+      0,
+    ),
+  );
 }
 
 async function getJobDepositTotal(jobId: string) {
-  const paymentTotals = await prisma.jobPayment.aggregate({
+  const payments = await prisma.jobPayment.findMany({
     where: {
       jobId,
       paymentType: "deposit",
+      status: { in: ["succeeded", "partially_refunded"] },
     },
-    _sum: {
-      amount: true,
-    },
+    select: { amount: true, refundedAmount: true, status: true },
   });
 
-  return Number(paymentTotals._sum.amount ?? 0).toFixed(2);
+  return minorUnitsToDecimalMoney(
+    payments.reduce(
+      (total, payment) =>
+        total +
+        getNetPaymentMinorUnits({
+          amount: payment.amount.toString(),
+          refundedAmount: payment.refundedAmount.toString(),
+          status: payment.status,
+        }),
+      0,
+    ),
+  );
 }
 
 async function syncJobPaymentSummary(jobId: string, ownerId: string) {
@@ -896,11 +918,7 @@ export async function updateJobAction(_previousState: JobMutationState, formData
       select: {
         customerId: true,
         id: true,
-        invoice: {
-          select: {
-            id: true,
-          },
-        },
+        invoice: { select: { id: true } },
       },
     });
 
@@ -1089,6 +1107,7 @@ export async function createJobPaymentAction(
     };
   }
 
+  let checkoutExpirationFailed = false;
   try {
     const job = await prisma.job.findUnique({
       where: {
@@ -1099,6 +1118,7 @@ export async function createJobPaymentAction(
       },
       select: {
         id: true,
+        invoice: { select: { balanceDue: true, id: true } },
       },
     });
 
@@ -1109,10 +1129,15 @@ export async function createJobPaymentAction(
       };
     }
 
+    if (job.invoice && Number(job.invoice.balanceDue) <= 0) {
+      return { success: false, message: "This invoice is already paid in full." };
+    }
+
     const payment = await prisma.jobPayment.create({
       data: {
         ownerId: workspaceId,
         jobId: parsed.data.jobId,
+        invoiceId: job.invoice?.id ?? null,
         paidOn: parsed.data.paidOn,
         amount: Number(parsed.data.amount).toFixed(2),
         paymentType: parsed.data.paymentType,
@@ -1124,6 +1149,7 @@ export async function createJobPaymentAction(
     });
 
     await syncJobPaymentSummary(parsed.data.jobId, workspaceId);
+    checkoutExpirationFailed = await didStripeCheckoutExpirationFail(workspaceId, parsed.data.jobId);
     await recordAuthorizationAuditEvent({
       workspaceId,
       actorUserId: authorization.principal.user.id,
@@ -1147,7 +1173,10 @@ export async function createJobPaymentAction(
 
   return {
     success: true,
-    message: parsed.data.paymentType === "deposit" ? "Deposit recorded." : "Payment recorded.",
+    message: withCheckoutExpirationWarning(
+      parsed.data.paymentType === "deposit" ? "Deposit recorded." : "Payment recorded.",
+      checkoutExpirationFailed,
+    ),
   };
 }
 
@@ -1184,6 +1213,7 @@ export async function updateJobPaymentAction(
     };
   }
 
+  let checkoutExpirationFailed = false;
   try {
     const payment = await prisma.jobPayment.findUnique({
       where: {
@@ -1194,6 +1224,7 @@ export async function updateJobPaymentAction(
       },
       select: {
         jobId: true,
+        provider: true,
       },
     });
 
@@ -1202,6 +1233,10 @@ export async function updateJobPaymentAction(
         success: false,
         message: "Payment could not be found.",
       };
+    }
+
+    if (payment.provider !== "manual") {
+      return { success: false, message: "Online payments cannot be edited manually." };
     }
 
     await prisma.jobPayment.update({
@@ -1223,6 +1258,7 @@ export async function updateJobPaymentAction(
     });
 
     await syncJobPaymentSummary(parsed.data.jobId, workspaceId);
+    checkoutExpirationFailed = await didStripeCheckoutExpirationFail(workspaceId, parsed.data.jobId);
     await recordAuthorizationAuditEvent({
       workspaceId,
       actorUserId: authorization.principal.user.id,
@@ -1246,7 +1282,10 @@ export async function updateJobPaymentAction(
 
   return {
     success: true,
-    message: parsed.data.paymentType === "deposit" ? "Deposit updated." : "Payment updated.",
+    message: withCheckoutExpirationWarning(
+      parsed.data.paymentType === "deposit" ? "Deposit updated." : "Payment updated.",
+      checkoutExpirationFailed,
+    ),
   };
 }
 
@@ -1275,6 +1314,7 @@ export async function deleteJobPaymentAction(
     };
   }
 
+  let checkoutExpirationFailed = false;
   try {
     const payment = await prisma.jobPayment.findUnique({
       where: {
@@ -1285,6 +1325,7 @@ export async function deleteJobPaymentAction(
       },
       select: {
         jobId: true,
+        provider: true,
       },
     });
 
@@ -1293,6 +1334,10 @@ export async function deleteJobPaymentAction(
         success: false,
         message: "Payment could not be found.",
       };
+    }
+
+    if (payment.provider !== "manual") {
+      return { success: false, message: "Online payments cannot be deleted manually." };
     }
 
     await prisma.jobPayment.delete({
@@ -1305,6 +1350,7 @@ export async function deleteJobPaymentAction(
     });
 
     await syncJobPaymentSummary(payment.jobId, workspaceId);
+    checkoutExpirationFailed = await didStripeCheckoutExpirationFail(workspaceId, payment.jobId);
     await recordAuthorizationAuditEvent({
       workspaceId,
       actorUserId: authorization.principal.user.id,
@@ -1328,8 +1374,24 @@ export async function deleteJobPaymentAction(
 
   return {
     success: true,
-    message: "Payment deleted.",
+    message: withCheckoutExpirationWarning("Payment deleted.", checkoutExpirationFailed),
   };
+}
+
+async function didStripeCheckoutExpirationFail(workspaceId: string, jobId: string) {
+  try {
+    const result = await expireStripeCheckoutSessionsAfterManualPayment({ workspaceId, jobId });
+    return result.failedCount > 0;
+  } catch (error) {
+    console.error("Stripe Checkout cleanup failed after a manual payment change.", error);
+    return true;
+  }
+}
+
+function withCheckoutExpirationWarning(message: string, expirationFailed: boolean) {
+  return expirationFailed
+    ? `${message} An open Stripe checkout could not be closed; review the invoice in Stripe.`
+    : message;
 }
 
 const deleteJobSchema = z.object({

@@ -72,6 +72,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
 import { formatDateOnly, toDateInputValue } from "@/lib/date-only";
+import { formatPaymentReference } from "@/lib/payments/presentation";
 
 import type { JobMutationState } from "../../jobs/actions";
 import { getInvoicesColumns } from "./invoices-table/columns";
@@ -395,80 +396,82 @@ export function InvoiceDetailsDialog({
             </div>
           </section>
 
-          <form
-            ref={paymentFormRef}
-            action={createPaymentFormAction}
-            className="grid gap-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/20"
-          >
-            <input type="hidden" name="jobId" value={invoice.jobId} />
-            <input type="hidden" name="paymentType" value="invoice_payment" />
-            <div className="flex items-start gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
-                <CircleDollarSign className="size-4" />
+          {Number(invoice.balanceDue) > 0 ? (
+            <form
+              ref={paymentFormRef}
+              action={createPaymentFormAction}
+              className="grid gap-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/20"
+            >
+              <input type="hidden" name="jobId" value={invoice.jobId} />
+              <input type="hidden" name="paymentType" value="invoice_payment" />
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
+                  <CircleDollarSign className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm leading-5">Record payment</div>
+                  <p className="text-muted-foreground text-xs">
+                    Add a payment received for this invoice and update the balance.
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <div className="font-semibold text-sm leading-5">Record payment</div>
-                <p className="text-muted-foreground text-xs">
-                  Add a payment received for this invoice and update the balance.
-                </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor={`invoice-payment-date-${invoice.id}`}>Date</Label>
+                  <Input
+                    id={`invoice-payment-date-${invoice.id}`}
+                    name="paidOn"
+                    type="date"
+                    defaultValue={toDateInputValue()}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`invoice-payment-amount-${invoice.id}`}>Amount</Label>
+                  <Input
+                    id={`invoice-payment-amount-${invoice.id}`}
+                    name="amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`invoice-payment-method-${invoice.id}`}>Method</Label>
+                  <Input
+                    id={`invoice-payment-method-${invoice.id}`}
+                    name="method"
+                    placeholder="Zelle, check, card"
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`invoice-payment-reference-${invoice.id}`}>Check / Ref #</Label>
+                  <Input id={`invoice-payment-reference-${invoice.id}`} name="referenceNumber" placeholder="Optional" />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor={`invoice-payment-description-${invoice.id}`}>Description</Label>
+                  <Input
+                    id={`invoice-payment-description-${invoice.id}`}
+                    name="description"
+                    placeholder="Final payment, deposit"
+                    required
+                  />
+                </div>
               </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor={`invoice-payment-date-${invoice.id}`}>Date</Label>
-                <Input
-                  id={`invoice-payment-date-${invoice.id}`}
-                  name="paidOn"
-                  type="date"
-                  defaultValue={toDateInputValue()}
-                  required
-                />
+              {paymentState.message && !paymentState.success ? (
+                <p className="text-destructive text-sm">{paymentState.message}</p>
+              ) : null}
+              <div className="flex justify-end">
+                <Button type="submit" size="sm" disabled={isCreatingPayment} className="shadow-sm">
+                  <CircleDollarSign className="size-4" />
+                  {isCreatingPayment ? "Recording..." : "Record payment"}
+                </Button>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor={`invoice-payment-amount-${invoice.id}`}>Amount</Label>
-                <Input
-                  id={`invoice-payment-amount-${invoice.id}`}
-                  name="amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor={`invoice-payment-method-${invoice.id}`}>Method</Label>
-                <Input
-                  id={`invoice-payment-method-${invoice.id}`}
-                  name="method"
-                  placeholder="Zelle, check, card"
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor={`invoice-payment-reference-${invoice.id}`}>Check / Ref #</Label>
-                <Input id={`invoice-payment-reference-${invoice.id}`} name="referenceNumber" placeholder="Optional" />
-              </div>
-              <div className="grid gap-2 sm:col-span-2">
-                <Label htmlFor={`invoice-payment-description-${invoice.id}`}>Description</Label>
-                <Input
-                  id={`invoice-payment-description-${invoice.id}`}
-                  name="description"
-                  placeholder="Final payment, deposit"
-                  required
-                />
-              </div>
-            </div>
-            {paymentState.message && !paymentState.success ? (
-              <p className="text-destructive text-sm">{paymentState.message}</p>
-            ) : null}
-            <div className="flex justify-end">
-              <Button type="submit" size="sm" disabled={isCreatingPayment} className="shadow-sm">
-                <CircleDollarSign className="size-4" />
-                {isCreatingPayment ? "Recording..." : "Record payment"}
-              </Button>
-            </div>
-          </form>
+            </form>
+          ) : null}
 
           <section className="grid gap-3">
             <div className="font-medium text-sm">Transaction history</div>
@@ -495,7 +498,9 @@ export function InvoiceDetailsDialog({
                         </div>
                         <div className="grid gap-1">
                           <span className="text-muted-foreground">Ref #</span>
-                          <span className="font-medium">{payment.referenceNumber ?? "-"}</span>
+                          <span className="font-medium" title={payment.referenceNumber ?? undefined}>
+                            {formatPaymentReference(payment.referenceNumber) ?? "-"}
+                          </span>
                         </div>
                         <div className="flex justify-end">
                           <DeleteInvoicePaymentDialog
@@ -539,8 +544,11 @@ export function InvoiceDetailsDialog({
                         </div>
                       </div>
                       <div className="min-w-0">
-                        <p className="whitespace-normal break-words leading-snug">
-                          {payment.referenceNumber ? payment.referenceNumber : "-"}
+                        <p
+                          className="whitespace-normal break-words leading-snug"
+                          title={payment.referenceNumber ?? undefined}
+                        >
+                          {formatPaymentReference(payment.referenceNumber) ?? "-"}
                         </p>
                       </div>
                       <span className="text-right font-medium tabular-nums">{formatMoney(payment.amount)}</span>
