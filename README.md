@@ -47,8 +47,9 @@ stable value; changing it prevents staff from copying previously created links, 
 to validate links already shared with customers. Development and tests may fall back to `AUTH_SECRET`, then
 `STRIPE_SECRET_KEY`.
 
-`CRON_SECRET` protects scheduled maintenance routes. `/api/cron/payments` runs every ten minutes to retry durable Stripe
-webhook events and reconcile recent Stripe payments with VadosStack's ledger.
+`CRON_SECRET` protects scheduled maintenance routes. `/api/cron/payments` runs once daily to retry durable Stripe webhook
+events and reconcile recent Stripe payments with VadosStack's ledger. The daily schedule is compatible with Vercel Hobby;
+projects on Vercel Pro can increase the frequency for faster recovery from failed webhook processing.
 
 Stripe uses one platform secret and one Connect webhook secret for the deployment. Each workspace stores only its
 Stripe connected-account ID. Register `/api/webhooks/stripe` as a Connect webhook endpoint; never place an individual

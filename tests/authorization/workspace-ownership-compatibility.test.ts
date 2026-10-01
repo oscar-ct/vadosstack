@@ -152,7 +152,7 @@ describe("workspace ownership compatibility release", () => {
     );
 
     expect(schema).not.toMatch(/owner\s+User\s+@relation\(fields: \[ownerId\]/);
-    expect(schema.match(/owner\s+Workspace\??\s+@relation\(fields: \[ownerId\]/g)).toHaveLength(34);
+    expect(schema.match(/owner\s+Workspace\??\s+@relation\(fields: \[ownerId\]/g)).toHaveLength(35);
     expect(schema).toMatch(/model GoogleMailAccount \{[\s\S]*workspaceId\s+String\s+@unique/);
     expect(migration.trimStart()).toMatch(/^--[\s\S]*\nBEGIN;/);
     expect(migration.trimEnd()).toMatch(/COMMIT;$/);
