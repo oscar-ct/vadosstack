@@ -154,6 +154,7 @@ export default async function Page({ searchParams }: PageProps) {
           orderBy: { createdAt: "desc" },
           select: {
             action: true,
+            actorId: true,
             createdAt: true,
             employee: { select: { employeeNumber: true, name: true } },
             id: true,
@@ -163,6 +164,15 @@ export default async function Page({ searchParams }: PageProps) {
         })
       : Promise.resolve([]),
   ]);
+
+  const auditActorIds = Array.from(new Set(auditEvents.map((event) => event.actorId)));
+  const auditActors = auditActorIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: auditActorIds } },
+        select: { email: true, id: true, name: true },
+      })
+    : [];
+  const auditActorNames = new Map(auditActors.map((actor) => [actor.id, actor.name?.trim() || actor.email] as const));
 
   const currentEntryIds = pendingRequests
     .map((request) => request.timeEntryId)
@@ -268,6 +278,7 @@ export default async function Page({ searchParams }: PageProps) {
       approveTimeEntryRequestAction={canApproveTime ? approveTimeEntryRequestAction : undefined}
       auditEvents={auditEvents.map((event) => ({
         action: event.action,
+        actorName: auditActorNames.get(event.actorId) ?? "Former user",
         createdAt: event.createdAt.toISOString(),
         employeeName: event.employee.name,
         employeeNumber: event.employee.employeeNumber,

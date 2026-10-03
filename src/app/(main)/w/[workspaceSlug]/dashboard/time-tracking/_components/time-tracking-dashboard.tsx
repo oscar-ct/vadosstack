@@ -164,6 +164,7 @@ export type JobOption = {
 
 type TimeEntryAuditRow = {
   action: string;
+  actorName: string;
   createdAt: string;
   employeeName: string;
   employeeNumber: string;
@@ -2133,26 +2134,72 @@ function TimesheetLockButton({
 }
 
 function TimeEntryAuditCard({ events }: { events: TimeEntryAuditRow[] }) {
+  function getActionPresentation(action: string) {
+    const normalized = action.toLowerCase();
+
+    if (normalized.includes("add") || normalized === "create") {
+      return {
+        className:
+          "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+        label: normalized === "create" ? "Time entry added" : action,
+        performedBy: "Added by",
+      };
+    }
+
+    if (normalized.includes("update")) {
+      return {
+        className: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
+        label: normalized === "update" ? "Time entry updated" : action,
+        performedBy: "Updated by",
+      };
+    }
+
+    if (normalized.includes("remove") || normalized === "delete") {
+      return {
+        className:
+          "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300",
+        label: normalized === "delete" ? "Time entry removed" : action,
+        performedBy: "Removed by",
+      };
+    }
+
+    return {
+      className: "border-border bg-muted text-foreground",
+      label: action,
+      performedBy: "Changed by",
+    };
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Recent activity</CardTitle>
-        <CardDescription>Immutable manager and approved-request changes.</CardDescription>
+        <CardDescription>Manager and approved-request changes, including who made them.</CardDescription>
       </CardHeader>
       <CardContent>
         {events.length ? (
           <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
-            {events.map((event) => (
-              <div key={event.id} className="rounded-md border bg-muted/20 p-2 text-xs">
-                <div className="font-medium">
-                  {event.action} · {event.employeeName} #{event.employeeNumber}
+            {events.map((event) => {
+              const presentation = getActionPresentation(event.action);
+
+              return (
+                <div key={event.id} className="rounded-md border bg-muted/20 p-2.5 text-xs">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge variant="outline" className={cn("font-semibold", presentation.className)}>
+                      {presentation.label}
+                    </Badge>
+                    <span className="font-medium">
+                      {event.employeeName} #{event.employeeNumber}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 text-muted-foreground">
+                    {presentation.performedBy} <span className="font-medium text-foreground">{event.actorName}</span> ·{" "}
+                    {event.source === "EmployeeRequest" ? "Approved request" : "Direct change"} ·{" "}
+                    {format(parseISO(event.createdAt), "MMM d, h:mm a")}
+                  </div>
                 </div>
-                <div className="text-muted-foreground">
-                  {event.source === "EmployeeRequest" ? "Approved employee request" : "Manager change"} ·{" "}
-                  {format(parseISO(event.createdAt), "MMM d, h:mm a")}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="rounded-md border bg-muted/20 p-3 text-muted-foreground text-sm">No audited changes yet.</div>
