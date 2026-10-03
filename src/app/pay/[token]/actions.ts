@@ -25,7 +25,7 @@ import { randomUUID } from "node:crypto";
 export type StripeCheckoutState = { success: boolean; message: string; checkoutUrl?: string };
 
 const OPEN_PAYMENT_STATUSES = ["created", "pending", "processing"] as const;
-const CHECKOUT_PRESENTATION_VERSION = "4";
+const CHECKOUT_PRESENTATION_VERSION = "5";
 type ResolvedPaymentInvoice = NonNullable<Awaited<ReturnType<typeof resolveInvoicePaymentLink>>>["invoice"];
 
 function countJsonItems(value: string) {
@@ -59,6 +59,9 @@ function buildCheckoutLineItems(input: {
   const laborMinor = decimalMoneyToMinorUnits(input.invoice.laborCost.toString());
   const materialsMinor = decimalMoneyToMinorUnits(input.invoice.materialsSubtotal.toString());
   const taxMinor = decimalMoneyToMinorUnits(input.invoice.materialTaxAmount.toString());
+  const otherFeesMinor = input.invoice.otherFeesEnabled
+    ? decimalMoneyToMinorUnits(input.invoice.otherFeesAmount.toString())
+    : 0;
   const materialItemCount = countJsonItems(input.invoice.materials);
   const breakdown = [
     laborMinor > 0
@@ -82,6 +85,13 @@ function buildCheckoutLineItems(input: {
           amount: taxMinor,
           description: `Tax calculated for ${input.invoice.jobTitle}`,
           name: `Invoice ${invoiceNumber} · Sales tax (${Number(input.invoice.materialTaxRate)}%)`,
+        }
+      : null,
+    otherFeesMinor > 0
+      ? {
+          amount: otherFeesMinor,
+          description: `Additional charges for ${input.invoice.jobTitle}`,
+          name: `Invoice ${invoiceNumber} · Other fees and charges (${Number(input.invoice.otherFeesRate)}%)`,
         }
       : null,
   ].filter((item): item is { amount: number; description: string; name: string } => Boolean(item));

@@ -123,6 +123,7 @@ const invoiceExportColumns: CsvColumn<InvoiceTableItem>[] = [
   { header: "Labor cost", value: (invoice) => invoice.laborCost },
   { header: "Materials subtotal", value: (invoice) => invoice.materialsSubtotal },
   { header: "Material tax", value: (invoice) => invoice.materialTaxAmount },
+  { header: "Other fees and charges", value: (invoice) => (invoice.otherFeesEnabled ? invoice.otherFeesAmount : "") },
   { header: "Total", value: (invoice) => invoice.total },
   { header: "Deposit paid", value: (invoice) => invoice.depositPaid },
   { header: "Amount paid", value: (invoice) => invoice.amountPaid },
@@ -335,7 +336,11 @@ export function InvoiceDetailsDialog({
             {invoice.jobDescription ? (
               <p className="line-clamp-3 text-muted-foreground text-sm">{invoice.jobDescription}</p>
             ) : null}
-            <div className="grid grid-cols-2 overflow-hidden rounded-md border bg-muted/10 sm:grid-cols-5">
+            <div
+              className={`grid grid-cols-2 overflow-hidden rounded-md border bg-muted/10 ${
+                invoice.otherFeesEnabled ? "sm:grid-cols-6" : "sm:grid-cols-5"
+              }`}
+            >
               <div className="grid gap-0.5 p-2">
                 <span className="text-muted-foreground text-xs">Labor</span>
                 <span className="font-medium tabular-nums">{formatMoney(invoice.laborCost)}</span>
@@ -348,6 +353,12 @@ export function InvoiceDetailsDialog({
                 <span className="text-muted-foreground text-xs">Tax</span>
                 <span className="font-medium tabular-nums">{formatMoney(invoice.materialTaxAmount)}</span>
               </div>
+              {invoice.otherFeesEnabled ? (
+                <div className="grid gap-0.5 p-2">
+                  <span className="text-muted-foreground text-xs">Other fees</span>
+                  <span className="font-medium tabular-nums">{formatMoney(invoice.otherFeesAmount ?? "0")}</span>
+                </div>
+              ) : null}
               <div className="grid gap-0.5 p-2">
                 <span className="text-muted-foreground text-xs">Job deposits</span>
                 <span className="font-medium tabular-nums">{formatMoney(invoice.depositPaid)}</span>

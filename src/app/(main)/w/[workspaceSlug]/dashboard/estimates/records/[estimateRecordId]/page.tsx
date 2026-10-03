@@ -85,7 +85,9 @@ function parsePublishedItems(value: string) {
 
 function formatMoney(value?: string | number) {
   const amount = Number(value ?? 0);
-  return Number.isFinite(amount) ? `$${amount.toFixed(2)}` : "$0.00";
+  return Number.isFinite(amount)
+    ? `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : "$0.00";
 }
 
 function formatArea(value: number) {

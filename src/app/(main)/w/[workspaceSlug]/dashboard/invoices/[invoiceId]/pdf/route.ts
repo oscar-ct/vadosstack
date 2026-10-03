@@ -146,6 +146,9 @@ export async function GET(
     laborItems: parsePricingItems(invoice.job.laborItems),
     materialTaxAmount: invoice.materialTaxAmount,
     materialTaxRate: invoice.materialTaxRate,
+    otherFeesEnabled: invoice.otherFeesEnabled,
+    otherFeesRate: invoice.otherFeesRate,
+    otherFeesAmount: invoice.otherFeesAmount,
     materials: parseInvoiceMaterials(invoice.materials),
     materialsSubtotal: invoice.materialsSubtotal,
     payments: invoice.job.payments.map((payment) => ({

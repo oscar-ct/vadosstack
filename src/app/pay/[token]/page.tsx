@@ -185,6 +185,9 @@ export default async function PayInvoicePage({
               laborTotal={money(invoice.laborCost)}
               materialTaxAmount={money(invoice.materialTaxAmount)}
               materialTaxRate={`${Number(invoice.materialTaxRate)}%`}
+              otherFeesEnabled={invoice.otherFeesEnabled}
+              otherFeesRate={`${Number(invoice.otherFeesRate)}%`}
+              otherFeesAmount={money(invoice.otherFeesAmount)}
               materials={materials}
               materialsTotal={money(invoice.materialsSubtotal)}
               message={message}

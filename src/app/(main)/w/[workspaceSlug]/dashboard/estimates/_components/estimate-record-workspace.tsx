@@ -39,7 +39,12 @@ function getEstimateDraftKey(mode: "create" | "edit", estimateId?: string, leadI
 }
 
 function formatMoney(value?: string) {
-  return value ? `$${Number(value).toFixed(2)}` : "$0.00";
+  if (!value) return "$0.00";
+
+  const amount = Number(value);
+  return Number.isFinite(amount)
+    ? `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : "$0.00";
 }
 
 function getWorkspaceCopy(mode: "create" | "edit") {
@@ -187,8 +192,8 @@ export function EstimateRecordWorkspace({
                 <CardDescription>{copy.description}</CardDescription>
               </div>
               <div className="rounded-md border bg-background px-3 py-2 text-right">
-                <div className="text-muted-foreground text-xs">Current value</div>
-                <div className="font-semibold text-lg tabular-nums">{formatMoney(estimate?.estimatedTotal)}</div>
+                <div className="text-muted-foreground text-sm">Current value</div>
+                <div className="font-semibold text-xl tabular-nums">{formatMoney(estimate?.estimatedTotal)}</div>
               </div>
             </div>
           </CardHeader>

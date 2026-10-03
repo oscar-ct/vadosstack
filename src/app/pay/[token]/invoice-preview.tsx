@@ -44,6 +44,9 @@ type InvoicePreviewProps = {
   laborTotal: string;
   materialTaxAmount: string;
   materialTaxRate: string;
+  otherFeesEnabled: boolean;
+  otherFeesRate: string;
+  otherFeesAmount: string;
   materials: LineItem[];
   materialsTotal: string;
   message?: string | null;
@@ -223,6 +226,12 @@ export function InvoicePreview(props: InvoicePreviewProps) {
           <span className="text-muted-foreground">Material tax ({props.materialTaxRate})</span>
           <span className="tabular-nums">{props.materialTaxAmount}</span>
         </div>
+        {props.otherFeesEnabled ? (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Other fees and charges ({props.otherFeesRate})</span>
+            <span className="tabular-nums">{props.otherFeesAmount}</span>
+          </div>
+        ) : null}
         <div className="flex justify-between border-t pt-2 font-semibold">
           <span>Invoice total</span>
           <span className="tabular-nums">{props.finalCost}</span>

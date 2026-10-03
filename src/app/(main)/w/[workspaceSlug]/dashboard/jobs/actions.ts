@@ -10,6 +10,7 @@ import {
   deriveJobPaymentStatus,
 } from "@/lib/customer-billing";
 import { parseDateInput } from "@/lib/date-only";
+import { calculateJobPricing, DEFAULT_OTHER_FEES_RATE } from "@/lib/job-pricing";
 import { getNetPaymentMinorUnits, minorUnitsToDecimalMoney } from "@/lib/payments/domain";
 import { expireStripeCheckoutSessionsAfterManualPayment } from "@/lib/payments/stripe-checkout-sessions";
 import { normalizePhoneNumber } from "@/lib/phone";
@@ -225,6 +226,11 @@ const jobSchema = z.object({
   measurementRooms: measurementRoomsSchema,
   materialTaxRate: optionalMoney,
   materials: materialsSchema,
+  otherFeesEnabled: z.boolean().default(false),
+  otherFeesRate: optionalMoney.refine(
+    (value) => value === undefined || (Number(value) >= 0 && Number(value) <= 100),
+    "Other fees rate must be between 0% and 100%.",
+  ),
   scope: z.string().trim().optional(),
   category: z.string().trim().min(1, "Job category is required."),
   status: z.enum(jobStatuses),
@@ -261,6 +267,8 @@ function getJobPayload(formData: FormData) {
     measurementRooms: parseMeasurementRooms(String(formData.get("measurementRooms") ?? "")),
     materialTaxRate: emptyToUndefined(formData.get("materialTaxRate")),
     materials: parseMaterials(String(formData.get("materials") ?? "")),
+    otherFeesEnabled: formData.get("otherFeesEnabled") === "true",
+    otherFeesRate: emptyToUndefined(formData.get("otherFeesRate")) ?? DEFAULT_OTHER_FEES_RATE.toString(),
     scope: emptyToUndefined(formData.get("scope")),
     category: formData.get("category"),
     status: formData.get("status"),
@@ -472,6 +480,8 @@ function calculateFinalCost(job: {
   laborItems: Array<{ price: string }>;
   materialTaxRate?: string;
   materials: Array<{ quantity: string; unitPrice: string; price: string; type?: "purchase" | "return" }>;
+  otherFeesEnabled?: boolean;
+  otherFeesRate?: string;
 }) {
   const laborCost = job.laborItems.reduce((total, item) => total + Number(item.price), 0);
   const materialTaxRate = Number(job.materialTaxRate ?? 0);
@@ -479,10 +489,14 @@ function calculateFinalCost(job: {
     (total, material) => total + Number(calculateSignedMaterialTotal(material)),
     0,
   );
-  const taxableSubtotal = materialsSubtotal + (job.jobType === "Commercial" ? laborCost : 0);
-  const tax = taxableSubtotal * (materialTaxRate / 100);
-
-  return (laborCost + materialsSubtotal + tax).toFixed(2);
+  return calculateJobPricing({
+    jobType: job.jobType ?? "Residential",
+    laborSubtotal: laborCost,
+    materialsSubtotal,
+    otherFeesEnabled: Boolean(job.otherFeesEnabled),
+    otherFeesRate: Number(job.otherFeesRate ?? DEFAULT_OTHER_FEES_RATE),
+    taxRate: materialTaxRate,
+  }).total.toFixed(2);
 }
 
 function normalizeJobStatus(status: (typeof jobStatuses)[number], dateBegin?: Date, dateEnd?: Date) {
@@ -710,6 +724,9 @@ async function syncExistingInvoiceSnapshotFromJob(jobId: string, ownerId: string
       materials: JSON.stringify(materials),
       materialsSubtotal: materialsSubtotal.toFixed(2),
       materialTaxAmount: materialTaxAmount.toFixed(2),
+      otherFeesEnabled: job.otherFeesEnabled,
+      otherFeesRate: job.otherFeesRate,
+      otherFeesAmount: job.otherFeesAmount,
       finalCost: (Number(job.finalCost ?? 0) || 0).toFixed(2),
       depositPaid,
       amountPaid,
@@ -751,6 +768,18 @@ export async function createJobAction(_previousState: JobMutationState, formData
     const measurementRooms = normalizeMeasurementRooms(job.measurementRooms);
     const laborCost = laborItems.reduce((total, item) => total + Number(item.price), 0).toFixed(2);
     const calculatedFinalCost = calculateFinalCost({ ...job, laborItems, materials });
+    const materialsSubtotal = materials.reduce(
+      (total, material) => total + Number(calculateSignedMaterialTotal(material)),
+      0,
+    );
+    const otherFeesAmount = calculateJobPricing({
+      jobType: job.jobType,
+      laborSubtotal: Number(laborCost),
+      materialsSubtotal,
+      otherFeesEnabled: job.otherFeesEnabled,
+      otherFeesRate: Number(job.otherFeesRate ?? DEFAULT_OTHER_FEES_RATE),
+      taxRate: Number(job.materialTaxRate ?? 0),
+    }).otherFees;
     const normalizedStatus = normalizeJobStatus(job.status, job.dateBegin, job.dateEnd);
     const serviceAddress = {
       serviceAddressLine1: job.serviceAddressLine1,
@@ -822,6 +851,9 @@ export async function createJobAction(_previousState: JobMutationState, formData
         measurementRooms: JSON.stringify(measurementRooms),
         materialTaxRate: job.materialTaxRate ?? "0",
         materials: JSON.stringify(materials),
+        otherFeesEnabled: job.otherFeesEnabled,
+        otherFeesRate: job.otherFeesRate ?? DEFAULT_OTHER_FEES_RATE.toString(),
+        otherFeesAmount: otherFeesAmount.toFixed(2),
         paymentStatus: deriveJobPaymentStatus(normalizedStatus, calculatedFinalCost, "0"),
         depositPaid: "0.00",
         amountPaid: "0.00",
@@ -900,6 +932,18 @@ export async function updateJobAction(_previousState: JobMutationState, formData
     const measurementRooms = normalizeMeasurementRooms(job.measurementRooms);
     const laborCost = laborItems.reduce((total, item) => total + Number(item.price), 0).toFixed(2);
     const calculatedFinalCost = calculateFinalCost({ ...job, laborItems, materials });
+    const materialsSubtotal = materials.reduce(
+      (total, material) => total + Number(calculateSignedMaterialTotal(material)),
+      0,
+    );
+    const otherFeesAmount = calculateJobPricing({
+      jobType: job.jobType,
+      laborSubtotal: Number(laborCost),
+      materialsSubtotal,
+      otherFeesEnabled: job.otherFeesEnabled,
+      otherFeesRate: Number(job.otherFeesRate ?? DEFAULT_OTHER_FEES_RATE),
+      taxRate: Number(job.materialTaxRate ?? 0),
+    }).otherFees;
     const normalizedStatus = normalizeJobStatus(job.status, job.dateBegin, job.dateEnd);
     const serviceAddress = {
       serviceAddressLine1: job.serviceAddressLine1,
@@ -996,6 +1040,9 @@ export async function updateJobAction(_previousState: JobMutationState, formData
         measurementRooms: JSON.stringify(measurementRooms),
         materialTaxRate: job.materialTaxRate ?? "0",
         materials: JSON.stringify(materials),
+        otherFeesEnabled: job.otherFeesEnabled,
+        otherFeesRate: job.otherFeesRate ?? DEFAULT_OTHER_FEES_RATE.toString(),
+        otherFeesAmount: otherFeesAmount.toFixed(2),
         paymentStatus: deriveJobPaymentStatus(normalizedStatus, calculatedFinalCost, await getJobPaidTotal(id)),
         finalCost: calculatedFinalCost,
         status: normalizedStatus,

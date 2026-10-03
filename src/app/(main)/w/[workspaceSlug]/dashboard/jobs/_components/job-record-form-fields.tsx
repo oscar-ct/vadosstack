@@ -32,9 +32,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { UsStateSelect } from "@/components/us-state-select";
 import { useDiscardLocalDraftListener } from "@/lib/drafts.client";
+import { calculateJobPricing, DEFAULT_OTHER_FEES_RATE } from "@/lib/job-pricing";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { formatServiceAddress, hasStructuredServiceAddress, type ServiceAddressFields } from "@/lib/service-address";
 import { cn } from "@/lib/utils";
@@ -86,6 +88,8 @@ type JobRecordDraft = {
   jobType: JobType;
   laborItems: LineItem[];
   materialTaxRate: number;
+  otherFeesEnabled: boolean;
+  otherFeesRate: number;
   materials: MaterialLineItem[];
   measurementRooms: MeasurementRoom[];
   measurementsOpen: boolean;
@@ -201,7 +205,10 @@ function toNumber(value: string) {
 }
 
 function formatCurrency(value: number) {
-  return value.toFixed(2);
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatMoneyInputValue(value: string) {
@@ -267,6 +274,10 @@ function parseJobDraft(value: string): JobRecordDraft | null {
         ? parsed.laborItems.map((item) => createLineItem(item))
         : [createLineItem()],
       materialTaxRate: Number.isFinite(Number(parsed.materialTaxRate)) ? Number(parsed.materialTaxRate) : 8.25,
+      otherFeesEnabled: Boolean(parsed.otherFeesEnabled),
+      otherFeesRate: Number.isFinite(Number(parsed.otherFeesRate))
+        ? Number(parsed.otherFeesRate)
+        : DEFAULT_OTHER_FEES_RATE,
       materials: parsed.materials?.length ? parsed.materials.map((item) => createMaterialLineItem(item)) : [],
       measurementRooms: parsed.measurementRooms?.length
         ? parsed.measurementRooms.map((room, index) => createMeasurementRoom(room, index))
@@ -1890,6 +1901,8 @@ export function JobRecordFormFields({
   );
   const [measurementsOpen, setMeasurementsOpen] = React.useState(false);
   const [taxRate, setTaxRate] = React.useState(Number(job?.materialTaxRate ?? "8.25"));
+  const [otherFeesEnabled, setOtherFeesEnabled] = React.useState(Boolean(job?.otherFeesEnabled));
+  const [otherFeesRate, setOtherFeesRate] = React.useState(Number(job?.otherFeesRate ?? DEFAULT_OTHER_FEES_RATE));
   const isCreatingNewCustomer = selectedCustomerId === newCustomerValue;
   const selectedCustomer = isCreatingNewCustomer
     ? undefined
@@ -1969,6 +1982,8 @@ export function JobRecordFormFields({
     );
     setMeasurementsOpen(false);
     setTaxRate(Number(job?.materialTaxRate ?? "8.25"));
+    setOtherFeesEnabled(Boolean(job?.otherFeesEnabled));
+    setOtherFeesRate(Number(job?.otherFeesRate ?? DEFAULT_OTHER_FEES_RATE));
     setSelectedLocation(nextHasSavedInitialLocation && nextInitialLocation ? nextInitialLocation : customLocationValue);
     setCustomLocationFields(createCustomLocationFields(nextHasSavedInitialLocation ? null : job));
   }, [customers, job]);
@@ -2018,6 +2033,8 @@ export function JobRecordFormFields({
     setMeasurementRooms(parsed.measurementRooms);
     setMeasurementsOpen(parsed.measurementsOpen);
     setTaxRate(parsed.materialTaxRate);
+    setOtherFeesEnabled(parsed.otherFeesEnabled);
+    setOtherFeesRate(parsed.otherFeesRate);
     setSelectedLocation(parsed.selectedLocation);
     setCustomLocationFields(parsed.customLocationFields);
     setDraftSavedAt(parsed.savedAt);
@@ -2064,6 +2081,8 @@ export function JobRecordFormFields({
       jobType,
       laborItems,
       materialTaxRate: taxRate,
+      otherFeesEnabled,
+      otherFeesRate,
       materials,
       measurementRooms,
       measurementsOpen,
@@ -2106,6 +2125,8 @@ export function JobRecordFormFields({
     newCustomerName,
     newCustomerPhone,
     notes,
+    otherFeesEnabled,
+    otherFeesRate,
     scheduledDate,
     selectedCustomerId,
     selectedLocation,
@@ -2139,10 +2160,15 @@ export function JobRecordFormFields({
   }, [customers, isCreatingNewCustomer, selectedCustomerId]);
   const laborSubtotal = laborItems.reduce((total, item) => total + toNumber(item.price), 0);
   const materialsSubtotal = materials.reduce((total, item) => total + toNumber(calculateSignedMaterialTotal(item)), 0);
-  const subtotal = laborSubtotal + materialsSubtotal;
-  const taxableSubtotal = materialsSubtotal + (jobType === "Commercial" ? laborSubtotal : 0);
-  const tax = taxableSubtotal * (taxRate / 100);
-  const total = laborSubtotal + materialsSubtotal + tax;
+  const pricing = calculateJobPricing({
+    jobType,
+    laborSubtotal,
+    materialsSubtotal,
+    otherFeesEnabled,
+    otherFeesRate,
+    taxRate,
+  });
+  const { otherFees, subtotal, tax, total } = pricing;
   const taxableItemsLabel = jobType === "Commercial" ? "labor + materials" : "materials";
   const measurementTotalSqft = measurementRooms.reduce((sum, room) => sum + calculateRoomArea(room), 0);
   const measuredAreaCount = measurementRooms.filter((room) => calculateRoomArea(room) > 0).length;
@@ -2202,6 +2228,8 @@ export function JobRecordFormFields({
         <input type="hidden" name="jobType" value={jobType} />
         <input type="hidden" name="measurementRooms" value={stringifyMeasurementRooms(measurementRooms)} />
         <input type="hidden" name="materialTaxRate" value={taxRate.toFixed(2)} />
+        <input type="hidden" name="otherFeesEnabled" value={String(otherFeesEnabled)} />
+        <input type="hidden" name="otherFeesRate" value={otherFeesRate.toFixed(2)} />
         <input type="hidden" name="status" value={status} />
         {draftKey ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2 text-sky-950 text-xs dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-100">
@@ -2699,6 +2727,31 @@ export function JobRecordFormFields({
                   <span className="text-muted-foreground text-sm">%</span>
                 </div>
               </div>
+              <div className="grid gap-3 border-t pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor={`job-other-fees-${job?.id ?? "new"}`}>Other fees and charges</Label>
+                  <Switch
+                    id={`job-other-fees-${job?.id ?? "new"}`}
+                    checked={otherFeesEnabled}
+                    onCheckedChange={setOtherFeesEnabled}
+                  />
+                </div>
+                {otherFeesEnabled ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      aria-label="Other fees and charges rate"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={otherFeesRate}
+                      onChange={(event) => setOtherFeesRate(toNumber(event.target.value))}
+                      className="h-11 bg-background"
+                    />
+                    <span className="text-muted-foreground text-sm">%</span>
+                  </div>
+                ) : null}
+              </div>
               <div className="grid gap-2 border-t pt-3 text-sm">
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">Labor</span>
@@ -2716,6 +2769,12 @@ export function JobRecordFormFields({
                   <span className="text-muted-foreground">Tax on {taxableItemsLabel}</span>
                   <span className="font-medium tabular-nums">${formatCurrency(tax)}</span>
                 </div>
+                {otherFeesEnabled ? (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Other fees and charges ({otherFeesRate}%)</span>
+                    <span className="font-medium tabular-nums">${formatCurrency(otherFees)}</span>
+                  </div>
+                ) : null}
                 <div className="mt-2 rounded-lg border border-sky-200 bg-background p-3 dark:border-sky-900/60">
                   <div className="text-muted-foreground text-xs">Customer total</div>
                   <div className="font-semibold text-2xl tabular-nums">${formatCurrency(total)}</div>
@@ -2744,6 +2803,8 @@ export function JobRecordFormFields({
       <input type="hidden" name="jobType" value={jobType} />
       <input type="hidden" name="measurementRooms" value={stringifyMeasurementRooms(measurementRooms)} />
       <input type="hidden" name="materialTaxRate" value={taxRate.toFixed(2)} />
+      <input type="hidden" name="otherFeesEnabled" value={String(otherFeesEnabled)} />
+      <input type="hidden" name="otherFeesRate" value={otherFeesRate.toFixed(2)} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {services.length ? (
@@ -3079,7 +3140,35 @@ export function JobRecordFormFields({
             Review calculated totals. Tax defaults to 8.25% but can be adjusted when needed.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className="flex flex-wrap items-end justify-between gap-3 rounded-md border bg-background/70 p-3">
+          <div className="grid gap-1">
+            <Label htmlFor={`job-other-fees-${job?.id ?? "new"}`}>Other fees and charges</Label>
+            <span className="text-muted-foreground text-xs">Applied to labor and materials before tax.</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {otherFeesEnabled ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  aria-label="Other fees and charges rate"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={otherFeesRate}
+                  onChange={(event) => setOtherFeesRate(toNumber(event.target.value))}
+                  className="h-9 w-24 bg-background"
+                />
+                <span className="text-muted-foreground text-sm">%</span>
+              </div>
+            ) : null}
+            <Switch
+              id={`job-other-fees-${job?.id ?? "new"}`}
+              checked={otherFeesEnabled}
+              onCheckedChange={setOtherFeesEnabled}
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
           <div className="grid gap-2">
             <Label htmlFor={`job-tax-rate-${job?.id ?? "new"}`}>Tax rate</Label>
             <div className="flex items-center gap-2">
@@ -3108,6 +3197,12 @@ export function JobRecordFormFields({
             <span className="text-muted-foreground text-xs">Tax</span>
             <span className="font-medium text-sm">${formatCurrency(tax)}</span>
           </div>
+          {otherFeesEnabled ? (
+            <div className="grid gap-1">
+              <span className="text-muted-foreground text-xs">Other fees</span>
+              <span className="font-medium text-sm">${formatCurrency(otherFees)}</span>
+            </div>
+          ) : null}
           <div className="col-span-2 grid gap-1 rounded-md bg-background p-3 sm:col-span-1 sm:bg-transparent sm:p-0">
             <span className="text-muted-foreground text-xs">Job total</span>
             <span className="font-semibold text-base">${formatCurrency(total)}</span>

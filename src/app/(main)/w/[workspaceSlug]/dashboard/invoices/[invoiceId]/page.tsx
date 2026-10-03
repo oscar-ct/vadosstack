@@ -334,6 +334,9 @@ export default async function Page({
     laborCost: invoice.laborCost.toString(),
     materialsSubtotal: invoice.materialsSubtotal.toString(),
     materialTaxAmount: invoice.materialTaxAmount.toString(),
+    otherFeesEnabled: invoice.otherFeesEnabled,
+    otherFeesRate: invoice.otherFeesRate.toString(),
+    otherFeesAmount: invoice.otherFeesAmount.toString(),
     depositPaid: invoice.depositPaid.toString(),
     amountPaid: invoice.amountPaid.toString(),
     balanceDue: invoice.balanceDue.toString(),
@@ -770,6 +773,14 @@ export default async function Page({
                 </span>
                 <span className="font-medium">{formatMoney(invoice.materialTaxAmount)}</span>
               </div>
+              {invoice.otherFeesEnabled ? (
+                <div className="flex items-center justify-between gap-6">
+                  <span className="text-muted-foreground">
+                    Other fees and charges ({invoice.otherFeesRate.toString()}%)
+                  </span>
+                  <span className="font-medium">{formatMoney(invoice.otherFeesAmount)}</span>
+                </div>
+              ) : null}
               <Separator />
               <div className="flex items-center justify-between gap-6">
                 <span className="font-medium">Final cost</span>

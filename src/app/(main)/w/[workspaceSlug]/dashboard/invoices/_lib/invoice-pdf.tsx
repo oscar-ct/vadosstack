@@ -54,6 +54,9 @@ export type InvoicePdfData = {
   laborItems: PricingLineItem[];
   materialTaxAmount: { toString: () => string };
   materialTaxRate: { toString: () => string };
+  otherFeesEnabled: boolean;
+  otherFeesRate: { toString: () => string };
+  otherFeesAmount: { toString: () => string };
   materials: InvoicePdfMaterial[];
   materialsSubtotal: { toString: () => string };
   payments: InvoicePdfPayment[];
@@ -185,7 +188,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 8,
     textAlign: "right",
-    width: 108,
+    width: 118,
   },
   balanceLabel: {
     color: "#262626",
@@ -197,6 +200,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 700,
     marginBottom: 20,
+  },
+  balanceAmountCompact: {
+    fontSize: 16,
+  },
+  balanceAmountSmall: {
+    fontSize: 14,
   },
   balanceDue: {
     color: "#262626",
@@ -728,6 +737,13 @@ function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
   const subtotal = Number(data.laborCost.toString()) + Number(data.materialsSubtotal.toString());
   const documentMessageLines = getDocumentMessageLineItems(data.documentMessage ?? "");
   const documentMessageStyle = { textAlign: data.documentMessageAlign ?? "left" } as const;
+  const balanceDueText = money(data.balanceDue);
+  const balanceAmountStyle =
+    balanceDueText.length >= 12
+      ? [styles.balanceAmount, styles.balanceAmountSmall]
+      : balanceDueText.length >= 10
+        ? [styles.balanceAmount, styles.balanceAmountCompact]
+        : styles.balanceAmount;
 
   return (
     <Document title={`Invoice ${data.invoiceNumber}`}>
@@ -756,7 +772,7 @@ function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
 
           <View style={styles.balancePanel}>
             <Text style={styles.balanceLabel}>Balance due</Text>
-            <Text style={styles.balanceAmount}>{money(data.balanceDue)}</Text>
+            <Text style={balanceAmountStyle}>{balanceDueText}</Text>
             <Text style={styles.balanceDue}>by {format(data.dueDate, "MMM d, yyyy")}</Text>
           </View>
         </View>
@@ -806,6 +822,12 @@ function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
             label={`Tax on ${data.taxableItemsLabel} (${data.materialTaxRate.toString()}%)`}
             value={money(data.materialTaxAmount)}
           />
+          {data.otherFeesEnabled ? (
+            <SummaryRow
+              label={`Other fees and charges (${data.otherFeesRate.toString()}%)`}
+              value={money(data.otherFeesAmount)}
+            />
+          ) : null}
           <View style={styles.summaryRule} />
           <SummaryRow label="Final cost" last strong value={money(data.finalCost)} />
         </View>

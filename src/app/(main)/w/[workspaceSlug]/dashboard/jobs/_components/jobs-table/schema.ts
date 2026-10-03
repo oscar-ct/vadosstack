@@ -72,6 +72,9 @@ export const jobRowSchema = z.object({
     }),
   ),
   materialTaxRate: z.string().optional(),
+  otherFeesEnabled: z.boolean().default(false),
+  otherFeesRate: z.string().optional(),
+  otherFeesAmount: z.string().optional(),
   materials: z.array(
     z.object({
       description: z.string(),
