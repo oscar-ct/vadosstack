@@ -9,6 +9,7 @@
     "dev": "next dev --turbopack",
     "prebuild": "prisma generate",
     "build": "next build --webpack",
+    "vercel-build": "prisma generate && if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && next build --webpack",
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
