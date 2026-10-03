@@ -67,6 +67,16 @@ function isSafeEmailFontSize(value: string) {
   return size >= 10 && size <= 28;
 }
 
+function isSafeEmailPixelList(value: string, maximum: number) {
+  const values = value.trim().split(/\s+/);
+  if (values.length < 1 || values.length > 4) return false;
+
+  return values.every((entry) => {
+    const match = /^(\d+(?:\.\d+)?)px$/i.exec(entry);
+    return Boolean(match && Number(match[1]) <= maximum);
+  });
+}
+
 function sanitizeEmailStyle(value: string) {
   const declarations = value
     .split(";")
@@ -91,6 +101,26 @@ function sanitizeEmailStyle(value: string) {
 
     if (normalizedProperty === "font-size" && isSafeEmailFontSize(normalizedValue)) {
       safeDeclarations.push(`font-size:${normalizedValue}`);
+    }
+
+    if (normalizedProperty === "display" && normalizedValue === "inline-block") {
+      safeDeclarations.push("display:inline-block");
+    }
+
+    if (normalizedProperty === "font-weight" && /^(500|600|700|bold)$/i.test(normalizedValue)) {
+      safeDeclarations.push(`font-weight:${normalizedValue}`);
+    }
+
+    if (normalizedProperty === "text-decoration" && ["none", "underline"].includes(normalizedValue)) {
+      safeDeclarations.push(`text-decoration:${normalizedValue}`);
+    }
+
+    if (normalizedProperty === "border-radius" && isSafeEmailPixelList(normalizedValue, 24)) {
+      safeDeclarations.push(`border-radius:${normalizedValue}`);
+    }
+
+    if (normalizedProperty === "padding" && isSafeEmailPixelList(normalizedValue, 32)) {
+      safeDeclarations.push(`padding:${normalizedValue}`);
     }
   }
 
@@ -118,7 +148,7 @@ export function sanitizeEmailHtml(value?: string) {
     "u",
     "ul",
   ]);
-  const styleTags = new Set(["blockquote", "div", "mark", "p", "span"]);
+  const styleTags = new Set(["a", "blockquote", "div", "mark", "p", "span"]);
   const withoutScripts = value.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "");
 
   return withoutScripts.replace(/<\/?([a-z0-9]+)([^>]*)?>/gi, (tag, tagName: string, rawAttributes: string) => {

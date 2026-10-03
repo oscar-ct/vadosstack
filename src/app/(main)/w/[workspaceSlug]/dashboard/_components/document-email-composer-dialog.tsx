@@ -80,6 +80,18 @@ const initialState: DocumentEmailState = {
   message: "",
 };
 
+const EmailLinkExtension = LinkExtension.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      style: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("style"),
+      },
+    };
+  },
+});
+
 const activeToolClass =
   "bg-zinc-950 text-white shadow-sm hover:bg-zinc-900 hover:text-white dark:bg-white dark:text-zinc-950";
 
@@ -196,7 +208,7 @@ export function DocumentEmailComposerDialog({
         "aria-label": `${documentLabel} email message`,
         "aria-multiline": "true",
         class:
-          "min-h-56 w-full px-3 py-3 text-base leading-6 outline-none sm:min-h-80 sm:text-sm [&_.is-editor-empty:first-child::before]:pointer-events-none [&_.is-editor-empty:first-child::before]:float-left [&_.is-editor-empty:first-child::before]:h-0 [&_.is-editor-empty:first-child::before]:text-muted-foreground [&_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:my-0 [&_p+_p]:mt-3 [&_ul]:ml-5 [&_ul]:list-disc",
+          "min-h-56 w-full px-3 py-3 text-base leading-6 outline-none sm:min-h-80 sm:text-sm [&_.is-editor-empty:first-child::before]:pointer-events-none [&_.is-editor-empty:first-child::before]:float-left [&_.is-editor-empty:first-child::before]:h-0 [&_.is-editor-empty:first-child::before]:text-muted-foreground [&_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_a]:break-all [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-2 [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:my-0 [&_p+_p]:mt-3 [&_ul]:ml-5 [&_ul]:list-disc dark:[&_a]:text-blue-400",
         role: "textbox",
       },
     },
@@ -212,7 +224,7 @@ export function DocumentEmailComposerDialog({
       Highlight.configure({
         multicolor: true,
       }),
-      LinkExtension.configure({
+      EmailLinkExtension.configure({
         HTMLAttributes: {
           rel: "noopener noreferrer",
           target: "_blank",

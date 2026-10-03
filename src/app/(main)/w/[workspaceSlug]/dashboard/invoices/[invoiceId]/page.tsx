@@ -394,6 +394,19 @@ export default async function Page({
           {canSendInvoice && Number(invoice.balanceDue) > 0 ? (
             <PaymentLinkDialog
               invoiceId={invoice.id}
+              email={{
+                action: emailInvoiceAction,
+                balanceDue: formatMoney(invoice.balanceDue),
+                canManageGmailAccount,
+                companyName: workspace.name,
+                customerEmail: invoice.customerEmail,
+                customerName: invoice.customerName,
+                dueDate: format(dueDate, "MMM d, yyyy"),
+                gmailConnected: Boolean(googleMailAccount),
+                gmailSenderEmail: googleMailAccount?.email ?? null,
+                invoiceNumber,
+                returnTo: currentHref,
+              }}
               existingLink={
                 invoice.paymentLinks[0]
                   ? {

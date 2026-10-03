@@ -605,8 +605,10 @@ export async function emailInvoiceAction(
         },
       });
       const paymentUrl = createPaymentLinkUrl(paymentLink.token);
-      emailText = `${emailText}\n\nPay this invoice securely: ${paymentUrl}`;
-      emailHtml = `${emailHtml}<p style="margin:24px 0"><a href="${paymentUrl}" style="display:inline-block;border-radius:8px;background:#111827;color:#ffffff;padding:12px 18px;text-decoration:none;font-weight:600">Pay invoice securely</a></p>`;
+      if (!emailText.includes(paymentUrl) && !emailHtml.includes(paymentUrl)) {
+        emailText = `${emailText}\n\nPay this invoice securely: ${paymentUrl}`;
+        emailHtml = `${emailHtml}<p style="margin:24px 0"><a href="${paymentUrl}" style="display:inline-block;border-radius:8px;background:#111827;color:#ffffff;padding:12px 18px;text-decoration:none;font-weight:600">Pay invoice securely</a></p>`;
+      }
     }
     const serviceLocation = formatServiceAddress(invoice);
     const pdfBuffer = await renderInvoicePdfBuffer({
