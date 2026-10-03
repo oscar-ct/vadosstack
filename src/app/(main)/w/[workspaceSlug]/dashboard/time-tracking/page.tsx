@@ -155,6 +155,8 @@ export default async function Page({ searchParams }: PageProps) {
           select: {
             action: true,
             actorId: true,
+            afterSnapshot: true,
+            beforeSnapshot: true,
             createdAt: true,
             employee: { select: { employeeNumber: true, name: true } },
             id: true,
@@ -279,6 +281,8 @@ export default async function Page({ searchParams }: PageProps) {
       auditEvents={auditEvents.map((event) => ({
         action: event.action,
         actorName: auditActorNames.get(event.actorId) ?? "Former user",
+        afterSnapshot: event.afterSnapshot,
+        beforeSnapshot: event.beforeSnapshot,
         createdAt: event.createdAt.toISOString(),
         employeeName: event.employee.name,
         employeeNumber: event.employee.employeeNumber,

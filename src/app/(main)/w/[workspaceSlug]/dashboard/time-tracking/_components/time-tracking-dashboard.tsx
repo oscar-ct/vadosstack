@@ -5,23 +5,30 @@ import * as React from "react";
 import { addDays, format, parseISO } from "date-fns";
 import {
   AlertTriangle,
+  ArrowRight,
+  Building2,
   CalendarX2,
   Check,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
+  CircleEllipsis,
   Clock3,
+  CloudRain,
   Download,
   EllipsisVertical,
   Filter,
   Lock,
   LockOpen,
   LogOut,
+  PackageX,
   Pencil,
   Plus,
   Printer,
   Trash2,
+  UserRound,
   UserRoundCog,
+  UserRoundX,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -65,6 +72,7 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/compon
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { type EmployeeAccent, getEmployeeAccent as getStoredEmployeeAccent } from "@/lib/employee-colors";
 import { getNoWorkDayReasonLabel, noWorkDayReasons } from "@/lib/no-work-days";
 import { cn } from "@/lib/utils";
@@ -165,11 +173,26 @@ export type JobOption = {
 type TimeEntryAuditRow = {
   action: string;
   actorName: string;
+  afterSnapshot?: unknown;
+  beforeSnapshot?: unknown;
   createdAt: string;
   employeeName: string;
   employeeNumber: string;
   id: string;
   source: string;
+};
+
+type AuditDetail = {
+  key: string;
+  label: string;
+  value: string;
+};
+
+type AuditChange = {
+  after: string;
+  before: string;
+  key: string;
+  label: string;
 };
 
 const initialState: TimeTrackingMutationState = {
@@ -182,6 +205,58 @@ function formatHours(hours: number) {
   const wholeHours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return minutes ? `${wholeHours}h ${minutes}m` : `${wholeHours}h`;
+}
+
+function getNoWorkDayPresentation(reason: string) {
+  switch (reason) {
+    case "weather":
+      return {
+        className: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
+        icon: CloudRain,
+        label: "Weather delay",
+      };
+    case "customer_cancellation":
+      return {
+        className:
+          "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+        icon: UserRoundX,
+        label: "Customer canceled",
+      };
+    case "no_work_scheduled":
+      return {
+        className:
+          "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300",
+        icon: CalendarX2,
+        label: "No work scheduled",
+      };
+    case "company_closure":
+      return {
+        className:
+          "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300",
+        icon: Building2,
+        label: "Company closed",
+      };
+    case "material_or_equipment_delay":
+      return {
+        className:
+          "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300",
+        icon: PackageX,
+        label: "Materials or equipment delayed",
+      };
+    case "personal":
+      return {
+        className:
+          "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300",
+        icon: UserRound,
+        label: "Personal day",
+      };
+    default:
+      return {
+        className: "border-border bg-muted text-muted-foreground",
+        icon: CircleEllipsis,
+        label: "Other reason",
+      };
+  }
 }
 
 function formatTime12(value?: string) {
@@ -1103,6 +1178,7 @@ function DayEntryActions({
   requiresApproval: boolean;
 }) {
   const [mode, setMode] = React.useState<"hours" | "no-work" | null>(null);
+  const isMobile = useIsMobile();
 
   return (
     <>
@@ -1112,7 +1188,7 @@ function DayEntryActions({
             <Plus /> Add entry
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuContent align={isMobile ? "start" : "end"} className="w-48">
           <DropdownMenuItem onSelect={() => setMode("hours")}>
             <Clock3 /> Log hours
           </DropdownMenuItem>
@@ -2133,40 +2209,149 @@ function TimesheetLockButton({
   );
 }
 
-function TimeEntryAuditCard({ events }: { events: TimeEntryAuditRow[] }) {
+function getAuditSnapshot(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function getAuditString(snapshot: Record<string, unknown>, key: string) {
+  const value = snapshot[key];
+  return typeof value === "string" ? value : null;
+}
+
+function getAuditDetails(snapshotValue: unknown, action: string, jobs: JobOption[]): AuditDetail[] {
+  const snapshot = getAuditSnapshot(snapshotValue);
+  if (!snapshot) return [];
+
+  const workedOn = getAuditString(snapshot, "workedOn");
+  const jobId = getAuditString(snapshot, "jobId");
+  const notes = getAuditString(snapshot, "notes");
+  const job = jobId ? jobs.find((option) => option.id === jobId) : undefined;
+  const commonDetails: AuditDetail[] = [
+    {
+      key: "workedOn",
+      label: "Work date",
+      value: workedOn ? format(parseISO(workedOn), "EEEE, MMM d, yyyy") : "Not recorded",
+    },
+    {
+      key: "jobId",
+      label: "Job",
+      value: job
+        ? formatJobLabel({ customerName: job.customerName, title: job.title })
+        : jobId
+          ? "Job unavailable"
+          : "No job",
+    },
+    { key: "notes", label: "Notes", value: notes?.trim() ? notes : "None" },
+  ];
+
+  if (action.toLowerCase().includes("no-work")) {
+    const reason = getAuditString(snapshot, "reason");
+    return [
+      commonDetails[0],
+      {
+        key: "reason",
+        label: "Reason",
+        value: reason ? getNoWorkDayReasonLabel(reason) : "Not recorded",
+      },
+      ...commonDetails.slice(1),
+    ];
+  }
+
+  const startTime = getAuditString(snapshot, "startTime") ?? undefined;
+  const endTime = getAuditString(snapshot, "endTime") ?? undefined;
+  const hours = getAuditString(snapshot, "hours");
+  const deductLunch = snapshot.deductLunch === true;
+  const lunchMinutes = typeof snapshot.lunchMinutes === "number" ? snapshot.lunchMinutes : 0;
+
+  return [
+    commonDetails[0],
+    {
+      key: "time",
+      label: "Time",
+      value: startTime && endTime ? `${formatTime12(startTime)} – ${formatTime12(endTime)}` : "Not recorded",
+    },
+    { key: "hours", label: "Hours", value: hours ? formatHours(Number(hours)) : "Not recorded" },
+    {
+      key: "lunch",
+      label: "Lunch",
+      value: deductLunch ? `${lunchMinutes} minutes deducted` : "No deduction",
+    },
+    ...commonDetails.slice(1),
+  ];
+}
+
+function AuditDetailList({ details }: { details: AuditDetail[] }) {
+  return (
+    <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border text-sm">
+      {details.map((detail) => (
+        <div key={detail.key} className="grid min-w-0 gap-1 bg-card p-3">
+          <dt className="text-muted-foreground text-xs">{detail.label}</dt>
+          <dd className="break-words font-medium">{detail.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function getAuditChanges(beforeDetails: AuditDetail[], afterDetails: AuditDetail[]) {
+  const beforeByKey = new Map(beforeDetails.map((detail) => [detail.key, detail]));
+
+  return afterDetails.flatMap((detail): AuditChange[] => {
+    const before = beforeByKey.get(detail.key);
+    if (!before || before.value === detail.value) return [];
+
+    return [{ after: detail.value, before: before.value, key: detail.key, label: detail.label }];
+  });
+}
+
+function TimeEntryAuditCard({ events, jobs }: { events: TimeEntryAuditRow[]; jobs: JobOption[] }) {
   function getActionPresentation(action: string) {
     const normalized = action.toLowerCase();
 
     if (normalized.includes("add") || normalized === "create") {
       return {
-        className:
-          "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
-        label: normalized === "create" ? "Time entry added" : action,
+        accentClassName: "bg-emerald-500",
+        icon: Plus,
+        iconClassName: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+        recordLabel: normalized === "create" ? "Time entry" : action.replace(/\s+added$/i, ""),
         performedBy: "Added by",
+        verb: "Added",
+        verbClassName: "text-emerald-700 dark:text-emerald-300",
       };
     }
 
     if (normalized.includes("update")) {
       return {
-        className: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
-        label: normalized === "update" ? "Time entry updated" : action,
+        accentClassName: "bg-sky-500",
+        icon: Pencil,
+        iconClassName: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+        recordLabel: normalized === "update" ? "Time entry" : action.replace(/\s+updated$/i, ""),
         performedBy: "Updated by",
+        verb: "Updated",
+        verbClassName: "text-sky-700 dark:text-sky-300",
       };
     }
 
     if (normalized.includes("remove") || normalized === "delete") {
       return {
-        className:
-          "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300",
-        label: normalized === "delete" ? "Time entry removed" : action,
+        accentClassName: "bg-rose-500",
+        icon: Trash2,
+        iconClassName: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+        recordLabel: normalized === "delete" ? "Time entry" : action.replace(/\s+removed$/i, ""),
         performedBy: "Removed by",
+        verb: "Removed",
+        verbClassName: "text-rose-700 dark:text-rose-300",
       };
     }
 
     return {
-      className: "border-border bg-muted text-foreground",
-      label: action,
+      accentClassName: "bg-zinc-400",
+      icon: Clock3,
+      iconClassName: "bg-muted text-muted-foreground",
+      recordLabel: action,
       performedBy: "Changed by",
+      verb: "Changed",
+      verbClassName: "text-foreground",
     };
   }
 
@@ -2181,23 +2366,123 @@ function TimeEntryAuditCard({ events }: { events: TimeEntryAuditRow[] }) {
           <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
             {events.map((event) => {
               const presentation = getActionPresentation(event.action);
+              const ActionIcon = presentation.icon;
+              const beforeDetails = getAuditDetails(event.beforeSnapshot, event.action, jobs);
+              const afterDetails = getAuditDetails(event.afterSnapshot, event.action, jobs);
+              const recordedDetails = afterDetails.length ? afterDetails : beforeDetails;
+              const changes = getAuditChanges(beforeDetails, afterDetails);
+              const changedKeys = new Set(changes.map((change) => change.key));
+              const contextDetails = afterDetails.filter((detail) => !changedKeys.has(detail.key));
 
               return (
-                <div key={event.id} className="rounded-md border bg-muted/20 p-2.5 text-xs">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge variant="outline" className={cn("font-semibold", presentation.className)}>
-                      {presentation.label}
-                    </Badge>
-                    <span className="font-medium">
-                      {event.employeeName} #{event.employeeNumber}
-                    </span>
-                  </div>
-                  <div className="mt-1.5 text-muted-foreground">
-                    {presentation.performedBy} <span className="font-medium text-foreground">{event.actorName}</span> ·{" "}
-                    {event.source === "EmployeeRequest" ? "Approved request" : "Direct change"} ·{" "}
-                    {format(parseISO(event.createdAt), "MMM d, h:mm a")}
-                  </div>
-                </div>
+                <Dialog key={event.id}>
+                  <DialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="group relative w-full overflow-hidden rounded-lg border bg-card p-2.5 pl-3 text-left text-xs transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1", presentation.accentClassName)} />
+                      <span className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5">
+                        <span
+                          className={cn(
+                            "mt-0.5 flex size-7 items-center justify-center rounded-md",
+                            presentation.iconClassName,
+                          )}
+                        >
+                          <ActionIcon className="size-3.5" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                            <span className={cn("font-bold uppercase tracking-wide", presentation.verbClassName)}>
+                              {presentation.verb}
+                            </span>
+                            <span className="font-semibold">{presentation.recordLabel}</span>
+                          </span>
+                          <span className="mt-0.5 block font-medium">
+                            {event.employeeName} <span className="text-muted-foreground">#{event.employeeNumber}</span>
+                          </span>
+                          <span className="mt-1 block text-muted-foreground">
+                            {presentation.performedBy}{" "}
+                            <span className="font-medium text-foreground">{event.actorName}</span>
+                            {event.source === "EmployeeRequest" ? " · Approved request" : ""} ·{" "}
+                            {format(parseISO(event.createdAt), "MMM d, h:mm a")}
+                          </span>
+                        </span>
+                        <ChevronRight className="mt-2 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="max-h-[calc(100svh-1rem)] overflow-y-auto sm:max-w-xl">
+                    <DialogHeader>
+                      <DialogTitle>
+                        {presentation.recordLabel} {presentation.verb.toLowerCase()}
+                      </DialogTitle>
+                      <DialogDescription>
+                        {event.employeeName} #{event.employeeNumber} · {format(parseISO(event.createdAt), "PPp")}
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-4">
+                      <div className="grid gap-1 rounded-lg bg-muted/50 p-3 text-sm">
+                        <span>
+                          {presentation.performedBy} <strong>{event.actorName}</strong>
+                        </span>
+                        {event.source === "EmployeeRequest" ? (
+                          <span className="text-muted-foreground text-xs">
+                            This change approved an employee request.
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {beforeDetails.length && afterDetails.length ? (
+                        <div className="grid gap-4">
+                          <section className="grid gap-2">
+                            <h3 className="font-semibold text-sm">Changes</h3>
+                            {changes.length ? (
+                              <div className="grid gap-2">
+                                {changes.map((change) => (
+                                  <div key={change.key} className="grid gap-2 rounded-lg border bg-muted/20 p-3">
+                                    <span className="font-medium text-muted-foreground text-xs">{change.label}</span>
+                                    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-sm">
+                                      <span className="min-w-0 break-words rounded-md bg-background px-2.5 py-2 text-muted-foreground ring-1 ring-border">
+                                        {change.before}
+                                      </span>
+                                      <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                                      <span className="min-w-0 break-words rounded-md bg-sky-50 px-2.5 py-2 font-semibold text-sky-800 ring-1 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-200 dark:ring-sky-900">
+                                        {change.after}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="rounded-lg border bg-muted/20 p-3 text-muted-foreground text-sm">
+                                No displayable fields changed.
+                              </p>
+                            )}
+                          </section>
+                          {contextDetails.length ? (
+                            <section className="grid gap-2">
+                              <h3 className="font-semibold text-sm">Other details</h3>
+                              <AuditDetailList details={contextDetails} />
+                            </section>
+                          ) : null}
+                        </div>
+                      ) : recordedDetails.length ? (
+                        <section className="grid gap-2">
+                          <h3 className="font-semibold text-sm">
+                            {afterDetails.length ? "Recorded details" : "Removed record"}
+                          </h3>
+                          <AuditDetailList details={recordedDetails} />
+                        </section>
+                      ) : (
+                        <p className="rounded-lg border bg-muted/20 p-3 text-muted-foreground text-sm">
+                          No additional snapshot data is available for this older activity record.
+                        </p>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               );
             })}
           </div>
@@ -2608,34 +2893,45 @@ export function TimeTrackingDashboard({
         ) : null}
       </div>
 
-      <div className={cn("grid gap-3", showEmployeeControls ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2")}>
-        <Card>
-          <CardContent className="grid gap-1 p-4">
-            <span className="text-muted-foreground text-xs">
+      <div className={cn("grid gap-2 sm:gap-3", showEmployeeControls ? "grid-cols-3" : "grid-cols-2")}>
+        <Card className="min-w-0 py-2 sm:py-4">
+          <CardContent className="grid gap-0.5 px-2 py-0 sm:gap-1 sm:p-4">
+            <span className="text-[11px] text-muted-foreground leading-tight sm:text-xs">
               {activeFilterCount > 0 ? "Filtered hours" : "Hours logged"}
             </span>
-            <span className="font-semibold text-2xl">{formatHours(weekHours)}</span>
-            <span className="text-muted-foreground text-xs">{periodLabel}</span>
+            <span className="font-semibold text-xl sm:text-2xl">{formatHours(weekHours)}</span>
+            <span className="text-[11px] text-muted-foreground leading-tight sm:text-xs">
+              <span className="sm:hidden">This week</span>
+              <span className="hidden sm:inline">{periodLabel}</span>
+            </span>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="grid gap-1 p-4">
-            <span className="text-muted-foreground text-xs">{secondaryStatLabel}</span>
-            <span className="font-semibold text-2xl">{secondaryStatValue ?? activeEmployees.length}</span>
+        <Card className="min-w-0 py-2 sm:py-4">
+          <CardContent className="grid gap-0.5 px-2 py-0 sm:gap-1 sm:p-4">
+            <span className="text-[11px] text-muted-foreground leading-tight sm:text-xs">{secondaryStatLabel}</span>
+            <span className="font-semibold text-xl sm:text-2xl">{secondaryStatValue ?? activeEmployees.length}</span>
             {secondaryStatValue === undefined ? (
-              <span className="text-muted-foreground text-xs">
-                {activeEmployeesWithHours} of {activeEmployees.length} logged time for the selected week
+              <span className="text-[11px] text-muted-foreground leading-tight sm:text-xs">
+                <span className="sm:hidden">
+                  {activeEmployeesWithHours} of {activeEmployees.length} logged
+                </span>
+                <span className="hidden sm:inline">
+                  {activeEmployeesWithHours} of {activeEmployees.length} logged time for the selected week
+                </span>
               </span>
             ) : null}
           </CardContent>
         </Card>
         {showEmployeeControls ? (
-          <Card>
-            <CardContent className="grid gap-1 p-4">
-              <span className="text-muted-foreground text-xs">No-work records</span>
-              <span className="font-semibold text-2xl">{noWorkDayCount}</span>
-              <span className="text-muted-foreground text-xs">
-                {noWorkDayCount === 1 ? "1 explained day" : `${noWorkDayCount} explained days`} for this week
+          <Card className="min-w-0 py-2 sm:py-4">
+            <CardContent className="grid gap-0.5 px-2 py-0 sm:gap-1 sm:p-4">
+              <span className="text-[11px] text-muted-foreground leading-tight sm:text-xs">No-work records</span>
+              <span className="font-semibold text-xl sm:text-2xl">{noWorkDayCount}</span>
+              <span className="text-[11px] text-muted-foreground leading-tight sm:text-xs">
+                <span className="sm:hidden">{noWorkDayCount === 1 ? "1 day" : `${noWorkDayCount} days`}</span>
+                <span className="hidden sm:inline">
+                  {noWorkDayCount === 1 ? "1 explained day" : `${noWorkDayCount} explained days`} for this week
+                </span>
               </span>
             </CardContent>
           </Card>
@@ -2973,6 +3269,9 @@ export function TimeTrackingDashboard({
                   {group.noWorkDays.length ? (
                     <div className="grid gap-2">
                       {group.noWorkDays.map((record) => {
+                        const reasonPresentation = getNoWorkDayPresentation(record.reason);
+                        const ReasonIcon = reasonPresentation.icon;
+
                         return (
                           <div
                             key={record.id}
@@ -2990,12 +3289,16 @@ export function TimeTrackingDashboard({
                                 </div>
                               </div>
                               <div className="flex items-center gap-1.5">
-                                <Badge
-                                  variant="outline"
-                                  className="h-5 gap-1 bg-background/70 px-1.5 font-medium text-xs text-foreground/70 tracking-wide"
+                                <span
+                                  className={cn(
+                                    "inline-flex min-h-6 items-center gap-1.5 rounded-md border px-2 py-1 font-semibold text-[11px] leading-none",
+                                    reasonPresentation.className,
+                                  )}
+                                  title={`No-work reason: ${getNoWorkDayReasonLabel(record.reason)}`}
                                 >
-                                  <CalendarX2 className="size-3" /> No work - {getNoWorkDayReasonLabel(record.reason)}
-                                </Badge>
+                                  <ReasonIcon className="size-3.5 shrink-0" aria-hidden="true" />
+                                  {reasonPresentation.label}
+                                </span>
                                 <span className="font-medium text-xs">0h</span>
                               </div>
                             </div>
@@ -3040,7 +3343,7 @@ export function TimeTrackingDashboard({
         ) : null}
         {showEmployeeControls ? (
           <div className="order-3 self-start xl:order-none">
-            <TimeEntryAuditCard events={auditEvents} />
+            <TimeEntryAuditCard events={auditEvents} jobs={jobs} />
           </div>
         ) : null}
         {!showEmployeeControls ? (
