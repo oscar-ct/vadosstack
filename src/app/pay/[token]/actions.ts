@@ -45,6 +45,10 @@ function checkoutProductData(input: { description: string; images?: string[]; na
   };
 }
 
+function isMissingStripeResource(error: unknown) {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "resource_missing");
+}
+
 function buildCheckoutLineItems(input: {
   amountMinor: number;
   companyLogoUrl?: string;
@@ -157,6 +161,18 @@ async function resumeExistingStripeCheckout(input: {
       { stripeAccount: input.connectedAccountId },
     );
   } catch (error) {
+    if (isMissingStripeResource(error)) {
+      await applyProviderPaymentEvent({
+        workspaceId: input.workspaceId,
+        provider: "stripe",
+        paymentId: payment.id,
+        status: "failed",
+        failureCode: "checkout_session_missing",
+        failureMessage: "The saved Stripe Checkout session no longer exists in the connected Stripe account.",
+      });
+      return null;
+    }
+
     console.error("Existing Stripe Checkout session could not be retrieved.", error);
     return {
       success: false,

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { normalizeDocumentMessageAlign, renderDocumentMessage } from "@/lib/document-messages";
-import { resolveInvoicePaymentLink } from "@/lib/payments/payment-links";
+import { getInvoicePaymentLinkUnavailableReason, resolveInvoicePaymentLink } from "@/lib/payments/payment-links";
 import { getPaymentDisplayMethod, getPaymentDisplayReference } from "@/lib/payments/presentation";
 import { synchronizeStripeCheckoutReturn } from "@/lib/payments/stripe-checkout-sessions";
 import { formatPhoneNumber } from "@/lib/phone";
@@ -22,6 +22,7 @@ import { PrintInvoiceButton } from "./invoice-controls";
 import { InvoicePreview } from "./invoice-preview";
 import { PayWithStripeButton } from "./pay-button";
 import { CheckoutCanceledNotice, PaymentConfirmationStatus } from "./payment-confirmation-status";
+import { UnavailablePaymentLink } from "./unavailable-payment-link";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Pay invoice", robots: { index: false, follow: false } };
@@ -64,7 +65,11 @@ export default async function PayInvoicePage({
 }) {
   const { token } = await params;
   const link = await resolveInvoicePaymentLink(token);
-  if (!link) notFound();
+  if (!link) {
+    const unavailableReason = await getInvoicePaymentLinkUnavailableReason(token);
+    if (unavailableReason) return <UnavailablePaymentLink reason={unavailableReason} />;
+    notFound();
+  }
 
   const query = await searchParams;
   const invoice = link.invoice;

@@ -150,6 +150,45 @@ export async function resolveInvoicePaymentLink(token: string, accessedAt = new 
   });
 }
 
+export type InvoicePaymentLinkUnavailableReason = "disabled" | "expired" | "replaced";
+
+export async function getInvoicePaymentLinkUnavailableReason(
+  token: string,
+  accessedAt = new Date(),
+): Promise<InvoicePaymentLinkUnavailableReason | null> {
+  if (!token || token.length > 256) return null;
+
+  const link = await prisma.invoicePaymentLink.findUnique({
+    where: { tokenHash: hashPaymentLinkToken(token) },
+    select: {
+      createdAt: true,
+      expiresAt: true,
+      revokedAt: true,
+      invoice: {
+        select: {
+          owner: { select: { status: true } },
+          paymentLinks: {
+            where: {
+              revokedAt: null,
+              OR: [{ expiresAt: null }, { expiresAt: { gt: accessedAt } }],
+            },
+            orderBy: { createdAt: "desc" },
+            select: { createdAt: true },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  if (!link || link.invoice.owner.status !== "Active") return null;
+  if (link.expiresAt && link.expiresAt <= accessedAt) return "expired";
+  if (!link.revokedAt) return null;
+
+  const activeReplacement = link.invoice.paymentLinks[0];
+  return activeReplacement && activeReplacement.createdAt > link.createdAt ? "replaced" : "disabled";
+}
+
 export async function revokeInvoicePaymentLink(input: {
   workspaceId: string;
   invoiceId: string;
