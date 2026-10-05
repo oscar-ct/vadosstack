@@ -1,4 +1,4 @@
-import { addHours, differenceInCalendarDays, format, startOfToday } from "date-fns";
+import { addHours, differenceInCalendarDays, endOfDay, format, startOfToday } from "date-fns";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getDisplayName } from "@/lib/auth";
@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getTimeTrackingRange } from "@/lib/time-tracking";
 
 import { getManagerActionQueue } from "../_lib/manager-action-queue";
+import { completeCalendarTaskAction } from "../calendar/actions";
 import { OverviewV2Dashboard } from "./_components/overview-v2-dashboard";
 
 export default async function Page() {
@@ -25,6 +26,8 @@ export default async function Page() {
   const workspaceId = authorization.workspaceId;
   const { membership } = authorization;
   const canViewEmployees = can(membership, "employees.view");
+  const canViewCalendar = can(membership, "calendar.view");
+  const canManageCalendar = can(membership, "calendar.manage");
   const canViewJobs = can(membership, "jobs.view");
   const canViewLeads = can(membership, "leads.view");
   const canViewTime = can(membership, "time.view");
@@ -40,76 +43,103 @@ export default async function Page() {
       timeZone: "America/Chicago",
     }).format(now),
   );
-  const [actionQueue, leads, jobs, activeEmployeeCount, currentWeekHours, pendingCurrentWeekTime] = await Promise.all([
-    getManagerActionQueue(workspaceId, undefined, membership),
-    canViewLeads
-      ? prisma.lead.findMany({
-          where: {
-            ownerId: workspaceId,
-            status: {
-              notIn: ["Won", "Lost"],
-            },
-          },
-          orderBy: [{ followUpAt: "asc" }, { createdAt: "desc" }],
-          take: 500,
-        })
-      : Promise.resolve([]),
-    canViewJobs
-      ? prisma.job.findMany({
-          where: {
-            ownerId: workspaceId,
-            status: {
-              not: "Cancelled",
-            },
-          },
-          include: {
-            customer: true,
-            invoice: {
-              select: {
-                id: true,
+  const [actionQueue, leads, jobs, activeEmployeeCount, currentWeekHours, pendingCurrentWeekTime, dueTasks] =
+    await Promise.all([
+      getManagerActionQueue(workspaceId, undefined, membership),
+      canViewLeads
+        ? prisma.lead.findMany({
+            where: {
+              ownerId: workspaceId,
+              status: {
+                notIn: ["Won", "Lost"],
               },
             },
-          },
-          orderBy: [{ dateBegin: "asc" }, { updatedAt: "desc" }],
-          take: 500,
-        })
-      : Promise.resolve([]),
-    canViewEmployees || canViewTime
-      ? prisma.employee.count({
-          where: {
-            active: true,
-            ownerId: workspaceId,
-          },
-        })
-      : Promise.resolve(0),
-    canViewTime
-      ? prisma.timeEntry.aggregate({
-          where: {
-            ownerId: workspaceId,
-            workedOn: {
-              gte: weekStart,
-              lt: weekEnd,
+            orderBy: [{ followUpAt: "asc" }, { createdAt: "desc" }],
+            take: 500,
+          })
+        : Promise.resolve([]),
+      canViewJobs
+        ? prisma.job.findMany({
+            where: {
+              ownerId: workspaceId,
+              status: {
+                not: "Cancelled",
+              },
             },
-          },
-          _sum: {
-            hours: true,
-          },
-        })
-      : Promise.resolve({ _sum: { hours: null } }),
-    canApproveTime
-      ? prisma.timeEntryRequest.count({
-          where: {
-            action: "Create",
-            ownerId: workspaceId,
-            status: "Pending",
-            workedOn: {
-              gte: weekStart,
-              lt: weekEnd,
+            include: {
+              customer: true,
+              invoice: {
+                select: {
+                  id: true,
+                },
+              },
             },
-          },
-        })
-      : Promise.resolve(0),
-  ]);
+            orderBy: [{ dateBegin: "asc" }, { updatedAt: "desc" }],
+            take: 500,
+          })
+        : Promise.resolve([]),
+      canViewEmployees || canViewTime
+        ? prisma.employee.count({
+            where: {
+              active: true,
+              ownerId: workspaceId,
+            },
+          })
+        : Promise.resolve(0),
+      canViewTime
+        ? prisma.timeEntry.aggregate({
+            where: {
+              ownerId: workspaceId,
+              workedOn: {
+                gte: weekStart,
+                lt: weekEnd,
+              },
+            },
+            _sum: {
+              hours: true,
+            },
+          })
+        : Promise.resolve({ _sum: { hours: null } }),
+      canApproveTime
+        ? prisma.timeEntryRequest.count({
+            where: {
+              action: "Create",
+              ownerId: workspaceId,
+              status: "Pending",
+              workedOn: {
+                gte: weekStart,
+                lt: weekEnd,
+              },
+            },
+          })
+        : Promise.resolve(0),
+      canViewCalendar
+        ? prisma.task.findMany({
+            where: {
+              ownerId: workspaceId,
+              scheduledFor: {
+                lte: endOfDay(now),
+              },
+              status: {
+                not: "Completed",
+              },
+            },
+            include: {
+              customer: {
+                select: { name: true },
+              },
+              job: {
+                select: { description: true },
+              },
+              lead: {
+                select: { name: true },
+              },
+            },
+            orderBy: [{ scheduledFor: "asc" }, { createdAt: "asc" }],
+            take: 3,
+          })
+        : Promise.resolve([]),
+    ]);
 
   const hasCurrentWeekHours = Number(currentWeekHours._sum.hours ?? 0) > 0;
   const shouldWarnAboutTime =
@@ -199,7 +229,11 @@ export default async function Page() {
   return (
     <OverviewV2Dashboard
       actionQueue={actionQueue}
+      canManageCalendar={canManageCalendar}
+      canViewCalendar={canViewCalendar}
+      canViewJobs={canViewJobs}
       companyName={authorization.membership.workspaceName}
+      completeTaskAction={completeCalendarTaskAction}
       dateLabel={new Intl.DateTimeFormat("en-US", {
         day: "numeric",
         month: "long",
@@ -207,6 +241,15 @@ export default async function Page() {
         weekday: "long",
       }).format(now)}
       displayName={getDisplayName(currentUser).split(" ")[0]}
+      dueTasks={dueTasks.map((task) => ({
+        contextName: task.customer?.name ?? task.lead?.name ?? task.job?.description ?? "General task",
+        href: "/dashboard/calendar",
+        id: task.id,
+        isOverdue: task.scheduledFor < today,
+        priority: task.priority,
+        scheduledFor: task.scheduledFor.toISOString(),
+        title: task.title,
+      }))}
       greeting={localHour < 12 ? "Good morning" : localHour < 18 ? "Good afternoon" : "Good evening"}
       leadFollowUpCount={leads.filter((lead) => lead.followUpAt).length}
       leadNewCount={leads.filter((lead) => lead.status === "New").length}

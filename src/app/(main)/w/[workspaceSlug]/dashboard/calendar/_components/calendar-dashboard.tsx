@@ -18,6 +18,7 @@ import {
   CalendarDays,
   Calendar as CalendarIcon,
   Check,
+  CheckCircle2,
   CheckSquare,
   ChevronLeft,
   ChevronRight,
@@ -27,9 +28,11 @@ import {
   Pencil,
   Plus,
   ReceiptText,
+  RotateCcw,
   Trash2,
   XIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { EventCalendarViews } from "@/components/calendar/event-calendar-views";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
@@ -89,6 +92,9 @@ export type CalendarDashboardEvent = {
   amount?: string;
   location?: string;
   href?: string;
+  completed?: boolean;
+  completedAt?: string;
+  completedBy?: string;
 };
 
 export type CalendarDashboardContact = {
@@ -161,6 +167,14 @@ function getPaletteIndex(value: string) {
 }
 
 function getEventPalette(event: CalendarDashboardEvent) {
+  if (event.type === "task" && event.completed) {
+    return {
+      dot: "bg-emerald-500",
+      text: "text-emerald-600 dark:text-emerald-300",
+      tone: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+    };
+  }
+
   return eventPalette[getPaletteIndex(event.recordId || event.id)];
 }
 
@@ -542,6 +556,7 @@ function TaskFormFields({
 
 function CalendarEventCard({
   canManage,
+  completeTaskAction,
   contacts,
   deleteTaskAction,
   event,
@@ -552,6 +567,7 @@ function CalendarEventCard({
   showDate = false,
 }: {
   canManage: boolean;
+  completeTaskAction: TaskAction;
   contacts: CalendarDashboardContact[];
   deleteTaskAction: TaskAction;
   event: CalendarDashboardEvent;
@@ -568,6 +584,7 @@ function CalendarEventCard({
     event.type === "task" ? (
       <TaskActionsMenu
         canManage={canManage}
+        completeAction={completeTaskAction}
         contacts={contacts}
         deleteAction={deleteTaskAction}
         event={event}
@@ -582,7 +599,11 @@ function CalendarEventCard({
             <Icon className="size-3.5" />
           </span>
           <div className="min-w-0">
-            <div className="truncate font-medium leading-5">{event.title}</div>
+            <div
+              className={cn("truncate font-medium leading-5", event.completed && "text-muted-foreground line-through")}
+            >
+              {event.title}
+            </div>
             <div className="truncate text-muted-foreground text-xs">{event.customerName}</div>
           </div>
         </div>
@@ -603,7 +624,7 @@ function CalendarEventCard({
           </span>
         ) : null}
         <span>{getEventLabel(event.type)}</span>
-        <span>{event.status}</span>
+        <span>{event.completed ? `Completed · ${event.status}` : event.status}</span>
         {event.location ? (
           <span className="inline-flex min-w-0 items-center gap-1">
             <MapPin className="size-3" />
@@ -658,7 +679,9 @@ function CalendarEventPill({ event }: { event: CalendarDashboardEvent }) {
   return (
     <>
       <Icon className={cn("size-3.5 shrink-0", palette.text)} />
-      <span className="truncate">{getCalendarDisplayName(event)}</span>
+      <span className={cn("truncate", event.completed && "line-through opacity-70")}>
+        {getCalendarDisplayName(event)}
+      </span>
     </>
   );
 }
@@ -767,23 +790,101 @@ function EditTaskDialog({
 
 function TaskActionsMenu({
   canManage,
+  completeAction,
   contacts,
   deleteAction,
   event,
+  onCompleted,
   updateAction,
 }: {
   canManage: boolean;
+  completeAction: TaskAction;
   contacts: CalendarDashboardContact[];
   deleteAction: TaskAction;
   event: CalendarDashboardEvent;
+  onCompleted?: () => void;
   updateAction: TaskAction;
 }) {
+  const router = useRouter();
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [isCompleting, startCompleting] = React.useTransition();
+
+  async function reopenTask() {
+    const formData = new FormData();
+    formData.set("id", event.recordId);
+    formData.set("intent", "reopen");
+    const result = await completeAction(initialTaskState, formData);
+
+    if (!result.success) {
+      toast.error(result.message);
+      return;
+    }
+
+    toast.success(result.message || "Task reopened.");
+    router.refresh();
+  }
+
+  function completeTask() {
+    startCompleting(async () => {
+      const formData = new FormData();
+      formData.set("id", event.recordId);
+      const result = await completeAction(initialTaskState, formData);
+
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
+      setMenuOpen(false);
+      onCompleted?.();
+      toast.success(result.message || "Task completed.", {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void reopenTask();
+          },
+        },
+      });
+      router.refresh();
+    });
+  }
+
+  function changeTaskStatus() {
+    if (event.completed) {
+      startCompleting(async () => {
+        await reopenTask();
+      });
+      return;
+    }
+
+    completeTask();
+  }
 
   return (
-    <div className="pointer-events-auto relative z-10 flex items-center">
+    <div className="pointer-events-auto relative z-10 flex items-center gap-1">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        disabled={!canManage || isCompleting}
+        aria-label={event.completed ? `Reopen ${event.title}` : `Mark ${event.title} complete`}
+        title={event.completed ? "Reopen task" : "Mark complete"}
+        className={cn(
+          "size-8 rounded-full shadow-none",
+          event.completed
+            ? "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+            : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20",
+        )}
+        onClick={(clickEvent) => {
+          clickEvent.preventDefault();
+          clickEvent.stopPropagation();
+          changeTaskStatus();
+        }}
+      >
+        {event.completed ? <RotateCcw className="size-3.5" /> : <Check className="size-4" />}
+      </Button>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button
@@ -837,6 +938,7 @@ function TaskActionsMenu({
 
 function CalendarEventDialog({
   canManage,
+  completeTaskAction,
   contacts,
   deleteTaskAction,
   event,
@@ -844,6 +946,7 @@ function CalendarEventDialog({
   updateTaskAction,
 }: {
   canManage: boolean;
+  completeTaskAction: TaskAction;
   contacts: CalendarDashboardContact[];
   deleteTaskAction: TaskAction;
   event: CalendarDashboardEvent | null;
@@ -885,9 +988,11 @@ function CalendarEventDialog({
               </div>
               <TaskActionsMenu
                 canManage={canManage}
+                completeAction={completeTaskAction}
                 contacts={contacts}
                 deleteAction={deleteTaskAction}
                 event={event}
+                onCompleted={() => onOpenChange(false)}
                 updateAction={updateTaskAction}
               />
             </div>
@@ -901,9 +1006,25 @@ function CalendarEventDialog({
                 </dd>
               </div>
               <div className="rounded-lg border bg-muted/20 p-4">
-                <dt className="text-muted-foreground text-xs uppercase tracking-wide">Priority</dt>
-                <dd className="mt-1.5 font-medium text-sm">{event.status}</dd>
+                <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                  {event.completed ? "Status" : "Priority"}
+                </dt>
+                <dd className="mt-1.5 font-medium text-sm">
+                  {event.completed ? `Completed · ${event.status} priority` : event.status}
+                </dd>
               </div>
+              {event.completed ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 text-emerald-900 sm:col-span-2 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-100">
+                  <dt className="flex items-center gap-2 font-medium text-sm">
+                    <CheckCircle2 className="size-4" />
+                    Task completed
+                  </dt>
+                  <dd className="mt-1.5 text-emerald-800/75 text-xs dark:text-emerald-100/65">
+                    {event.completedBy ? `By ${event.completedBy}` : "Completion recorded"}
+                    {event.completedAt ? ` · ${format(parseISO(event.completedAt), "MMM d, yyyy 'at' h:mm a")}` : null}
+                  </dd>
+                </div>
+              ) : null}
               <div className="rounded-lg border bg-muted/20 p-4 sm:col-span-2">
                 <dt className="text-muted-foreground text-xs uppercase tracking-wide">Location</dt>
                 <dd className="mt-1.5 flex items-start gap-2 text-sm">
@@ -924,6 +1045,7 @@ function CalendarEventDialog({
           <div className="grid gap-3">
             <CalendarEventCard
               canManage={canManage}
+              completeTaskAction={completeTaskAction}
               contacts={contacts}
               deleteTaskAction={deleteTaskAction}
               event={event}
@@ -952,6 +1074,7 @@ function CalendarEventDialog({
 
 export function CalendarDashboard({
   canManage,
+  completeTaskAction,
   contacts,
   createTaskAction,
   deleteTaskAction,
@@ -959,6 +1082,7 @@ export function CalendarDashboard({
   updateTaskAction,
 }: {
   canManage: boolean;
+  completeTaskAction: TaskAction;
   contacts: CalendarDashboardContact[];
   createTaskAction: TaskAction;
   deleteTaskAction: TaskAction;
@@ -976,6 +1100,7 @@ export function CalendarDashboard({
     title: format(today, "MMMM yyyy"),
   }));
   const [activeTypes, setActiveTypes] = React.useState<CalendarDashboardEvent["type"][]>(["task"]);
+  const [showCompleted, setShowCompleted] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [createDate, setCreateDate] = React.useState(today);
   const [selectedEvent, setSelectedEvent] = React.useState<CalendarDashboardEvent | null>(null);
@@ -983,8 +1108,9 @@ export function CalendarDashboard({
     () =>
       events
         .filter((event) => activeTypes.includes(event.type))
+        .filter((event) => showCompleted || !event.completed)
         .sort((a, b) => getEventDate(a).getTime() - getEventDate(b).getTime()),
-    [activeTypes, events],
+    [activeTypes, events, showCompleted],
   );
   const rangeEvents = React.useMemo(
     () =>
@@ -1061,6 +1187,19 @@ export function CalendarDashboard({
                 </SelectGroup>
               </SelectContent>
             </Select>
+
+            <Button
+              type="button"
+              variant="outline"
+              aria-pressed={showCompleted}
+              onClick={() => setShowCompleted((current) => !current)}
+              className={cn(
+                showCompleted && "border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10",
+              )}
+            >
+              <CheckCircle2 />
+              {showCompleted ? "Hide completed" : "Show completed"}
+            </Button>
 
             <ButtonGroup>
               <Button
@@ -1153,6 +1292,7 @@ export function CalendarDashboard({
               {rangeEvents.map((event) => (
                 <CalendarEventCard
                   canManage={canManage}
+                  completeTaskAction={completeTaskAction}
                   key={event.id}
                   contacts={contacts}
                   deleteTaskAction={deleteTaskAction}
@@ -1181,6 +1321,7 @@ export function CalendarDashboard({
       />
       <CalendarEventDialog
         canManage={canManage}
+        completeTaskAction={completeTaskAction}
         contacts={contacts}
         deleteTaskAction={deleteTaskAction}
         event={selectedEvent}

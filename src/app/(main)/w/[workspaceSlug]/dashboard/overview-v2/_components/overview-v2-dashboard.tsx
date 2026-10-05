@@ -1,23 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 
-import { format } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 import {
   ArrowRight,
   BanknoteArrowDown,
   BriefcaseBusiness,
+  CalendarDays,
+  Check,
   CheckCircle2,
   CircleDollarSign,
+  ListTodo,
   MessagesSquare,
   TriangleAlert,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
+import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
 import { cn } from "@/lib/utils";
 
 import type { ManagerActionQueueItem } from "../../_lib/manager-action-queue";
+import type { CalendarTaskMutationState } from "../../calendar/actions";
+import { OverviewWaveBackground } from "./overview-wave-background";
 
 type MoneyItem = {
   balanceDue: number;
@@ -56,7 +62,18 @@ type TimeWarning = {
   title: string;
 };
 
+type DueTask = {
+  contextName: string;
+  href: string;
+  id: string;
+  isOverdue: boolean;
+  priority: string;
+  scheduledFor: string;
+  title: string;
+};
+
 type Lens = "jobs" | "money" | "now";
+type TaskAction = (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
 
 const BRIEFING_TIME_ZONE = "America/Chicago";
 
@@ -158,11 +175,112 @@ function EmptyState({ detail, title }: { detail: string; title: string }) {
   );
 }
 
+const initialTaskState: CalendarTaskMutationState = {
+  success: false,
+  message: "",
+};
+
+function DueTaskRow({
+  canManage,
+  completeAction,
+  task,
+}: {
+  canManage: boolean;
+  completeAction: TaskAction;
+  task: DueTask;
+}) {
+  const router = useRouter();
+  const [completed, setCompleted] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  if (completed) return null;
+
+  async function reopenTask() {
+    const formData = new FormData();
+    formData.set("id", task.id);
+    formData.set("intent", "reopen");
+    const result = await completeAction(initialTaskState, formData);
+
+    if (!result.success) {
+      toast.error(result.message);
+      return;
+    }
+
+    setCompleted(false);
+    toast.success(result.message || "Task reopened.");
+    router.refresh();
+  }
+
+  function handleComplete() {
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.set("id", task.id);
+      const result = await completeAction(initialTaskState, formData);
+
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
+      setCompleted(true);
+      toast.success(result.message || "Task completed.", {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void reopenTask();
+          },
+        },
+      });
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 px-3 py-2.5 transition-colors hover:bg-white/[0.06]">
+      <Link prefetch={false} href={task.href} className="flex min-w-0 flex-1 items-center justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block truncate font-medium text-xs">{task.title}</span>
+          <span className="mt-0.5 block truncate text-[10px] text-white/55">
+            {task.contextName} · {task.priority}
+          </span>
+        </span>
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-2 py-1 font-medium text-[9px]",
+            task.isOverdue ? "bg-red-400/15 text-red-200" : "bg-white/10 text-white/75",
+          )}
+        >
+          {task.isOverdue
+            ? `${Math.max(1, Math.abs(differenceInCalendarDays(new Date(), new Date(task.scheduledFor))))}d late`
+            : format(new Date(task.scheduledFor), "h:mm a")}
+        </span>
+      </Link>
+      {canManage ? (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={handleComplete}
+          aria-label={`Mark ${task.title} complete`}
+          title="Mark complete"
+          className="grid size-7 shrink-0 place-items-center rounded-full border border-white/20 bg-white/[0.08] text-white/70 transition-colors hover:border-emerald-300/60 hover:bg-emerald-400/20 hover:text-emerald-100 disabled:opacity-50"
+        >
+          <Check className="size-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function OverviewV2Dashboard({
   actionQueue,
+  canManageCalendar,
+  canViewCalendar,
+  canViewJobs,
   companyName,
+  completeTaskAction,
   dateLabel,
   displayName,
+  dueTasks,
   greeting,
   leadFollowUpCount,
   leadNewCount,
@@ -181,9 +299,14 @@ export function OverviewV2Dashboard({
   waitingJobs,
 }: {
   actionQueue: ManagerActionQueueItem[];
+  canManageCalendar: boolean;
+  canViewCalendar: boolean;
+  canViewJobs: boolean;
   companyName: string;
+  completeTaskAction: TaskAction;
   dateLabel: string;
   displayName: string;
+  dueTasks: DueTask[];
   greeting: string;
   leadFollowUpCount: number;
   leadNewCount: number;
@@ -229,10 +352,10 @@ export function OverviewV2Dashboard({
   return (
     <div className="mx-auto w-full max-w-[1500px] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <div className="grid min-h-[calc(100svh-7rem)] lg:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.55fr)]">
-        <aside className="relative overflow-hidden bg-gradient-to-br from-violet-700 via-indigo-700 to-blue-600 p-6 text-white dark:from-violet-950 dark:via-indigo-950 dark:to-blue-950 sm:p-7">
-          <div className="pointer-events-none absolute top-40 -right-28 size-60 rounded-full border-[44px] border-white/10" />
-          <div className="pointer-events-none absolute -top-24 -left-20 size-56 rounded-full bg-fuchsia-400/20 blur-3xl" />
-          <div className="relative flex h-full min-h-[540px] flex-col">
+        <aside className="relative overflow-hidden bg-gradient-to-br from-[#17181d] via-[#10141d] to-[#101b2a] p-6 text-white sm:p-7 dark:from-[#0d0e12] dark:via-[#0b0e14] dark:to-[#0b1420]">
+          <OverviewWaveBackground />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/[0.02] via-transparent to-black/10" />
+          <div className="relative z-10 flex h-full min-h-[540px] flex-col">
             <div className="mt-8 text-white/70 text-xs">{dateLabel}</div>
             <div className="mt-1 font-normal text-4xl tracking-[-0.05em]" aria-live="off">
               {liveTime}
@@ -266,6 +389,84 @@ export function OverviewV2Dashboard({
                   : "The manager queue is currently clear."}
               </div>
             </div>
+
+            {canViewCalendar || canViewJobs ? (
+              <div className="mt-7 grid gap-3">
+                {canViewCalendar ? (
+                  <section className="overflow-hidden rounded-xl border border-white/15 bg-black/25 backdrop-blur-[2px]">
+                    <div className="flex items-center justify-between gap-3 border-white/15 border-b px-3 py-2.5">
+                      <div className="flex items-center gap-2 font-medium text-xs">
+                        <ListTodo className="size-3.5 text-red-300" />
+                        Tasks due
+                      </div>
+                      <Link
+                        prefetch={false}
+                        href="/dashboard/calendar"
+                        className="flex items-center gap-1 text-[10px] text-white/55 hover:text-white"
+                      >
+                        Calendar <ArrowRight className="size-3" />
+                      </Link>
+                    </div>
+                    {dueTasks.length ? (
+                      <div className="divide-y divide-white/10">
+                        {dueTasks.slice(0, 2).map((task) => (
+                          <DueTaskRow
+                            key={task.id}
+                            canManage={canManageCalendar}
+                            completeAction={completeTaskAction}
+                            task={task}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="px-3 py-3 text-[11px] text-white/55">No open tasks are due today.</p>
+                    )}
+                  </section>
+                ) : null}
+
+                {canViewJobs ? (
+                  <section className="overflow-hidden rounded-xl border border-white/15 bg-black/25 backdrop-blur-[2px]">
+                    <div className="flex items-center justify-between gap-3 border-white/15 border-b px-3 py-2.5">
+                      <div className="flex items-center gap-2 font-medium text-xs">
+                        <CalendarDays className="size-3.5 text-blue-300" />
+                        Upcoming jobs
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setLens("jobs")}
+                        className="flex items-center gap-1 text-[10px] text-white/55 hover:text-white"
+                      >
+                        View jobs <ArrowRight className="size-3" />
+                      </button>
+                    </div>
+                    {scheduleItems.length ? (
+                      <div className="divide-y divide-white/10">
+                        {scheduleItems.slice(0, 2).map((job) => (
+                          <Link
+                            key={job.id}
+                            prefetch={false}
+                            href={job.href}
+                            className="flex min-w-0 items-center justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-white/[0.06]"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium text-xs">{job.title}</span>
+                              <span className="mt-0.5 block truncate text-[10px] text-white/55">
+                                {job.customerName} · {job.status}
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-right font-medium text-[10px] text-white/80">
+                              {format(new Date(job.dateBegin), "EEE, MMM d")}
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="px-3 py-3 text-[11px] text-white/55">No upcoming jobs have dates yet.</p>
+                    )}
+                  </section>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="mt-auto flex items-center gap-2 pt-8 text-white/65 text-xs">
               {actionQueue.length} open {actionQueue.length === 1 ? "decision" : "decisions"}

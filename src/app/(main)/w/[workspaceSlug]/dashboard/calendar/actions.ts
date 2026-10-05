@@ -255,6 +255,82 @@ const deleteTaskSchema = z.object({
   id: z.string().trim().min(1, "Task is required."),
 });
 
+const completeTaskSchema = deleteTaskSchema.extend({
+  intent: z.enum(["complete", "reopen"]).default("complete"),
+});
+
+export async function completeCalendarTaskAction(
+  _state: CalendarTaskMutationState,
+  formData: FormData,
+): Promise<CalendarTaskMutationState> {
+  const authorization = await getPermittedDashboardAuthorization("calendar.manage");
+
+  if (!authorization) {
+    return {
+      success: false,
+      message: "You do not have permission to complete calendar tasks.",
+    };
+  }
+  const workspaceId = authorization.workspaceId;
+
+  const parsed = completeTaskSchema.safeParse({
+    id: formData.get("id"),
+    intent: formData.get("intent") ?? "complete",
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message ?? "Choose a valid task.",
+    };
+  }
+
+  const isReopening = parsed.data.intent === "reopen";
+  const nextStatus = isReopening ? "Open" : "Completed";
+  const updated = await prisma.$transaction(async (transaction) => {
+    const result = await transaction.task.updateMany({
+      where: {
+        id: parsed.data.id,
+        ownerId: workspaceId,
+        status: isReopening ? "Completed" : { not: "Completed" },
+      },
+      data: {
+        status: nextStatus,
+      },
+    });
+    if (result.count === 0) return false;
+    await recordAuthorizationAuditEvent(
+      {
+        workspaceId,
+        actorUserId: authorization.principal.user.id,
+        membershipId: authorization.membership.id,
+        action: isReopening ? "calendar.task.reopen" : "calendar.task.complete",
+        targetType: "Task",
+        targetId: parsed.data.id,
+      },
+      transaction,
+    );
+    return true;
+  });
+
+  if (!updated) {
+    return {
+      success: false,
+      message: isReopening
+        ? "That task is not completed or is no longer available."
+        : "That task is already complete or is no longer available.",
+    };
+  }
+
+  revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/calendar");
+  revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/overview");
+
+  return {
+    success: true,
+    message: isReopening ? "Task reopened." : "Task completed.",
+  };
+}
+
 export async function deleteCalendarTaskAction(
   _state: CalendarTaskMutationState,
   formData: FormData,

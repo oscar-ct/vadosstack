@@ -10,7 +10,12 @@ import {
   type CalendarDashboardContact,
   type CalendarDashboardEvent,
 } from "./_components/calendar-dashboard";
-import { createCalendarTaskAction, deleteCalendarTaskAction, updateCalendarTaskAction } from "./actions";
+import {
+  completeCalendarTaskAction,
+  createCalendarTaskAction,
+  deleteCalendarTaskAction,
+  updateCalendarTaskAction,
+} from "./actions";
 
 function formatMoney(value: { toString: () => string } | null | undefined) {
   return value ? value.toString() : undefined;
@@ -82,9 +87,6 @@ export default async function Page() {
         scheduledFor: {
           gte: windowStart,
           lte: windowEnd,
-        },
-        status: {
-          not: "Completed",
         },
       },
       include: {
@@ -161,6 +163,41 @@ export default async function Page() {
       : Promise.resolve([]),
   ]);
 
+  const completedTaskEvents = tasks.some((task) => task.status === "Completed")
+    ? await prisma.authorizationAuditEvent.findMany({
+        where: {
+          action: "calendar.task.complete",
+          targetId: {
+            in: tasks.filter((task) => task.status === "Completed").map((task) => task.id),
+          },
+          targetType: "Task",
+          workspaceId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        select: {
+          actor: {
+            select: {
+              email: true,
+              name: true,
+            },
+          },
+          createdAt: true,
+          targetId: true,
+        },
+      })
+    : [];
+  const taskCompletionById = new Map<string, { completedAt: Date; completedBy: string }>();
+
+  for (const event of completedTaskEvents) {
+    if (!event.targetId || taskCompletionById.has(event.targetId)) continue;
+    taskCompletionById.set(event.targetId, {
+      completedAt: event.createdAt,
+      completedBy: event.actor?.name ?? event.actor?.email ?? "Workspace member",
+    });
+  }
+
   const events: CalendarDashboardEvent[] = [
     ...jobs.map((job) => ({
       id: `job-${job.id}`,
@@ -175,19 +212,26 @@ export default async function Page() {
       location: formatServiceAddress(job) ?? undefined,
       href: `/dashboard/jobs/${job.id}`,
     })),
-    ...tasks.map((task) => ({
-      id: `task-${task.id}`,
-      recordId: task.id,
-      type: "task" as const,
-      title: task.title,
-      customerName: task.customer?.name ?? task.lead?.name ?? "Task",
-      customerId: task.customerId ?? undefined,
-      date: task.scheduledFor.toISOString(),
-      leadId: task.leadId ?? undefined,
-      notes: task.notes ?? undefined,
-      status: task.priority,
-      location: task.location ?? undefined,
-    })),
+    ...tasks.map((task) => {
+      const completion = taskCompletionById.get(task.id);
+
+      return {
+        id: `task-${task.id}`,
+        recordId: task.id,
+        type: "task" as const,
+        title: task.title,
+        customerName: task.customer?.name ?? task.lead?.name ?? "Task",
+        customerId: task.customerId ?? undefined,
+        date: task.scheduledFor.toISOString(),
+        leadId: task.leadId ?? undefined,
+        notes: task.notes ?? undefined,
+        status: task.priority,
+        location: task.location ?? undefined,
+        completed: task.status === "Completed",
+        completedAt: completion?.completedAt.toISOString(),
+        completedBy: completion?.completedBy,
+      };
+    }),
     ...invoices.map((invoice) => ({
       id: `invoice-${invoice.id}`,
       recordId: invoice.id,
@@ -247,6 +291,7 @@ export default async function Page() {
   return (
     <CalendarDashboard
       canManage={canManageCalendar}
+      completeTaskAction={completeCalendarTaskAction}
       createTaskAction={createCalendarTaskAction}
       deleteTaskAction={deleteCalendarTaskAction}
       updateTaskAction={updateCalendarTaskAction}

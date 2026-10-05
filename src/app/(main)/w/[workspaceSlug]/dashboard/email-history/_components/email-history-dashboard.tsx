@@ -99,7 +99,7 @@ function DocumentLink({ record }: { record: EmailHistoryItem }) {
     <Link
       href={record.documentHref}
       prefetch={false}
-      className="pointer-events-auto inline-flex max-w-full items-center gap-1 font-medium underline-offset-4 hover:underline"
+      className="pointer-events-auto inline-flex min-w-0 max-w-full items-center gap-1 font-medium underline-offset-4 hover:underline"
     >
       <span className="truncate">{record.documentNumber}</span>
       <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground" />
@@ -269,7 +269,7 @@ export function EmailHistoryDashboard({
 
   return (
     <>
-      <div className="grid min-w-0 gap-3 sm:grid-cols-3">
+      <div className="grid min-w-0 grid-cols-3 gap-2 sm:gap-3">
         {statOptions.map((option) => {
           const active = initialStatus === option.status;
 
@@ -281,15 +281,19 @@ export function EmailHistoryDashboard({
               disabled={isPending}
               onClick={() => updateParams({ status: option.status })}
               className={cn(
-                "rounded-lg border bg-card p-4 text-left text-card-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60",
+                "min-w-0 rounded-lg border bg-card p-2.5 text-left text-card-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60 sm:p-4",
                 active && "border-primary/40 bg-primary/5 ring-1 ring-primary/15",
               )}
             >
-              <span className="flex items-center justify-between gap-3">
-                <span className="font-medium text-muted-foreground text-sm">{option.label}</span>
-                <span className="text-muted-foreground">{option.icon}</span>
+              <span className="flex items-start justify-between gap-1.5 sm:items-center sm:gap-3">
+                <span className="font-medium text-[11px] text-muted-foreground leading-tight sm:text-sm">
+                  {option.label}
+                </span>
+                <span className="shrink-0 text-muted-foreground [&_svg]:size-3.5 sm:[&_svg]:size-4">{option.icon}</span>
               </span>
-              <span className="mt-2 block font-semibold text-2xl tabular-nums tracking-tight">{option.count}</span>
+              <span className="mt-1 block font-semibold text-xl tabular-nums tracking-tight sm:mt-2 sm:text-2xl">
+                {option.count}
+              </span>
             </button>
           );
         })}
@@ -418,11 +422,16 @@ export function EmailHistoryDashboard({
             </Table>
           </div>
 
-          <div className={cn("space-y-3 transition-opacity md:hidden", isPending && "opacity-60")}>
+          <div
+            className={cn(
+              "w-full min-w-0 max-w-full space-y-2.5 overflow-hidden transition-opacity md:hidden",
+              isPending && "opacity-60",
+            )}
+          >
             {records.map((record) => (
               <div
                 key={record.id}
-                className="relative grid min-w-0 gap-3 overflow-hidden rounded-lg border bg-background p-3 transition-colors hover:bg-muted/30"
+                className="relative grid w-full min-w-0 max-w-full gap-2.5 overflow-hidden rounded-lg border bg-background p-2.5 transition-colors hover:bg-muted/30 sm:gap-3 sm:p-3"
               >
                 <button
                   type="button"
@@ -430,18 +439,20 @@ export function EmailHistoryDashboard({
                   className="absolute inset-0 z-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   onClick={() => setSelectedRecord(record)}
                 />
-                <div className="pointer-events-none relative z-10 flex min-w-0 items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
+                <div className="pointer-events-none relative z-10 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                  <div className="min-w-0 overflow-hidden">
                     <DocumentLink record={record} />
-                    <div className="text-muted-foreground text-xs">{record.documentType}</div>
+                    <div className="truncate text-muted-foreground text-xs">{record.documentType}</div>
                   </div>
-                  <StatusBadge status={record.status} />
+                  <span className="max-w-full overflow-hidden">
+                    <StatusBadge status={record.status} />
+                  </span>
                 </div>
 
                 <div className="pointer-events-none relative z-10 grid min-w-0 gap-2 text-sm">
                   <div className="flex min-w-0 items-start gap-2">
                     <UserRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1 overflow-hidden">
                       <CustomerLink
                         customerId={record.customerId}
                         name={record.recipientName}
@@ -455,24 +466,26 @@ export function EmailHistoryDashboard({
                   </div>
                   <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
                     <Send className="size-4 shrink-0" />
-                    <span className="truncate">
+                    <span className="min-w-0 flex-1 truncate">
                       {record.sentByName ?? record.sentByEmail ?? "Legacy record"}
                       {record.senderEmail ? ` via ${record.senderEmail}` : ""}
                     </span>
                   </div>
-                  <div className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
-                    <span className="font-medium text-muted-foreground text-xs uppercase">Amount</span>
-                    <span className="shrink-0 font-semibold tabular-nums">{record.documentTotal}</span>
+                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md bg-muted/50 px-2.5 py-2 sm:px-3">
+                    <span className="truncate font-medium text-muted-foreground text-xs uppercase">Amount</span>
+                    <span className="max-w-full truncate text-right font-semibold tabular-nums">
+                      {record.documentTotal}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
                     <Clock3 className="size-4 shrink-0" />
-                    <span>{formatDate(record.sentAt)}</span>
+                    <span className="min-w-0 truncate">{formatDate(record.sentAt)}</span>
                   </div>
                 </div>
 
                 <div
                   className={cn(
-                    "pointer-events-none relative z-10 rounded-md bg-muted/50 px-3 py-2 text-sm",
+                    "pointer-events-none relative z-10 min-w-0 overflow-hidden rounded-md bg-muted/50 px-2.5 py-2 text-sm sm:px-3",
                     record.errorMessage && "bg-destructive/5 text-destructive",
                   )}
                 >

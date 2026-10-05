@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 
 import { format, parseISO } from "date-fns";
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  History,
   KeyRound,
   MailPlus,
   PauseCircle,
@@ -64,6 +66,45 @@ type PermissionGroups = ReadonlyArray<{
 }>;
 
 const initialState: RoleActionState = { message: "", success: false };
+
+const auditActionVerbs: Record<string, string> = {
+  accept: "accepted",
+  apply: "applied",
+  complete: "completed",
+  connect: "connected",
+  connect_start: "connection started",
+  convert: "converted",
+  convert_to_customer: "converted to customer",
+  create: "created",
+  created: "created",
+  delete: "deleted",
+  disconnect: "disconnected",
+  publish: "published",
+  reactivate: "reactivated",
+  reconcile: "reconciled",
+  remove: "removed",
+  resend: "resent",
+  restore: "restored",
+  retry: "retried",
+  revoke: "revoked",
+  save: "saved",
+  send: "sent",
+  suspend: "suspended",
+  update: "updated",
+};
+
+function formatAuditAction(action: string) {
+  const parts = action.split(".");
+  const verbKey = parts.pop();
+  const subject = parts
+    .join(" ")
+    .replaceAll("_", " ")
+    .replace(/^./, (letter) => letter.toUpperCase());
+  const verb = verbKey ? (auditActionVerbs[verbKey] ?? verbKey.replaceAll("_", " ")) : "";
+
+  if (!subject) return verb.replace(/^./, (letter) => letter.toUpperCase());
+  return `${subject} ${verb}`;
+}
 
 function RoleDialog({
   action,
@@ -259,7 +300,12 @@ function RemoveMemberDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="ghost" className="text-destructive hover:text-destructive">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="w-full text-destructive hover:text-destructive sm:w-auto"
+        >
           <UserMinus />
           Remove access
         </Button>
@@ -304,9 +350,9 @@ function RestoreMemberButton({ action, member }: { action: RoleAction; member: M
   }, [state]);
 
   return (
-    <form action={formAction}>
+    <form action={formAction} className="w-full sm:w-auto">
       <input type="hidden" name="membershipId" value={member.id} />
-      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+      <Button type="submit" size="sm" variant="outline" disabled={pending} className="w-full sm:w-auto">
         <RotateCcw />
         {pending ? "Restoring..." : "Restore access"}
       </Button>
@@ -328,7 +374,7 @@ function SuspendMemberDialog({ action, member }: { action: RoleAction; member: M
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="outline">
+        <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto">
           <PauseCircle />
           Suspend
         </Button>
@@ -366,9 +412,9 @@ function ReactivateMemberButton({ action, member }: { action: RoleAction; member
   }, [state]);
 
   return (
-    <form action={formAction}>
+    <form action={formAction} className="w-full sm:w-auto">
       <input type="hidden" name="membershipId" value={member.id} />
-      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+      <Button type="submit" size="sm" variant="outline" disabled={pending} className="w-full sm:w-auto">
         <Play />
         {pending ? "Reactivating..." : "Reactivate"}
       </Button>
@@ -413,7 +459,7 @@ function MemberRoleSelect({ action, member, roles }: { action: RoleAction; membe
   const availableRoles = roles.filter((role) => role.systemKey !== "OWNER" || role.id === member.roleId);
 
   return (
-    <form action={formAction}>
+    <form action={formAction} className="w-full sm:w-auto">
       <input type="hidden" name="membershipId" value={member.id} />
       <NativeSelect
         name="roleId"
@@ -423,7 +469,7 @@ function MemberRoleSelect({ action, member, roles }: { action: RoleAction; membe
           setSelectedRoleId(event.currentTarget.value);
           event.currentTarget.form?.requestSubmit();
         }}
-        className="min-w-40"
+        className="w-full min-w-0 sm:min-w-40"
       >
         {availableRoles.map((role) => (
           <option key={role.id} value={role.id}>
@@ -700,7 +746,7 @@ export function RolesManager({
             count: members.length + suspendedMembers.length + removedMembers.length,
           },
           { id: "invitations" as const, label: "Invitations", count: invitations.length },
-          { id: "audit" as const, label: "Audit history", count: auditEvents.length },
+          { id: "audit" as const, label: "Activity log", count: auditEvents.length },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -987,17 +1033,17 @@ export function RolesManager({
                     {member.user.email} · Joined {format(parseISO(member.joinedAt), "MMM d, yyyy")}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="grid w-full min-w-0 gap-2 sm:flex sm:w-auto sm:items-center">
                   <MemberRoleSelect action={actions.updateMemberRoleAction} member={member} roles={roles} />
                   {roles.find((role) => role.id === member.roleId)?.systemKey !== "OWNER" ? (
-                    <>
+                    <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:items-center">
                       <SuspendMemberDialog action={actions.suspendWorkspaceMemberAction} member={member} />
                       <RemoveMemberDialog
                         action={actions.removeWorkspaceMemberAction}
                         member={member}
                         workspaceName={workspaceName}
                       />
-                    </>
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -1026,14 +1072,16 @@ export function RolesManager({
                         {member.user.email} · Suspended {format(parseISO(member.changedAt), "MMM d, yyyy")}
                       </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="grid w-full min-w-0 gap-2 sm:flex sm:w-auto sm:items-center">
                       <MemberRoleSelect action={actions.updateMemberRoleAction} member={member} roles={roles} />
-                      <ReactivateMemberButton action={actions.reactivateWorkspaceMemberAction} member={member} />
-                      <RemoveMemberDialog
-                        action={actions.removeWorkspaceMemberAction}
-                        member={member}
-                        workspaceName={workspaceName}
-                      />
+                      <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:items-center">
+                        <ReactivateMemberButton action={actions.reactivateWorkspaceMemberAction} member={member} />
+                        <RemoveMemberDialog
+                          action={actions.removeWorkspaceMemberAction}
+                          member={member}
+                          workspaceName={workspaceName}
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1063,7 +1111,7 @@ export function RolesManager({
                         {member.user.email} · Removed {format(parseISO(member.removedAt), "MMM d, yyyy")}
                       </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="grid w-full min-w-0 gap-2 sm:flex sm:w-auto sm:items-center">
                       <MemberRoleSelect action={actions.updateMemberRoleAction} member={member} roles={roles} />
                       <RestoreMemberButton action={actions.restoreWorkspaceMemberAction} member={member} />
                     </div>
@@ -1128,37 +1176,62 @@ export function RolesManager({
         <div className="overflow-hidden rounded-xl border bg-background">
           <div className="border-b p-4">
             <div className="flex items-center gap-2 font-medium">
-              <ShieldCheck className="size-4" />
-              Authorization audit history
+              <History className="size-4" />
+              Activity log
             </div>
             <p className="mt-1 text-muted-foreground text-xs">
-              The 100 most recent role, invitation, membership, and workspace-access events.
+              The 100 most recent changes and actions across your business.
             </p>
           </div>
           {auditEvents.length ? (
             <div className="grid divide-y">
               {auditEvents.map((event) => {
-                const actionLabel = event.action
-                  .split(".")
-                  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-                  .join(" · ");
+                const actionLabel = formatAuditAction(event.action);
                 const actor = event.actor?.name || event.actor?.email || "System";
                 return (
-                  <div key={event.id} className="grid gap-1 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
+                  <details key={event.id} className="group">
+                    <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                      <div className="min-w-0">
                         <p className="font-medium text-sm">{actionLabel}</p>
-                        {event.targetType ? <Badge variant="outline">{event.targetType}</Badge> : null}
+                        <p className="mt-1 text-muted-foreground text-xs">
+                          {actor} · {format(parseISO(event.createdAt), "MMM d, yyyy 'at' h:mm a")}
+                        </p>
                       </div>
-                      <p className="mt-1 truncate text-muted-foreground text-xs">
-                        {actor}
-                        {event.targetId ? ` · ${event.targetId}` : ""}
-                      </p>
+                      <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="border-t bg-muted/20 px-4 py-3">
+                      <dl className="grid gap-3 text-xs sm:grid-cols-2">
+                        <div className="min-w-0">
+                          <dt className="text-muted-foreground">Recorded action</dt>
+                          <dd className="mt-0.5 break-all font-medium">{event.action}</dd>
+                        </div>
+                        {event.targetType ? (
+                          <div className="min-w-0">
+                            <dt className="text-muted-foreground">Record type</dt>
+                            <dd className="mt-0.5 break-all font-medium">{event.targetType}</dd>
+                          </div>
+                        ) : null}
+                        {event.targetId ? (
+                          <div className="min-w-0">
+                            <dt className="text-muted-foreground">Record ID</dt>
+                            <dd className="mt-0.5 break-all font-mono">{event.targetId}</dd>
+                          </div>
+                        ) : null}
+                        <div className="min-w-0">
+                          <dt className="text-muted-foreground">Event ID</dt>
+                          <dd className="mt-0.5 break-all font-mono">{event.id}</dd>
+                        </div>
+                      </dl>
+                      {event.metadata && Object.keys(event.metadata).length ? (
+                        <div className="mt-3 min-w-0">
+                          <p className="text-muted-foreground text-xs">Additional details</p>
+                          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-background p-2 font-mono text-xs">
+                            {JSON.stringify(event.metadata, null, 2)}
+                          </pre>
+                        </div>
+                      ) : null}
                     </div>
-                    <time className="text-muted-foreground text-xs" dateTime={event.createdAt}>
-                      {format(parseISO(event.createdAt), "MMM d, yyyy · h:mm a")}
-                    </time>
-                  </div>
+                  </details>
                 );
               })}
             </div>
