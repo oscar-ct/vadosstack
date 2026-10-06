@@ -112,9 +112,19 @@ export function DashboardNavigationContent({
   className,
 }: Readonly<{ children: React.ReactNode; className?: string }>) {
   const { isNavigating } = useDashboardNavigationLoader();
+  const dashboardPath = getLegacyDashboardPath(usePathname());
+  const isOverviewPage = dashboardPath === "/dashboard/overview" || dashboardPath === "/dashboard/overview-v2";
 
   return (
-    <div className={cn("relative h-full p-4 md:p-6 print:p-0", className)}>
+    <div
+      className={cn(
+        "relative h-full p-0 md:p-6 print:bg-transparent print:p-0",
+        isOverviewPage
+          ? "bg-[#17181d] md:bg-transparent"
+          : "bg-background max-md:[&>*:not([data-slot=card]):not(:has(>[data-slot=card]))]:p-4 max-md:[&>*>[data-slot=card]]:rounded-none max-md:[&>*>[data-slot=card]]:shadow-none max-md:[&>*>[data-slot=card]]:ring-0 max-md:[&>[data-slot=card]]:rounded-none max-md:[&>[data-slot=card]]:shadow-none max-md:[&>[data-slot=card]]:ring-0",
+        className,
+      )}
+    >
       {children}
       {isNavigating ? <DashboardNavigationLoader /> : null}
     </div>

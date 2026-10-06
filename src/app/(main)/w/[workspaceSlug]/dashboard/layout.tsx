@@ -168,10 +168,6 @@ export default async function Layout({
   const canViewLeads = activeMembership ? can(activeMembership, "leads.view") : false;
   const canReviewTime = activeMembership ? can(activeMembership, "time.approve") : false;
   const canViewCalendar = activeMembership ? can(activeMembership, "calendar.view") : false;
-  const isOverviewPage = ["/dashboard/overview", "/dashboard/overview-v2"].includes(requestContext.dashboardPath);
-  const useFullBleedOverview = Boolean(
-    isOverviewPage && activeMembership && can(activeMembership, "dashboard.overview.view"),
-  );
   const [
     companyLogoSrc,
     googleMailAccount,
@@ -371,8 +367,7 @@ export default async function Layout({
               "[html[data-content-layout=centered]_&>*]:mx-auto",
               "[html[data-content-layout=centered]_&>*]:w-full",
               "[html[data-content-layout=centered]_&>*]:max-w-screen-2xl",
-              "peer-data-[variant=inset]:border print:border-0",
-              useFullBleedOverview && "max-md:border-0",
+              "md:peer-data-[variant=inset]:border print:border-0",
             )}
           >
             <header
@@ -419,9 +414,7 @@ export default async function Layout({
                 </div>
               </div>
             </header>
-            <DashboardNavigationContent
-              className={useFullBleedOverview ? "bg-[#17181d] p-0 md:bg-transparent md:p-6" : undefined}
-            >
+            <DashboardNavigationContent>
               <DashboardRouteAccessGate
                 backHref={permittedLandingHref}
                 backLabel={`Return to ${permittedLandingLabel}`}
