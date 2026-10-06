@@ -350,8 +350,8 @@ export function OverviewV2Dashboard({
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      <div className="grid min-h-[calc(100svh-7rem)] lg:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.55fr)]">
+    <div className="-mx-4 -my-4 w-[calc(100%+2rem)] max-w-[1500px] overflow-hidden bg-card md:mx-auto md:my-0 md:w-full md:rounded-xl md:border md:border-border md:shadow-sm">
+      <div className="grid min-h-[calc(100svh-3rem)] md:min-h-[calc(100svh-7rem)] lg:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.55fr)]">
         <aside className="relative overflow-hidden bg-gradient-to-br from-[#17181d] via-[#10141d] to-[#101b2a] p-6 text-white sm:p-7 dark:from-[#0d0e12] dark:via-[#0b0e14] dark:to-[#0b1420]">
           <OverviewWaveBackground />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/[0.02] via-transparent to-black/10" />
