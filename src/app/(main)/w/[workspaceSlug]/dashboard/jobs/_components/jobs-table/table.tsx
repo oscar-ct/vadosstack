@@ -26,6 +26,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Copy,
+  Expand,
   MapPin,
   Navigation,
   ReceiptText,
@@ -38,6 +39,7 @@ import type { DateRange } from "react-day-picker";
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
 import { CustomerLink } from "@/components/customer-link";
 import { DateRangePicker } from "@/components/date-range-picker";
+import { LocationMapDialog } from "@/components/location-map-card";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -519,24 +521,8 @@ export function JobsTable({
                     <div className="grid min-w-0 gap-2 text-sm">
                       {serviceLocation && directionsUrl ? (
                         <div className="rounded-lg border bg-muted/25 p-2.5">
-                          <div className="flex min-w-0 items-start gap-2.5">
-                            <Image
-                              src="/google-maps-ios.png"
-                              alt="Google Maps"
-                              width={32}
-                              height={32}
-                              className="size-8 shrink-0 rounded-lg shadow-xs ring-1 ring-foreground/10"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-muted-foreground text-xs">Service location</div>
-                              <a
-                                href={directionsUrl}
-                                className="mt-0.5 line-clamp-2 block break-words font-medium text-sm leading-5 hover:underline"
-                                aria-label={`Get directions to ${serviceLocation}`}
-                              >
-                                {serviceLocation}
-                              </a>
-                            </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="whitespace-nowrap text-muted-foreground text-xs">Service location</div>
                             <div className="flex shrink-0 items-center gap-1">
                               <Button
                                 type="button"
@@ -558,6 +544,25 @@ export function JobsTable({
                               </Button>
                             </div>
                           </div>
+                          <LocationMapDialog address={serviceLocation} label="Job site">
+                            <button
+                              type="button"
+                              className="group mt-1.5 flex w-full min-w-0 items-center gap-2.5 rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                              aria-label={`View ${serviceLocation} on a map`}
+                            >
+                              <Image
+                                src="/google-maps-ios.png"
+                                alt=""
+                                width={32}
+                                height={32}
+                                className="size-8 shrink-0 rounded-lg shadow-xs ring-1 ring-foreground/10"
+                              />
+                              <span className="line-clamp-2 min-w-0 flex-1 break-words font-medium text-sm leading-5 group-hover:underline">
+                                {serviceLocation}
+                              </span>
+                              <Expand className="size-3.5 shrink-0 text-muted-foreground" />
+                            </button>
+                          </LocationMapDialog>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-muted-foreground text-xs">

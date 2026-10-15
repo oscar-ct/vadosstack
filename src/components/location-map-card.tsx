@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Check, Copy, Expand, ExternalLink, MapPin } from "lucide-react";
+import { Check, Copy, Expand, ExternalLink, MapPin, Navigation } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,12 +13,23 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { createGoogleMapsEmbedUrl, createGoogleMapsSearchUrl, normalizeMapAddress } from "@/lib/google-maps";
+import {
+  createGoogleMapsDirectionsUrl,
+  createGoogleMapsEmbedUrl,
+  createGoogleMapsSearchUrl,
+  normalizeMapAddress,
+} from "@/lib/google-maps";
 import { cn } from "@/lib/utils";
 
 type LocationMapCardProps = {
   address: string;
   className?: string;
+  label?: string;
+};
+
+type LocationMapDialogProps = {
+  address: string;
+  children: React.ReactNode;
   label?: string;
 };
 
@@ -154,6 +165,71 @@ export function LocationMapCard({ address, className, label = "Location" }: Loca
           </div>
         </DialogContent>
       ) : null}
+    </Dialog>
+  );
+}
+
+export function LocationMapDialog({ address, children, label = "Location" }: LocationMapDialogProps) {
+  const [copied, setCopied] = React.useState(false);
+  const normalizedAddress = normalizeMapAddress(address);
+  const mapUrl = createGoogleMapsEmbedUrl(normalizedAddress, process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY);
+  const directionsUrl = createGoogleMapsDirectionsUrl(normalizedAddress);
+
+  React.useEffect(() => {
+    if (!copied) return;
+
+    const timeout = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
+
+  async function copyAddress() {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(normalizedAddress);
+        setCopied(true);
+        return;
+      }
+    } catch {
+      // Some embedded browsers deny Clipboard API access even on localhost.
+    }
+
+    setCopied(copyTextFallback(normalizedAddress));
+  }
+
+  if (!mapUrl) {
+    return children;
+  }
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent className="grid h-[min(48rem,calc(100svh-1rem))] w-[calc(100vw-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-5xl">
+        <DialogHeader className="border-b p-4 pr-12">
+          <DialogTitle>{label}</DialogTitle>
+          <DialogDescription>{normalizedAddress}</DialogDescription>
+        </DialogHeader>
+        <iframe
+          title={`Interactive map for ${label}`}
+          src={mapUrl}
+          className="size-full min-h-0 border-0"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
+        />
+        <div className="flex flex-wrap justify-end gap-2 border-t bg-muted/20 p-3">
+          <Button type="button" size="sm" variant="outline" onClick={copyAddress}>
+            {copied ? <Check /> : <Copy />}
+            {copied ? "Copied" : "Copy address"}
+          </Button>
+          {directionsUrl ? (
+            <Button asChild size="sm">
+              <a href={directionsUrl}>
+                <Navigation />
+                Directions
+              </a>
+            </Button>
+          ) : null}
+        </div>
+      </DialogContent>
     </Dialog>
   );
 }
