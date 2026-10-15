@@ -88,7 +88,7 @@ export function LocationMapCard({ address, className, label = "Location" }: Loca
             </Button>
             {mapsUrl ? (
               <Button asChild size="sm" variant="outline">
-                <a href={mapsUrl} target="_blank" rel="noreferrer">
+                <a href={mapsUrl}>
                   <ExternalLink />
                   Open in Maps
                 </a>
@@ -145,7 +145,7 @@ export function LocationMapCard({ address, className, label = "Location" }: Loca
             </Button>
             {mapsUrl ? (
               <Button asChild size="sm">
-                <a href={mapsUrl} target="_blank" rel="noreferrer">
+                <a href={mapsUrl}>
                   <ExternalLink />
                   Open in Maps
                 </a>

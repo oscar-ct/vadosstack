@@ -17,7 +17,7 @@ export function createGoogleMapsEmbedUrl(address: string, apiKey?: string) {
   const params = new URLSearchParams({
     key: normalizedApiKey,
     q: normalizedAddress,
-    zoom: "15",
+    zoom: "12",
   });
 
   return `https://www.google.com/maps/embed/v1/place?${params.toString()}`;
@@ -36,4 +36,21 @@ export function createGoogleMapsSearchUrl(address: string) {
   });
 
   return `https://www.google.com/maps/search/?${params.toString()}`;
+}
+
+export function createGoogleMapsDirectionsUrl(address: string) {
+  const normalizedAddress = normalizeMapAddress(address);
+
+  if (!normalizedAddress) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    api: "1",
+    destination: normalizedAddress,
+    travelmode: "driving",
+    dir_action: "navigate",
+  });
+
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
 }

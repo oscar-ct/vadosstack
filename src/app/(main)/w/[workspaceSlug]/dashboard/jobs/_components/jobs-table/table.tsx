@@ -3,6 +3,8 @@
 
 import * as React from "react";
 
+import Image from "next/image";
+
 import {
   type ColumnFiltersState,
   flexRender,
@@ -18,10 +20,14 @@ import {
 import {
   ArrowUpDown,
   BriefcaseBusiness,
+  Check,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Copy,
+  MapPin,
+  Navigation,
   ReceiptText,
   Search,
   SlidersHorizontal,
@@ -58,6 +64,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { createGoogleMapsDirectionsUrl, normalizeMapAddress } from "@/lib/google-maps";
 
 import type { InvoiceMutationState } from "../../../invoices/types";
 import { getJobBillingState } from "../job-billing-state";
@@ -97,6 +104,20 @@ function shouldIgnoreRowClick(target: EventTarget | null, row: HTMLElement) {
 
 function formatExportDate(value?: string) {
   return value ? new Date(value).toLocaleDateString() : "";
+}
+
+function copyTextFallback(value: string) {
+  const textArea = document.createElement("textarea");
+  textArea.value = value;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.appendChild(textArea);
+  textArea.select();
+
+  const copied = document.execCommand("copy");
+  textArea.remove();
+  return copied;
 }
 
 const jobExportColumns: CsvColumn<JobRow>[] = [
@@ -144,6 +165,33 @@ export function JobsTable({
     pageIndex: 0,
     pageSize: 20,
   });
+  const [copiedAddressJobId, setCopiedAddressJobId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!copiedAddressJobId) return;
+
+    const timeout = window.setTimeout(() => setCopiedAddressJobId(null), 2000);
+    return () => window.clearTimeout(timeout);
+  }, [copiedAddressJobId]);
+
+  async function copyJobAddress(jobId: string, address: string) {
+    const normalizedAddress = normalizeMapAddress(address);
+    if (!normalizedAddress) return;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(normalizedAddress);
+        setCopiedAddressJobId(jobId);
+        return;
+      }
+    } catch {
+      // Some embedded browsers deny Clipboard API access even on localhost.
+    }
+
+    if (copyTextFallback(normalizedAddress)) {
+      setCopiedAddressJobId(jobId);
+    }
+  }
   const columns = React.useMemo(
     () =>
       getJobsColumns({
@@ -424,6 +472,8 @@ export function JobsTable({
             table.getRowModel().rows.map((row) => {
               const amountDue = getAmountDueDisplay(row.original);
               const billingState = getJobBillingState(row.original);
+              const serviceLocation = row.original.serviceLocation;
+              const directionsUrl = serviceLocation ? createGoogleMapsDirectionsUrl(serviceLocation) : null;
 
               return (
                 <Card
@@ -467,12 +517,54 @@ export function JobsTable({
                       </div>
                     ) : null}
                     <div className="grid min-w-0 gap-2 text-sm">
-                      <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-3">
-                        <span className="text-muted-foreground text-xs leading-6">Service Location</span>
-                        <span className="line-clamp-2 min-w-0 break-words text-right leading-6">
-                          {row.original.serviceLocation ? row.original.serviceLocation : "Not address on file"}
-                        </span>
-                      </div>
+                      {serviceLocation && directionsUrl ? (
+                        <div className="rounded-lg border bg-muted/25 p-2.5">
+                          <div className="flex min-w-0 items-start gap-2.5">
+                            <Image
+                              src="/google-maps-ios.png"
+                              alt="Google Maps"
+                              width={32}
+                              height={32}
+                              className="size-8 shrink-0 rounded-lg shadow-xs ring-1 ring-foreground/10"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-muted-foreground text-xs">Service location</div>
+                              <a
+                                href={directionsUrl}
+                                className="mt-0.5 line-clamp-2 block break-words font-medium text-sm leading-5 hover:underline"
+                                aria-label={`Get directions to ${serviceLocation}`}
+                              >
+                                {serviceLocation}
+                              </a>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <Button
+                                type="button"
+                                size="icon-sm"
+                                variant="outline"
+                                onClick={() => copyJobAddress(row.original.id, serviceLocation)}
+                                aria-label={
+                                  copiedAddressJobId === row.original.id ? "Address copied" : "Copy service address"
+                                }
+                                title={copiedAddressJobId === row.original.id ? "Copied" : "Copy address"}
+                              >
+                                {copiedAddressJobId === row.original.id ? <Check /> : <Copy />}
+                              </Button>
+                              <Button asChild size="sm" variant="outline">
+                                <a href={directionsUrl} aria-label={`Get directions to ${serviceLocation}`}>
+                                  <Navigation />
+                                  Directions
+                                </a>
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-muted-foreground text-xs">
+                          <MapPin className="size-4" />
+                          No address on file
+                        </div>
+                      )}
                       <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">Start Date</span>
                         <span className="min-w-0 text-right">

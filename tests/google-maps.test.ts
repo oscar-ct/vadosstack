@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { createGoogleMapsEmbedUrl, createGoogleMapsSearchUrl, normalizeMapAddress } from "@/lib/google-maps";
+import {
+  createGoogleMapsDirectionsUrl,
+  createGoogleMapsEmbedUrl,
+  createGoogleMapsSearchUrl,
+  normalizeMapAddress,
+} from "@/lib/google-maps";
 
 describe("Google Maps URL helpers", () => {
   it("normalizes multiline addresses for map queries", () => {
@@ -11,7 +16,7 @@ describe("Google Maps URL helpers", () => {
 
   it("builds an encoded embed URL when an API key is available", () => {
     expect(createGoogleMapsEmbedUrl("123 Main St\nAustin, TX", "maps-key")).toBe(
-      "https://www.google.com/maps/embed/v1/place?key=maps-key&q=123+Main+St%2C+Austin%2C+TX&zoom=15",
+      "https://www.google.com/maps/embed/v1/place?key=maps-key&q=123+Main+St%2C+Austin%2C+TX&zoom=12",
     );
   });
 
@@ -25,5 +30,12 @@ describe("Google Maps URL helpers", () => {
     expect(createGoogleMapsSearchUrl("123 Main St, Austin, TX")).toBe(
       "https://www.google.com/maps/search/?api=1&query=123+Main+St%2C+Austin%2C+TX",
     );
+  });
+
+  it("builds a universal Google Maps directions URL", () => {
+    expect(createGoogleMapsDirectionsUrl("123 Main St, Austin, TX")).toBe(
+      "https://www.google.com/maps/dir/?api=1&destination=123+Main+St%2C+Austin%2C+TX&travelmode=driving&dir_action=navigate",
+    );
+    expect(createGoogleMapsDirectionsUrl("  ")).toBeNull();
   });
 });
