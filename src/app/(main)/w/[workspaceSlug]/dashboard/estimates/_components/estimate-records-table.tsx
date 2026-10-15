@@ -111,6 +111,7 @@ function formatExportDate(value?: string) {
 }
 
 const estimateExportColumns: CsvColumn<EstimateRecordRow>[] = [
+  { header: "Estimate number", value: (estimate) => estimate.estimateNumber },
   { header: "Estimate title", value: (estimate) => estimate.description },
   { header: "Customer/Lead", value: (estimate) => estimate.customerName ?? estimate.leadName },
   { header: "Status", value: (estimate) => estimate.status },
@@ -122,6 +123,7 @@ const estimateExportColumns: CsvColumn<EstimateRecordRow>[] = [
   { header: "Estimated total", value: (estimate) => estimate.estimatedTotal },
   { header: "Printable estimate", value: (estimate) => (estimate.printableEstimateId ? "Yes" : "No") },
   { header: "Converted to job", value: (estimate) => (estimate.convertedJobId ? "Yes" : "No") },
+  { header: "Issued date", value: (estimate) => formatExportDate(estimate.issuedAt) },
   { header: "Created date", value: (estimate) => formatExportDate(estimate.createdAt) },
   { header: "Notes", value: (estimate) => estimate.notes },
 ];
@@ -161,7 +163,7 @@ export function EstimateRecordsTable({
   const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]);
+  const [sorting, setSorting] = React.useState<SortingState>([{ id: "estimateDate", desc: true }]);
   const [columnVisibility] = React.useState<VisibilityState>({
     search: false,
   });
@@ -238,8 +240,8 @@ export function EstimateRecordsTable({
     const currentSort = sorting[0];
 
     if (!currentSort) return "newest";
-    if (currentSort.id === "createdAt" && !currentSort.desc) return "oldest";
-    if (currentSort.id === "createdAt" && currentSort.desc) return "newest";
+    if (currentSort.id === "estimateDate" && !currentSort.desc) return "oldest";
+    if (currentSort.id === "estimateDate" && currentSort.desc) return "newest";
     if (currentSort.id === "estimatedTotal" && !currentSort.desc) return "value-asc";
     if (currentSort.id === "estimatedTotal" && currentSort.desc) return "value-desc";
 
@@ -249,12 +251,12 @@ export function EstimateRecordsTable({
   function updateSort(value: string) {
     const nextSorting: SortingState =
       value === "oldest"
-        ? [{ id: "createdAt", desc: false }]
+        ? [{ id: "estimateDate", desc: false }]
         : value === "value-asc"
           ? [{ id: "estimatedTotal", desc: false }]
           : value === "value-desc"
             ? [{ id: "estimatedTotal", desc: true }]
-            : [{ id: "createdAt", desc: true }];
+            : [{ id: "estimateDate", desc: true }];
 
     table.setSorting(nextSorting);
     table.setPageIndex(0);
@@ -485,6 +487,9 @@ export function EstimateRecordsTable({
               <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
+                    <div className="mb-1 font-medium font-mono text-muted-foreground text-xs">
+                      {estimate.estimateNumber ?? "Not issued"}
+                    </div>
                     <div className="line-clamp-2 min-w-0 font-medium text-sm">{estimate.description}</div>
                     <CustomerLink
                       customerId={estimate.customerId}
@@ -524,9 +529,12 @@ export function EstimateRecordsTable({
                       {estimate.dateBegin ? new Date(estimate.dateBegin).toLocaleDateString() : "Unscheduled"}
                     </span>
                   </div>
-                  <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
-                    <span className="text-muted-foreground text-xs">Created date</span>
-                    <span className="min-w-0 text-right">{new Date(estimate.createdAt).toLocaleDateString()}</span>
+                  <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-3">
+                    <span className="text-muted-foreground text-xs leading-6">Date</span>
+                    <span className="grid min-w-0 justify-items-end text-right">
+                      <span>{new Date(estimate.issuedAt ?? estimate.createdAt).toLocaleDateString()}</span>
+                      <span className="text-muted-foreground text-xs">{estimate.issuedAt ? "Issued" : "Created"}</span>
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center justify-end">

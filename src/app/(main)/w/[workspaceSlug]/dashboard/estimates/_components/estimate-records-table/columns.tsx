@@ -71,11 +71,27 @@ export function getEstimateRecordsColumns({
         ]
       : []),
     {
-      accessorKey: "createdAt",
+      accessorKey: "estimateNumber",
+      header: "Estimate #",
+      cell: ({ row }) =>
+        row.original.estimateNumber ? (
+          <span className="whitespace-nowrap font-medium font-mono text-sm">{row.original.estimateNumber}</span>
+        ) : (
+          <span className="whitespace-nowrap text-muted-foreground text-xs">Not issued</span>
+        ),
+    },
+    {
+      id: "estimateDate",
+      accessorFn: (row) => row.issuedAt ?? row.createdAt,
       header: "Date",
       sortUndefined: "last",
       cell: ({ row }) => (
-        <span className="whitespace-nowrap text-sm">{format(parseISO(row.original.createdAt), "MMM d, yyyy")}</span>
+        <div className="grid gap-1">
+          <span className="whitespace-nowrap text-sm">
+            {format(parseISO(row.original.issuedAt ?? row.original.createdAt), "MMM d, yyyy")}
+          </span>
+          <span className="text-muted-foreground text-xs">{row.original.issuedAt ? "Issued" : "Created"}</span>
+        </div>
       ),
     },
     {
@@ -176,7 +192,15 @@ export function getEstimateRecordsColumns({
     {
       id: "search",
       accessorFn: (row) =>
-        [row.description, row.customerName, row.leadName, row.status, row.category, row.estimatedTotal]
+        [
+          row.estimateNumber,
+          row.description,
+          row.customerName,
+          row.leadName,
+          row.status,
+          row.category,
+          row.estimatedTotal,
+        ]
           .filter(Boolean)
           .join(" "),
       filterFn: "includesString",

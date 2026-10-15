@@ -72,6 +72,8 @@ The first callback is for Google sign-in. The second callback is for Gmail invoi
 
 If production is behind a proxy or needs a different callback than `NEXT_PUBLIC_SITE_URL`, set `GOOGLE_REDIRECT_URI` and `GOOGLE_MAIL_REDIRECT_URI` explicitly.
 
+Customer and job location cards use the Google Maps Embed API. Enable Maps Embed in Google Cloud, create a browser API key restricted to the VadosStack domains and the Maps Embed API, then set `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY`.
+
 ## Local Setup
 
 ```bash

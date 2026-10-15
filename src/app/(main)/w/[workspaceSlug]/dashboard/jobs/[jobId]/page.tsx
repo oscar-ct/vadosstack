@@ -10,7 +10,6 @@ import {
   CircleDollarSign,
   ClipboardList,
   type LucideIcon,
-  MapPin,
   Package,
   Pencil,
   ReceiptText,
@@ -21,6 +20,7 @@ import {
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { CustomerLink } from "@/components/customer-link";
+import { LocationMapCard } from "@/components/location-map-card";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -367,9 +367,8 @@ export default async function Page({
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
         <div className="grid gap-5">
           <SectionPanel icon={ClipboardList} title="Job Details">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <InfoTile customerId={job.customerId} icon={UserRound} label="Customer" value={job.customerName} />
-              <InfoTile icon={MapPin} label="Service location" value={job.serviceLocation} />
               <InfoTile
                 icon={CalendarDays}
                 label="Schedule"
@@ -377,6 +376,9 @@ export default async function Page({
               />
               <InfoTile icon={Building2} label="Job type" value={job.jobType} />
             </div>
+            {job.serviceLocation ? (
+              <LocationMapCard className="mt-3" address={job.serviceLocation} label="Job site" />
+            ) : null}
             {job.notes ? (
               <div className="mt-3 rounded-lg border bg-muted/20 p-3">
                 <div className="text-muted-foreground text-xs">Internal notes</div>

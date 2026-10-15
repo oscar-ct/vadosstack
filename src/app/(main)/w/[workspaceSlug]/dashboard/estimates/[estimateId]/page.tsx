@@ -6,6 +6,7 @@ import { BriefcaseBusiness, CalendarDays, Mail, MapPin, NotebookText, Phone, Use
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { BackButton } from "@/components/back-button";
+import { LocationMapCard } from "@/components/location-map-card";
 import { Separator } from "@/components/ui/separator";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
@@ -410,6 +411,10 @@ export default async function Page({
               </div>
             </div>
           </section>
+
+          {serviceLocation ? (
+            <LocationMapCard address={serviceLocation} className="print:hidden" label="Service location" />
+          ) : null}
 
           {estimate.jobDescription ? (
             <section className="grid gap-1">

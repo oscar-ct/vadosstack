@@ -8,7 +8,6 @@ import {
   CalendarDays,
   ClipboardList,
   MailWarning,
-  MapPin,
   Package,
   Pencil,
   ReceiptText,
@@ -19,6 +18,7 @@ import {
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { CustomerLink } from "@/components/customer-link";
+import { LocationMapCard } from "@/components/location-map-card";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -517,9 +517,16 @@ export default async function Page({
       <div className="overflow-hidden rounded-lg border bg-background">
         <div className="grid gap-5 bg-card p-4 md:p-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
           <div className="grid gap-3">
-            <Badge variant="outline" className={cn("w-fit", estimateStatusClassName(estimate.status))}>
-              {estimate.status}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className={cn("w-fit", estimateStatusClassName(estimate.status))}>
+                {estimate.status}
+              </Badge>
+              {publishedEstimate?.estimateNumber ? (
+                <Badge variant="secondary" className="font-mono">
+                  Estimate #{publishedEstimate.estimateNumber}
+                </Badge>
+              ) : null}
+            </div>
             <div>
               <h1 className="font-medium text-xl tracking-normal md:text-2xl">{estimate.description}</h1>
               <p className="mt-2 max-w-3xl text-muted-foreground text-sm">
@@ -527,8 +534,8 @@ export default async function Page({
               </p>
               <p className="mt-3 text-muted-foreground text-xs">
                 {publishedEstimate
-                  ? `Customer copy ${publishedEstimate.estimateNumber ?? "issued"} · Issued ${format(publishedEstimate.issuedAt, "MMM d, yyyy")}`
-                  : "Customer copy not issued"}
+                  ? `Issued ${format(publishedEstimate.issuedAt, "MMM d, yyyy")}`
+                  : "Estimate number not issued"}
               </p>
             </div>
           </div>
@@ -569,17 +576,19 @@ export default async function Page({
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
             <div className="grid gap-5">
               <SectionPanel icon={ClipboardList} title="Estimate Details">
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <InfoTile
                     customerId={estimate.customerId}
                     icon={UserRound}
                     label={estimate.customerId ? "Customer" : "Lead"}
                     value={estimate.customerName ?? estimate.leadName}
                   />
-                  <InfoTile icon={MapPin} label="Service location" value={estimate.serviceLocation} />
                   <InfoTile icon={CalendarDays} label="Scheduled" value={scheduledDate} />
                   <InfoTile icon={Building2} label="Job type" value={estimate.jobType} />
                 </div>
+                {serviceLocation ? (
+                  <LocationMapCard address={serviceLocation} className="mt-3" label="Service location" />
+                ) : null}
                 {estimate.notes ? (
                   <div className="mt-3 rounded-lg border bg-muted/20 p-3">
                     <div className="text-muted-foreground text-xs">Internal notes</div>

@@ -22,6 +22,7 @@ import {
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { BackButton } from "@/components/back-button";
+import { LocationMapCard } from "@/components/location-map-card";
 import { Badge } from "@/components/ui/badge";
 import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
@@ -565,10 +566,11 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
             <div className="mt-4 grid gap-2">
               {customer.addresses.length ? (
                 customer.addresses.map((address, index) => (
-                  <div key={address.id} className="grid gap-1 rounded-md border bg-muted/20 p-3">
-                    <span className="font-medium text-xs">{address.label ?? `Address ${index + 1}`}</span>
-                    <p className="whitespace-pre-line text-sm">{formatAddress(address)}</p>
-                  </div>
+                  <LocationMapCard
+                    key={address.id}
+                    address={formatAddress(address)}
+                    label={address.label ?? `Address ${index + 1}`}
+                  />
                 ))
               ) : (
                 <p className="rounded-md border border-dashed bg-muted/20 p-3 text-muted-foreground text-sm">

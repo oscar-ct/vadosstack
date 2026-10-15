@@ -52,13 +52,20 @@ function toEstimateRecordRow(
   estimate: Awaited<ReturnType<typeof prisma.estimateRecord.findMany>>[number] & {
     customer?: { email: string | null; name: string } | null;
     lead?: { email: string | null; id: string; name: string } | null;
-    printableEstimate?: { customerEmail: string | null; id: string } | null;
+    printableEstimate?: {
+      customerEmail: string | null;
+      estimateNumber: string | null;
+      id: string;
+      issuedAt: Date;
+    } | null;
   },
 ): EstimateRecordRow {
   return {
     id: estimate.id,
     convertedJobId: estimate.convertedJobId ?? undefined,
     printableEstimateId: estimate.printableEstimate?.id,
+    estimateNumber: estimate.printableEstimate?.estimateNumber ?? undefined,
+    issuedAt: estimate.printableEstimate?.issuedAt.toISOString(),
     customerId: estimate.customerId ?? undefined,
     customerEmail:
       estimate.printableEstimate?.customerEmail ?? estimate.customer?.email ?? estimate.lead?.email ?? undefined,

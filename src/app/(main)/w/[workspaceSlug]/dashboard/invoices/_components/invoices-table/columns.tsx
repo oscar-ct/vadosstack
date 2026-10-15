@@ -102,8 +102,40 @@ export function getInvoicesColumns(): ColumnDef<InvoiceTableItem>[] {
       enableHiding: false,
     },
     {
+      accessorKey: "invoiceNumber",
+      header: "Invoice #",
+      cell: ({ row }) => <span className="font-medium">{row.original.invoiceNumber}</span>,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "customerName",
+      header: "Customer",
+      cell: ({ row }) => (
+        <span className="block w-48 max-w-48" data-invoice-row-ignore>
+          <CustomerLink
+            customerId={row.original.customerId}
+            name={row.original.customerName}
+            className="block whitespace-normal break-words leading-snug"
+          />
+        </span>
+      ),
+    },
+    {
+      accessorKey: "jobTitle",
+      header: "Job Description",
+      cell: ({ row }) => (
+        <div className="grid min-w-48 gap-1.5">
+          <span className="truncate font-medium text-sm">{row.original.jobTitle}</span>
+          <span className="truncate text-muted-foreground text-xs leading-none">
+            {row.original.jobServiceLocation ?? "No address on file"}
+          </span>
+        </div>
+        // <span className="block max-w-64 truncate">{row.original.jobTitle}</span>
+      ),
+    },
+    {
       accessorKey: "issuedAt",
-      header: "Issued Date",
+      header: "Issued",
       cell: ({ row }) => (
         <span className="whitespace-nowrap">{format(parseISO(row.original.issuedAt), "MMM d, yyyy")}</span>
       ),
@@ -135,38 +167,6 @@ export function getInvoicesColumns(): ColumnDef<InvoiceTableItem>[] {
         );
       },
       sortingFn: (rowA, rowB) => parseISO(rowA.original.dueAt).getTime() - parseISO(rowB.original.dueAt).getTime(),
-    },
-    {
-      accessorKey: "invoiceNumber",
-      header: "Invoice ID",
-      cell: ({ row }) => <span className="font-medium">{row.original.invoiceNumber}</span>,
-      enableHiding: false,
-    },
-    {
-      accessorKey: "customerName",
-      header: "Customer",
-      cell: ({ row }) => (
-        <span data-invoice-row-ignore>
-          <CustomerLink
-            customerId={row.original.customerId}
-            name={row.original.customerName}
-            className="block whitespace-nowrap"
-          />
-        </span>
-      ),
-    },
-    {
-      accessorKey: "jobTitle",
-      header: "Job Description",
-      cell: ({ row }) => (
-        <div className="grid min-w-48 gap-1.5">
-          <span className="truncate font-medium text-sm">{row.original.jobTitle}</span>
-          <span className="truncate text-muted-foreground text-xs leading-none">
-            {row.original.jobServiceLocation ?? "No address on file"}
-          </span>
-        </div>
-        // <span className="block max-w-64 truncate">{row.original.jobTitle}</span>
-      ),
     },
     {
       accessorKey: "total",
