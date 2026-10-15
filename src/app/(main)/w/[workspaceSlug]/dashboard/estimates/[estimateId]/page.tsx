@@ -413,7 +413,12 @@ export default async function Page({
           </section>
 
           {serviceLocation ? (
-            <LocationMapCard address={serviceLocation} className="print:hidden" label="Service location" />
+            <LocationMapCard
+              address={serviceLocation}
+              className="print:hidden"
+              label="Service location"
+              mapAction="directions"
+            />
           ) : null}
 
           {estimate.jobDescription ? (

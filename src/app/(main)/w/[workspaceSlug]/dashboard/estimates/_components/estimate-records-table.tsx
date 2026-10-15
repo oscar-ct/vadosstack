@@ -28,6 +28,7 @@ import {
 
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
 import { CustomerLink } from "@/components/customer-link";
+import { MobileLocationCard } from "@/components/mobile-location-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -507,12 +508,7 @@ export function EstimateRecordsTable({
                   <span className="shrink-0 font-medium text-sm">{formatMoney(estimate.estimatedTotal)}</span>
                 </div>
                 <div className="grid min-w-0 gap-2 text-sm">
-                  <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-3">
-                    <span className="text-muted-foreground text-xs leading-6">Service Location</span>
-                    <span className="line-clamp-2 min-w-0 break-words text-right leading-6">
-                      {estimate.serviceLocation ? estimate.serviceLocation : "Not address on file"}
-                    </span>
-                  </div>
+                  <MobileLocationCard address={estimate.serviceLocation} />
                   <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                     <span className="text-muted-foreground text-xs">Status</span>
                     <Badge variant="outline" className={`${estimateStatusClassName(estimate.status)} justify-self-end`}>

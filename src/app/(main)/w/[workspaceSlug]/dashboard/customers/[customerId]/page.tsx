@@ -570,6 +570,7 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
                     key={address.id}
                     address={formatAddress(address)}
                     label={address.label ?? `Address ${index + 1}`}
+                    mapAction="directions"
                   />
                 ))
               ) : (
