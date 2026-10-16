@@ -412,14 +412,13 @@ export default async function Page({
             </div>
           </section>
 
-          {serviceLocation ? (
-            <LocationMapCard
-              address={serviceLocation}
-              className="print:hidden"
-              label="Service location"
-              mapAction="directions"
-            />
-          ) : null}
+          <LocationMapCard
+            address={serviceLocation}
+            className="print:hidden"
+            emptyDescription="Add a service location to this estimate to enable the map and directions."
+            label="Service location"
+            mapAction="directions"
+          />
 
           {estimate.jobDescription ? (
             <section className="grid gap-1">

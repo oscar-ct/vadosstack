@@ -22,8 +22,9 @@ import {
 import { cn } from "@/lib/utils";
 
 type LocationMapCardProps = {
-  address: string;
+  address?: string | null;
   className?: string;
+  emptyDescription?: string;
   label?: string;
   mapAction?: "directions" | "open";
 };
@@ -48,9 +49,15 @@ function copyTextFallback(value: string) {
   return copied;
 }
 
-export function LocationMapCard({ address, className, label = "Location", mapAction = "open" }: LocationMapCardProps) {
+export function LocationMapCard({
+  address,
+  className,
+  emptyDescription = "Add an address to enable the map and directions.",
+  label = "Location",
+  mapAction = "open",
+}: LocationMapCardProps) {
   const [copied, setCopied] = React.useState(false);
-  const normalizedAddress = normalizeMapAddress(address);
+  const normalizedAddress = normalizeMapAddress(address ?? "");
   const mapUrl = createGoogleMapsEmbedUrl(normalizedAddress, process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY);
   const actionUrl =
     mapAction === "directions"
@@ -79,7 +86,17 @@ export function LocationMapCard({ address, className, label = "Location", mapAct
   }
 
   if (!normalizedAddress) {
-    return null;
+    return (
+      <div className={cn("flex items-start gap-3 rounded-lg border border-dashed bg-muted/20 p-3", className)}>
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+          <MapPin className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="font-medium text-sm">No {label.toLowerCase()} on file</div>
+          <p className="mt-1 text-muted-foreground text-xs leading-relaxed">{emptyDescription}</p>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -35,12 +35,12 @@ export function CustomerProfileActions({
       {canUpdate ? (
         <Button type="button" size="sm" onClick={() => setEditingCustomer(customer)}>
           <Pencil />
-          Edit customer
+          Edit
         </Button>
       ) : (
         <PermissionDisabledButton size="sm" reason="Your role can view customers but cannot edit them.">
           <Pencil />
-          Edit customer
+          Edit
         </PermissionDisabledButton>
       )}
       <EditCustomerDialog

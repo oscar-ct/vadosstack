@@ -155,7 +155,7 @@ export function EstimateCustomerPreview({
   const taxableItemsLabel = data.jobType === "Commercial" ? "labor + materials" : "materials";
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-2 sm:p-4 print:contents">
+    <div className="bg-transparent p-0 sm:rounded-lg sm:border sm:bg-muted/20 sm:p-4 print:contents">
       {isDraft ? (
         <div className="mx-auto mb-3 flex w-full max-w-[816px] items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 text-xs dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200 print:hidden">
           <span>

@@ -586,14 +586,13 @@ export default async function Page({
                   <InfoTile icon={CalendarDays} label="Scheduled" value={scheduledDate} />
                   <InfoTile icon={Building2} label="Job type" value={estimate.jobType} />
                 </div>
-                {serviceLocation ? (
-                  <LocationMapCard
-                    address={serviceLocation}
-                    className="mt-3"
-                    label="Service location"
-                    mapAction="directions"
-                  />
-                ) : null}
+                <LocationMapCard
+                  address={serviceLocation}
+                  className="mt-3"
+                  emptyDescription="Add a service location to this estimate to enable the map and directions."
+                  label="Service location"
+                  mapAction="directions"
+                />
                 {estimate.notes ? (
                   <div className="mt-3 rounded-lg border bg-muted/20 p-3">
                     <div className="text-muted-foreground text-xs">Internal notes</div>

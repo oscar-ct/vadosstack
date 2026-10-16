@@ -193,7 +193,7 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
 
   return (
     <div className="@container/main mx-auto grid w-full max-w-6xl gap-4 md:gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-4 md:px-0 md:pt-0">
         <BackButton fallbackHref="/dashboard/leads" />
         {canUpdateLead ? (
           <div className="flex flex-wrap items-center gap-2">

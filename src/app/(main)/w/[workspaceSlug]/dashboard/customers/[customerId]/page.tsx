@@ -450,18 +450,18 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
 
   return (
     <div className="@container/main mx-auto grid w-full max-w-7xl gap-5 md:gap-6">
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+      <div className="grid grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
         <div className="flex justify-start">
           <BackButton fallbackHref="/dashboard/customers" />
         </div>
         {workspaceMode === "both" ? (
-          <div className="flex justify-center">
+          <div className="order-3 col-span-2 flex justify-center sm:order-none sm:col-span-1">
             <CustomerViewSwitcher customerId={customer.id} view={customerView} />
           </div>
         ) : (
-          <div />
+          <div className="order-3 col-span-2 sm:order-none sm:col-span-1" />
         )}
-        <div className="flex justify-start sm:justify-end">
+        <div className="flex justify-end">
           <CustomerProfileActions
             canDelete={canDeleteCustomer}
             canUpdate={canUpdateCustomer}
@@ -512,12 +512,12 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
             </div>
           </div>
 
-          <div className="rounded-lg border bg-background p-4">
+          <div className="rounded-lg border bg-background p-3 sm:p-4">
             <div className="flex items-center gap-2 font-medium text-sm">
               <CalendarDays className="size-4 text-muted-foreground" />
               Account snapshot
             </div>
-            <div className="mt-4 grid gap-3">
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
               <DetailItem label="Last activity" value={`${formatDistanceToNowStrict(lastActivityDate)} ago`} />
               {customerView === "orders" ? (
                 <>
@@ -575,7 +575,7 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
                 ))
               ) : (
                 <p className="rounded-md border border-dashed bg-muted/20 p-3 text-muted-foreground text-sm">
-                  No addresses on file.
+                  No addresses on file. Add an address to enable maps and directions.
                 </p>
               )}
             </div>
