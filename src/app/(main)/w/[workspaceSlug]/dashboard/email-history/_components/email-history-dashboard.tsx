@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { CustomerLink } from "@/components/customer-link";
+import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,16 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
 import { cn } from "@/lib/utils";
+
+export type EmailHistorySort =
+  | "amount-asc"
+  | "amount-desc"
+  | "recipient-asc"
+  | "recipient-desc"
+  | "sent-asc"
+  | "sent-desc"
+  | "status-asc"
+  | "status-desc";
 
 export type EmailHistoryItem = {
   id: string;
@@ -56,6 +67,7 @@ type EmailHistoryDashboardProps = {
   errorCount: number;
   filteredCount: number;
   initialQuery: string;
+  initialSort: EmailHistorySort;
   initialStatus: EmailHistoryStatus;
   page: number;
   pageSize: number;
@@ -201,6 +213,7 @@ export function EmailHistoryDashboard({
   errorCount,
   filteredCount,
   initialQuery,
+  initialSort,
   initialStatus,
   page,
   pageSize,
@@ -218,7 +231,13 @@ export function EmailHistoryDashboard({
   React.useEffect(() => setQuery(initialQuery), [initialQuery]);
 
   const updateParams = React.useCallback(
-    (updates: { page?: number; pageSize?: number; query?: string; status?: EmailHistoryStatus }) => {
+    (updates: {
+      page?: number;
+      pageSize?: number;
+      query?: string;
+      sort?: EmailHistorySort;
+      status?: EmailHistoryStatus;
+    }) => {
       const params = new URLSearchParams(searchParams.toString());
       const nextQuery = updates.query ?? initialQuery;
       const nextStatus = updates.status ?? initialStatus;
@@ -228,6 +247,10 @@ export function EmailHistoryDashboard({
 
       if (nextStatus === "all") params.delete("status");
       else params.set("status", nextStatus);
+
+      const nextSort = updates.sort ?? initialSort;
+      if (nextSort === "sent-desc") params.delete("sort");
+      else params.set("sort", nextSort);
 
       const nextPageSize = updates.pageSize ?? pageSize;
       if (nextPageSize === 20) params.delete("pageSize");
@@ -240,8 +263,14 @@ export function EmailHistoryDashboard({
       const suffix = params.toString();
       startTransition(() => router.replace(`/dashboard/email-history${suffix ? `?${suffix}` : ""}`, { scroll: false }));
     },
-    [initialQuery, initialStatus, pageSize, router, searchParams],
+    [initialQuery, initialSort, initialStatus, pageSize, router, searchParams],
   );
+
+  function sortDirection(ascending: EmailHistorySort, descending: EmailHistorySort): TableSortDirection {
+    if (initialSort === ascending) return "asc";
+    if (initialSort === descending) return "desc";
+    return false;
+  }
 
   const firstResult = filteredCount ? (page - 1) * pageSize + 1 : 0;
   const lastResult = Math.min(page * pageSize, filteredCount);
@@ -338,20 +367,47 @@ export function EmailHistoryDashboard({
         <>
           <div
             className={cn(
-              "hidden min-w-0 max-w-full overflow-hidden rounded-lg border bg-card transition-opacity md:block",
+              "hidden w-full min-w-0 max-w-full overflow-hidden transition-opacity md:block [&_th]:top-0",
               isPending && "opacity-60",
             )}
           >
             <Table className="min-w-[56rem] table-fixed">
-              <TableHeader className="bg-muted/20">
+              <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[8%]">Status</TableHead>
-                  <TableHead className="w-[12%]">Document</TableHead>
-                  <TableHead className="w-[18%]">Recipient</TableHead>
-                  <TableHead className="w-[24%]">Subject</TableHead>
-                  <TableHead className="w-[11%] text-right">Amount</TableHead>
-                  <TableHead className="w-[16%]">Sent by</TableHead>
-                  <TableHead className="w-[13%]">Sent at</TableHead>
+                  <TableHead className="sticky top-12 z-20 w-[8%] border-b bg-card">
+                    <SortableTableHeader
+                      direction={sortDirection("status-asc", "status-desc")}
+                      label="Status"
+                      onSort={() => updateParams({ sort: initialSort === "status-asc" ? "status-desc" : "status-asc" })}
+                    />
+                  </TableHead>
+                  <TableHead className="sticky top-12 z-20 w-[12%] border-b bg-card">Document</TableHead>
+                  <TableHead className="sticky top-12 z-20 w-[18%] border-b bg-card">
+                    <SortableTableHeader
+                      direction={sortDirection("recipient-asc", "recipient-desc")}
+                      label="Recipient"
+                      onSort={() =>
+                        updateParams({ sort: initialSort === "recipient-asc" ? "recipient-desc" : "recipient-asc" })
+                      }
+                    />
+                  </TableHead>
+                  <TableHead className="sticky top-12 z-20 w-[23%] border-b bg-card">Subject</TableHead>
+                  <TableHead className="sticky top-12 z-20 w-[10%] border-b bg-card text-right">
+                    <SortableTableHeader
+                      align="right"
+                      direction={sortDirection("amount-asc", "amount-desc")}
+                      label="Amount"
+                      onSort={() => updateParams({ sort: initialSort === "amount-asc" ? "amount-desc" : "amount-asc" })}
+                    />
+                  </TableHead>
+                  <TableHead className="sticky top-12 z-20 w-[16%] border-b bg-card">Sent by</TableHead>
+                  <TableHead className="sticky top-12 z-20 w-[13%] border-b bg-card">
+                    <SortableTableHeader
+                      direction={sortDirection("sent-asc", "sent-desc")}
+                      label="Sent at"
+                      onSort={() => updateParams({ sort: initialSort === "sent-asc" ? "sent-desc" : "sent-asc" })}
+                    />
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -53,7 +53,7 @@ export default async function Page() {
   const locations = mergeOptions(inventoryOptions.locations, getUniqueOptions(inventoryItems, "location"));
 
   return (
-    <Card>
+    <Card className="md:overflow-visible">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="grid max-w-2xl gap-2">

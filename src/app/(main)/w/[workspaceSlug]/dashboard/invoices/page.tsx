@@ -95,7 +95,7 @@ export default async function Page() {
   }));
 
   return (
-    <Card>
+    <Card className="md:overflow-visible">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 leading-none">
           <span className={"text-xl"}>Invoices</span>

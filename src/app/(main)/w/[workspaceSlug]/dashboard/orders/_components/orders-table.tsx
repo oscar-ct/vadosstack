@@ -3,7 +3,6 @@
 import * as React from "react";
 
 import {
-  ArrowUpDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -18,6 +17,7 @@ import {
 import { toast } from "sonner";
 
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
+import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -66,7 +66,17 @@ export type OrderTableItem = {
 };
 
 type OrderFilter = "all" | "needs-action" | "returns" | "unfulfilled" | "unpaid";
-type OrderSort = "newest" | "oldest" | "total-asc" | "total-desc";
+type OrderSort =
+  | "customer-asc"
+  | "customer-desc"
+  | "newest"
+  | "oldest"
+  | "order-asc"
+  | "order-desc"
+  | "status-asc"
+  | "status-desc"
+  | "total-asc"
+  | "total-desc";
 
 const filterOptions: Array<{ label: string; value: OrderFilter }> = [
   { value: "all", label: "All" },
@@ -81,7 +91,19 @@ const sortOptions: Array<{ label: string; value: OrderSort }> = [
   { value: "oldest", label: "Oldest first" },
   { value: "total-asc", label: "Total low-high" },
   { value: "total-desc", label: "Total high-low" },
+  { value: "order-asc", label: "Order number A-Z" },
+  { value: "order-desc", label: "Order number Z-A" },
+  { value: "customer-asc", label: "Customer A-Z" },
+  { value: "customer-desc", label: "Customer Z-A" },
+  { value: "status-asc", label: "Status A-Z" },
+  { value: "status-desc", label: "Status Z-A" },
 ];
+
+function orderSortDirection(sortValue: OrderSort, ascending: OrderSort, descending: OrderSort): TableSortDirection {
+  if (sortValue === ascending) return "asc";
+  if (sortValue === descending) return "desc";
+  return false;
+}
 
 const orderExportColumns: CsvColumn<OrderTableItem>[] = [
   { header: "Order", value: (order) => order.orderNumber },
@@ -342,6 +364,22 @@ export function OrdersTable({
       if (sortValue === "oldest") return leftTime - rightTime;
       if (sortValue === "total-asc") return left.total - right.total;
       if (sortValue === "total-desc") return right.total - left.total;
+      if (sortValue === "order-asc")
+        return left.orderNumber.localeCompare(right.orderNumber, undefined, { numeric: true });
+      if (sortValue === "order-desc")
+        return right.orderNumber.localeCompare(left.orderNumber, undefined, { numeric: true });
+      if (sortValue === "customer-asc") return left.customerName.localeCompare(right.customerName);
+      if (sortValue === "customer-desc") return right.customerName.localeCompare(left.customerName);
+      if (sortValue === "status-asc") {
+        return `${left.paymentStatus} ${left.fulfillmentStatus}`.localeCompare(
+          `${right.paymentStatus} ${right.fulfillmentStatus}`,
+        );
+      }
+      if (sortValue === "status-desc") {
+        return `${right.paymentStatus} ${right.fulfillmentStatus}`.localeCompare(
+          `${left.paymentStatus} ${left.fulfillmentStatus}`,
+        );
+      }
       return rightTime - leftTime;
     });
   }, [activeFilter, normalizedQuery, orders, sortValue]);
@@ -444,7 +482,7 @@ export function OrdersTable({
             <div className="md:hidden">
               <Drawer>
                 <DrawerTrigger asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="md:hidden">
                     <SlidersHorizontal />
                     Filters
                   </Button>
@@ -519,23 +557,6 @@ export function OrdersTable({
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <ArrowUpDown />
-                    Sort
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup value={sortValue} onValueChange={(value) => updateSort(value as OrderSort)}>
-                    {sortOptions.map((option) => (
-                      <DropdownMenuRadioItem key={option.value} value={option.value}>
-                        {option.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
             {hasFilters && (
               <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
@@ -547,23 +568,60 @@ export function OrdersTable({
           <div className="flex flex-wrap items-center gap-2">{!exportSlotId && canExport ? exportMenu : null}</div>
         </div>
 
-        <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
-          <Table>
-            <TableHeader className="bg-muted/15">
+        <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
+          <Table className="min-w-[60.5rem] table-fixed">
+            <colgroup>
+              <col className="w-[4%]" />
+              <col className="w-[14%]" />
+              <col className="w-[20%]" />
+              <col className="w-[24%]" />
+              <col className="w-[14%]" />
+              <col className="w-[24%]" />
+            </colgroup>
+            <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-10">
+                <TableHead className="sticky top-12 z-20 w-10 border-b bg-card">
                   <Checkbox
                     checked={allVisibleSelected || (someVisibleSelected ? "indeterminate" : false)}
                     aria-label="Select all visible orders"
                     onCheckedChange={(value) => toggleVisibleOrders(value === true)}
                   />
                 </TableHead>
-                <TableHead className="w-[8rem] text-foreground">Order</TableHead>
-                <TableHead className="min-w-[10rem] text-foreground">Customer</TableHead>
-                <TableHead className="min-w-[14rem] text-foreground">Status</TableHead>
-                <TableHead className="w-[8rem] text-foreground">Total</TableHead>
-                <TableHead className="w-[13rem] text-foreground">Date</TableHead>
-                <TableHead className="w-20 text-right text-foreground">Actions</TableHead>
+                <TableHead className="sticky top-12 z-20 w-[8rem] border-b bg-card">
+                  <SortableTableHeader
+                    direction={orderSortDirection(sortValue, "order-asc", "order-desc")}
+                    label="Order"
+                    onSort={() => updateSort(sortValue === "order-asc" ? "order-desc" : "order-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 min-w-[10rem] border-b bg-card">
+                  <SortableTableHeader
+                    direction={orderSortDirection(sortValue, "customer-asc", "customer-desc")}
+                    label="Customer"
+                    onSort={() => updateSort(sortValue === "customer-asc" ? "customer-desc" : "customer-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 min-w-[14rem] border-b bg-card">
+                  <SortableTableHeader
+                    direction={orderSortDirection(sortValue, "status-asc", "status-desc")}
+                    label="Status"
+                    onSort={() => updateSort(sortValue === "status-asc" ? "status-desc" : "status-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 w-[8rem] border-b bg-card">
+                  <SortableTableHeader
+                    direction={orderSortDirection(sortValue, "total-asc", "total-desc")}
+                    label="Total"
+                    onSort={() => updateSort(sortValue === "total-asc" ? "total-desc" : "total-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 w-[13rem] border-b bg-card">
+                  <SortableTableHeader
+                    direction={orderSortDirection(sortValue, "oldest", "newest")}
+                    label="Date"
+                    onSort={() => updateSort(sortValue === "oldest" ? "newest" : "oldest")}
+                  />
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -615,15 +673,17 @@ export function OrdersTable({
                       <div className="font-medium tabular-nums">{formatCurrency(order.total)}</div>
                       <RefundAmountText order={order} />
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{formatOrderDate(order.orderedAt)}</TableCell>
-                    <TableCell className="text-right">
-                      <OrderActions canManageReturns={canManageReturns} canUpdate={canUpdate} order={order} />
+                    <TableCell>
+                      <div className="flex min-w-0 items-center justify-between gap-2">
+                        <span className="truncate text-muted-foreground">{formatOrderDate(order.orderedAt)}</span>
+                        <OrderActions canManageReturns={canManageReturns} canUpdate={canUpdate} order={order} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
+                  <TableCell colSpan={6} className="h-24 text-center">
                     No orders found.
                   </TableCell>
                 </TableRow>

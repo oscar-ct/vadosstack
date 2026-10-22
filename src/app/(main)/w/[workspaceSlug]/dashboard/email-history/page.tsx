@@ -7,18 +7,22 @@ import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 
-import { EmailHistoryDashboard, type EmailHistoryItem } from "./_components/email-history-dashboard";
+import {
+  EmailHistoryDashboard,
+  type EmailHistoryItem,
+  type EmailHistorySort,
+} from "./_components/email-history-dashboard";
 
 const defaultPageSize = 20;
 const pageSizeOptions = [20, 30, 40, 50] as const;
 
 type EmailHistoryStatus = "all" | "error" | "success";
-
 type PageProps = {
   searchParams?: Promise<{
     page?: string;
     pageSize?: string;
     q?: string;
+    sort?: string;
     status?: string;
   }>;
 };
@@ -43,6 +47,21 @@ function parseStatus(value?: string): EmailHistoryStatus {
   return value === "success" || value === "error" ? value : "all";
 }
 
+function parseSort(value?: string): EmailHistorySort {
+  const options: EmailHistorySort[] = [
+    "amount-asc",
+    "amount-desc",
+    "recipient-asc",
+    "recipient-desc",
+    "sent-asc",
+    "sent-desc",
+    "status-asc",
+    "status-desc",
+  ];
+
+  return options.includes(value as EmailHistorySort) ? (value as EmailHistorySort) : "sent-desc";
+}
+
 export default async function Page({ searchParams }: PageProps) {
   const authorization = await getPermittedDashboardAuthorization("email.history.view");
 
@@ -59,6 +78,7 @@ export default async function Page({ searchParams }: PageProps) {
   const workspaceId = authorization.workspaceId;
   const query = params?.q?.trim().slice(0, 120) ?? "";
   const status = parseStatus(params?.status);
+  const sort = parseSort(params?.sort);
   const requestedPage = parsePage(params?.page);
   const pageSize = parsePageSize(params?.pageSize);
   const filteredWhere: Prisma.EmailRecordWhereInput = {
@@ -92,7 +112,22 @@ export default async function Page({ searchParams }: PageProps) {
   const page = Math.min(requestedPage, totalPages);
   const records = await prisma.emailRecord.findMany({
     where: filteredWhere,
-    orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+    orderBy:
+      sort === "sent-asc"
+        ? [{ sentAt: "asc" }, { id: "asc" }]
+        : sort === "amount-asc"
+          ? [{ documentTotal: { sort: "asc", nulls: "last" } }, { sentAt: "desc" }]
+          : sort === "amount-desc"
+            ? [{ documentTotal: { sort: "desc", nulls: "last" } }, { sentAt: "desc" }]
+            : sort === "recipient-asc"
+              ? [{ recipientName: { sort: "asc", nulls: "last" } }, { sentAt: "desc" }]
+              : sort === "recipient-desc"
+                ? [{ recipientName: { sort: "desc", nulls: "last" } }, { sentAt: "desc" }]
+                : sort === "status-asc"
+                  ? [{ status: "asc" }, { sentAt: "desc" }]
+                  : sort === "status-desc"
+                    ? [{ status: "desc" }, { sentAt: "desc" }]
+                    : [{ sentAt: "desc" }, { id: "desc" }],
     skip: (page - 1) * pageSize,
     take: pageSize,
   });
@@ -216,7 +251,7 @@ export default async function Page({ searchParams }: PageProps) {
   }));
 
   return (
-    <Card className="min-w-0">
+    <Card className="min-w-0 md:overflow-visible">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 leading-none">
           <span className="text-xl">Email History</span>
@@ -226,11 +261,12 @@ export default async function Page({ searchParams }: PageProps) {
         </CardTitle>
         <CardDescription>Search sent messages, inspect delivery errors, and open related records.</CardDescription>
       </CardHeader>
-      <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden pt-0">
+      <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden pt-0 md:overflow-visible">
         <EmailHistoryDashboard
           errorCount={errorCount}
           filteredCount={filteredCount}
           initialQuery={query}
+          initialSort={sort}
           initialStatus={status}
           page={page}
           pageSize={pageSize}

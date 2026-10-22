@@ -48,7 +48,7 @@ export default async function Page() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <Card className="rounded-lg">
+      <Card className="rounded-lg md:overflow-visible">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 leading-none">
             <span className="text-xl">Leads</span>
@@ -66,7 +66,7 @@ export default async function Page() {
             />
           </CardAction>
         </CardHeader>
-        <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden pt-0">
+        <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden pt-0 md:overflow-visible">
           <div className="grid grid-cols-3 divide-x overflow-hidden rounded-lg border bg-card md:hidden">
             <MobileStat label="Open" value={summary.open} />
             <MobileStat label="Follow-up" value={summary.needsFollowUp} />

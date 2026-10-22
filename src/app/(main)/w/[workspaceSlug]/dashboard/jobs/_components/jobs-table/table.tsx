@@ -16,7 +16,6 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import {
-  ArrowUpDown,
   BriefcaseBusiness,
   ChevronLeft,
   ChevronRight,
@@ -74,6 +73,17 @@ const statusOptions = [
   { value: "On Hold", label: "On Hold" },
   { value: "Cancelled", label: "Cancelled" },
 ] as const;
+
+const desktopColumnWidths: Record<string, string> = {
+  select: "3.5%",
+  dateBegin: "9.5%",
+  finalCost: "21%",
+  customerName: "25.5%",
+  status: "14%",
+  outstandingBalance: "12%",
+  documents: "10.5%",
+  actions: "4%",
+};
 // const categoryOptions = [
 //   { value: "all", label: "All" },
 //   { value: "Repair", label: "Repair" },
@@ -87,6 +97,12 @@ const sortOptions = [
   { value: "start-desc", label: "Start date latest" },
   { value: "cost-asc", label: "Cost low-high" },
   { value: "cost-desc", label: "Cost high-low" },
+  { value: "customer-asc", label: "Customer A-Z" },
+  { value: "customer-desc", label: "Customer Z-A" },
+  { value: "status-asc", label: "Status A-Z" },
+  { value: "status-desc", label: "Status Z-A" },
+  { value: "billing-asc", label: "Balance low-high" },
+  { value: "billing-desc", label: "Balance high-low" },
 ] as const;
 
 function shouldIgnoreRowClick(target: EventTarget | null, row: HTMLElement) {
@@ -205,6 +221,12 @@ export function JobsTable({
     if (currentSort.id === "dateBegin" && currentSort.desc) return "start-desc";
     if (currentSort.id === "finalCost" && !currentSort.desc) return "cost-asc";
     if (currentSort.id === "finalCost" && currentSort.desc) return "cost-desc";
+    if (currentSort.id === "customerName" && !currentSort.desc) return "customer-asc";
+    if (currentSort.id === "customerName" && currentSort.desc) return "customer-desc";
+    if (currentSort.id === "status" && !currentSort.desc) return "status-asc";
+    if (currentSort.id === "status" && currentSort.desc) return "status-desc";
+    if (currentSort.id === "outstandingBalance" && !currentSort.desc) return "billing-asc";
+    if (currentSort.id === "outstandingBalance" && currentSort.desc) return "billing-desc";
 
     return "created-desc";
   }, [sorting]);
@@ -221,7 +243,19 @@ export function JobsTable({
               ? [{ id: "finalCost", desc: false }]
               : value === "cost-desc"
                 ? [{ id: "finalCost", desc: true }]
-                : [{ id: "createdAt", desc: true }];
+                : value === "customer-asc"
+                  ? [{ id: "customerName", desc: false }]
+                  : value === "customer-desc"
+                    ? [{ id: "customerName", desc: true }]
+                    : value === "status-asc"
+                      ? [{ id: "status", desc: false }]
+                      : value === "status-desc"
+                        ? [{ id: "status", desc: true }]
+                        : value === "billing-asc"
+                          ? [{ id: "outstandingBalance", desc: false }]
+                          : value === "billing-desc"
+                            ? [{ id: "outstandingBalance", desc: true }]
+                            : [{ id: "createdAt", desc: true }];
 
     table.setSorting(nextSorting);
     table.setPageIndex(0);
@@ -253,7 +287,7 @@ export function JobsTable({
             <div className="md:hidden">
               <Drawer>
                 <DrawerTrigger asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="md:hidden">
                     <SlidersHorizontal />
                     Filters
                   </Button>
@@ -399,23 +433,6 @@ export function JobsTable({
                   Clear start date
                 </Button>
               ) : null}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <ArrowUpDown />
-                    Sort
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup value={sortValue} onValueChange={updateSort}>
-                    {sortOptions.map((option) => (
-                      <DropdownMenuRadioItem key={option.value} value={option.value}>
-                        {option.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -553,13 +570,18 @@ export function JobsTable({
           )}
         </div>
 
-        <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
-          <Table>
-            <TableHeader className="bg-muted/15">
+        <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
+          <Table className="min-w-[74rem] table-fixed">
+            <colgroup>
+              {table.getVisibleLeafColumns().map((column) => (
+                <col key={column.id} style={{ width: desktopColumnWidths[column.id] }} />
+              ))}
+            </colgroup>
+            <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} colSpan={header.colSpan} className="h-11 p-3 font-medium">
+                    <TableHead key={header.id} colSpan={header.colSpan} className="sticky top-12 z-20 border-b bg-card">
                       {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   ))}
@@ -589,9 +611,7 @@ export function JobsTable({
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="p-3 align-middle">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
+                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                     ))}
                   </TableRow>
                 ))

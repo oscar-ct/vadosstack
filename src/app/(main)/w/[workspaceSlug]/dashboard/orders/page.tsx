@@ -29,7 +29,7 @@ export default async function Page() {
   const canUpdate = can(authorization.membership, "orders.update");
 
   return (
-    <Card>
+    <Card className="md:overflow-visible">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 leading-none">
           <span className="text-xl">Orders</span>

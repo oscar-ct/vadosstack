@@ -73,6 +73,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
 import { formatDateOnly, toDateInputValue } from "@/lib/date-only";
 import { formatPaymentReference } from "@/lib/payments/presentation";
+import { formatCurrency } from "@/lib/utils";
 
 import type { JobMutationState } from "../../jobs/actions";
 import { getInvoicesColumns } from "./invoices-table/columns";
@@ -83,8 +84,12 @@ export type { InvoiceTableItem } from "./invoices-table/schema";
 const sortOptions = [
   { value: "newest", label: "Newest first" },
   { value: "oldest", label: "Oldest first" },
+  { value: "due-asc", label: "Due soonest" },
+  { value: "due-desc", label: "Due latest" },
   { value: "total-asc", label: "Total low-high" },
   { value: "total-desc", label: "Total high-low" },
+  { value: "balance-asc", label: "Balance low-high" },
+  { value: "balance-desc", label: "Balance high-low" },
 ] as const;
 
 const statusOptions = [
@@ -103,8 +108,20 @@ const dueOptions = [
   { value: "paid", label: "Paid" },
 ] as const;
 
+const desktopColumnWidths: Record<string, string> = {
+  select: "3%",
+  invoiceNumber: "8%",
+  customerName: "15%",
+  jobTitle: "25%",
+  issuedAt: "9%",
+  dueAt: "13%",
+  total: "9%",
+  amountPaid: "9%",
+  balanceDue: "9%",
+};
+
 function formatMoney(value: string) {
-  return `$${Number(value).toFixed(2)}`;
+  return formatCurrency(Number(value));
 }
 
 function formatDate(value: string) {
@@ -669,8 +686,12 @@ export function InvoicesTable({
     if (!currentSort) return "newest";
     if (currentSort.id === "issuedAt" && currentSort.desc) return "newest";
     if (currentSort.id === "issuedAt" && !currentSort.desc) return "oldest";
+    if (currentSort.id === "dueAt" && !currentSort.desc) return "due-asc";
+    if (currentSort.id === "dueAt" && currentSort.desc) return "due-desc";
     if (currentSort.id === "total" && !currentSort.desc) return "total-asc";
     if (currentSort.id === "total" && currentSort.desc) return "total-desc";
+    if (currentSort.id === "balanceDue" && !currentSort.desc) return "balance-asc";
+    if (currentSort.id === "balanceDue" && currentSort.desc) return "balance-desc";
 
     return "newest";
   }, [sorting]);
@@ -679,11 +700,19 @@ export function InvoicesTable({
     const nextSorting: SortingState =
       value === "oldest"
         ? [{ id: "issuedAt", desc: false }]
-        : value === "total-asc"
-          ? [{ id: "total", desc: false }]
-          : value === "total-desc"
-            ? [{ id: "total", desc: true }]
-            : [{ id: "issuedAt", desc: true }];
+        : value === "due-asc"
+          ? [{ id: "dueAt", desc: false }]
+          : value === "due-desc"
+            ? [{ id: "dueAt", desc: true }]
+            : value === "total-asc"
+              ? [{ id: "total", desc: false }]
+              : value === "total-desc"
+                ? [{ id: "total", desc: true }]
+                : value === "balance-asc"
+                  ? [{ id: "balanceDue", desc: false }]
+                  : value === "balance-desc"
+                    ? [{ id: "balanceDue", desc: true }]
+                    : [{ id: "issuedAt", desc: true }];
 
     table.setSorting(nextSorting);
     table.setPageIndex(0);
@@ -714,24 +743,33 @@ export function InvoicesTable({
 
   return (
     <div className="grid gap-4">
-      <div
+      <button
+        type="button"
+        disabled={dueSummary.pastDueCount === 0}
+        onClick={() => updateDueFilter(dueFilter === "overdue" ? "all" : "overdue")}
+        aria-pressed={dueFilter === "overdue"}
         className={
           dueSummary.pastDueCount > 0
-            ? "grid gap-1 rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-700 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-400"
-            : "grid gap-1 rounded-lg border bg-muted/20 p-3 text-muted-foreground"
+            ? "grid gap-1 rounded-lg border border-rose-200 bg-rose-50 p-3 text-left text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/35"
+            : "grid gap-1 rounded-lg border bg-muted/20 p-3 text-left text-muted-foreground"
         }
       >
-        <div className="font-medium text-sm">
-          {dueSummary.pastDueCount > 0
-            ? `${dueSummary.pastDueCount} past due invoice${dueSummary.pastDueCount === 1 ? "" : "s"}`
-            : "No past due invoices"}
+        <div className="flex items-center justify-between gap-3 font-medium text-sm">
+          <span>
+            {dueSummary.pastDueCount > 0
+              ? `${dueSummary.pastDueCount} past due invoice${dueSummary.pastDueCount === 1 ? "" : "s"}`
+              : "No past due invoices"}
+          </span>
+          {dueSummary.pastDueCount > 0 ? (
+            <span className="hidden text-xs md:inline">{dueFilter === "overdue" ? "Show all" : "View overdue"} →</span>
+          ) : null}
         </div>
         <div className="text-sm">
           {dueSummary.pastDueCount > 0
             ? `${formatMoney(dueSummary.pastDueBalance)} currently past due`
             : "Outstanding invoices are still within their due window."}
         </div>
-      </div>
+      </button>
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full lg:w-80">
@@ -997,13 +1035,18 @@ export function InvoicesTable({
         )}
       </div>
 
-      <div className="hidden overflow-hidden rounded-lg border bg-card sm:block">
-        <Table>
-          <TableHeader className="bg-muted/15">
+      <div className="hidden w-full min-w-0 max-w-full overflow-hidden sm:block [&_th]:top-0">
+        <Table className="min-w-[70.75rem] table-fixed">
+          <colgroup>
+            {table.getVisibleLeafColumns().map((column) => (
+              <col key={column.id} style={{ width: desktopColumnWidths[column.id] }} />
+            ))}
+          </colgroup>
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} colSpan={header.colSpan} className="h-11 p-3 font-medium">
+                  <TableHead key={header.id} colSpan={header.colSpan} className="sticky top-12 z-20 border-b bg-card">
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 ))}
@@ -1034,9 +1077,7 @@ export function InvoicesTable({
                   }}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="p-3 align-middle">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
                 </TableRow>
               ))

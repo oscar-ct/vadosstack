@@ -7,6 +7,7 @@ import { MailWarning, Pencil } from "lucide-react";
 
 import { CustomerLink } from "@/components/customer-link";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
+import { SortableTableHeader } from "@/components/sortable-table-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -72,7 +73,13 @@ export function getEstimateRecordsColumns({
       : []),
     {
       accessorKey: "estimateNumber",
-      header: "Estimate #",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Estimate #"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       cell: ({ row }) =>
         row.original.estimateNumber ? (
           <span className="whitespace-nowrap font-medium font-mono text-sm">{row.original.estimateNumber}</span>
@@ -83,7 +90,9 @@ export function getEstimateRecordsColumns({
     {
       id: "estimateDate",
       accessorFn: (row) => row.issuedAt ?? row.createdAt,
-      header: "Date",
+      header: ({ column }) => (
+        <SortableTableHeader direction={column.getIsSorted()} label="Date" onSort={column.getToggleSortingHandler()} />
+      ),
       sortUndefined: "last",
       cell: ({ row }) => (
         <div className="grid gap-1">
@@ -96,7 +105,13 @@ export function getEstimateRecordsColumns({
     },
     {
       accessorKey: "customerName",
-      header: "Customer",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Customer"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       cell: ({ row }) => (
         <div className="min-w-0">
           <CustomerLink
@@ -129,7 +144,9 @@ export function getEstimateRecordsColumns({
     },
     {
       accessorKey: "estimatedTotal",
-      header: () => <div className="text-left">Value</div>,
+      header: ({ column }) => (
+        <SortableTableHeader direction={column.getIsSorted()} label="Value" onSort={column.getToggleSortingHandler()} />
+      ),
       cell: ({ row }) => (
         <div className="whitespace-nowrap text-left text-sm tabular-nums">
           {formatMoney(row.original.estimatedTotal)}
@@ -139,7 +156,13 @@ export function getEstimateRecordsColumns({
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Status"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       filterFn: "equalsString",
       cell: ({ row }) => (
         <div className="grid min-w-[6.5rem] gap-1">

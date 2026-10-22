@@ -27,7 +27,7 @@ export function JobsOverview({
   data: JobRow[];
 }) {
   return (
-    <Card>
+    <Card className="md:overflow-visible">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 leading-none">
           <span className="text-xl">Jobs</span>

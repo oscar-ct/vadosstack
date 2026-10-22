@@ -15,7 +15,6 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import {
-  ArrowUpDown,
   BriefcaseBusiness,
   ChevronLeft,
   ChevronRight,
@@ -60,6 +59,16 @@ import { getEstimateRecordsColumns } from "./estimate-records-table/columns";
 import type { EstimateRecordRow } from "./schema";
 
 const pageSize = 20;
+const desktopColumnWidths: Record<string, string> = {
+  select: "3.5%",
+  estimateNumber: "10%",
+  estimateDate: "10%",
+  customerName: "18%",
+  description: "28%",
+  estimatedTotal: "10%",
+  status: "17%",
+  actions: "3.5%",
+};
 const statusOptions = [
   { value: "all", label: "All statuses" },
   { value: "Draft", label: "Draft" },
@@ -105,6 +114,12 @@ const sortOptions = [
   { value: "oldest", label: "Oldest first" },
   { value: "value-asc", label: "Value low-high" },
   { value: "value-desc", label: "Value high-low" },
+  { value: "number-asc", label: "Estimate number A-Z" },
+  { value: "number-desc", label: "Estimate number Z-A" },
+  { value: "customer-asc", label: "Customer A-Z" },
+  { value: "customer-desc", label: "Customer Z-A" },
+  { value: "status-asc", label: "Status A-Z" },
+  { value: "status-desc", label: "Status Z-A" },
 ] as const;
 
 function formatExportDate(value?: string) {
@@ -245,6 +260,12 @@ export function EstimateRecordsTable({
     if (currentSort.id === "estimateDate" && currentSort.desc) return "newest";
     if (currentSort.id === "estimatedTotal" && !currentSort.desc) return "value-asc";
     if (currentSort.id === "estimatedTotal" && currentSort.desc) return "value-desc";
+    if (currentSort.id === "estimateNumber" && !currentSort.desc) return "number-asc";
+    if (currentSort.id === "estimateNumber" && currentSort.desc) return "number-desc";
+    if (currentSort.id === "customerName" && !currentSort.desc) return "customer-asc";
+    if (currentSort.id === "customerName" && currentSort.desc) return "customer-desc";
+    if (currentSort.id === "status" && !currentSort.desc) return "status-asc";
+    if (currentSort.id === "status" && currentSort.desc) return "status-desc";
 
     return "newest";
   }, [sorting]);
@@ -257,7 +278,19 @@ export function EstimateRecordsTable({
           ? [{ id: "estimatedTotal", desc: false }]
           : value === "value-desc"
             ? [{ id: "estimatedTotal", desc: true }]
-            : [{ id: "estimateDate", desc: true }];
+            : value === "number-asc"
+              ? [{ id: "estimateNumber", desc: false }]
+              : value === "number-desc"
+                ? [{ id: "estimateNumber", desc: true }]
+                : value === "customer-asc"
+                  ? [{ id: "customerName", desc: false }]
+                  : value === "customer-desc"
+                    ? [{ id: "customerName", desc: true }]
+                    : value === "status-asc"
+                      ? [{ id: "status", desc: false }]
+                      : value === "status-desc"
+                        ? [{ id: "status", desc: true }]
+                        : [{ id: "estimateDate", desc: true }];
 
     table.setSorting(nextSorting);
     table.setPageIndex(0);
@@ -320,7 +353,7 @@ export function EstimateRecordsTable({
             <div className="md:hidden">
               <Drawer>
                 <DrawerTrigger asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="md:hidden">
                     <SlidersHorizontal />
                     Filters
                   </Button>
@@ -404,33 +437,21 @@ export function EstimateRecordsTable({
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <ArrowUpDown />
-                    Sort
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup value={sortValue} onValueChange={updateSort}>
-                    {sortOptions.map((option) => (
-                      <DropdownMenuRadioItem key={option.value} value={option.value}>
-                        {option.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </div>
         </div>
-        <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
-          <Table>
-            <TableHeader className="bg-muted/15">
+        <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
+          <Table className="min-w-[67.5rem] table-fixed">
+            <colgroup>
+              {table.getVisibleLeafColumns().map((column) => (
+                <col key={column.id} style={{ width: desktopColumnWidths[column.id] }} />
+              ))}
+            </colgroup>
+            <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} className="h-11 p-3 font-medium">
+                    <TableHead key={header.id} className="sticky top-12 z-20 border-b bg-card">
                       {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   ))}
@@ -451,9 +472,7 @@ export function EstimateRecordsTable({
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="p-3 align-middle">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
+                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                     ))}
                   </TableRow>
                 ))

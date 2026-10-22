@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { differenceInCalendarDays, endOfToday, format, parseISO } from "date-fns";
 import { MailWarning, PackageCheck, RotateCcw, ShoppingCart, UserRound, WalletCards } from "lucide-react";
 
+import { SortableTableHeader } from "@/components/sortable-table-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -145,7 +146,13 @@ export function getRecentCustomersColumns({
     },
     {
       accessorKey: "name",
-      header: "Customer",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Customer"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <Button
@@ -214,7 +221,16 @@ export function getRecentCustomersColumns({
   const workColumns: ColumnDef<RecentCustomerRow>[] = [
     {
       accessorKey: "billing",
-      header: "Billing",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Billing"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
+      sortingFn: (rowA, rowB) =>
+        Number(rowA.original.outstandingAmount?.replace(/[^0-9.-]/g, "") ?? 0) -
+        Number(rowB.original.outstandingAmount?.replace(/[^0-9.-]/g, "") ?? 0),
       cell: ({ row }) => {
         const billingDisplay = getCustomerBillingDisplay(row.original);
 
@@ -244,7 +260,13 @@ export function getRecentCustomersColumns({
     },
     {
       accessorKey: "lastScheduledJobDate",
-      header: "Last scheduled",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Last scheduled"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       sortUndefined: "last",
       cell: ({ row }) => {
         if (!row.original.lastScheduledJobDate) {
@@ -262,7 +284,9 @@ export function getRecentCustomersColumns({
     },
     {
       accessorKey: "jobCount",
-      header: "Jobs",
+      header: ({ column }) => (
+        <SortableTableHeader direction={column.getIsSorted()} label="Jobs" onSort={column.getToggleSortingHandler()} />
+      ),
       cell: ({ row }) => (
         <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => onViewCustomer(row.original)}>
           <span className="font-medium text-sm">{row.original.jobCount}</span>
@@ -275,7 +299,13 @@ export function getRecentCustomersColumns({
   const orderColumns: ColumnDef<RecentCustomerRow>[] = [
     {
       accessorKey: "totalOrderSpentValue",
-      header: "Order spend",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Order spend"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       cell: ({ row }) => (
         <div className="grid gap-0.5">
           <span className="font-medium text-sm tabular-nums">{row.original.totalOrderSpent ?? "$0.00"}</span>
@@ -287,13 +317,25 @@ export function getRecentCustomersColumns({
     },
     {
       accessorKey: "lastOrderDate",
-      header: "Last order",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Last order"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       sortUndefined: "last",
       cell: ({ row }) => <span className="text-sm">{formatOrderDate(row.original.lastOrderDate)}</span>,
     },
     {
       accessorKey: "returnedOrderCount",
-      header: "Returns",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Returns"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       cell: ({ row }) => {
         const returnCount = row.original.returnedOrderCount ?? 0;
         const refundedValue = row.original.totalOrderRefundedValue ?? 0;
@@ -317,7 +359,13 @@ export function getRecentCustomersColumns({
     },
     {
       accessorKey: "orderCount",
-      header: "Orders",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Orders"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       cell: ({ row }) => (
         <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => onViewCustomer(row.original)}>
           <ShoppingCart className="size-3.5" />

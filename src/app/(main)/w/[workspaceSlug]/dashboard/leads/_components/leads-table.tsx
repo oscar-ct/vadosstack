@@ -4,7 +4,6 @@ import * as React from "react";
 
 import { format, isBefore, startOfToday } from "date-fns";
 import {
-  ArrowUpDown,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { CustomerLink } from "@/components/customer-link";
+import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,12 +67,27 @@ const followUpOptions = [
 
 const sortOptions = [
   { value: "follow-up", label: "Follow-up first" },
+  { value: "follow-up-desc", label: "Follow-up last" },
   { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
   { value: "name-asc", label: "Name A-Z" },
+  { value: "name-desc", label: "Name Z-A" },
+  { value: "status-asc", label: "Status A-Z" },
+  { value: "status-desc", label: "Status Z-A" },
+  { value: "customer-asc", label: "Customer A-Z" },
+  { value: "customer-desc", label: "Customer Z-A" },
+  { value: "estimate-asc", label: "Estimate A-Z" },
+  { value: "estimate-desc", label: "Estimate Z-A" },
 ] as const;
 
 type FollowUpFilter = (typeof followUpOptions)[number]["value"];
 type SortValue = (typeof sortOptions)[number]["value"];
+
+function leadSortDirection(sortValue: SortValue, ascending: SortValue, descending: SortValue): TableSortDirection {
+  if (sortValue === ascending) return "asc";
+  if (sortValue === descending) return "desc";
+  return false;
+}
 
 function statusClassName(status: string) {
   if (status === "Won") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900";
@@ -156,15 +171,31 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
           return leadDateTime(right.createdAt) - leadDateTime(left.createdAt);
         }
 
+        if (sortValue === "oldest") {
+          return leadDateTime(left.createdAt) - leadDateTime(right.createdAt);
+        }
+
         if (sortValue === "name-asc") {
           return left.name.localeCompare(right.name);
+        }
+
+        if (sortValue === "name-desc") return right.name.localeCompare(left.name);
+        if (sortValue === "status-asc") return left.status.localeCompare(right.status);
+        if (sortValue === "status-desc") return right.status.localeCompare(left.status);
+        if (sortValue === "customer-asc") return (left.customerName ?? "").localeCompare(right.customerName ?? "");
+        if (sortValue === "customer-desc") return (right.customerName ?? "").localeCompare(left.customerName ?? "");
+        if (sortValue === "estimate-asc") {
+          return (left.estimateNumber ?? "").localeCompare(right.estimateNumber ?? "", undefined, { numeric: true });
+        }
+        if (sortValue === "estimate-desc") {
+          return (right.estimateNumber ?? "").localeCompare(left.estimateNumber ?? "", undefined, { numeric: true });
         }
 
         const leftFollowUp = left.followUpAt ? leadDateTime(left.followUpAt) : Number.POSITIVE_INFINITY;
         const rightFollowUp = right.followUpAt ? leadDateTime(right.followUpAt) : Number.POSITIVE_INFINITY;
 
         if (leftFollowUp !== rightFollowUp) {
-          return leftFollowUp - rightFollowUp;
+          return sortValue === "follow-up-desc" ? rightFollowUp - leftFollowUp : leftFollowUp - rightFollowUp;
         }
 
         return leadDateTime(right.createdAt) - leadDateTime(left.createdAt);
@@ -178,6 +209,11 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
 
   function updateFilter<T>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) {
     setter(value);
+    setPage(1);
+  }
+
+  function updateSort(value: SortValue) {
+    setSortValue(value);
     setPage(1);
   }
 
@@ -313,7 +349,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
             <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="md:hidden">
                     <Tag />
                     Status
                   </Button>
@@ -371,26 +407,6 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <ArrowUpDown />
-                    Sort
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup
-                    value={sortValue}
-                    onValueChange={(value) => updateFilter(setSortValue, value as SortValue)}
-                  >
-                    {sortOptions.map((option) => (
-                      <DropdownMenuRadioItem key={option.value} value={option.value}>
-                        {option.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
               {hasFilters ? (
                 <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
                   Reset
@@ -401,16 +417,55 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
         </div>
       </div>
 
-      <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
-        <Table>
-          <TableHeader className="bg-muted/15">
+      <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
+        <Table className="min-w-[64rem] table-fixed">
+          <colgroup>
+            <col className="w-[27%]" />
+            <col className="w-[14%]" />
+            <col className="w-[18%]" />
+            <col className="w-[15%]" />
+            <col className="w-[16%]" />
+            <col className="w-[10%]" />
+          </colgroup>
+          <TableHeader>
             <TableRow>
-              <TableHead>Lead</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Service</TableHead>
-              <TableHead>Follow-up</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead className="text-right">Estimate</TableHead>
+              <TableHead className="sticky top-12 z-20 border-b bg-card">
+                <SortableTableHeader
+                  direction={leadSortDirection(sortValue, "name-asc", "name-desc")}
+                  label="Lead"
+                  onSort={() => updateSort(sortValue === "name-asc" ? "name-desc" : "name-asc")}
+                />
+              </TableHead>
+              <TableHead className="sticky top-12 z-20 border-b bg-card">
+                <SortableTableHeader
+                  direction={leadSortDirection(sortValue, "status-asc", "status-desc")}
+                  label="Status"
+                  onSort={() => updateSort(sortValue === "status-asc" ? "status-desc" : "status-asc")}
+                />
+              </TableHead>
+              <TableHead className="sticky top-12 z-20 border-b bg-card">Service</TableHead>
+              <TableHead className="sticky top-12 z-20 border-b bg-card">
+                <SortableTableHeader
+                  direction={leadSortDirection(sortValue, "follow-up", "follow-up-desc")}
+                  label="Follow-up"
+                  onSort={() => updateSort(sortValue === "follow-up" ? "follow-up-desc" : "follow-up")}
+                />
+              </TableHead>
+              <TableHead className="sticky top-12 z-20 border-b bg-card">
+                <SortableTableHeader
+                  direction={leadSortDirection(sortValue, "customer-asc", "customer-desc")}
+                  label="Customer"
+                  onSort={() => updateSort(sortValue === "customer-asc" ? "customer-desc" : "customer-asc")}
+                />
+              </TableHead>
+              <TableHead className="sticky top-12 z-20 border-b bg-card text-right">
+                <SortableTableHeader
+                  align="right"
+                  direction={leadSortDirection(sortValue, "estimate-asc", "estimate-desc")}
+                  label="Estimate"
+                  onSort={() => updateSort(sortValue === "estimate-asc" ? "estimate-desc" : "estimate-asc")}
+                />
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

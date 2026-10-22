@@ -17,6 +17,7 @@ import type { DateRange } from "react-day-picker";
 
 import { CustomerLink } from "@/components/customer-link";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
+import { SortableTableHeader } from "@/components/sortable-table-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -106,7 +107,13 @@ export function getJobsColumns({
     },
     {
       accessorKey: "dateBegin",
-      header: "Job Dates",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Job Dates"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       sortUndefined: "last",
       filterFn: (row, _columnId, filterValue: DateRange | undefined) => {
         if (!filterValue?.from && !filterValue?.to) return true;
@@ -150,7 +157,13 @@ export function getJobsColumns({
     },
     {
       accessorKey: "customerName",
-      header: "Customer",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Customer"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       cell: ({ row }) => (
         <div className="grid min-w-0 gap-1.5">
           <CustomerLink
@@ -174,16 +187,22 @@ export function getJobsColumns({
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Status"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
       filterFn: "equalsString",
       cell: ({ row }) => (
-        <div className="grid min-w-[6.5em] gap-0.5">
+        <div className="grid min-w-0 gap-0.5 overflow-hidden">
           <Badge variant="outline" className="w-fit px-1.5 text-muted-foreground">
             {statusIcon(row.original.status)}
             {row.original.status}
           </Badge>
           {getJobOverdueDate(row.original) ? (
-            <span className="px-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+            <span className="truncate px-1.5 text-[11px] text-amber-700 dark:text-amber-400">
               Overdue since {getJobOverdueDate(row.original)}
             </span>
           ) : null}
@@ -210,13 +229,21 @@ export function getJobsColumns({
     // },
     {
       accessorKey: "outstandingBalance",
-      header: "Billing",
+      header: ({ column }) => (
+        <SortableTableHeader
+          direction={column.getIsSorted()}
+          label="Billing"
+          onSort={column.getToggleSortingHandler()}
+        />
+      ),
+      sortingFn: (rowA, rowB) =>
+        getJobBillingState(rowA.original).balanceDue - getJobBillingState(rowB.original).balanceDue,
       cell: ({ row }) => {
         const amountDue = getAmountDueDisplay(row.original);
         return (
-          <div className="grid gap-0.5">
-            <span className={`font-medium text-[12px] ${amountDue.amountClassName}`}>{amountDue.label}</span>
-            <span className="max-w-36 truncate text-[11px] text-muted-foreground">{amountDue.detail}</span>
+          <div className="grid min-w-0 gap-0.5 overflow-hidden">
+            <span className={`truncate font-medium text-[12px] ${amountDue.amountClassName}`}>{amountDue.label}</span>
+            <span className="truncate text-[11px] text-muted-foreground">{amountDue.detail}</span>
           </div>
         );
       },

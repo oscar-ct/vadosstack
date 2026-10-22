@@ -3,7 +3,6 @@
 import * as React from "react";
 
 import {
-  ArrowUpDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -20,6 +19,7 @@ import {
 
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
+import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -91,7 +91,19 @@ type InventoryFieldKey =
   | "unit"
   | "unitPrice"
   | "vendor";
-type SortValue = "product-asc" | "stock-asc" | "stock-desc" | "value-desc";
+type SortValue =
+  | "location-asc"
+  | "location-desc"
+  | "product-asc"
+  | "product-desc"
+  | "sku-asc"
+  | "sku-desc"
+  | "status-asc"
+  | "status-desc"
+  | "stock-asc"
+  | "stock-desc"
+  | "value-asc"
+  | "value-desc";
 
 const fallbackStockRules: InventoryStockRules = {
   autoRestockAlerts: true,
@@ -115,7 +127,21 @@ const sortOptions: Array<{ label: string; value: SortValue }> = [
   { value: "stock-asc", label: "Lowest stock" },
   { value: "stock-desc", label: "Highest stock" },
   { value: "product-asc", label: "Product A-Z" },
+  { value: "product-desc", label: "Product Z-A" },
+  { value: "sku-asc", label: "SKU A-Z" },
+  { value: "sku-desc", label: "SKU Z-A" },
+  { value: "status-asc", label: "Status A-Z" },
+  { value: "status-desc", label: "Status Z-A" },
+  { value: "location-asc", label: "Location A-Z" },
+  { value: "location-desc", label: "Location Z-A" },
+  { value: "value-asc", label: "Lowest value" },
 ];
+
+function inventorySortDirection(sortValue: SortValue, ascending: SortValue, descending: SortValue): TableSortDirection {
+  if (sortValue === ascending) return "asc";
+  if (sortValue === descending) return "desc";
+  return false;
+}
 
 function getInventoryExportColumns(stockRules: InventoryStockRules): CsvColumn<InventoryItem>[] {
   return [
@@ -179,11 +205,23 @@ function getSearchText(item: InventoryItem, stockRules: InventoryStockRules) {
     .toLowerCase();
 }
 
-function sortInventoryItems(items: InventoryItem[], sortValue: SortValue) {
+function sortInventoryItems(items: InventoryItem[], sortValue: SortValue, stockRules: InventoryStockRules) {
   return [...items].sort((left, right) => {
     if (sortValue === "stock-asc") return left.stock - right.stock;
     if (sortValue === "stock-desc") return right.stock - left.stock;
     if (sortValue === "product-asc") return left.product.localeCompare(right.product);
+    if (sortValue === "product-desc") return right.product.localeCompare(left.product);
+    if (sortValue === "sku-asc") return left.sku.localeCompare(right.sku, undefined, { numeric: true });
+    if (sortValue === "sku-desc") return right.sku.localeCompare(left.sku, undefined, { numeric: true });
+    if (sortValue === "status-asc") {
+      return getInventoryStatus(left, stockRules).localeCompare(getInventoryStatus(right, stockRules));
+    }
+    if (sortValue === "status-desc") {
+      return getInventoryStatus(right, stockRules).localeCompare(getInventoryStatus(left, stockRules));
+    }
+    if (sortValue === "location-asc") return left.location.localeCompare(right.location);
+    if (sortValue === "location-desc") return right.location.localeCompare(left.location);
+    if (sortValue === "value-asc") return getInventoryValue(left) - getInventoryValue(right);
     return getInventoryValue(right) - getInventoryValue(left);
   });
 }
@@ -529,7 +567,7 @@ export function InventoryTable({
       .filter((item) => (categoryFilter === "all" ? true : item.category === categoryFilter))
       .filter((item) => (locationFilter === "all" ? true : item.location === locationFilter));
 
-    return sortInventoryItems(filtered, sortValue);
+    return sortInventoryItems(filtered, sortValue, stockRules);
   }, [categoryFilter, items, locationFilter, normalizedQuery, sortValue, statusFilter, stockRules]);
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const safePageIndex = Math.min(pageIndex, pageCount - 1);
@@ -669,7 +707,7 @@ export function InventoryTable({
             <div className="md:hidden">
               <Drawer>
                 <DrawerTrigger asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="md:hidden">
                     <SlidersHorizontal />
                     Filters
                   </Button>
@@ -814,23 +852,6 @@ export function InventoryTable({
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <ArrowUpDown />
-                    Sort
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup value={sortValue} onValueChange={(value) => updateSort(value as SortValue)}>
-                    {sortOptions.map((option) => (
-                      <DropdownMenuRadioItem key={option.value} value={option.value}>
-                        {option.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
               {hasFilters ? (
                 <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
                   <X />
@@ -841,25 +862,74 @@ export function InventoryTable({
           </div>
         </div>
 
-        <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
-          <Table>
-            <TableHeader className="bg-muted/15">
+        <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
+          <Table className="min-w-[64.5rem] table-fixed">
+            <colgroup>
+              <col className="w-[4%]" />
+              <col className="w-[8%]" />
+              <col className="w-[22%]" />
+              <col className="w-[7%]" />
+              <col className="w-[13%]" />
+              <col className="w-[12%]" />
+              <col className="w-[16%]" />
+              <col className="w-[12%]" />
+              <col className="w-[6%]" />
+            </colgroup>
+            <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-10">
+                <TableHead className="sticky top-12 z-20 w-10 border-b bg-card">
                   <Checkbox
                     checked={allVisibleSelected || (someVisibleSelected ? "indeterminate" : false)}
                     aria-label="Select all visible inventory items"
                     onCheckedChange={(value) => toggleVisibleItems(value === true)}
                   />
                 </TableHead>
-                <TableHead className="w-[5.25rem] text-muted-foreground">SKU</TableHead>
-                <TableHead className="min-w-[14rem] text-muted-foreground">Product</TableHead>
-                <TableHead className="w-[4.5rem] text-right text-muted-foreground">Stock</TableHead>
-                <TableHead className="w-[8.25rem] text-muted-foreground">Level</TableHead>
-                <TableHead className="w-[7.5rem] text-muted-foreground">Status</TableHead>
-                <TableHead className="w-[10.5rem] text-muted-foreground">Location</TableHead>
-                <TableHead className="w-[7.5rem] text-right text-muted-foreground">Value</TableHead>
-                <TableHead className="w-10" />
+                <TableHead className="sticky top-12 z-20 w-[5.25rem] border-b bg-card">
+                  <SortableTableHeader
+                    direction={inventorySortDirection(sortValue, "sku-asc", "sku-desc")}
+                    label="SKU"
+                    onSort={() => updateSort(sortValue === "sku-asc" ? "sku-desc" : "sku-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 min-w-[14rem] border-b bg-card">
+                  <SortableTableHeader
+                    direction={inventorySortDirection(sortValue, "product-asc", "product-desc")}
+                    label="Product"
+                    onSort={() => updateSort(sortValue === "product-asc" ? "product-desc" : "product-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 w-[4.5rem] border-b bg-card text-right">
+                  <SortableTableHeader
+                    align="right"
+                    direction={inventorySortDirection(sortValue, "stock-asc", "stock-desc")}
+                    label="Stock"
+                    onSort={() => updateSort(sortValue === "stock-asc" ? "stock-desc" : "stock-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 w-[8.25rem] border-b bg-card">Level</TableHead>
+                <TableHead className="sticky top-12 z-20 w-[7.5rem] border-b bg-card">
+                  <SortableTableHeader
+                    direction={inventorySortDirection(sortValue, "status-asc", "status-desc")}
+                    label="Status"
+                    onSort={() => updateSort(sortValue === "status-asc" ? "status-desc" : "status-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 w-[10.5rem] border-b bg-card">
+                  <SortableTableHeader
+                    direction={inventorySortDirection(sortValue, "location-asc", "location-desc")}
+                    label="Location"
+                    onSort={() => updateSort(sortValue === "location-asc" ? "location-desc" : "location-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 w-[7.5rem] border-b bg-card text-right">
+                  <SortableTableHeader
+                    align="right"
+                    direction={inventorySortDirection(sortValue, "value-asc", "value-desc")}
+                    label="Value"
+                    onSort={() => updateSort(sortValue === "value-asc" ? "value-desc" : "value-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 w-10 border-b bg-card" />
               </TableRow>
             </TableHeader>
             <TableBody>

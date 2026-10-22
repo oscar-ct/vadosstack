@@ -16,7 +16,6 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import {
-  ArrowUpDown,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -72,6 +71,10 @@ const sortOptions = [
   { value: "oldest", label: "Oldest first" },
   { value: "name-asc", label: "Name A-Z" },
   { value: "name-desc", label: "Name Z-A" },
+  { value: "billing-asc", label: "Balance low-high" },
+  { value: "billing-desc", label: "Balance high-low" },
+  { value: "jobs-asc", label: "Fewest jobs" },
+  { value: "jobs-desc", label: "Most jobs" },
 ] as const;
 const orderSortOptions = [
   { value: "newest", label: "Newest order" },
@@ -79,7 +82,29 @@ const orderSortOptions = [
   { value: "spend-desc", label: "Highest spend" },
   { value: "name-asc", label: "Name A-Z" },
   { value: "name-desc", label: "Name Z-A" },
+  { value: "spend-asc", label: "Lowest spend" },
+  { value: "returns-asc", label: "Fewest returns" },
+  { value: "returns-desc", label: "Most returns" },
+  { value: "orders-asc", label: "Fewest orders" },
+  { value: "orders-desc", label: "Most orders" },
 ] as const;
+
+const workDesktopColumnWidths: Record<string, string> = {
+  select: "4%",
+  name: "36%",
+  billing: "30%",
+  lastScheduledJobDate: "20%",
+  jobCount: "10%",
+};
+
+const ordersDesktopColumnWidths: Record<string, string> = {
+  select: "4%",
+  name: "30%",
+  totalOrderSpentValue: "17%",
+  lastOrderDate: "17%",
+  returnedOrderCount: "22%",
+  orderCount: "10%",
+};
 
 function shouldIgnoreRowClick(target: EventTarget | null) {
   return target instanceof HTMLElement
@@ -206,9 +231,14 @@ export function RecentCustomersTable({
     if (view === "orders") {
       if (currentSort.id === "lastOrderDate" && currentSort.desc) return "newest";
       if (currentSort.id === "lastOrderDate" && !currentSort.desc) return "oldest";
-      if (currentSort.id === "totalOrderSpentValue") return "spend-desc";
+      if (currentSort.id === "totalOrderSpentValue" && !currentSort.desc) return "spend-asc";
+      if (currentSort.id === "totalOrderSpentValue" && currentSort.desc) return "spend-desc";
       if (currentSort.id === "name" && !currentSort.desc) return "name-asc";
       if (currentSort.id === "name" && currentSort.desc) return "name-desc";
+      if (currentSort.id === "returnedOrderCount" && !currentSort.desc) return "returns-asc";
+      if (currentSort.id === "returnedOrderCount" && currentSort.desc) return "returns-desc";
+      if (currentSort.id === "orderCount" && !currentSort.desc) return "orders-asc";
+      if (currentSort.id === "orderCount" && currentSort.desc) return "orders-desc";
 
       return "newest";
     }
@@ -216,6 +246,10 @@ export function RecentCustomersTable({
     if (currentSort.id === "lastScheduledJobDate" && !currentSort.desc) return "oldest";
     if (currentSort.id === "name" && !currentSort.desc) return "name-asc";
     if (currentSort.id === "name" && currentSort.desc) return "name-desc";
+    if (currentSort.id === "billing" && !currentSort.desc) return "billing-asc";
+    if (currentSort.id === "billing" && currentSort.desc) return "billing-desc";
+    if (currentSort.id === "jobCount" && !currentSort.desc) return "jobs-asc";
+    if (currentSort.id === "jobCount" && currentSort.desc) return "jobs-desc";
 
     return "newest";
   }, [sorting, view]);
@@ -226,11 +260,29 @@ export function RecentCustomersTable({
         ? [{ id: view === "orders" ? "lastOrderDate" : "lastScheduledJobDate", desc: false }]
         : value === "spend-desc"
           ? [{ id: "totalOrderSpentValue", desc: true }]
-          : value === "name-asc"
-            ? [{ id: "name", desc: false }]
-            : value === "name-desc"
-              ? [{ id: "name", desc: true }]
-              : [{ id: view === "orders" ? "lastOrderDate" : "lastScheduledJobDate", desc: true }];
+          : value === "spend-asc"
+            ? [{ id: "totalOrderSpentValue", desc: false }]
+            : value === "billing-asc"
+              ? [{ id: "billing", desc: false }]
+              : value === "billing-desc"
+                ? [{ id: "billing", desc: true }]
+                : value === "jobs-asc"
+                  ? [{ id: "jobCount", desc: false }]
+                  : value === "jobs-desc"
+                    ? [{ id: "jobCount", desc: true }]
+                    : value === "returns-asc"
+                      ? [{ id: "returnedOrderCount", desc: false }]
+                      : value === "returns-desc"
+                        ? [{ id: "returnedOrderCount", desc: true }]
+                        : value === "orders-asc"
+                          ? [{ id: "orderCount", desc: false }]
+                          : value === "orders-desc"
+                            ? [{ id: "orderCount", desc: true }]
+                            : value === "name-asc"
+                              ? [{ id: "name", desc: false }]
+                              : value === "name-desc"
+                                ? [{ id: "name", desc: true }]
+                                : [{ id: view === "orders" ? "lastOrderDate" : "lastScheduledJobDate", desc: true }];
 
     table.setSorting(nextSorting);
     table.setPageIndex(0);
@@ -257,7 +309,7 @@ export function RecentCustomersTable({
             <div className="md:hidden">
               <Drawer>
                 <DrawerTrigger asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="md:hidden">
                     <SlidersHorizontal />
                     Filters
                   </Button>
@@ -397,23 +449,6 @@ export function RecentCustomersTable({
                   </DropdownMenu>
                 </>
               ) : null}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <ArrowUpDown />
-                    Sort
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup value={sortValue} onValueChange={handleSortChange}>
-                    {(view === "orders" ? orderSortOptions : sortOptions).map((option) => (
-                      <DropdownMenuRadioItem key={option.value} value={option.value}>
-                        {option.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -533,13 +568,23 @@ export function RecentCustomersTable({
           )}
         </div>
 
-        <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
-          <Table>
-            <TableHeader className="bg-muted/15">
+        <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
+          <Table className="min-w-[60rem] table-fixed">
+            <colgroup>
+              {table.getVisibleLeafColumns().map((column) => (
+                <col
+                  key={column.id}
+                  style={{
+                    width: (view === "orders" ? ordersDesktopColumnWidths : workDesktopColumnWidths)[column.id],
+                  }}
+                />
+              ))}
+            </colgroup>
+            <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} colSpan={header.colSpan} className="h-11 p-3 font-medium">
+                    <TableHead key={header.id} colSpan={header.colSpan} className="sticky top-12 z-20 border-b bg-card">
                       {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   ))}
@@ -569,9 +614,7 @@ export function RecentCustomersTable({
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="p-3 align-middle">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
+                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                     ))}
                   </TableRow>
                 ))

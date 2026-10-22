@@ -29,7 +29,7 @@ export default async function Page() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <Card>
+      <Card className="md:overflow-visible">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 leading-none">
             <span className={"text-xl"}>Estimates</span>
