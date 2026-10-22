@@ -51,6 +51,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Drawer,
+  DrawerBody,
   DrawerClose,
   DrawerContent,
   DrawerDescription,
@@ -799,7 +800,7 @@ export function InvoicesTable({
                     <DrawerTitle>Invoice filters</DrawerTitle>
                     <DrawerDescription>Filter and sort the invoices list on mobile.</DrawerDescription>
                   </DrawerHeader>
-                  <div className="grid gap-4 px-4">
+                  <DrawerBody className="grid gap-4 px-4 pb-1">
                     <div className="grid gap-2">
                       <Label htmlFor="invoices-mobile-status">Status</Label>
                       <Select value={statusFilter} onValueChange={updateStatusFilter}>
@@ -876,8 +877,8 @@ export function InvoicesTable({
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  <DrawerFooter>
+                  </DrawerBody>
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
                     <DrawerClose asChild>
                       <Button>Done</Button>
                     </DrawerClose>
@@ -956,7 +957,7 @@ export function InvoicesTable({
         </div>
       </div>
       {exportSlotId && canExport ? <CsvExportSlot id={exportSlotId}>{exportMenu}</CsvExportSlot> : null}
-      <div className="grid gap-3 sm:hidden">
+      <div className="grid gap-3 md:hidden">
         {currentRows.length ? (
           currentRows.map((row) => {
             const invoice = row.original;
@@ -964,7 +965,7 @@ export function InvoicesTable({
             return (
               <div
                 key={row.id}
-                className="relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40"
+                className="relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_minmax(18rem,1fr)] sm:gap-x-6"
               >
                 <Link
                   prefetch={false}
@@ -983,7 +984,7 @@ export function InvoicesTable({
                   </div>
                   <div className="shrink-0 font-semibold text-sm tabular-nums">{formatMoney(invoice.total)}</div>
                 </div>
-                <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
+                <div className="grid min-w-0 grid-cols-2 gap-3 text-sm sm:row-span-2">
                   <div className="flex min-w-0 flex-col gap-3">
                     <div className="grid gap-1">
                       <span className="text-muted-foreground text-xs">Issued</span>
@@ -1035,7 +1036,7 @@ export function InvoicesTable({
         )}
       </div>
 
-      <div className="hidden w-full min-w-0 max-w-full overflow-hidden sm:block [&_th]:top-0">
+      <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
         <Table className="min-w-[70.75rem] table-fixed">
           <colgroup>
             {table.getVisibleLeafColumns().map((column) => (

@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
+  DrawerBody,
   DrawerClose,
   DrawerContent,
   DrawerDescription,
@@ -257,7 +258,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                     <DrawerTitle>Lead filters</DrawerTitle>
                     <DrawerDescription>Filter and sort the lead pipeline on mobile.</DrawerDescription>
                   </DrawerHeader>
-                  <div className="grid gap-4 px-4">
+                  <DrawerBody className="grid gap-4 px-4 pb-1">
                     <div className="grid gap-2">
                       <Label htmlFor="leads-mobile-status">Status</Label>
                       <Select value={statusFilter} onValueChange={(value) => updateFilter(setStatusFilter, value)}>
@@ -332,8 +333,8 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  <DrawerFooter>
+                  </DrawerBody>
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
                     {hasFilters ? (
                       <Button type="button" variant="outline" onClick={resetFilters}>
                         Reset filters
@@ -597,7 +598,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
             return (
               <article
                 key={lead.id}
-                className="relative grid min-w-0 gap-2 overflow-hidden rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
+                className="relative grid min-w-0 gap-2 overflow-hidden rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30 sm:grid-cols-[minmax(0,1fr)_minmax(18rem,0.9fr)] sm:items-center sm:gap-x-6"
               >
                 <Link
                   href={href}
@@ -623,7 +624,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                     {lead.status}
                   </Badge>
                 </div>
-                <div className="pointer-events-none relative flex min-w-0 items-end justify-between gap-3 border-t pt-2">
+                <div className="pointer-events-none relative flex min-w-0 items-end justify-between gap-3 border-t pt-2 sm:border-t-0 sm:border-l sm:py-1 sm:pl-6">
                   <div className="min-w-0 text-xs">
                     <div className="truncate text-muted-foreground">{lead.serviceType ?? "Service not set"}</div>
                     <div className={cn("truncate font-medium", followUpOverdue && "text-destructive")}>

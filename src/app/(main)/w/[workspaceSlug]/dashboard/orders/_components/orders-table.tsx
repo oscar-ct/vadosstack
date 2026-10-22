@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Drawer,
+  DrawerBody,
   DrawerClose,
   DrawerContent,
   DrawerDescription,
@@ -294,7 +295,7 @@ function MobileOrderCard({
     <div className="relative overflow-hidden rounded-lg border bg-card">
       <button
         type="button"
-        className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden p-4 text-left hover:bg-muted/35"
+        className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden p-4 text-left hover:bg-muted/35 sm:grid-cols-[minmax(0,1fr)_minmax(18rem,1fr)] sm:gap-x-6"
         onClick={onOpen}
       >
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pr-10">
@@ -311,7 +312,7 @@ function MobileOrderCard({
           </div>
         </div>
         <ReturnBadge order={order} />
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-3 text-sm">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-3 text-sm sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:border-l sm:pl-6">
           <div className="min-w-0">
             <div className="text-muted-foreground text-xs">Customer</div>
             <div className="truncate">{order.customerName}</div>
@@ -492,7 +493,7 @@ export function OrdersTable({
                     <DrawerTitle>Order filters</DrawerTitle>
                     <DrawerDescription>Filter and sort the orders list on mobile.</DrawerDescription>
                   </DrawerHeader>
-                  <div className="grid gap-4 px-4">
+                  <DrawerBody className="grid gap-4 px-4 pb-1">
                     <div className="grid gap-2">
                       <Label htmlFor="orders-mobile-status">Status</Label>
                       <Select value={activeFilter} onValueChange={(value) => updateFilter(value as OrderFilter)}>
@@ -527,8 +528,8 @@ export function OrdersTable({
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  <DrawerFooter>
+                  </DrawerBody>
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
                     <DrawerClose asChild>
                       <Button>Done</Button>
                     </DrawerClose>

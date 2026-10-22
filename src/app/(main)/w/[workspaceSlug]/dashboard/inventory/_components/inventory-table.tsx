@@ -26,6 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Drawer,
+  DrawerBody,
   DrawerClose,
   DrawerContent,
   DrawerDescription,
@@ -469,7 +470,7 @@ function MobileInventoryCard({
   const status = getInventoryStatus(item, stockRules);
 
   return (
-    <div className="relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-4 transition-colors hover:bg-muted/35">
+    <div className="relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-4 transition-colors hover:bg-muted/35 sm:grid-cols-[minmax(0,1fr)_minmax(18rem,1fr)] sm:items-center sm:gap-x-6">
       <button
         type="button"
         className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -491,7 +492,7 @@ function MobileInventoryCard({
           </Badge>
         </div>
       </div>
-      <div className="pointer-events-none relative grid min-w-0 grid-cols-2 gap-3 text-sm">
+      <div className="pointer-events-none relative grid min-w-0 grid-cols-2 gap-3 text-sm sm:border-l sm:pl-6">
         <div className="min-w-0">
           <div className="text-muted-foreground text-xs">Stock</div>
           <div className={cn("font-semibold tabular-nums", getStockClassName(status))}>{item.stock}</div>
@@ -717,7 +718,7 @@ export function InventoryTable({
                     <DrawerTitle>Inventory filters</DrawerTitle>
                     <DrawerDescription>Filter and sort the inventory list on mobile.</DrawerDescription>
                   </DrawerHeader>
-                  <div className="grid gap-4 px-4">
+                  <DrawerBody className="grid gap-4 px-4 pb-1">
                     <div className="grid gap-2">
                       <Label htmlFor="inventory-mobile-status">Status</Label>
                       <Select value={statusFilter} onValueChange={updateStatusFilter}>
@@ -786,8 +787,8 @@ export function InventoryTable({
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  <DrawerFooter>
+                  </DrawerBody>
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
                     {hasFilters ? (
                       <Button type="button" variant="outline" onClick={resetFilters}>
                         Reset filters

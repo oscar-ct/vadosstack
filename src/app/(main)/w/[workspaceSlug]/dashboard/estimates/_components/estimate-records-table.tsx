@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Drawer,
+  DrawerBody,
   DrawerClose,
   DrawerContent,
   DrawerDescription,
@@ -363,7 +364,7 @@ export function EstimateRecordsTable({
                     <DrawerTitle>Estimate filters</DrawerTitle>
                     <DrawerDescription>Filter and sort the estimates list on mobile.</DrawerDescription>
                   </DrawerHeader>
-                  <div className="grid gap-4 px-4">
+                  <DrawerBody className="grid gap-4 px-4 pb-1">
                     <div className="grid gap-2">
                       <Label htmlFor="estimates-mobile-status">Status</Label>
                       <Select
@@ -404,8 +405,8 @@ export function EstimateRecordsTable({
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  <DrawerFooter>
+                  </DrawerBody>
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
                     <DrawerClose asChild>
                       <Button>Done</Button>
                     </DrawerClose>
@@ -504,7 +505,7 @@ export function EstimateRecordsTable({
                 router.push(`/dashboard/estimates/records/${estimate.id}`);
               }}
             >
-              <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden">
+              <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden sm:grid-cols-[minmax(0,1fr)_minmax(18rem,1fr)] sm:gap-x-6">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 font-medium font-mono text-muted-foreground text-xs">
@@ -526,7 +527,7 @@ export function EstimateRecordsTable({
                   </div>
                   <span className="shrink-0 font-medium text-sm">{formatMoney(estimate.estimatedTotal)}</span>
                 </div>
-                <div className="grid min-w-0 gap-2 text-sm">
+                <div className="grid min-w-0 gap-2 text-sm sm:row-span-2">
                   <MobileLocationCard address={estimate.serviceLocation} />
                   <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                     <span className="text-muted-foreground text-xs">Status</span>

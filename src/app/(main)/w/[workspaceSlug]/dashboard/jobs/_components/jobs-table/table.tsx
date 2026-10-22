@@ -38,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Drawer,
+  DrawerBody,
   DrawerClose,
   DrawerContent,
   DrawerDescription,
@@ -297,7 +298,7 @@ export function JobsTable({
                     <DrawerTitle>Job filters</DrawerTitle>
                     <DrawerDescription>Filter and sort the jobs list on mobile.</DrawerDescription>
                   </DrawerHeader>
-                  <div className="grid gap-4 px-4">
+                  <DrawerBody className="grid gap-4 px-4 pb-1">
                     <div className="grid gap-2">
                       <Label htmlFor="jobs-mobile-status">Status</Label>
                       <Select
@@ -386,8 +387,8 @@ export function JobsTable({
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  <DrawerFooter>
+                  </DrawerBody>
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
                     <DrawerClose asChild>
                       <Button>Done</Button>
                     </DrawerClose>
@@ -463,7 +464,7 @@ export function JobsTable({
                     router.push(`/dashboard/jobs/${row.original.id}`);
                   }}
                 >
-                  <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden">
+                  <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden sm:grid-cols-[minmax(0,1fr)_minmax(19rem,1fr)] sm:gap-x-6">
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -485,7 +486,7 @@ export function JobsTable({
                         Overdue since {getJobOverdueDate(row.original)}
                       </div>
                     ) : null}
-                    <div className="grid min-w-0 gap-2 text-sm">
+                    <div className="grid min-w-0 gap-2 text-sm sm:col-start-2 sm:row-span-4 sm:row-start-1 sm:border-l sm:pl-6">
                       <MobileLocationCard address={serviceLocation} modalLabel="Job site" />
                       <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">Start Date</span>
@@ -526,7 +527,7 @@ export function JobsTable({
                         </span>
                       </div>
                     </div>
-                    <div>
+                    <div className="sm:self-end">
                       {row.original.invoiceId ? (
                         <Button
                           asChild
@@ -558,7 +559,7 @@ export function JobsTable({
                         <span className="text-muted-foreground text-sm">Not invoiced</span>
                       )}
                     </div>
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center justify-end sm:justify-start">
                       <span className="text-muted-foreground text-sm">Open job</span>
                     </div>
                   </CardContent>

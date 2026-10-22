@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Drawer,
+  DrawerBody,
   DrawerClose,
   DrawerContent,
   DrawerDescription,
@@ -319,7 +320,7 @@ export function RecentCustomersTable({
                     <DrawerTitle>Customer filters</DrawerTitle>
                     <DrawerDescription>Filter and sort the customer list on mobile.</DrawerDescription>
                   </DrawerHeader>
-                  <div className="grid gap-4 px-4">
+                  <DrawerBody className="grid gap-4 px-4 pb-1">
                     {view === "work" ? (
                       <>
                         <div className="grid gap-2">
@@ -389,8 +390,8 @@ export function RecentCustomersTable({
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  <DrawerFooter>
+                  </DrawerBody>
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
                     <DrawerClose asChild>
                       <Button>Done</Button>
                     </DrawerClose>
@@ -475,7 +476,7 @@ export function RecentCustomersTable({
                     router.push(`/dashboard/customers/${row.original.id}${viewQuery}`);
                   }}
                 >
-                  <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden">
+                  <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden sm:grid-cols-[minmax(0,1fr)_minmax(18rem,1fr)] sm:gap-x-6">
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-sm">{row.original.name}</div>
@@ -498,7 +499,7 @@ export function RecentCustomersTable({
                         {view === "orders" ? (row.original.totalOrderSpent ?? "$0.00") : billingDisplay.amountLabel}
                       </span>
                     </div>
-                    <div className="grid min-w-0 gap-2 text-sm">
+                    <div className="grid min-w-0 gap-2 text-sm sm:row-span-3">
                       {view === "orders" ? (
                         <>
                           <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3">
