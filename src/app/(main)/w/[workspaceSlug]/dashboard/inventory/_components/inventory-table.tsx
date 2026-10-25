@@ -714,11 +714,13 @@ export function InventoryTable({
                   </Button>
                 </DrawerTrigger>
                 <DrawerContent>
-                  <DrawerHeader>
+                  <DrawerHeader className="landscape:py-2">
                     <DrawerTitle>Inventory filters</DrawerTitle>
-                    <DrawerDescription>Filter and sort the inventory list on mobile.</DrawerDescription>
+                    <DrawerDescription className="landscape:hidden">
+                      Filter and sort the inventory list on mobile.
+                    </DrawerDescription>
                   </DrawerHeader>
-                  <DrawerBody className="grid gap-4 px-4 pb-1">
+                  <DrawerBody className="grid gap-4 px-4 pb-1 landscape:gap-3">
                     <div className="grid gap-2">
                       <Label htmlFor="inventory-mobile-status">Status</Label>
                       <Select value={statusFilter} onValueChange={updateStatusFilter}>
@@ -788,7 +790,7 @@ export function InventoryTable({
                       </Select>
                     </div>
                   </DrawerBody>
-                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))] landscape:pt-2 landscape:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                     {hasFilters ? (
                       <Button type="button" variant="outline" onClick={resetFilters}>
                         Reset filters

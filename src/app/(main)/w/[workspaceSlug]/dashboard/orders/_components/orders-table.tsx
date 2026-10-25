@@ -489,11 +489,13 @@ export function OrdersTable({
                   </Button>
                 </DrawerTrigger>
                 <DrawerContent>
-                  <DrawerHeader>
+                  <DrawerHeader className="landscape:py-2">
                     <DrawerTitle>Order filters</DrawerTitle>
-                    <DrawerDescription>Filter and sort the orders list on mobile.</DrawerDescription>
+                    <DrawerDescription className="landscape:hidden">
+                      Filter and sort the orders list on mobile.
+                    </DrawerDescription>
                   </DrawerHeader>
-                  <DrawerBody className="grid gap-4 px-4 pb-1">
+                  <DrawerBody className="grid gap-4 px-4 pb-1 landscape:gap-3">
                     <div className="grid gap-2">
                       <Label htmlFor="orders-mobile-status">Status</Label>
                       <Select value={activeFilter} onValueChange={(value) => updateFilter(value as OrderFilter)}>
@@ -529,7 +531,7 @@ export function OrdersTable({
                       </Select>
                     </div>
                   </DrawerBody>
-                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))] landscape:pt-2 landscape:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                     <DrawerClose asChild>
                       <Button>Done</Button>
                     </DrawerClose>

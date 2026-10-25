@@ -254,11 +254,13 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                   </Button>
                 </DrawerTrigger>
                 <DrawerContent>
-                  <DrawerHeader>
+                  <DrawerHeader className="landscape:py-2">
                     <DrawerTitle>Lead filters</DrawerTitle>
-                    <DrawerDescription>Filter and sort the lead pipeline on mobile.</DrawerDescription>
+                    <DrawerDescription className="landscape:hidden">
+                      Filter and sort the lead pipeline on mobile.
+                    </DrawerDescription>
                   </DrawerHeader>
-                  <DrawerBody className="grid gap-4 px-4 pb-1">
+                  <DrawerBody className="grid gap-4 px-4 pb-1 landscape:gap-3">
                     <div className="grid gap-2">
                       <Label htmlFor="leads-mobile-status">Status</Label>
                       <Select value={statusFilter} onValueChange={(value) => updateFilter(setStatusFilter, value)}>
@@ -334,7 +336,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                       </Select>
                     </div>
                   </DrawerBody>
-                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))] landscape:pt-2 landscape:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                     {hasFilters ? (
                       <Button type="button" variant="outline" onClick={resetFilters}>
                         Reset filters

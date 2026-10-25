@@ -294,11 +294,13 @@ export function JobsTable({
                   </Button>
                 </DrawerTrigger>
                 <DrawerContent>
-                  <DrawerHeader>
+                  <DrawerHeader className="landscape:py-2">
                     <DrawerTitle>Job filters</DrawerTitle>
-                    <DrawerDescription>Filter and sort the jobs list on mobile.</DrawerDescription>
+                    <DrawerDescription className="landscape:hidden">
+                      Filter and sort the jobs list on mobile.
+                    </DrawerDescription>
                   </DrawerHeader>
-                  <DrawerBody className="grid gap-4 px-4 pb-1">
+                  <DrawerBody className="grid gap-4 px-4 pb-1 landscape:gap-3">
                     <div className="grid gap-2">
                       <Label htmlFor="jobs-mobile-status">Status</Label>
                       <Select
@@ -388,7 +390,7 @@ export function JobsTable({
                       </Select>
                     </div>
                   </DrawerBody>
-                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
+                  <DrawerFooter className="border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))] landscape:pt-2 landscape:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                     <DrawerClose asChild>
                       <Button>Done</Button>
                     </DrawerClose>
