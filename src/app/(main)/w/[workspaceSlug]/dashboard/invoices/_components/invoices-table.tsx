@@ -291,11 +291,17 @@ export function InvoiceDetailsDialog({
     deleteJobPaymentAction,
     initialJobMutationState,
   );
+  const [paymentIdempotencyKey, setPaymentIdempotencyKey] = React.useState("");
+
+  React.useEffect(() => {
+    if (open && invoice) setPaymentIdempotencyKey(globalThis.crypto.randomUUID());
+  }, [invoice, open]);
 
   React.useEffect(() => {
     if (!paymentState.success) return;
 
     paymentFormRef.current?.reset();
+    setPaymentIdempotencyKey(globalThis.crypto.randomUUID());
     router.refresh();
     toast.success(paymentState.message || "Payment recorded.");
   }, [paymentState, router]);
@@ -433,6 +439,7 @@ export function InvoiceDetailsDialog({
             >
               <input type="hidden" name="jobId" value={invoice.jobId} />
               <input type="hidden" name="paymentType" value="invoice_payment" />
+              <input type="hidden" name="idempotencyKey" value={paymentIdempotencyKey} />
               <div className="flex items-start gap-3">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
                   <CircleDollarSign className="size-4" />
@@ -494,7 +501,12 @@ export function InvoiceDetailsDialog({
                 <p className="text-destructive text-sm">{paymentState.message}</p>
               ) : null}
               <div className="flex justify-end">
-                <Button type="submit" size="sm" disabled={isCreatingPayment} className="shadow-sm">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isCreatingPayment || !paymentIdempotencyKey}
+                  className="shadow-sm"
+                >
                   <CircleDollarSign className="size-4" />
                   {isCreatingPayment ? "Recording..." : "Record payment"}
                 </Button>

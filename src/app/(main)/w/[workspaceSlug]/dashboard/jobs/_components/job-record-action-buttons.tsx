@@ -2,7 +2,16 @@
 
 import * as React from "react";
 
-import { CircleCheck, CircleDollarSign, MoreVertical, Pencil, ReceiptText, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CircleCheck,
+  CircleDollarSign,
+  MoreVertical,
+  Pencil,
+  ReceiptText,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -518,22 +527,30 @@ function DepositDialog({
   payment?: JobPayment;
 }) {
   const isEditing = Boolean(payment);
+  const requiresPaymentChoice = Boolean(job.invoiceId) && !isEditing;
   const paymentFormRef = React.useRef<HTMLFormElement>(null);
   const router = useRouter();
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const [paymentType, setPaymentType] = React.useState<"deposit" | null>(requiresPaymentChoice ? null : "deposit");
+  const [idempotencyKey, setIdempotencyKey] = React.useState("");
   const [state, formAction, isPending] = React.useActionState(action, initialState);
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = React.useCallback(
     (nextOpen: boolean) => {
+      if (nextOpen) {
+        setPaymentType(requiresPaymentChoice ? null : "deposit");
+      }
       if (onOpenChange) {
         onOpenChange(nextOpen);
         return;
       }
       setUncontrolledOpen(nextOpen);
     },
-    [onOpenChange],
+    [onOpenChange, requiresPaymentChoice],
   );
-
+  React.useEffect(() => {
+    if (open && !isEditing) setIdempotencyKey(globalThis.crypto.randomUUID());
+  }, [isEditing, open]);
   React.useEffect(() => {
     if (!state.success) return;
     if (!isEditing) {
@@ -549,81 +566,131 @@ function DepositDialog({
       {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit deposit" : "Record deposit"}</DialogTitle>
+          <DialogTitle>
+            {isEditing
+              ? "Edit deposit"
+              : paymentType === null
+                ? "This job has already been invoiced"
+                : "Record deposit"}
+          </DialogTitle>
           <DialogDescription>
             {isEditing
               ? "Update the deposit details. Changes will refresh the job balance."
-              : "Add a deposit collected before or during the job. Deposits reduce the future invoice balance."}
+              : paymentType === null
+                ? `Payments received now should normally be applied to invoice ${job.invoiceNumber ?? "for this job"}.`
+                : "Add a deposit collected before or during the job. Deposits reduce the future invoice balance."}
           </DialogDescription>
         </DialogHeader>
-        <form ref={paymentFormRef} action={formAction} className="grid gap-4">
-          {payment ? <input type="hidden" name="id" value={payment.id} /> : null}
-          <input type="hidden" name="jobId" value={job.id} />
-          <input type="hidden" name="paymentType" value="deposit" />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor={`job-deposit-date-${payment?.id ?? job.id}`}>Date</Label>
-              <Input
-                id={`job-deposit-date-${payment?.id ?? job.id}`}
-                name="paidOn"
-                type="date"
-                defaultValue={payment ? toDateInputValue(new Date(payment.paidOn)) : toDateInputValue(new Date())}
-                required
-              />
+        {paymentType === null ? (
+          <div className="grid gap-4">
+            <div className="flex gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+              <div className="grid gap-1">
+                <p className="font-medium text-sm">Recording a deposit may misclassify this payment.</p>
+                <p className="text-xs leading-relaxed">
+                  Open {job.invoiceNumber ?? "the existing invoice"} to review it and record the payment from the
+                  invoice. This keeps its outstanding balance accurate.
+                </p>
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor={`job-deposit-amount-${payment?.id ?? job.id}`}>Amount</Label>
-              <Input
-                id={`job-deposit-amount-${payment?.id ?? job.id}`}
-                name="amount"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                defaultValue={payment?.amount}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor={`job-deposit-method-${payment?.id ?? job.id}`}>Method</Label>
-              <Input
-                id={`job-deposit-method-${payment?.id ?? job.id}`}
-                name="method"
-                placeholder="Zelle, check, card"
-                defaultValue={payment?.method}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor={`job-deposit-reference-${payment?.id ?? job.id}`}>Check / Ref #</Label>
-              <Input
-                id={`job-deposit-reference-${payment?.id ?? job.id}`}
-                name="referenceNumber"
-                placeholder="Optional"
-                defaultValue={payment?.referenceNumber ?? ""}
-              />
-            </div>
-            <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor={`job-deposit-description-${payment?.id ?? job.id}`}>Description</Label>
-              <Input
-                id={`job-deposit-description-${payment?.id ?? job.id}`}
-                name="description"
-                placeholder="Deposit"
-                defaultValue={payment?.description || "Deposit"}
-                required
-              />
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setPaymentType("deposit")}>
+                Record as deposit anyway
+              </Button>
+              <Button asChild>
+                <Link prefetch={false} href={`/dashboard/invoices/${job.invoiceId}`}>
+                  <ReceiptText />
+                  View invoice
+                </Link>
+              </Button>
             </div>
           </div>
-          {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? (isEditing ? "Saving..." : "Recording...") : isEditing ? "Save deposit" : "Record deposit"}
-            </Button>
-          </div>
-        </form>
+        ) : (
+          <form ref={paymentFormRef} action={formAction} className="grid gap-4">
+            {payment ? <input type="hidden" name="id" value={payment.id} /> : null}
+            <input type="hidden" name="jobId" value={job.id} />
+            <input type="hidden" name="paymentType" value={paymentType} />
+            {!isEditing ? <input type="hidden" name="idempotencyKey" value={idempotencyKey} /> : null}
+            {requiresPaymentChoice ? (
+              <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/25 px-3 py-2">
+                <div className="min-w-0 text-xs">
+                  <span className="font-medium">Deposit override</span>
+                  <span className="ml-1 text-muted-foreground">· {job.invoiceNumber ?? "Existing invoice"}</span>
+                </div>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setPaymentType(null)}>
+                  <ArrowLeft />
+                  Change
+                </Button>
+              </div>
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor={`job-deposit-date-${payment?.id ?? job.id}`}>Date</Label>
+                <Input
+                  id={`job-deposit-date-${payment?.id ?? job.id}`}
+                  name="paidOn"
+                  type="date"
+                  defaultValue={payment ? toDateInputValue(new Date(payment.paidOn)) : toDateInputValue(new Date())}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor={`job-deposit-amount-${payment?.id ?? job.id}`}>Amount</Label>
+                <Input
+                  id={`job-deposit-amount-${payment?.id ?? job.id}`}
+                  name="amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  defaultValue={payment?.amount}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor={`job-deposit-method-${payment?.id ?? job.id}`}>Method</Label>
+                <Input
+                  id={`job-deposit-method-${payment?.id ?? job.id}`}
+                  name="method"
+                  placeholder="Zelle, check, card"
+                  defaultValue={payment?.method}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor={`job-deposit-reference-${payment?.id ?? job.id}`}>Check / Ref #</Label>
+                <Input
+                  id={`job-deposit-reference-${payment?.id ?? job.id}`}
+                  name="referenceNumber"
+                  placeholder="Optional"
+                  defaultValue={payment?.referenceNumber ?? ""}
+                />
+              </div>
+              <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor={`job-deposit-description-${payment?.id ?? job.id}`}>Description</Label>
+                <Input
+                  id={`job-deposit-description-${payment?.id ?? job.id}`}
+                  name="description"
+                  placeholder="Deposit"
+                  defaultValue={payment?.description || "Deposit"}
+                  required
+                />
+              </div>
+            </div>
+            {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending || (!isEditing && !idempotencyKey)}>
+                {isPending ? (isEditing ? "Saving..." : "Recording...") : isEditing ? "Save deposit" : "Record deposit"}
+              </Button>
+            </div>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

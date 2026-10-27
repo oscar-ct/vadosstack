@@ -1,5 +1,6 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { getPermittedDashboardAuthorization } from "@/lib/authorization";
@@ -27,6 +28,7 @@ const jobTypes = ["Residential", "Commercial"] as const;
 export type JobMutationState = {
   success: boolean;
   message: string;
+  paymentId?: string;
   redirectTo?: string;
 };
 
@@ -513,12 +515,18 @@ function normalizeJobStatus(status: (typeof jobStatuses)[number], dateBegin?: Da
   return status;
 }
 
-async function syncCustomerBillingStatus(customerId: string | null | undefined, ownerId: string) {
+type PaymentSummaryDatabase = Pick<Prisma.TransactionClient, "customer" | "invoice" | "job" | "jobPayment">;
+
+async function syncCustomerBillingStatus(
+  customerId: string | null | undefined,
+  ownerId: string,
+  database: PaymentSummaryDatabase = prisma,
+) {
   if (!customerId) {
     return;
   }
 
-  const jobs = await prisma.job.findMany({
+  const jobs = await database.job.findMany({
     where: {
       ownerId,
       customerId,
@@ -531,7 +539,7 @@ async function syncCustomerBillingStatus(customerId: string | null | undefined, 
     },
   });
 
-  await prisma.customer.update({
+  await database.customer.update({
     where: {
       id_ownerId: {
         id: customerId,
@@ -550,8 +558,8 @@ async function syncCustomerBillingStatus(customerId: string | null | undefined, 
   });
 }
 
-async function getJobPaidTotal(jobId: string) {
-  const payments = await prisma.jobPayment.findMany({
+async function getJobPaidTotal(jobId: string, database: PaymentSummaryDatabase = prisma) {
+  const payments = await database.jobPayment.findMany({
     where: {
       jobId,
       status: { in: ["succeeded", "partially_refunded"] },
@@ -573,8 +581,8 @@ async function getJobPaidTotal(jobId: string) {
   );
 }
 
-async function getJobDepositTotal(jobId: string) {
-  const payments = await prisma.jobPayment.findMany({
+async function getJobDepositTotal(jobId: string, database: PaymentSummaryDatabase = prisma) {
+  const payments = await database.jobPayment.findMany({
     where: {
       jobId,
       paymentType: "deposit",
@@ -597,8 +605,8 @@ async function getJobDepositTotal(jobId: string) {
   );
 }
 
-async function syncJobPaymentSummary(jobId: string, ownerId: string) {
-  const job = await prisma.job.findUnique({
+async function syncJobPaymentSummary(jobId: string, ownerId: string, database: PaymentSummaryDatabase = prisma) {
+  const job = await database.job.findUnique({
     where: {
       id_ownerId: {
         id: jobId,
@@ -622,11 +630,11 @@ async function syncJobPaymentSummary(jobId: string, ownerId: string) {
     throw new Error("Job could not be found.");
   }
 
-  const amountPaid = await getJobPaidTotal(job.id);
-  const depositPaid = await getJobDepositTotal(job.id);
+  const amountPaid = await getJobPaidTotal(job.id, database);
+  const depositPaid = await getJobDepositTotal(job.id, database);
   const paymentStatus = deriveJobPaymentStatus(job.status, job.finalCost?.toString(), amountPaid);
 
-  await prisma.job.update({
+  await database.job.update({
     where: {
       id_ownerId: {
         id: job.id,
@@ -642,7 +650,7 @@ async function syncJobPaymentSummary(jobId: string, ownerId: string) {
 
   if (job.invoice) {
     const finalCost = Number(job.finalCost ?? 0);
-    await prisma.invoice.update({
+    await database.invoice.update({
       where: {
         id_ownerId: {
           id: job.invoice.id,
@@ -658,7 +666,7 @@ async function syncJobPaymentSummary(jobId: string, ownerId: string) {
     });
   }
 
-  await syncCustomerBillingStatus(job.customerId, ownerId);
+  await syncCustomerBillingStatus(job.customerId, ownerId, database);
 }
 
 async function syncExistingInvoiceSnapshotFromJob(jobId: string, ownerId: string) {
@@ -1114,6 +1122,10 @@ const jobPaymentSchema = z.object({
   notes: z.string().trim().optional(),
 });
 
+const createJobPaymentSchema = jobPaymentSchema.extend({
+  idempotencyKey: z.string().trim().min(1, "Payment submission is required.").max(128),
+});
+
 const deleteJobPaymentSchema = z.object({
   id: z.string().trim().min(1, "Payment is required."),
 });
@@ -1136,8 +1148,9 @@ export async function createJobPaymentAction(
   }
   const workspaceId = authorization.workspaceId;
 
-  const parsed = jobPaymentSchema.safeParse({
+  const parsed = createJobPaymentSchema.safeParse({
     jobId: formData.get("jobId"),
+    idempotencyKey: formData.get("idempotencyKey"),
     paymentType: formData.get("paymentType") || "deposit",
     paidOn: formData.get("paidOn"),
     amount: formData.get("amount"),
@@ -1154,59 +1167,106 @@ export async function createJobPaymentAction(
     };
   }
 
-  let checkoutExpirationFailed = false;
+  const existingPayment = await prisma.jobPayment.findUnique({
+    where: {
+      ownerId_idempotencyKey: {
+        ownerId: workspaceId,
+        idempotencyKey: parsed.data.idempotencyKey,
+      },
+    },
+    select: { id: true },
+  });
+  if (existingPayment) {
+    return {
+      success: true,
+      message: parsed.data.paymentType === "deposit" ? "Deposit already recorded." : "Payment already recorded.",
+      paymentId: existingPayment.id,
+    };
+  }
+
+  let createdPaymentId: string | undefined;
   try {
-    const job = await prisma.job.findUnique({
-      where: {
-        id_ownerId: {
-          id: parsed.data.jobId,
+    createdPaymentId = await prisma.$transaction(async (transaction) => {
+      const job = await transaction.job.findUnique({
+        where: {
+          id_ownerId: {
+            id: parsed.data.jobId,
+            ownerId: workspaceId,
+          },
+        },
+        select: {
+          id: true,
+          invoice: { select: { balanceDue: true, id: true } },
+        },
+      });
+
+      if (!job) throw new Error("PAYMENT_JOB_NOT_FOUND");
+
+      if (job.invoice && Number(job.invoice.balanceDue) <= 0) throw new Error("PAYMENT_INVOICE_PAID");
+
+      const paymentAmountMinor = Math.round(Number(parsed.data.amount) * 100);
+      const balanceDueMinor = Math.round(Number(job.invoice?.balanceDue ?? 0) * 100);
+      if (parsed.data.paymentType === "invoice_payment" && job.invoice && paymentAmountMinor > balanceDueMinor) {
+        throw new Error("PAYMENT_EXCEEDS_BALANCE");
+      }
+
+      const payment = await transaction.jobPayment.create({
+        data: {
           ownerId: workspaceId,
+          jobId: parsed.data.jobId,
+          invoiceId: job.invoice?.id ?? null,
+          idempotencyKey: parsed.data.idempotencyKey,
+          paidOn: parsed.data.paidOn,
+          amount: Number(parsed.data.amount).toFixed(2),
+          paymentType: parsed.data.paymentType,
+          method: parsed.data.method,
+          referenceNumber: parsed.data.referenceNumber || null,
+          description: parsed.data.description,
+          notes: parsed.data.notes || null,
+        },
+      });
+
+      await syncJobPaymentSummary(parsed.data.jobId, workspaceId, transaction);
+      await recordAuthorizationAuditEvent(
+        {
+          workspaceId,
+          actorUserId: authorization.principal.user.id,
+          membershipId: authorization.membership.id,
+          action: "job.payment.create",
+          targetType: "JobPayment",
+          targetId: payment.id,
+          metadata: { jobId: parsed.data.jobId, paymentType: parsed.data.paymentType },
+        },
+        transaction,
+      );
+      return payment.id;
+    });
+  } catch (error) {
+    const duplicate = await prisma.jobPayment.findUnique({
+      where: {
+        ownerId_idempotencyKey: {
+          ownerId: workspaceId,
+          idempotencyKey: parsed.data.idempotencyKey,
         },
       },
-      select: {
-        id: true,
-        invoice: { select: { balanceDue: true, id: true } },
-      },
+      select: { id: true },
     });
-
-    if (!job) {
+    if (duplicate) {
       return {
-        success: false,
-        message: "Select a job from your account.",
+        success: true,
+        message: parsed.data.paymentType === "deposit" ? "Deposit already recorded." : "Payment already recorded.",
+        paymentId: duplicate.id,
       };
     }
-
-    if (job.invoice && Number(job.invoice.balanceDue) <= 0) {
+    if (error instanceof Error && error.message === "PAYMENT_JOB_NOT_FOUND") {
+      return { success: false, message: "Select a job from your account." };
+    }
+    if (error instanceof Error && error.message === "PAYMENT_INVOICE_PAID") {
       return { success: false, message: "This invoice is already paid in full." };
     }
-
-    const payment = await prisma.jobPayment.create({
-      data: {
-        ownerId: workspaceId,
-        jobId: parsed.data.jobId,
-        invoiceId: job.invoice?.id ?? null,
-        paidOn: parsed.data.paidOn,
-        amount: Number(parsed.data.amount).toFixed(2),
-        paymentType: parsed.data.paymentType,
-        method: parsed.data.method,
-        referenceNumber: parsed.data.referenceNumber || null,
-        description: parsed.data.description,
-        notes: parsed.data.notes || null,
-      },
-    });
-
-    await syncJobPaymentSummary(parsed.data.jobId, workspaceId);
-    checkoutExpirationFailed = await didStripeCheckoutExpirationFail(workspaceId, parsed.data.jobId);
-    await recordAuthorizationAuditEvent({
-      workspaceId,
-      actorUserId: authorization.principal.user.id,
-      membershipId: authorization.membership.id,
-      action: "job.payment.create",
-      targetType: "JobPayment",
-      targetId: payment.id,
-      metadata: { jobId: parsed.data.jobId, paymentType: parsed.data.paymentType },
-    }).catch((error) => console.error("Job payment creation audit could not be saved.", error));
-  } catch (error) {
+    if (error instanceof Error && error.message === "PAYMENT_EXCEEDS_BALANCE") {
+      return { success: false, message: "Payment amount cannot be greater than the invoice balance." };
+    }
     console.error("Job payment creation failed.", error);
     return {
       success: false,
@@ -1214,9 +1274,12 @@ export async function createJobPaymentAction(
     };
   }
 
+  const checkoutExpirationFailed = await didStripeCheckoutExpirationFail(workspaceId, parsed.data.jobId);
+
   revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/jobs");
   revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/customers");
   revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/invoices");
+  revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/payments");
 
   return {
     success: true,
@@ -1224,6 +1287,7 @@ export async function createJobPaymentAction(
       parsed.data.paymentType === "deposit" ? "Deposit recorded." : "Payment recorded.",
       checkoutExpirationFailed,
     ),
+    paymentId: createdPaymentId,
   };
 }
 

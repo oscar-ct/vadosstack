@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   BadgeDollarSign,
@@ -16,8 +16,11 @@ import {
   Smartphone,
   Unplug,
   WalletCards,
+  X,
 } from "lucide-react";
+import { siPaypal } from "simple-icons";
 
+import { SimpleIcon } from "@/components/simple-icon";
 import { StripeWordmark } from "@/components/stripe-wordmark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -202,8 +205,17 @@ export function StripeSetupExperience(props: StripeSetupExperienceProps) {
   const [disconnectState, disconnectAction, disconnectPending] = useActionState(disconnectStripeAction, initialState);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionMessageDismissed, setActionMessageDismissed] = useState(false);
+  const [paypalSetupOpen, setPaypalSetupOpen] = useState(false);
+  const [stripeProviderOpen, setStripeProviderOpen] = useState(returnedIncomplete || showReadyCelebration);
+  const providerContentRef = useRef<HTMLDivElement>(null);
+  const [providerHeight, setProviderHeight] = useState(128);
   const state = setupState(props);
   const tone = setupTone(props);
+  const stripeLauncherStatus = ready ? "connected" : connected ? "incomplete" : "disconnected";
+  const surfaceTransition = {
+    duration: reduceMotion ? 0 : 0.32,
+    ease: [0.22, 1, 0.36, 1] as const,
+  };
 
   useEffect(() => {
     if (!returnedIncomplete && !showReadyCelebration) return;
@@ -213,105 +225,295 @@ export function StripeSetupExperience(props: StripeSetupExperienceProps) {
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   }, [returnedIncomplete, showReadyCelebration]);
 
+  useEffect(() => {
+    const content = providerContentRef.current;
+    if (!content) return;
+
+    const updateHeight = () => setProviderHeight(content.offsetHeight);
+    updateHeight();
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
   function handleDialogOpenChange(open: boolean) {
     setDialogOpen(open);
     if (!open) setActionMessageDismissed(true);
   }
 
+  function openStripeProvider() {
+    setPaypalSetupOpen(false);
+    setStripeProviderOpen(true);
+  }
+
   return (
     <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-      {ready && !showReadyCelebration ? (
-        <PaymentHealthPanel
-          {...health}
-          manageControl={
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline">
-                Manage Stripe
-              </Button>
-            </DialogTrigger>
-          }
-        />
-      ) : (
-        <section
-          className={cn(
-            "relative isolate overflow-hidden rounded-[1.5rem] border p-5 shadow-sm transition-colors sm:p-6",
-            tone.panel,
-          )}
-        >
-          <div
-            aria-hidden
-            className={cn("absolute -top-20 -right-16 -z-10 size-56 rounded-full blur-3xl", tone.glow)}
-          />
-          <div
-            aria-hidden
-            className={cn(
-              "absolute -bottom-24 left-1/4 -z-10 size-52 rounded-full blur-3xl",
-              ready ? "bg-teal-400/8" : "bg-white/30 dark:bg-white/5",
-            )}
-          />
-
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-4">
-                <span className="relative flex h-10 w-[4.5rem] shrink-0 items-center border-r pr-4">
-                  <StripeWordmark className="w-full dark:hidden" variant="blurple" />
-                  <StripeWordmark className="hidden w-full dark:block" variant="white" />
-                  {ready ? (
-                    <span className="absolute -top-0.5 right-2 grid size-4 place-items-center rounded-full bg-emerald-500 text-white ring-2 ring-background">
-                      <Check className="size-3" />
-                    </span>
-                  ) : null}
-                </span>
-                <div>
-                  <p className={cn("font-semibold text-xs uppercase tracking-[0.18em]", tone.eyebrow)}>
-                    {state.eyebrow}
-                  </p>
-                  <h2 className="mt-0.5 font-semibold text-xl tracking-tight sm:text-2xl">{state.title}</h2>
-                </div>
-              </div>
-              <p className="mt-3 max-w-2xl text-muted-foreground text-sm leading-6">{state.description}</p>
-
-              <div className="mt-5">
-                <div className="mb-2 flex items-center justify-between gap-4 text-xs">
-                  <span className="font-medium">Stripe setup</span>
-                  <span className="text-muted-foreground">{state.step}</span>
-                </div>
-                <div
-                  aria-label={`Stripe setup ${state.progress}% complete`}
-                  aria-valuemax={100}
-                  aria-valuemin={0}
-                  aria-valuenow={state.progress}
-                  className="relative h-3 overflow-hidden rounded-full bg-white/80 shadow-inner ring-1 ring-black/10 dark:bg-white/10 dark:ring-white/10"
-                  role="progressbar"
-                >
-                  <motion.div
-                    className={cn("relative h-full rounded-full", tone.progress)}
-                    initial={reduceMotion ? false : { width: 0 }}
-                    animate={{ width: `${state.progress}%` }}
-                    transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <span className="absolute inset-0 bg-[linear-gradient(110deg,transparent_20%,rgba(255,255,255,0.55)_45%,transparent_70%)]" />
-                  </motion.div>
-                </div>
-              </div>
-            </div>
-
-            <DialogTrigger asChild>
-              <Button
-                className={cn(
-                  "group h-12 shrink-0 rounded-xl px-6 transition hover:scale-[1.02] disabled:opacity-60",
-                  tone.button,
-                )}
-                disabled={!canManage}
-                size="lg"
+      <motion.div
+        animate={{ height: providerHeight }}
+        className="overflow-hidden"
+        initial={false}
+        transition={{ height: { duration: reduceMotion ? 0 : 0.42, ease: [0.22, 1, 0.36, 1] } }}
+      >
+        <div className="relative grid" ref={providerContentRef}>
+          <AnimatePresence initial={false} mode="popLayout">
+            {ready && !showReadyCelebration && stripeProviderOpen ? (
+              <motion.div
+                key="stripe-health"
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.992, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className="col-start-1 row-start-1"
+                exit={reduceMotion ? undefined : { opacity: 0, scale: 0.992, y: -6 }}
+                transition={surfaceTransition}
               >
-                {canManage ? state.button : "Admin access required"}
-                {/*<ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />*/}
-              </Button>
-            </DialogTrigger>
-          </div>
-        </section>
-      )}
+                <PaymentHealthPanel
+                  {...health}
+                  closeControl={
+                    <Button
+                      aria-label="Close Stripe details"
+                      onClick={() => setStripeProviderOpen(false)}
+                      size="icon-sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  }
+                  manageControl={
+                    <DialogTrigger asChild>
+                      <Button size="sm" variant="outline">
+                        Manage Stripe
+                      </Button>
+                    </DialogTrigger>
+                  }
+                />
+              </motion.div>
+            ) : paypalSetupOpen ? (
+              <motion.section
+                key="paypal-setup"
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.992, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0, scale: 0.992, y: -6 }}
+                transition={surfaceTransition}
+                className="relative isolate col-start-1 row-start-1 overflow-hidden rounded-[1.5rem] border border-sky-200/80 bg-gradient-to-br from-sky-50 via-background to-blue-50 p-5 shadow-sm sm:p-6 dark:border-sky-400/20 dark:from-sky-950/35 dark:via-background dark:to-blue-950/25"
+              >
+                <Button
+                  aria-label="Close PayPal setup"
+                  className="absolute top-2.5 right-2.5 z-10 rounded-full text-muted-foreground hover:bg-background/70 hover:text-foreground"
+                  onClick={() => setPaypalSetupOpen(false)}
+                  size="icon-sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <X className="size-4" />
+                </Button>
+                <div
+                  aria-hidden
+                  className="absolute -top-20 -right-16 -z-10 size-56 rounded-full bg-sky-400/15 blur-3xl"
+                />
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-end">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-4">
+                      <span className="flex h-10 w-[4.5rem] shrink-0 items-center border-r pr-4">
+                        <SimpleIcon className="size-9 fill-[#002991] dark:fill-sky-300" icon={siPaypal} />
+                      </span>
+                      <div>
+                        <p className="font-semibold text-sky-700 text-xs uppercase tracking-[0.18em] dark:text-sky-300">
+                          Work in progress
+                        </p>
+                        <h2 className="mt-0.5 font-semibold text-xl tracking-tight sm:text-2xl">
+                          PayPal setup is coming soon
+                        </h2>
+                      </div>
+                    </div>
+                    <p className="mt-3 max-w-2xl text-muted-foreground text-sm leading-6">
+                      We’re building a secure PayPal connection for online invoice payments. Setup is not available yet.
+                    </p>
+                  </div>
+                  <Button className="h-12 shrink-0 rounded-xl px-6" disabled size="lg" type="button">
+                    Coming soon
+                  </Button>
+                </div>
+              </motion.section>
+            ) : !stripeProviderOpen ? (
+              <motion.div
+                key="provider-launchers"
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0, scale: 0.97, y: -6 }}
+                transition={surfaceTransition}
+                className="col-start-1 row-start-1 flex justify-center gap-4 py-1"
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <div className="relative">
+                    <Button
+                      aria-label={ready ? "Open connected Stripe details" : "Open Stripe setup"}
+                      className="size-24 cursor-pointer rounded-full border-0 bg-[#635BFF] text-white shadow-[0_8px_24px_rgba(99,91,255,0.26)] transition-all duration-200 hover:-translate-y-1 hover:bg-[#5147e5] hover:text-white hover:shadow-[0_14px_30px_rgba(99,91,255,0.36)] dark:bg-[#635BFF] dark:hover:bg-[#5147e5]"
+                      onClick={openStripeProvider}
+                      type="button"
+                    >
+                      <StripeWordmark className="h-auto! w-14!" variant="white" />
+                    </Button>
+                    <span
+                      aria-label={
+                        stripeLauncherStatus === "connected"
+                          ? "Stripe connected"
+                          : stripeLauncherStatus === "incomplete"
+                            ? "Stripe setup incomplete"
+                            : "Stripe disconnected"
+                      }
+                      className={cn(
+                        "absolute right-0 bottom-0 grid size-7 place-items-center rounded-full text-white ring-4 ring-background",
+                        stripeLauncherStatus === "connected"
+                          ? "bg-emerald-500"
+                          : stripeLauncherStatus === "incomplete"
+                            ? "bg-amber-500"
+                            : "bg-slate-500",
+                      )}
+                      role="img"
+                      title={
+                        stripeLauncherStatus === "connected"
+                          ? "Connected"
+                          : stripeLauncherStatus === "incomplete"
+                            ? "Setup incomplete"
+                            : "Disconnected"
+                      }
+                    >
+                      {stripeLauncherStatus === "connected" ? (
+                        <Check className="size-4" />
+                      ) : stripeLauncherStatus === "incomplete" ? (
+                        <RefreshCw className="size-3.5" />
+                      ) : (
+                        <Link2Off className="size-3.5" />
+                      )}
+                    </span>
+                  </div>
+                  <span className="font-medium text-muted-foreground text-xs">Stripe</span>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="relative">
+                    <Button
+                      aria-label="Open disconnected PayPal details"
+                      className="size-24 cursor-pointer rounded-full border-0 bg-[#002991] text-white shadow-[0_8px_24px_rgba(0,41,145,0.24)] transition-all duration-200 hover:-translate-y-1 hover:bg-[#001f73] hover:text-white hover:shadow-[0_14px_30px_rgba(0,41,145,0.34)] dark:bg-[#002991] dark:hover:bg-[#001f73]"
+                      onClick={() => {
+                        setStripeProviderOpen(false);
+                        setPaypalSetupOpen(true);
+                      }}
+                      type="button"
+                    >
+                      <SimpleIcon className="size-10! fill-white" icon={siPaypal} />
+                    </Button>
+                    <span
+                      aria-label="PayPal disconnected"
+                      className="absolute right-0 bottom-0 grid size-7 place-items-center rounded-full bg-slate-500 text-white ring-4 ring-background"
+                      role="img"
+                      title="Disconnected"
+                    >
+                      <Link2Off className="size-3.5" />
+                    </span>
+                  </div>
+                  <span className="font-medium text-muted-foreground text-xs">PayPal</span>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.section
+                key="stripe-setup"
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.992, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0, scale: 0.992, y: -6 }}
+                transition={surfaceTransition}
+                className={cn(
+                  "relative isolate col-start-1 row-start-1 overflow-hidden rounded-[1.5rem] border p-5 shadow-sm transition-colors sm:p-6",
+                  tone.panel,
+                )}
+              >
+                <Button
+                  aria-label="Close Stripe setup"
+                  className="absolute top-2.5 right-2.5 z-10 rounded-full text-muted-foreground hover:bg-background/70 hover:text-foreground"
+                  onClick={() => setStripeProviderOpen(false)}
+                  size="icon-sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <X className="size-4" />
+                </Button>
+                <div
+                  aria-hidden
+                  className={cn("absolute -top-20 -right-16 -z-10 size-56 rounded-full blur-3xl", tone.glow)}
+                />
+                <div
+                  aria-hidden
+                  className={cn(
+                    "absolute -bottom-24 left-1/4 -z-10 size-52 rounded-full blur-3xl",
+                    ready ? "bg-teal-400/8" : "bg-white/30 dark:bg-white/5",
+                  )}
+                />
+
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-end">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-4">
+                      <span className="relative flex h-10 w-[4.5rem] shrink-0 items-center border-r pr-4">
+                        <StripeWordmark className="w-full dark:hidden" variant="blurple" />
+                        <StripeWordmark className="hidden w-full dark:block" variant="white" />
+                        {ready ? (
+                          <span className="absolute -top-0.5 right-2 grid size-4 place-items-center rounded-full bg-emerald-500 text-white ring-2 ring-background">
+                            <Check className="size-3" />
+                          </span>
+                        ) : null}
+                      </span>
+                      <div>
+                        <p className={cn("font-semibold text-xs uppercase tracking-[0.18em]", tone.eyebrow)}>
+                          {state.eyebrow}
+                        </p>
+                        <h2 className="mt-0.5 font-semibold text-xl tracking-tight sm:text-2xl">{state.title}</h2>
+                      </div>
+                    </div>
+                    <p className="mt-3 max-w-2xl text-muted-foreground text-sm leading-6">{state.description}</p>
+
+                    <div className="mt-5">
+                      <div className="mb-2 flex items-center justify-between gap-4 text-xs">
+                        <span className="font-medium">Stripe setup</span>
+                        <span className="text-muted-foreground">{state.step}</span>
+                      </div>
+                      <div
+                        aria-label={`Stripe setup ${state.progress}% complete`}
+                        aria-valuemax={100}
+                        aria-valuemin={0}
+                        aria-valuenow={state.progress}
+                        className="relative h-3 overflow-hidden rounded-full bg-white/80 shadow-inner ring-1 ring-black/10 dark:bg-white/10 dark:ring-white/10"
+                        role="progressbar"
+                      >
+                        <motion.div
+                          className={cn("relative h-full rounded-full", tone.progress)}
+                          initial={reduceMotion ? false : { width: 0 }}
+                          animate={{ width: `${state.progress}%` }}
+                          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                          <span className="absolute inset-0 bg-[linear-gradient(110deg,transparent_20%,rgba(255,255,255,0.55)_45%,transparent_70%)]" />
+                        </motion.div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <DialogTrigger asChild>
+                    <Button
+                      className={cn(
+                        "group h-12 shrink-0 rounded-xl px-6 transition hover:scale-[1.02] disabled:opacity-60",
+                        tone.button,
+                      )}
+                      disabled={!canManage}
+                      size="lg"
+                    >
+                      {canManage ? state.button : "Admin access required"}
+                      {/*<ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />*/}
+                    </Button>
+                  </DialogTrigger>
+                </div>
+              </motion.section>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
 
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto p-0 shadow-2xl shadow-black/20 sm:max-w-xl">
         <div className="relative isolate overflow-hidden rounded-t-xl bg-gradient-to-br from-[#635BFF] via-indigo-600 to-violet-600 px-6 pt-9 pb-8 text-white sm:px-8">
