@@ -37,9 +37,7 @@ export default async function Page() {
               <NotebookText className="size-4 text-muted-foreground" />
             </div>
           </CardTitle>
-          <CardDescription>
-            Work estimates from draft, to sending, to customer decision, to job conversion.
-          </CardDescription>
+          <CardDescription>Create, send, and track estimates.</CardDescription>
           <CardAction className="flex items-center gap-2">
             {canCreate ? (
               <Button asChild size="sm">

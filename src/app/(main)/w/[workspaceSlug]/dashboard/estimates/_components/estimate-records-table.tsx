@@ -16,13 +16,20 @@ import {
 } from "@tanstack/react-table";
 import {
   BriefcaseBusiness,
+  Check,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Clock3,
+  FilePenLine,
+  Layers3,
   MailWarning,
+  RotateCcw,
   Search,
+  Send,
   SlidersHorizontal,
+  Trophy,
 } from "lucide-react";
 
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
@@ -74,39 +81,49 @@ const statusOptions = [
   { value: "all", label: "All statuses" },
   { value: "Draft", label: "Draft" },
   { value: "Ready to Send", label: "Ready to send" },
-  { value: "Waiting on Customer", label: "Waiting" },
+  { value: "Waiting on Customer", label: "Awaiting decision" },
   { value: "Won", label: "Won" },
   { value: "Lost", label: "Lost" },
 ] as const;
 const pipelineStages = [
   {
-    action: "Write estimate",
-    description: "Work has been discussed and the estimate is still being prepared.",
-    label: "Drafts",
+    action: "Continue writing",
+    accent: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
+    icon: FilePenLine,
+    label: "Draft",
+    mobileLabel: "Draft",
     status: "Draft",
   },
   {
     action: "Send estimate",
-    description: "Estimate is prepared and ready to provide to the customer.",
-    label: "Ready",
+    accent: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    icon: Send,
+    label: "Ready to send",
+    mobileLabel: "Ready",
     status: "Ready to Send",
   },
   {
-    action: "Convert or mark lost",
-    description: "Estimate has been sent and you are waiting for a decision.",
-    label: "Waiting",
+    action: "Follow up",
+    accent: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    icon: Clock3,
+    label: "Awaiting decision",
+    mobileLabel: "Waiting",
     status: "Waiting on Customer",
   },
   {
     action: "View job",
-    description: "Customer approved the estimate.",
+    accent: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    icon: Trophy,
     label: "Won",
+    mobileLabel: "Won",
     status: "Won",
   },
   {
-    action: "Reopen if needed",
-    description: "Customer declined or the opportunity is no longer active.",
+    action: "Review or reopen",
+    accent: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
+    icon: RotateCcw,
     label: "Lost",
+    mobileLabel: "Lost",
     status: "Lost",
   },
 ] as const;
@@ -147,6 +164,16 @@ const estimateExportColumns: CsvColumn<EstimateRecordRow>[] = [
 
 function formatMoney(value?: string) {
   return value ? `$${Number(value).toFixed(2)}` : "$0.00";
+}
+
+const pipelineMoneyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
+function formatPipelineMoney(value: number) {
+  return pipelineMoneyFormatter.format(value);
 }
 
 function estimateStatusClassName(status: string) {
@@ -253,6 +280,22 @@ export function EstimateRecordsTable({
       }),
     [data],
   );
+  const pipelineCards = React.useMemo(
+    () => [
+      {
+        action: "Entire pipeline",
+        accent: "bg-primary/10 text-primary",
+        count: data.length,
+        icon: Layers3,
+        label: "All estimates",
+        mobileLabel: "All",
+        status: "all",
+        total: pipelineCounts.reduce((sum, stage) => sum + stage.total, 0),
+      },
+      ...pipelineCounts,
+    ],
+    [data.length, pipelineCounts],
+  );
   const sortValue = React.useMemo(() => {
     const currentSort = sorting[0];
 
@@ -306,30 +349,51 @@ export function EstimateRecordsTable({
     <>
       <div className="grid gap-4">
         <div className="grid gap-3">
-          <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))] sm:[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
-            {pipelineCounts.map((stage) => {
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 xl:grid-cols-6">
+            {pipelineCards.map((stage) => {
               const isActive = statusFilter === stage.status;
+              const StageIcon = stage.icon;
 
               return (
                 <button
                   key={stage.status}
                   type="button"
                   className={cn(
-                    "grid gap-2 rounded-lg border bg-card p-3 text-left transition hover:border-primary/40 hover:bg-muted/20",
-                    isActive && "border-primary bg-primary/5",
+                    "group relative grid min-h-20 content-between gap-1.5 overflow-hidden rounded-lg border bg-card p-2.5 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-28 sm:gap-2 sm:rounded-xl sm:p-3",
+                    isActive && "border-primary bg-primary/[0.06] shadow-sm ring-1 ring-primary/15",
                   )}
-                  onClick={() => updateStatusFilter(isActive ? "all" : stage.status)}
+                  onClick={() => updateStatusFilter(stage.status)}
+                  aria-pressed={isActive}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-sm">{stage.label}</span>
-                    <Badge variant="outline" className={estimateStatusClassName(stage.status)}>
+                  <div className="flex items-start justify-between gap-2">
+                    <span
+                      className={cn(
+                        "hidden size-8 shrink-0 items-center justify-center rounded-lg transition-colors sm:flex",
+                        isActive ? "bg-primary text-primary-foreground" : stage.accent,
+                      )}
+                    >
+                      <StageIcon className="size-4" />
+                    </span>
+                    <span className="min-w-0 font-medium text-xs leading-tight sm:hidden">{stage.mobileLabel}</span>
+                    <Badge
+                      variant={isActive ? "default" : "outline"}
+                      className={cn(
+                        "gap-1 tabular-nums",
+                        !isActive && stage.status !== "all" && estimateStatusClassName(stage.status),
+                      )}
+                    >
+                      {isActive ? <Check className="size-3" /> : null}
                       {stage.count}
                     </Badge>
                   </div>
-                  <p className="min-h-8 text-muted-foreground text-xs">{stage.description}</p>
-                  <div className="flex flex-col items-center justify-between gap-2 border-t pt-2 min-[420px]:flex-row">
-                    <span className="text-muted-foreground text-xs">{stage.action}</span>
-                    <span className="font-medium text-xs tabular-nums">{formatMoney(stage.total.toFixed(2))}</span>
+                  <div className="min-w-0">
+                    <span className="hidden font-medium text-sm leading-tight sm:block">{stage.label}</span>
+                    <span className="mt-0.5 block font-semibold text-sm tabular-nums tracking-tight sm:mt-1 sm:text-base">
+                      {formatPipelineMoney(stage.total)}
+                    </span>
+                    <span className="mt-1 hidden truncate text-[11px] text-muted-foreground sm:block">
+                      {stage.action}
+                    </span>
                   </div>
                 </button>
               );
