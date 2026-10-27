@@ -208,22 +208,28 @@ function ChoiceStep({ onSelect }: { onSelect: (kind: PaymentKind) => void }) {
 function JobSelectionCard({
   disabled = false,
   job,
+  loading = false,
   onSelect,
   useInvoicePayment = false,
 }: {
   disabled?: boolean;
   job: PaymentJobOption;
+  loading?: boolean;
   onSelect: () => void;
   useInvoicePayment?: boolean;
 }) {
   return (
     <button
       type="button"
-      className="grid gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+      className={cn(
+        "relative grid gap-3 overflow-hidden rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+        disabled && !loading && "opacity-60",
+      )}
       disabled={disabled}
       onClick={onSelect}
+      aria-busy={loading}
     >
-      <span className="min-w-0">
+      <span className="min-w-0 pr-3">
         <span className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{job.description}</span>
           <Badge variant="outline">{job.status}</Badge>
@@ -251,6 +257,12 @@ function JobSelectionCard({
           </>
         )}
       </span>
+      {loading ? (
+        <span className="fade-in-0 absolute inset-0 flex animate-in items-center justify-center gap-2 bg-card/85 font-medium text-sm backdrop-blur-[1px] duration-200">
+          <LoaderCircle className="size-4 animate-spin" />
+          Opening…
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -353,39 +365,41 @@ function RecordSelectionStep({
   }
 
   return (
-    <div className="grid gap-4">
-      <div className="flex items-center gap-2">
-        <Button type="button" size="icon-sm" variant="ghost" onClick={onBack} aria-label="Back to payment type">
-          <ArrowLeft />
-        </Button>
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="pl-8"
-            placeholder={
-              kind === "invoice_payment"
-                ? "Search invoices, customers, or jobs..."
-                : "Search jobs, customers, or locations..."
-            }
-            aria-label={kind === "invoice_payment" ? "Search invoices" : "Search jobs"}
-          />
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-4 sm:h-auto">
+      <div className="grid min-w-0 gap-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button type="button" size="icon-sm" variant="ghost" onClick={onBack} aria-label="Back to payment type">
+            <ArrowLeft />
+          </Button>
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="min-w-0 pl-8"
+              placeholder={
+                kind === "invoice_payment"
+                  ? "Search invoices, customers, or jobs..."
+                  : "Search jobs, customers, or locations..."
+              }
+              aria-label={kind === "invoice_payment" ? "Search invoices" : "Search jobs"}
+            />
+          </div>
         </div>
-      </div>
 
-      {error ? (
-        <div
-          className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive text-sm"
-          role="alert"
-        >
-          {error}
-        </div>
-      ) : null}
+        {error ? (
+          <div
+            className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive text-sm"
+            role="alert"
+          >
+            {error}
+          </div>
+        ) : null}
+      </div>
 
       <div
         className={cn(
-          "relative grid max-h-[min(31rem,calc(100svh-17rem))] min-h-36 gap-2 overflow-y-auto overscroll-contain pr-1",
+          "relative grid min-h-0 min-w-0 flex-1 auto-rows-max content-start gap-2 overflow-y-auto overflow-x-hidden overscroll-y-contain overscroll-x-none pr-1 [touch-action:pan-y] sm:max-h-[min(31rem,calc(100svh-17rem))] sm:min-h-36",
           loading && "opacity-60",
         )}
       >
@@ -400,11 +414,15 @@ function RecordSelectionStep({
               <button
                 key={invoice.id}
                 type="button"
-                className="grid gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                className={cn(
+                  "relative grid gap-3 overflow-hidden rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+                  loadingId && loadingId !== invoice.id && "opacity-60",
+                )}
                 disabled={Boolean(loadingId)}
                 onClick={() => selectInvoice(invoice.id)}
+                aria-busy={loadingId === invoice.id}
               >
-                <span className="min-w-0">
+                <span className="min-w-0 pr-3">
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{invoice.invoiceNumber}</span>
                     <Badge variant="outline">Due {formatDateOnly(invoice.dueAt)}</Badge>
@@ -415,8 +433,13 @@ function RecordSelectionStep({
                 <span className="text-left sm:text-right">
                   <span className="block text-muted-foreground text-xs">Balance due</span>
                   <span className="mt-1 block font-semibold tabular-nums">{money(invoice.balanceDue)}</span>
-                  {loadingId === invoice.id ? <LoaderCircle className="mt-1 ml-auto size-4 animate-spin" /> : null}
                 </span>
+                {loadingId === invoice.id ? (
+                  <span className="fade-in-0 absolute inset-0 flex animate-in items-center justify-center gap-2 bg-card/85 font-medium text-sm backdrop-blur-[1px] duration-200">
+                    <LoaderCircle className="size-4 animate-spin" />
+                    Opening…
+                  </span>
+                ) : null}
               </button>
             ))
           ) : (
@@ -434,6 +457,7 @@ function RecordSelectionStep({
                       disabled={Boolean(loadingId)}
                       key={job.id}
                       job={job}
+                      loading={loadingId === job.id}
                       onSelect={() => selectJob(job)}
                     />
                   ))}
@@ -450,6 +474,7 @@ function RecordSelectionStep({
                       disabled={Boolean(loadingId)}
                       key={job.id}
                       job={job}
+                      loading={loadingId === job.id}
                       onSelect={() => selectJob(job)}
                     />
                   ))}
@@ -468,6 +493,7 @@ function RecordSelectionStep({
                       key={job.id}
                       job={job}
                       disabled={Boolean(loadingId)}
+                      loading={loadingId === job.id}
                       onSelect={() => selectJob(job)}
                       useInvoicePayment
                     />
@@ -558,12 +584,12 @@ function PaymentDetailsStep({
   }, [amount, method, onSuccess, referenceNumber, state.paymentId, state.success]);
 
   return (
-    <form action={formAction} className="grid gap-5">
+    <form action={formAction} className="grid min-w-0 max-w-full gap-5 overflow-x-hidden">
       <input type="hidden" name="jobId" value={selectedJobId ?? ""} />
       <input type="hidden" name="paymentType" value={kind} />
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 
-      <div className="flex items-start gap-3 rounded-xl border bg-muted/25 p-4">
+      <div className="flex min-w-0 max-w-full items-start gap-3 rounded-xl border bg-muted/25 p-4">
         <Button type="button" size="icon-sm" variant="ghost" onClick={onBack} aria-label="Choose another record">
           <ArrowLeft />
         </Button>
@@ -600,12 +626,12 @@ function PaymentDetailsStep({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-2">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="payment-dialog-date">Payment date</Label>
           <Input id="payment-dialog-date" name="paidOn" type="date" defaultValue={toDateInputValue()} required />
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="payment-dialog-amount">Amount</Label>
           <Input
             id="payment-dialog-amount"
@@ -625,7 +651,7 @@ function PaymentDetailsStep({
             </p>
           ) : null}
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="payment-dialog-method">Method</Label>
           <Input
             id="payment-dialog-method"
@@ -636,7 +662,7 @@ function PaymentDetailsStep({
             required
           />
         </div>
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <Label htmlFor="payment-dialog-reference">Check / reference number</Label>
           <Input
             id="payment-dialog-reference"
@@ -646,7 +672,7 @@ function PaymentDetailsStep({
             placeholder="Optional"
           />
         </div>
-        <div className="grid gap-2 sm:col-span-2">
+        <div className="grid min-w-0 gap-2 sm:col-span-2">
           <Label htmlFor="payment-dialog-description">Description</Label>
           <Input
             id="payment-dialog-description"
@@ -656,7 +682,7 @@ function PaymentDetailsStep({
             required
           />
         </div>
-        <div className="grid gap-2 sm:col-span-2">
+        <div className="grid min-w-0 gap-2 sm:col-span-2">
           <Label htmlFor="payment-dialog-notes">Notes</Label>
           <Textarea id="payment-dialog-notes" name="notes" placeholder="Optional internal notes" />
         </div>
@@ -817,13 +843,13 @@ export function RecordPaymentDialog({
           if (!nextOpen) reset();
         }}
       >
-        <DialogContent className="top-0 left-0 grid h-svh max-h-svh w-screen max-w-none translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-none p-0 sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[calc(100svh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-3xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
+        <DialogContent className="top-0 left-0 grid h-svh max-h-svh w-full max-w-full translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-none p-0 sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[calc(100svh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-3xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
           <DialogHeader className="border-b px-4 py-4 pr-12 sm:px-6">
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{description}</DialogDescription>
             <StepIndicator step={step} />
           </DialogHeader>
-          <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+          <div className="min-h-0 min-w-0 max-w-full overflow-y-auto overflow-x-hidden overscroll-y-contain overscroll-x-none px-4 py-5 [touch-action:pan-y] sm:px-6">
             {step === "choose" ? (
               <ChoiceStep
                 onSelect={(selectedKind) => {
