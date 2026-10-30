@@ -23,6 +23,7 @@ import {
   ORDER_RECEIPT_PAPER_WIDTH,
   type OrderCompany,
   type OrderFormValues,
+  orderNeedsShipping,
 } from "./data";
 import { useVisibleCenterPosition } from "./use-visible-center-position";
 
@@ -178,6 +179,7 @@ function OrderReceiptPaper({
   page: ReceiptPage;
   pageCount: number;
 }) {
+  const showShipping = orderNeedsShipping(order);
   const subtotal = getOrderSubtotal(order);
   const shipping = Number.isFinite(order.shipping) ? order.shipping : 0;
   const tax = getOrderTaxAmount(order);
@@ -257,7 +259,7 @@ function OrderReceiptPaper({
 
       {page.showSummary ? (
         <>
-          {isPaid ? (
+          {isPaid && showShipping ? (
             <OrderReceiptSection className="grid grid-cols-2 gap-4 py-3">
               <div className="grid min-w-0 gap-1">
                 <div className="flex items-center gap-2 text-[11px] text-neutral-500">
@@ -282,12 +284,20 @@ function OrderReceiptPaper({
 
           <OrderReceiptSection className="grid grid-cols-2 gap-5 py-3.5">
             <div>
-              <div className="font-medium text-[11px] text-neutral-500">Shipping Address</div>
+              <div className="font-medium text-[11px] text-neutral-500">
+                {showShipping ? "Shipping Address" : "Customer"}
+              </div>
               <div className="mt-1.5 grid gap-0.5">
                 <div className="font-medium text-sm">{order.customerName || "Customer name"}</div>
-                <div className="text-[11px] text-neutral-500">{streetLine || "Street address"}</div>
-                <div className="text-[11px] text-neutral-500">{cityStateZip || "City state ZIP"}</div>
-                <div className="text-[11px] text-neutral-500">{formatPhoneNumber(order.customerPhone) || "Phone"}</div>
+                {showShipping ? (
+                  <>
+                    <div className="text-[11px] text-neutral-500">{streetLine || "Street address"}</div>
+                    <div className="text-[11px] text-neutral-500">{cityStateZip || "City state ZIP"}</div>
+                  </>
+                ) : null}
+                {order.customerPhone ? (
+                  <div className="text-[11px] text-neutral-500">{formatPhoneNumber(order.customerPhone)}</div>
+                ) : null}
               </div>
             </div>
 
@@ -314,10 +324,12 @@ function OrderReceiptPaper({
               <span className="text-neutral-500">Subtotal</span>
               <span className="tabular-nums">{formatOrderCurrency(subtotal)}</span>
             </div>
-            <div className="flex items-center justify-between gap-4 text-xs">
-              <span className="text-neutral-500">Shipping</span>
-              <span className="tabular-nums">{formatOrderCurrency(shipping)}</span>
-            </div>
+            {showShipping ? (
+              <div className="flex items-center justify-between gap-4 text-xs">
+                <span className="text-neutral-500">Shipping</span>
+                <span className="tabular-nums">{formatOrderCurrency(shipping)}</span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between gap-4 text-xs">
               <span className="text-neutral-500">Sales tax</span>
               <span className="tabular-nums">{formatOrderCurrency(tax)}</span>

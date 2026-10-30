@@ -1,4 +1,5 @@
 import { calculateOrderTotals } from "@/lib/commerce/money";
+import { hasOrderShipping, type OrderCustomerMode, type OrderDeliveryMethod } from "@/lib/commerce/order-customer";
 import type { fulfillmentStatuses, paymentStatuses } from "@/lib/commerce/validation";
 
 export interface OrderLineItem {
@@ -45,6 +46,11 @@ export type OrderPaymentStatus = (typeof paymentStatuses)[number];
 export type OrderFulfillmentStatus = (typeof fulfillmentStatuses)[number];
 
 export interface OrderFormValues {
+  customerId?: string | null;
+  customerMode?: OrderCustomerMode;
+  customerSelection?: string;
+  addressSelection?: string;
+  deliveryMethod?: OrderDeliveryMethod;
   expectedVersion?: number;
   externalPaymentConfirmed?: boolean;
   persistedTotals?: { signature: string; subtotal: number; taxAmount: number; total: number };
@@ -89,6 +95,9 @@ export function clampOrderFooterMessage(value: string) {
 }
 
 export const blankOrderValues: OrderFormValues = {
+  customerId: null,
+  customerMode: "customer",
+  deliveryMethod: "delivery",
   orderNumber: "",
   orderDate: "",
   deliveryRange: "",
@@ -136,7 +145,7 @@ export function getLineAmount(item?: OrderLineItem) {
   return quantity * unitPrice;
 }
 
-export function pricingSignature(order: Pick<OrderFormValues, "items" | "shipping" | "discount">) {
+export function pricingSignature(order: Pick<OrderFormValues, "items" | "shipping" | "discount" | "deliveryMethod">) {
   return JSON.stringify([
     order.items.map((item) => [
       item.id,
@@ -146,14 +155,14 @@ export function pricingSignature(order: Pick<OrderFormValues, "items" | "shippin
       item.taxable,
       item.taxRate,
     ]),
-    order.shipping,
+    order.deliveryMethod === "pickup" ? 0 : order.shipping,
     order.discount,
   ]);
 }
 
 function totals(order: OrderFormValues) {
   if (order.persistedTotals?.signature === pricingSignature(order)) return order.persistedTotals;
-  return calculateOrderTotals(order.items, order.shipping, order.discount, order.tax);
+  return calculateOrderTotals(order.items, orderNeedsShipping(order) ? order.shipping : 0, order.discount, order.tax);
 }
 
 export function getOrderSubtotal(order: OrderFormValues) {
@@ -164,4 +173,19 @@ export function getOrderTaxAmount(order: OrderFormValues) {
 }
 export function getOrderTotal(order: OrderFormValues) {
   return totals(order).total;
+}
+
+export function orderNeedsShipping(order: OrderFormValues) {
+  return hasOrderShipping({
+    deliveryMethod: order.deliveryMethod,
+    shippingLine1: order.streetAddress,
+    shippingLine2: order.apartment,
+    shippingCity: order.city,
+    shippingState: order.state,
+    shippingPostalCode: order.zip,
+    shippingService: order.deliveryCompany,
+    trackingNumber: order.trackingNumber,
+    estimatedDelivery: order.deliveryRange,
+    shippingAmount: order.shipping,
+  });
 }

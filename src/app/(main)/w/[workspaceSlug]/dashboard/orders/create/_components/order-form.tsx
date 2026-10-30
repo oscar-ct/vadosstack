@@ -50,6 +50,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { UsStateSelect } from "@/components/us-state-select";
+import { isWalkInOrder, type OrderDeliveryMethod, WALK_IN_CUSTOMER_NAME } from "@/lib/commerce/order-customer";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
@@ -65,10 +66,12 @@ import {
   type OrderPaymentStatus,
   orderFooterMaxLength,
   orderFooterMaxLines,
+  orderNeedsShipping,
 } from "./data";
 
 const customAddressValue = "new-address";
 const newCustomerValue = "new-customer";
+const walkInCustomerValue = "walk-in";
 const selectCustomerValue = "";
 const paymentStatusOptions: OrderPaymentStatus[] = [
   "Pending",
@@ -150,6 +153,7 @@ function OrderDetails({
   canRecordPayment: boolean;
 }) {
   const { control, register } = useFormContext<OrderFormValues>();
+  const needsDelivery = orderNeedsShipping(useWatch({ control }) as OrderFormValues);
 
   return (
     <section className="flex flex-col gap-3">
@@ -250,39 +254,48 @@ function OrderDetails({
               </Field>
             )}
           />
-          <Controller
-            control={control}
-            name="deliveryRange"
-            render={({ field }) => (
-              <Field className="gap-1">
-                <FieldLabel className="text-xs" htmlFor="delivery-range">
-                  Estimated Delivery
-                </FieldLabel>
-                <DatePicker disabled={disabled} id="delivery-range" value={field.value} onChange={field.onChange} />
-              </Field>
-            )}
-          />
+          {needsDelivery ? (
+            <Controller
+              control={control}
+              name="deliveryRange"
+              render={({ field }) => (
+                <Field className="gap-1">
+                  <FieldLabel className="text-xs" htmlFor="delivery-range">
+                    Estimated Delivery
+                  </FieldLabel>
+                  <DatePicker disabled={disabled} id="delivery-range" value={field.value} onChange={field.onChange} />
+                </Field>
+              )}
+            />
+          ) : null}
         </div>
 
-        <div className="grid gap-5 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-          <Field className="gap-1">
-            <FieldLabel className="text-xs" htmlFor="delivery-company">
-              Shipping Service
-            </FieldLabel>
-            <Input
-              id="delivery-company"
-              disabled={disabled}
-              placeholder="USPS Priority Mail"
-              {...register("deliveryCompany")}
-            />
-          </Field>
-          <Field className="gap-1">
-            <FieldLabel className="text-xs" htmlFor="tracking-number">
-              Tracking Number
-            </FieldLabel>
-            <Input id="tracking-number" disabled={disabled} placeholder="1Z999AA..." {...register("trackingNumber")} />
-          </Field>
-        </div>
+        {needsDelivery ? (
+          <div className="grid gap-5 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+            <Field className="gap-1">
+              <FieldLabel className="text-xs" htmlFor="delivery-company">
+                Shipping Service
+              </FieldLabel>
+              <Input
+                id="delivery-company"
+                disabled={disabled}
+                placeholder="USPS Priority Mail"
+                {...register("deliveryCompany")}
+              />
+            </Field>
+            <Field className="gap-1">
+              <FieldLabel className="text-xs" htmlFor="tracking-number">
+                Tracking Number
+              </FieldLabel>
+              <Input
+                id="tracking-number"
+                disabled={disabled}
+                placeholder="1Z999AA..."
+                {...register("trackingNumber")}
+              />
+            </Field>
+          </div>
+        ) : null}
 
         <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
           <Field className="gap-1">
@@ -314,15 +327,16 @@ function OrderDetails({
 }
 
 function getInitialCustomerSelection(order: OrderFormValues, customers: OrderCustomer[]) {
-  const hasCustomerDetails = Boolean(order.customerName || order.customerEmail || order.customerPhone);
-  if (!hasCustomerDetails) return selectCustomerValue;
-
+  if (isWalkInOrder(order)) return walkInCustomerValue;
+  if (order.customerId)
+    return customers.some((customer) => customer.id === order.customerId) ? order.customerId : newCustomerValue;
+  if (!order.customerName && !order.customerEmail && !order.customerPhone) return selectCustomerValue;
   return (
     customers.find(
       (customer) =>
-        customer.email === order.customerEmail ||
-        customer.phone === order.customerPhone ||
-        customer.name === order.customerName,
+        (order.customerEmail && customer.email === order.customerEmail) ||
+        (order.customerPhone && customer.phone === order.customerPhone) ||
+        (order.customerName && customer.name === order.customerName),
     )?.id ?? newCustomerValue
   );
 }
@@ -338,9 +352,7 @@ function getInitialAddressSelection(order: OrderFormValues, customer?: OrderCust
         address.city === order.city &&
         address.state === order.state &&
         address.zip === order.zip,
-    )?.id ??
-    customer.addresses[0]?.id ??
-    customAddressValue
+    )?.id ?? customAddressValue
   );
 }
 
@@ -350,28 +362,21 @@ function formatAddressOption(address: OrderCustomerAddress) {
 }
 
 function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; disabled: boolean }) {
-  const { control, getValues, register, setValue } = useFormContext<OrderFormValues>();
+  const { control, register, setValue } = useFormContext<OrderFormValues>();
   const [customerPickerOpen, setCustomerPickerOpen] = React.useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = React.useState(() =>
-    getInitialCustomerSelection(getValues(), customers),
-  );
-  const [selectedAddressId, setSelectedAddressId] = React.useState(() => {
-    const order = getValues();
-    const initialCustomer = customers.find(
-      (customer) =>
-        customer.email === order.customerEmail ||
-        customer.phone === order.customerPhone ||
-        customer.name === order.customerName,
-    );
-
-    return getInitialAddressSelection(order, initialCustomer);
-  });
-  const isCreatingNewCustomer = selectedCustomerId === newCustomerValue;
+  const order = useWatch({ control }) as OrderFormValues;
+  const selectedCustomerId = order.customerSelection ?? getInitialCustomerSelection(order, customers);
+  const setSelectedCustomerId = (value: string) => setValue("customerSelection", value, { shouldDirty: true });
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId);
+  const selectedAddressId = order.addressSelection ?? getInitialAddressSelection(order, selectedCustomer);
+  const setSelectedAddressId = (value: string) => setValue("addressSelection", value, { shouldDirty: true });
+  const isWalkIn = selectedCustomerId === walkInCustomerValue;
+  const needsDelivery = orderNeedsShipping(order);
+  const isCreatingNewCustomer = selectedCustomerId === newCustomerValue;
   const addressOptions = selectedCustomer?.addresses ?? [];
-  const showCustomerFields = isCreatingNewCustomer || Boolean(selectedCustomer);
+  const showCustomerFields = isWalkIn || isCreatingNewCustomer || Boolean(selectedCustomer);
   const selectedCustomerLabel = React.useMemo(() => {
-    if (isCreatingNewCustomer) return "New customer";
+    if (isCreatingNewCustomer) return "Customer details";
     return selectedCustomer?.name ?? "Select customer";
   }, [isCreatingNewCustomer, selectedCustomer]);
 
@@ -391,6 +396,8 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
   }
 
   function selectNewCustomer() {
+    setValue("customerMode", "customer", { shouldDirty: true });
+    setValue("customerId", null, { shouldDirty: true });
     setSelectedCustomerId(newCustomerValue);
     setSelectedAddressId(customAddressValue);
     fillCustomerFields(null);
@@ -400,10 +407,49 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
   function selectCustomer(customer: OrderCustomer) {
     const primaryAddress = customer.addresses[0] ?? null;
 
+    setValue("customerMode", "customer", { shouldDirty: true });
+    setValue("customerId", customer.id, { shouldDirty: true });
     setSelectedCustomerId(customer.id);
     setSelectedAddressId(primaryAddress?.id ?? customAddressValue);
     fillCustomerFields(customer);
+    if (!needsDelivery) fillAddressFields(null);
     setCustomerPickerOpen(false);
+  }
+
+  function selectDelivery(method: OrderDeliveryMethod) {
+    setValue("deliveryMethod", method, { shouldDirty: true });
+    if (method === "pickup") {
+      fillAddressFields(null);
+      setValue("shipping", 0, { shouldDirty: true });
+      setValue("deliveryCompany", "", { shouldDirty: true });
+      setValue("deliveryRange", "", { shouldDirty: true });
+      setValue("trackingNumber", "", { shouldDirty: true });
+    } else if (selectedCustomer) {
+      fillAddressFields(
+        selectedCustomer.addresses.find((address) => address.id === selectedAddressId) ??
+          selectedCustomer.addresses[0] ??
+          null,
+      );
+    }
+  }
+
+  function selectWalkIn() {
+    setSelectedCustomerId(walkInCustomerValue);
+    setSelectedAddressId(customAddressValue);
+    fillCustomerFields(null);
+    setValue("customerMode", "walk_in", { shouldDirty: true });
+    setValue("customerId", null, { shouldDirty: true });
+    setValue("customerName", WALK_IN_CUSTOMER_NAME, { shouldDirty: true });
+    setValue("customerNotes", "", { shouldDirty: true });
+    selectDelivery("pickup");
+    setCustomerPickerOpen(false);
+  }
+
+  function selectCustomerMode() {
+    setValue("customerMode", "customer", { shouldDirty: true });
+    setValue("customerId", null, { shouldDirty: true });
+    setSelectedCustomerId(selectCustomerValue);
+    fillCustomerFields(null);
   }
 
   function selectAddress(value: string) {
@@ -419,70 +465,128 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="grid content-start gap-3">
-        <div className="flex items-center gap-2 font-medium text-sm">
-          <UserRound className="size-4 text-muted-foreground" />
-          Customer
-        </div>
-        <Popover open={customerPickerOpen} onOpenChange={setCustomerPickerOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              role="combobox"
-              aria-expanded={customerPickerOpen}
-              disabled={disabled}
-              className="h-8 w-full justify-between bg-background font-normal text-base md:text-sm"
+      <fieldset className="grid gap-2">
+        <legend className="mb-2 font-medium text-sm">Customer type</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { value: "customer", label: "Customer details", help: "Choose a profile or enter a name" },
+            { value: "walk_in", label: "Walk-in customer", help: "No profile or name required" },
+          ].map((choice) => (
+            <label
+              key={choice.value}
+              className={cn(
+                "flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm",
+                (choice.value === "walk_in" ? isWalkIn : !isWalkIn) && "border-foreground bg-muted/50",
+              )}
             >
-              <span className="truncate">{selectedCustomerLabel}</span>
-              <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
-            <Command>
-              <CommandInput className="text-base md:text-sm" placeholder="Search customers..." />
-              <CommandList>
-                <CommandEmpty>No customers found.</CommandEmpty>
-                <CommandGroup>
-                  <CommandItem value="New customer" onSelect={selectNewCustomer}>
-                    <Check className={cn("size-4", isCreatingNewCustomer ? "opacity-100" : "opacity-0")} />
-                    New customer
-                  </CommandItem>
-                  {customers.map((customer) => (
-                    <CommandItem key={customer.id} value={customer.name} onSelect={() => selectCustomer(customer)}>
-                      <Check
-                        className={cn("size-4", selectedCustomerId === customer.id ? "opacity-100" : "opacity-0")}
-                      />
-                      <span>{customer.name}</span>
-                      <span className="ml-auto text-muted-foreground text-xs">{formatPhoneNumber(customer.phone)}</span>
+              <input
+                type="radio"
+                name="customer-type"
+                value={choice.value}
+                checked={choice.value === "walk_in" ? isWalkIn : !isWalkIn}
+                disabled={disabled}
+                onChange={() => (choice.value === "walk_in" ? selectWalkIn() : selectCustomerMode())}
+                className="mt-1"
+              />
+              <span className="grid gap-1">
+                <span className="font-medium">{choice.label}</span>
+                <span className="text-muted-foreground text-xs">{choice.help}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {!isWalkIn ? (
+        <div className="grid content-start gap-3">
+          <div className="flex items-center gap-2 font-medium text-sm">
+            <UserRound className="size-4 text-muted-foreground" />
+            Customer
+          </div>
+          <Popover open={customerPickerOpen} onOpenChange={setCustomerPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                role="combobox"
+                aria-expanded={customerPickerOpen}
+                disabled={disabled}
+                className="h-8 w-full justify-between bg-background font-normal text-base md:text-sm"
+              >
+                <span className="truncate">{selectedCustomerLabel}</span>
+                <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+              <Command>
+                <CommandInput className="text-base md:text-sm" placeholder="Search customers..." />
+                <CommandList>
+                  <CommandEmpty>No customers found.</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem value="Enter customer details" onSelect={selectNewCustomer}>
+                      <Check className={cn("size-4", isCreatingNewCustomer ? "opacity-100" : "opacity-0")} />
+                      Enter customer details
                     </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-        <p className="text-muted-foreground text-xs">
-          Choose an existing customer or create one while building the order.
+                    {customers.map((customer) => (
+                      <CommandItem key={customer.id} value={customer.name} onSelect={() => selectCustomer(customer)}>
+                        <Check
+                          className={cn("size-4", selectedCustomerId === customer.id ? "opacity-100" : "opacity-0")}
+                        />
+                        <span>{customer.name}</span>
+                        <span className="ml-auto text-muted-foreground text-xs">
+                          {formatPhoneNumber(customer.phone)}
+                        </span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          <p className="text-muted-foreground text-xs">
+            Choose a saved profile or enter customer details for this order.
+          </p>
+        </div>
+      ) : (
+        <p className="rounded-lg bg-muted/40 p-3 text-muted-foreground text-sm">
+          This order will use “Walk-in customer.” No customer profile will be created. Contact details are optional.
         </p>
-      </div>
-
+      )}
+      <Field className="gap-1">
+        <FieldLabel className="text-xs" htmlFor="order-delivery-method">
+          How will the customer receive the order?
+        </FieldLabel>
+        <Select
+          disabled={disabled}
+          value={needsDelivery ? "delivery" : "pickup"}
+          onValueChange={(value) => selectDelivery(value as OrderDeliveryMethod)}
+        >
+          <SelectTrigger id="order-delivery-method" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pickup">In-person pickup</SelectItem>
+            <SelectItem value="delivery">Delivery / shipping</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
       {showCustomerFields ? (
         <FieldGroup>
           <div className="grid gap-5 md:grid-cols-2">
-            <Field className="gap-1">
-              <FieldLabel className="text-xs" htmlFor="customer-name">
-                Name
-              </FieldLabel>
-              <Input id="customer-name" disabled={disabled} placeholder="Jane Smith" {...register("customerName")} />
-            </Field>
+            {!isWalkIn ? (
+              <Field className="gap-1">
+                <FieldLabel className="text-xs" htmlFor="customer-name">
+                  Name
+                </FieldLabel>
+                <Input id="customer-name" disabled={disabled} placeholder="Jane Smith" {...register("customerName")} />
+              </Field>
+            ) : null}
             <Controller
               control={control}
               name="customerPhone"
               render={({ field }) => (
                 <Field className="gap-1">
                   <FieldLabel className="text-xs" htmlFor="customer-phone">
-                    Phone Number
+                    {isWalkIn ? "Phone (optional)" : "Phone Number"}
                   </FieldLabel>
                   <Input
                     id="customer-phone"
@@ -501,7 +605,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
             />
             <Field className="gap-1 md:col-span-2">
               <FieldLabel className="text-xs" htmlFor="customer-email">
-                Email
+                {isWalkIn ? "Email (optional)" : "Email"}
               </FieldLabel>
               <Input
                 id="customer-email"
@@ -513,98 +617,101 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
             </Field>
           </div>
 
-          <h2 className="font-medium tracking-tight">Shipping To</h2>
+          {needsDelivery ? (
+            <>
+              <h2 className="font-medium tracking-tight">Shipping To</h2>
 
-          {selectedCustomer && addressOptions.length > 1 ? (
-            <Field className="gap-1">
-              <FieldLabel className="text-xs" htmlFor="shipping-address-select">
-                Saved Address
-              </FieldLabel>
-              <Select disabled={disabled} value={selectedAddressId} onValueChange={selectAddress}>
-                <SelectTrigger
-                  id="shipping-address-select"
-                  className="w-full min-w-0 overflow-hidden text-base md:text-sm"
-                >
-                  <SelectValue placeholder="Select shipping address" />
-                </SelectTrigger>
-                <SelectContent className="max-w-[calc(100vw-2rem)]">
-                  <SelectGroup>
-                    {addressOptions.map((address) => (
-                      <SelectItem key={address.id} value={address.id} className="max-w-[calc(100vw-2rem)]">
-                        <span className="block truncate">
-                          {address.label
-                            ? `${address.label}: ${formatAddressOption(address)}`
-                            : formatAddressOption(address)}
-                        </span>
-                      </SelectItem>
-                    ))}
-                    <SelectItem value={customAddressValue}>New address</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </Field>
-          ) : null}
+              {selectedCustomer && addressOptions.length > 1 ? (
+                <Field className="gap-1">
+                  <FieldLabel className="text-xs" htmlFor="shipping-address-select">
+                    Saved Address
+                  </FieldLabel>
+                  <Select disabled={disabled} value={selectedAddressId} onValueChange={selectAddress}>
+                    <SelectTrigger
+                      id="shipping-address-select"
+                      className="w-full min-w-0 overflow-hidden text-base md:text-sm"
+                    >
+                      <SelectValue placeholder="Select shipping address" />
+                    </SelectTrigger>
+                    <SelectContent className="max-w-[calc(100vw-2rem)]">
+                      <SelectGroup>
+                        {addressOptions.map((address) => (
+                          <SelectItem key={address.id} value={address.id} className="max-w-[calc(100vw-2rem)]">
+                            <span className="block truncate">
+                              {address.label
+                                ? `${address.label}: ${formatAddressOption(address)}`
+                                : formatAddressOption(address)}
+                            </span>
+                          </SelectItem>
+                        ))}
+                        <SelectItem value={customAddressValue}>New address</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              ) : null}
 
-          <div className="grid gap-5">
-            <Field className="gap-1">
-              <FieldLabel className="text-xs" htmlFor="shipping-street">
-                Street Address
-              </FieldLabel>
-              <Input
-                id="shipping-street"
-                disabled={disabled}
-                placeholder="123 Main St"
-                {...register("streetAddress")}
-              />
-            </Field>
-          </div>
+              <div className="grid gap-5">
+                <Field className="gap-1">
+                  <FieldLabel className="text-xs" htmlFor="shipping-street">
+                    Street Address
+                  </FieldLabel>
+                  <Input
+                    id="shipping-street"
+                    disabled={disabled}
+                    placeholder="123 Main St"
+                    {...register("streetAddress")}
+                  />
+                </Field>
+              </div>
 
-          <div className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-3 md:grid-cols-[minmax(180px,0.45fr)_minmax(0,1fr)_150px_140px] md:gap-5">
-            <Field className="gap-1">
-              <FieldLabel className="text-xs" htmlFor="shipping-apartment">
-                Apt/Suite
-              </FieldLabel>
-              <Input id="shipping-apartment" disabled={disabled} placeholder="Unit B" {...register("apartment")} />
-            </Field>
-            <Field className="gap-1">
-              <FieldLabel className="text-xs" htmlFor="shipping-city">
-                City
-              </FieldLabel>
-              <Input id="shipping-city" disabled={disabled} placeholder="Houston" {...register("city")} />
-            </Field>
-            <div className="col-span-2 grid grid-cols-2 gap-5 md:contents">
-              <Controller
-                control={control}
-                name="state"
-                render={({ field }) => (
+              <div className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-3 md:grid-cols-[minmax(180px,0.45fr)_minmax(0,1fr)_150px_140px] md:gap-5">
+                <Field className="gap-1">
+                  <FieldLabel className="text-xs" htmlFor="shipping-apartment">
+                    Apt/Suite
+                  </FieldLabel>
+                  <Input id="shipping-apartment" disabled={disabled} placeholder="Unit B" {...register("apartment")} />
+                </Field>
+                <Field className="gap-1">
+                  <FieldLabel className="text-xs" htmlFor="shipping-city">
+                    City
+                  </FieldLabel>
+                  <Input id="shipping-city" disabled={disabled} placeholder="Houston" {...register("city")} />
+                </Field>
+                <div className="col-span-2 grid grid-cols-2 gap-5 md:contents">
+                  <Controller
+                    control={control}
+                    name="state"
+                    render={({ field }) => (
+                      <Field className="gap-1">
+                        <FieldLabel className="text-xs" htmlFor="shipping-state">
+                          State
+                        </FieldLabel>
+                        <UsStateSelect
+                          id="shipping-state"
+                          disabled={disabled}
+                          value={field.value}
+                          onChange={(event) => field.onChange(event.target.value)}
+                        />
+                      </Field>
+                    )}
+                  />
                   <Field className="gap-1">
-                    <FieldLabel className="text-xs" htmlFor="shipping-state">
-                      State
+                    <FieldLabel className="text-xs" htmlFor="shipping-zip">
+                      ZIP
                     </FieldLabel>
-                    <UsStateSelect
-                      id="shipping-state"
+                    <Input
+                      id="shipping-zip"
+                      inputMode="numeric"
                       disabled={disabled}
-                      value={field.value}
-                      onChange={(event) => field.onChange(event.target.value)}
+                      placeholder="77001"
+                      {...register("zip")}
                     />
                   </Field>
-                )}
-              />
-              <Field className="gap-1">
-                <FieldLabel className="text-xs" htmlFor="shipping-zip">
-                  ZIP
-                </FieldLabel>
-                <Input
-                  id="shipping-zip"
-                  inputMode="numeric"
-                  disabled={disabled}
-                  placeholder="77001"
-                  {...register("zip")}
-                />
-              </Field>
-            </div>
-          </div>
-
+                </div>
+              </div>
+            </>
+          ) : null}
           <Field className="gap-1">
             <FieldLabel className="text-xs" htmlFor="customer-notes">
               Customer Notes
@@ -624,30 +731,35 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
 }
 
 function OrderAdjustments({ disabled }: { disabled: boolean }) {
-  const { register } = useFormContext<OrderFormValues>();
+  const { register, control } = useFormContext<OrderFormValues>();
+
+  const needsDelivery = orderNeedsShipping(useWatch({ control }) as OrderFormValues);
 
   return (
     <section className="flex flex-col gap-4">
       <h2 className="font-medium tracking-tight">Adjustments</h2>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5">
-        <Field className="gap-1">
-          <FieldLabel className="text-xs" htmlFor="order-shipping">
-            Shipping
-          </FieldLabel>
-          <InputGroup>
-            <InputGroupInput
-              id="order-shipping"
-              type="number"
-              min="0"
-              step="0.01"
-              disabled={disabled}
-              {...register("shipping", { valueAsNumber: true })}
-              onBlur={formatMoneyInputOnBlur}
-            />
-            <InputGroupAddon align="inline-end">$</InputGroupAddon>
-          </InputGroup>
-        </Field>
+        {needsDelivery ? (
+          <Field className="gap-1">
+            <FieldLabel className="text-xs" htmlFor="order-shipping">
+              Shipping
+            </FieldLabel>
+            <InputGroup>
+              <InputGroupInput
+                id="order-shipping"
+                type="number"
+                min="0"
+                step="0.01"
+                disabled={disabled}
+                {...register("shipping", { valueAsNumber: true })}
+                onBlur={formatMoneyInputOnBlur}
+              />
+              <InputGroupAddon align="inline-end">$</InputGroupAddon>
+            </InputGroup>
+          </Field>
+        ) : null}
+
         <Field className="gap-1">
           <FieldLabel className="text-xs" htmlFor="order-tax">
             Tax Rate

@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 
+import { hasOrderShipping } from "@/lib/commerce/order-customer";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -57,6 +58,7 @@ export async function getOrderDocumentData(ownerId: string, orderId: string): Pr
   const streetLine = [order.shippingLine1, order.shippingLine2].filter(Boolean).join(", ");
 
   return {
+    showShipping: hasOrderShipping({ ...order, shippingAmount: Number(order.shippingAmount) }),
     companyEmail: workspace.companyEmail ?? workspace.legacyOwner?.email ?? "",
     companyLogoSrc,
     companyName: workspace.name,

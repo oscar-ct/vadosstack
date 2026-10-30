@@ -1,3 +1,4 @@
+import { hasOrderShipping, isWalkInOrder } from "@/lib/commerce/order-customer";
 import { prisma } from "@/lib/prisma";
 
 import type { InventoryItem } from "../../inventory/_components/inventory-table";
@@ -182,6 +183,11 @@ export async function getOrderFormValues(ownerId: string, orderId: string): Prom
   if (!order) return null;
 
   const values: OrderFormValues = {
+    customerId: order.customerId,
+    customerMode: isWalkInOrder(order) ? "walk_in" : "customer",
+    deliveryMethod: hasOrderShipping({ ...order, shippingAmount: Number(order.shippingAmount) })
+      ? "delivery"
+      : "pickup",
     expectedVersion: order.version,
     apartment: order.shippingLine2 ?? "",
     city: order.shippingCity ?? "",

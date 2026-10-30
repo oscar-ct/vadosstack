@@ -31,6 +31,7 @@ export function CommerceIndexControls({
       <form className="flex flex-wrap items-center gap-2" method="get">
         <div className="flex min-w-0 flex-1 basis-64 gap-2">
           <Input
+            key={query}
             name="q"
             aria-label="Search all records"
             placeholder="Search all records by name, number, or SKU"
@@ -44,6 +45,7 @@ export function CommerceIndexControls({
         </div>
         {inventoryVisibility ? (
           <select
+            key={inventoryVisibility}
             name="visibility"
             aria-label="Inventory visibility"
             defaultValue={inventoryVisibility}

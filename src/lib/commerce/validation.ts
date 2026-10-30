@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normalizeOrderChoices } from "./order-customer";
+
 export const amountSchema = z
   .number()
   .finite()
@@ -19,6 +21,8 @@ export const orderInputSchema = z
     submissionKey: submissionKeySchema.optional(),
     expectedVersion: z.number().int().positive().optional(),
     externalPaymentConfirmed: z.boolean().optional(),
+    customerMode: z.enum(["customer", "walk_in"]).optional(),
+    deliveryMethod: z.enum(["pickup", "delivery"]).optional(),
     customerId: text,
     customerEmail: z.union([z.email(), z.literal("")]).nullish(),
     customerName: z.string().trim().min(1).max(200),
@@ -65,6 +69,14 @@ export const orderInputSchema = z
   })
   .strict()
   .superRefine((input, ctx) => {
+    if (
+      input.deliveryMethod === "delivery" &&
+      (!input.shippingLine1?.trim() ||
+        !input.shippingCity?.trim() ||
+        !input.shippingState?.trim() ||
+        !input.shippingPostalCode?.trim())
+    )
+      ctx.addIssue({ code: "custom", message: "A complete shipping address is required for delivery." });
     const inventoryIds = input.items.map((item) => item.inventoryItemId).filter(Boolean);
     const lineIds = input.items.map((item) => item.id).filter(Boolean);
     if (new Set(inventoryIds).size !== inventoryIds.length || new Set(lineIds).size !== lineIds.length) {
@@ -73,7 +85,8 @@ export const orderInputSchema = z
         message: "Each product and line may appear only once. Increase its quantity instead.",
       });
     }
-  });
+  })
+  .transform(normalizeOrderChoices);
 
 export type OrderInput = z.infer<typeof orderInputSchema>;
 

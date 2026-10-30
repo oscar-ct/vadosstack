@@ -49,10 +49,13 @@ export function useVisibleCenterPosition(
     }
 
     updateLayout();
+    const observer = new ResizeObserver(updateLayout);
+    if (parentRef.current) observer.observe(parentRef.current);
     window.addEventListener("scroll", updateLayout, { passive: true });
     window.addEventListener("resize", updateLayout);
 
     return () => {
+      observer.disconnect();
       window.removeEventListener("scroll", updateLayout);
       window.removeEventListener("resize", updateLayout);
     };

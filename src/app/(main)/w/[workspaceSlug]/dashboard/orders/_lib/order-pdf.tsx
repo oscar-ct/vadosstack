@@ -13,6 +13,7 @@ export type OrderPdfLineItem = {
 };
 
 export type OrderPdfData = {
+  showShipping?: boolean;
   companyEmail: string | null;
   companyLogoSrc: string;
   companyName: string;
@@ -240,6 +241,9 @@ function DetailPair({ label, value, right = false }: { label: string; right?: bo
 }
 
 function OrderPdfDocument({ data }: { data: OrderPdfData }) {
+  const showShipping =
+    data.showShipping ??
+    [data.shippingAddressLines.length, data.shippingService, data.trackingNumber, data.estimatedDelivery].some(Boolean);
   const title = data.isPaid ? "Order Receipt" : "Order Confirmation";
   const pages = paginatePdfItems(data.items);
 
@@ -290,7 +294,7 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
 
             {page.showSummary ? (
               <>
-                {data.isPaid ? (
+                {data.isPaid && showShipping ? (
                   <View style={[styles.section, styles.twoCol]}>
                     <DetailPair label="Estimated Delivery" value={data.estimatedDelivery ?? "Delivery date pending"} />
                     <View style={[styles.col, styles.right]}>
@@ -305,18 +309,20 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
 
                 <View style={[styles.section, styles.twoCol]}>
                   <View style={styles.col}>
-                    <Text style={styles.label}>Shipping Address</Text>
+                    <Text style={styles.label}>{showShipping ? "Shipping Address" : "Customer"}</Text>
                     <Text style={styles.value}>{data.customerName || "Customer name"}</Text>
-                    {data.shippingAddressLines.length ? (
-                      data.shippingAddressLines.map((line) => (
-                        <Text key={line} style={[styles.tiny, styles.muted]}>
-                          {line}
-                        </Text>
-                      ))
-                    ) : (
-                      <Text style={[styles.tiny, styles.muted]}>Street address</Text>
-                    )}
-                    <Text style={[styles.tiny, styles.muted]}>{data.customerPhone ?? "Phone"}</Text>
+                    {showShipping ? (
+                      data.shippingAddressLines.length ? (
+                        data.shippingAddressLines.map((line) => (
+                          <Text key={line} style={[styles.tiny, styles.muted]}>
+                            {line}
+                          </Text>
+                        ))
+                      ) : (
+                        <Text style={[styles.tiny, styles.muted]}>Street address</Text>
+                      )
+                    ) : null}
+                    {data.customerPhone ? <Text style={[styles.tiny, styles.muted]}>{data.customerPhone}</Text> : null}
                   </View>
                   <View style={[styles.col, styles.right]}>
                     {data.isPaid ? (
@@ -341,10 +347,12 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
                     <Text style={[styles.text, styles.muted]}>Subtotal</Text>
                     <Text style={styles.text}>{data.subtotal}</Text>
                   </View>
-                  <View style={styles.totalRow}>
-                    <Text style={[styles.text, styles.muted]}>Shipping</Text>
-                    <Text style={styles.text}>{data.shippingAmount}</Text>
-                  </View>
+                  {showShipping ? (
+                    <View style={styles.totalRow}>
+                      <Text style={[styles.text, styles.muted]}>Shipping</Text>
+                      <Text style={styles.text}>{data.shippingAmount}</Text>
+                    </View>
+                  ) : null}
                   <View style={styles.totalRow}>
                     <Text style={[styles.text, styles.muted]}>Sales tax</Text>
                     <Text style={styles.text}>{data.taxAmount}</Text>

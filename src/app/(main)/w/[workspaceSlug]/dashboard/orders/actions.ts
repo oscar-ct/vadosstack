@@ -8,6 +8,7 @@ import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
 import { getOrderBalance, refreshOrderPaymentStatus, requireVersion } from "@/lib/commerce/ledger";
 import { calculateOrderTotals, cents } from "@/lib/commerce/money";
+import { isWalkInOrder } from "@/lib/commerce/order-customer";
 import { adjustStock, CommerceError, commerceTransaction, lockOrder } from "@/lib/commerce/transaction";
 import { type OrderInput, orderInputSchema, parseCommerceInput, submissionKeySchema } from "@/lib/commerce/validation";
 import { allocateDocumentNumber, attachDocumentNumber } from "@/lib/document-numbering";
@@ -72,6 +73,7 @@ function optionalString(value?: string | null) {
 }
 
 async function resolveCustomerId(tx: Prisma.TransactionClient, ownerId: string, input: CreateOrderInput) {
+  if (isWalkInOrder(input)) return null;
   if (input.customerId) {
     const customer = await tx.customer.findFirst({
       where: {
