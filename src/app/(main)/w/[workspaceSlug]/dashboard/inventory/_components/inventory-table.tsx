@@ -23,7 +23,7 @@ import { SortableTableHeader, type TableSortDirection } from "@/components/sorta
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Drawer,
   DrawerBody,
@@ -46,12 +46,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { InventoryStockOverview } from "@/lib/commerce/inventory-summary";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import type { InventoryStockRules } from "../_lib/inventory-data";
-import { InventoryItemForm } from "./inventory-actions";
+import { InventoryItemForm, InventoryRecordMenu } from "./inventory-actions";
+import {
+  InventoryRecordHeader,
+  InventoryRecordSection,
+  InventoryRecordValue,
+  inventoryDialogBodyClassName,
+  inventoryDialogClassName,
+  inventoryDialogFooterClassName,
+} from "./inventory-record-layout";
+import { InventoryStockSummary } from "./inventory-stock-summary";
 
 export type InventoryItem = {
+  updatedAt?: string;
   barcode?: string;
   category: string;
   cost: number;
@@ -59,6 +70,10 @@ export type InventoryItem = {
   id: string;
   itemStatus: "Active" | "Inactive";
   location: string;
+  locationLocked?: boolean;
+  productId?: string;
+  identityLocked?: boolean;
+  stockOverview?: InventoryStockOverview;
   maxStock: number;
   notes?: string;
   product: string;
@@ -72,7 +87,7 @@ export type InventoryItem = {
   vendor?: string;
 };
 
-type InventoryStatus = "Critical" | "In Stock" | "Low Stock" | "Out of Stock";
+type InventoryStatus = "Archived" | "Critical" | "In Stock" | "Low Stock" | "Out of Stock";
 type InventoryDialogMode = "edit" | "view";
 type InventoryFieldKey =
   | "barcode"
@@ -176,6 +191,7 @@ function shouldIgnoreRowClick(target: EventTarget | null) {
 }
 
 function getInventoryStatus(item: InventoryItem, stockRules: InventoryStockRules): InventoryStatus {
+  if (item.itemStatus === "Inactive") return "Archived";
   if (item.stock <= 0) return stockRules.includeOutOfStock ? "Out of Stock" : "Critical";
   if (!stockRules.autoRestockAlerts) return "In Stock";
 
@@ -188,6 +204,7 @@ function getInventoryStatus(item: InventoryItem, stockRules: InventoryStockRules
 }
 
 function getStatusClassName(status: InventoryStatus) {
+  if (status === "Archived") return "border-border bg-muted text-muted-foreground";
   if (status === "In Stock") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "Low Stock") return "border-yellow-200 bg-yellow-50 text-yellow-700";
   if (status === "Critical") return "border-red-600 bg-red-600 text-white";
@@ -195,6 +212,7 @@ function getStatusClassName(status: InventoryStatus) {
 }
 
 function getStockClassName(status: InventoryStatus) {
+  if (status === "Archived") return "text-muted-foreground";
   if (status === "Out of Stock" || status === "Critical") return "text-red-600";
   if (status === "Low Stock") return "text-amber-600";
   return "text-foreground";
@@ -249,122 +267,55 @@ function StockLevel({ item, stockRules }: { item: InventoryItem; stockRules: Inv
   );
 }
 
-function ReadOnlyField({
-  field,
-  label,
-  multiline = false,
-  onEdit,
-  value,
-}: {
-  field: InventoryFieldKey;
-  label: string;
-  multiline?: boolean;
-  onEdit: (field: InventoryFieldKey) => void;
-  value?: React.ReactNode;
-}) {
+function InventoryItemViewFields({ item }: { item: InventoryItem }) {
   return (
-    <div className="grid min-w-0 gap-2">
-      <Label>{label}</Label>
-      <button
-        type="button"
-        className={cn(
-          "min-h-9 rounded-md border bg-muted/20 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          multiline && "min-h-20 whitespace-pre-wrap",
-        )}
-        onClick={() => onEdit(field)}
-      >
-        {value ?? "-"}
-      </button>
-    </div>
-  );
-}
-
-function InventoryItemViewFields({
-  item,
-  onEdit,
-}: {
-  item: InventoryItem;
-  onEdit: (field: InventoryFieldKey) => void;
-}) {
-  const fieldProps = { onEdit };
-
-  return (
-    <div className="grid min-w-0 gap-4">
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
-        <ReadOnlyField field="product" label="Product name" value={item.product} {...fieldProps} />
-        <ReadOnlyField field="sku" label="SKU" value={item.sku} {...fieldProps} />
+    <div className={inventoryDialogBodyClassName}>
+      <div className="grid gap-5">
+        <InventoryStockSummary item={item} />
+        <div className="grid items-start gap-5 lg:grid-cols-2">
+          <div className="grid min-w-0 gap-5">
+            <InventoryRecordSection title="Product information">
+              <dl className="grid gap-4">
+                <InventoryRecordValue label="Description" value={item.description || "No description added."} />
+                <div className="grid grid-cols-2 gap-4">
+                  <InventoryRecordValue label="Category" value={item.category} />
+                  <InventoryRecordValue label="Unit" value={item.unit} />
+                </div>
+                <InventoryRecordValue label="Barcode / UPC" value={item.barcode} />
+              </dl>
+            </InventoryRecordSection>
+            <InventoryRecordSection title="Notes">
+              <p className="whitespace-pre-wrap break-words text-sm">
+                {item.notes?.trim() ? item.notes : "No notes added."}
+              </p>
+            </InventoryRecordSection>
+          </div>
+          <div className="grid min-w-0 gap-5">
+            <InventoryRecordSection title="Pricing & purchasing" description="For this location’s record.">
+              <dl className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <InventoryRecordValue label="Unit price" value={formatCurrency(item.unitPrice)} />
+                  <InventoryRecordValue label="Unit cost" value={formatCurrency(item.cost)} />
+                </div>
+                <InventoryRecordValue label="Supplier" value={item.vendor} />
+                <div className="grid grid-cols-2 gap-4">
+                  <InventoryRecordValue label="Taxable" value={item.taxable ? "Yes" : "No"} />
+                  <InventoryRecordValue
+                    label="Tax rate"
+                    value={item.taxable ? `${item.taxRate.toFixed(2)}%` : "Not applicable"}
+                  />
+                </div>
+              </dl>
+            </InventoryRecordSection>
+            <InventoryRecordSection title="Inventory settings" description="For this location’s record.">
+              <dl className="grid grid-cols-2 gap-4">
+                <InventoryRecordValue label="Reorder point" value={item.reorderPoint} />
+                <InventoryRecordValue label="Maximum stock" value={item.maxStock} />
+              </dl>
+            </InventoryRecordSection>
+          </div>
+        </div>
       </div>
-
-      <ReadOnlyField
-        field="description"
-        label="Description"
-        value={item.description || "No description added."}
-        multiline
-        {...fieldProps}
-      />
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <ReadOnlyField field="category" label="Category" value={item.category} {...fieldProps} />
-        <ReadOnlyField field="location" label="Location" value={item.location} {...fieldProps} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-        <ReadOnlyField field="unit" label="Unit" value={item.unit} {...fieldProps} />
-        <ReadOnlyField field="itemStatus" label="Status" value={item.itemStatus} {...fieldProps} />
-        <ReadOnlyField field="taxable" label="Taxable" value={item.taxable ? "Yes" : "No"} {...fieldProps} />
-        <ReadOnlyField
-          field="taxRate"
-          label="Tax rate"
-          value={item.taxable ? `${item.taxRate.toFixed(2)}%` : "-"}
-          {...fieldProps}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-        <ReadOnlyField
-          field="stock"
-          label="Stock"
-          value={<span className="tabular-nums">{item.stock}</span>}
-          {...fieldProps}
-        />
-        <ReadOnlyField
-          field="unitPrice"
-          label="Unit price"
-          value={<span className="tabular-nums">{formatCurrency(item.unitPrice)}</span>}
-          {...fieldProps}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <ReadOnlyField
-          field="cost"
-          label="Cost"
-          value={<span className="tabular-nums">{formatCurrency(item.cost)}</span>}
-          {...fieldProps}
-        />
-        <ReadOnlyField field="vendor" label="Supplier" value={item.vendor} {...fieldProps} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <ReadOnlyField
-          field="maxStock"
-          label="Max stock"
-          value={<span className="tabular-nums">{item.maxStock}</span>}
-          {...fieldProps}
-        />
-        <ReadOnlyField
-          field="reorderPoint"
-          label="Reorder point"
-          value={<span className="tabular-nums">{item.reorderPoint}</span>}
-          {...fieldProps}
-        />
-      </div>
-
-      <div className="grid gap-3 sm:gap-4">
-        <ReadOnlyField field="barcode" label="Barcode / UPC" value={item.barcode} {...fieldProps} />
-      </div>
-
-      <ReadOnlyField field="notes" label="Notes" value={item.notes ?? "No notes added."} multiline {...fieldProps} />
     </div>
   );
 }
@@ -406,6 +357,7 @@ function InventoryRowActions({
 }
 
 function InventoryItemDetailsDialog({
+  canManage,
   categories,
   focusField,
   item,
@@ -415,6 +367,7 @@ function InventoryItemDetailsDialog({
   onOpenChange,
   stockRules,
 }: {
+  canManage: boolean;
   categories: string[];
   focusField?: InventoryFieldKey;
   item: InventoryItem;
@@ -424,23 +377,14 @@ function InventoryItemDetailsDialog({
   onOpenChange: (open: boolean) => void;
   stockRules: InventoryStockRules;
 }) {
-  const title = mode === "edit" ? "Edit item" : "View item";
-
+  function adjustStock() {
+    onOpenChange(false);
+    window.dispatchEvent(new CustomEvent("inventory:adjust-stock", { detail: { itemId: item.id } }));
+  }
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
-        <DialogHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3 pr-8">
-            <div className="grid gap-1">
-              <DialogTitle>{title}</DialogTitle>
-              <DialogDescription>
-                {mode === "edit"
-                  ? "Update the item details used by inventory and future orders."
-                  : "Review the item details used by inventory and future orders."}
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
+      <DialogContent className={inventoryDialogClassName}>
+        <InventoryRecordHeader item={item} editing={mode === "edit"} />
         {mode === "edit" ? (
           <InventoryItemForm
             categories={categories}
@@ -451,7 +395,36 @@ function InventoryItemDetailsDialog({
             stockRules={stockRules}
           />
         ) : (
-          <InventoryItemViewFields item={item} onEdit={onEdit} />
+          <>
+            <InventoryItemViewFields item={item} />
+            <div className={inventoryDialogFooterClassName}>
+              {canManage ? (
+                <InventoryRecordMenu item={item} onArchived={() => onOpenChange(false)} />
+              ) : (
+                <span className="text-muted-foreground text-xs">View only</span>
+              )}
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  className="hidden sm:inline-flex"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Close
+                </Button>
+                {canManage ? (
+                  <>
+                    <Button type="button" variant="outline" onClick={adjustStock}>
+                      Adjust stock
+                    </Button>
+                    <Button type="button" onClick={() => onEdit()}>
+                      Edit details
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </>
         )}
       </DialogContent>
     </Dialog>
@@ -484,6 +457,11 @@ function MobileInventoryCard({
             <div className="truncate text-muted-foreground text-xs">
               {item.sku} · {item.category}
             </div>
+            {item.stockOverview && item.stockOverview.locations.length > 1 ? (
+              <div className="mt-1 truncate text-muted-foreground text-xs">
+                {item.stockOverview.locations.length} locations · {item.stockOverview.totalAvailable} total available
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="relative z-10 flex shrink-0 items-center gap-1" data-row-click-ignore>
@@ -676,6 +654,7 @@ export function InventoryTable({
       {exportSlotId && canExport ? <CsvExportSlot id={exportSlotId}>{exportMenu}</CsvExportSlot> : null}
       {activeItem ? (
         <InventoryItemDetailsDialog
+          canManage={canManage}
           categories={categoryFormOptions}
           focusField={focusField}
           item={activeItem}
@@ -866,14 +845,14 @@ export function InventoryTable({
         </div>
 
         <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
-          <Table className="min-w-[64.5rem] table-fixed">
+          <Table className="min-w-[70rem] table-fixed">
             <colgroup>
               <col className="w-[4%]" />
-              <col className="w-[8%]" />
-              <col className="w-[22%]" />
-              <col className="w-[7%]" />
-              <col className="w-[13%]" />
-              <col className="w-[12%]" />
+              <col className="w-[15%]" />
+              <col className="w-[21%]" />
+              <col className="w-[6%]" />
+              <col className="w-[10%]" />
+              <col className="w-[10%]" />
               <col className="w-[16%]" />
               <col className="w-[12%]" />
               <col className="w-[6%]" />
@@ -887,7 +866,7 @@ export function InventoryTable({
                     onCheckedChange={(value) => toggleVisibleItems(value === true)}
                   />
                 </TableHead>
-                <TableHead className="sticky top-12 z-20 w-[5.25rem] border-b bg-card">
+                <TableHead className="sticky top-12 z-20 w-[10rem] border-b bg-card">
                   <SortableTableHeader
                     direction={inventorySortDirection(sortValue, "sku-asc", "sku-desc")}
                     label="SKU"
@@ -967,13 +946,27 @@ export function InventoryTable({
                           onCheckedChange={(value) => toggleItem(item.id, value === true)}
                         />
                       </TableCell>
-                      <TableCell className="font-mono text-muted-foreground text-xs">{item.sku}</TableCell>
+                      <TableCell className="overflow-hidden font-mono text-muted-foreground text-xs">
+                        <span className="block truncate" title={item.sku}>
+                          {item.sku || "—"}
+                        </span>
+                      </TableCell>
                       <TableCell>
-                        <div className="font-medium leading-none">{item.product}</div>
-                        <div className="mt-1 text-muted-foreground text-xs">{item.category}</div>
+                        <div className="truncate font-medium leading-normal" title={item.product}>
+                          {item.product}
+                        </div>
+                        <div className="mt-1 truncate text-muted-foreground text-xs">{item.category}</div>
+                        {item.stockOverview && item.stockOverview.locations.length > 1 ? (
+                          <div className="mt-1 truncate text-muted-foreground text-xs">
+                            {item.stockOverview.locations.length} locations · {item.stockOverview.totalAvailable} total
+                            available
+                          </div>
+                        ) : null}
                       </TableCell>
                       <TableCell className={cn("text-right font-semibold tabular-nums", getStockClassName(status))}>
-                        {item.stock}
+                        <span className="block truncate" title={`${item.stock} available`}>
+                          {item.stock}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <StockLevel item={item} stockRules={stockRules} />
@@ -984,13 +977,17 @@ export function InventoryTable({
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <span className="flex items-center gap-1.5 text-muted-foreground">
-                          <MapPin className="size-3.5" />
-                          {item.location}
+                        <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                          <MapPin className="size-3.5 shrink-0" />
+                          <span className="truncate" title={item.location}>
+                            {item.location}
+                          </span>
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
-                        {item.stock > 0 ? formatCurrency(getInventoryValue(item)) : "$0"}
+                        <span className="block truncate" title={formatCurrency(getInventoryValue(item))}>
+                          {item.stock > 0 ? formatCurrency(getInventoryValue(item)) : "$0"}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right">
                         <InventoryRowActions

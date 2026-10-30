@@ -90,6 +90,13 @@ function formatPercent(value: number) {
 export function CommerceKpiStrip({ data }: { data: CommercePulseData }) {
   return (
     <div className="h-full overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 xl:col-span-12">
+      <p className="border-b p-3 text-muted-foreground text-xs">
+        Sales exclude sales tax and include shipping. Collections recorded externally:{" "}
+        {formatCurrency(data.collections)}. Refunds count completed transactions.{" "}
+        {data.profitHasUnknownCosts
+          ? "Historical or custom item costs are unknown; profit is incomplete."
+          : "Profit uses costs saved when items were sold and credits stock recovered by returns."}
+      </p>
       <div className="grid grid-cols-1 xl:grid-cols-12">
         <div className="grid grid-cols-1 md:grid-cols-2 md:grid-rows-3 xl:col-span-5 xl:border-r">
           <KpiCard

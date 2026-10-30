@@ -1,4 +1,5 @@
 import { AuthRequiredState } from "@/components/auth-required-state";
+import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
 import { prisma } from "@/lib/prisma";
@@ -9,12 +10,13 @@ import { formatMoney, getReturnRefundWorkspaceData } from "./_lib/return-data";
 import { emailReturnReceiptAction } from "./actions";
 
 type PageProps = {
+  searchParams: Promise<{ returnId?: string; new?: string }>;
   params: Promise<{
     orderId: string;
   }>;
 };
 
-export default async function Page({ params }: PageProps) {
+export default async function Page({ params, searchParams }: PageProps) {
   const authorization = await getPermittedDashboardAuthorization("orders.returns.manage");
 
   if (!authorization) {
@@ -27,11 +29,12 @@ export default async function Page({ params }: PageProps) {
   }
 
   const { orderId } = await params;
+  const query = await searchParams;
   const workspaceId = authorization.workspaceId;
   const canSendEmail = can(authorization.membership, "email.send");
   const canManageGmailAccount = can(authorization.membership, "email.account.manage");
   const [workspaceData, googleMailAccount] = await Promise.all([
-    getReturnRefundWorkspaceData(workspaceId, orderId),
+    getReturnRefundWorkspaceData(workspaceId, orderId, query.new === "1" ? null : query.returnId),
     canSendEmail
       ? prisma.googleMailAccount.findUnique({
           where: {
@@ -49,6 +52,17 @@ export default async function Page({ params }: PageProps) {
       />
     );
   }
+
+  if (!workspaceData.returnId && !workspaceData.values.items.length)
+    return (
+      <div className="grid gap-3">
+        <h1 className="font-medium text-xl">All order items have been resolved</h1>
+        <p>Open an existing return from the order history to review its receipt.</p>
+        <Link className="underline" href={`/dashboard/orders/${orderId}/edit`}>
+          Back to order
+        </Link>
+      </div>
+    );
 
   const returnDate = workspaceData.values.returnDate
     ? new Intl.DateTimeFormat("en-US", {
@@ -78,12 +92,13 @@ export default async function Page({ params }: PageProps) {
 
   return (
     <ReturnRefundWorkspace
+      key={workspaceData.returnId ?? `new-${workspaceData.values.orderVersion}`}
       company={workspaceData.company}
       defaultValues={workspaceData.values}
       emailAction={
         workspaceData.returnId && canSendEmail ? (
           <ReturnReceiptActions
-            action={emailReturnReceiptAction}
+            action={emailReturnReceiptAction.bind(null, workspaceData.returnId)}
             canManageGmailAccount={canManageGmailAccount}
             companyName={workspaceData.company.name}
             customerEmail={workspaceData.values.customerEmail}

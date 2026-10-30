@@ -70,8 +70,14 @@ import {
 const customAddressValue = "new-address";
 const newCustomerValue = "new-customer";
 const selectCustomerValue = "";
-const paymentStatusOptions: OrderPaymentStatus[] = ["Pending", "Paid"];
-const fulfillmentStatusOptions: OrderFulfillmentStatus[] = ["Unfulfilled", "Fulfilled"];
+const paymentStatusOptions: OrderPaymentStatus[] = [
+  "Pending",
+  "Paid",
+  "Partially Paid",
+  "Partially Refunded",
+  "Refunded",
+];
+const fulfillmentStatusOptions: OrderFulfillmentStatus[] = ["Unfulfilled", "Fulfilled", "Partially Fulfilled"];
 
 function formatOrderCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -95,10 +101,14 @@ function formatMoneyInputOnBlur(event: React.FocusEvent<HTMLInputElement>) {
 export function OrderForm({
   customers,
   disabled = false,
+  creating = false,
+  canRecordPayment = false,
   inventoryItems,
 }: {
   customers: OrderCustomer[];
   disabled?: boolean;
+  creating?: boolean;
+  canRecordPayment?: boolean;
   inventoryItems: InventoryItem[];
 }) {
   return (
@@ -111,7 +121,7 @@ export function OrderForm({
         </TabsList>
 
         <TabsContent value="order" className="mt-0 flex flex-col gap-4">
-          <OrderDetails disabled={disabled} />
+          <OrderDetails disabled={disabled} creating={creating} canRecordPayment={canRecordPayment} />
           <Separator />
           <OrderAdjustments disabled={disabled} />
           <Separator />
@@ -130,7 +140,15 @@ export function OrderForm({
   );
 }
 
-function OrderDetails({ disabled }: { disabled: boolean }) {
+function OrderDetails({
+  disabled,
+  creating,
+  canRecordPayment,
+}: {
+  disabled: boolean;
+  creating: boolean;
+  canRecordPayment: boolean;
+}) {
   const { control, register } = useFormContext<OrderFormValues>();
 
   return (
@@ -157,17 +175,23 @@ function OrderDetails({ disabled }: { disabled: boolean }) {
                 <FieldLabel className="text-xs" htmlFor="payment-status">
                   Payment Status
                 </FieldLabel>
-                <Select disabled={disabled} value={field.value} onValueChange={field.onChange}>
+                <Select
+                  disabled={disabled || !creating || !canRecordPayment}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
                   <SelectTrigger id="payment-status" className="w-full text-base md:text-sm">
                     <SelectValue placeholder="Payment status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {paymentStatusOptions.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
+                      {paymentStatusOptions
+                        .filter((status) => !creating || status === "Paid" || status === "Pending")
+                        .map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status}
+                          </SelectItem>
+                        ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
@@ -182,17 +206,19 @@ function OrderDetails({ disabled }: { disabled: boolean }) {
                 <FieldLabel className="text-xs" htmlFor="fulfillment-status">
                   Fulfillment Status
                 </FieldLabel>
-                <Select disabled={disabled} value={field.value} onValueChange={field.onChange}>
+                <Select disabled={disabled || !creating} value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger id="fulfillment-status" className="w-full text-base md:text-sm">
                     <SelectValue placeholder="Fulfillment status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {fulfillmentStatusOptions.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
+                      {fulfillmentStatusOptions
+                        .filter((status) => !creating || status !== "Partially Fulfilled")
+                        .map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status}
+                          </SelectItem>
+                        ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
@@ -201,6 +227,16 @@ function OrderDetails({ disabled }: { disabled: boolean }) {
           />
         </div>
 
+        {creating && canRecordPayment ? (
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" disabled={disabled} {...register("externalPaymentConfirmed")} />I confirm any Paid
+            amount has already been received externally. VadosStack records it without charging a card.
+          </label>
+        ) : null}
+        <p className="text-muted-foreground text-xs">
+          Unpaid, unshipped orders hold stock for seven days. Backorders are not accepted. Saved payments and shipments
+          are managed in the order operations panel.
+        </p>
         <div className="grid grid-cols-2 gap-3 sm:gap-5">
           <Controller
             control={control}
@@ -1019,6 +1055,8 @@ function InventoryProductPicker({
 
   function selectCustomItem() {
     setValue(`items.${index}.inventoryItemId`, undefined, { shouldDirty: true });
+    setValue(`items.${index}.taxable`, true, { shouldDirty: true });
+    setValue(`items.${index}.taxRate`, undefined, { shouldDirty: true });
     setValue(`items.${index}.sku`, "", { shouldDirty: true });
     setValue(`items.${index}.product`, "", { shouldDirty: true });
     setValue(`items.${index}.category`, "", { shouldDirty: true });
@@ -1033,6 +1071,8 @@ function InventoryProductPicker({
     setValue(`items.${index}.product`, inventoryItem.product, { shouldDirty: true });
     setValue(`items.${index}.category`, inventoryItem.category, { shouldDirty: true });
     setValue(`items.${index}.unitPrice`, inventoryItem.unitPrice, { shouldDirty: true });
+    setValue(`items.${index}.taxable`, inventoryItem.taxable, { shouldDirty: true });
+    setValue(`items.${index}.taxRate`, inventoryItem.taxRate, { shouldDirty: true });
     setManualMode(false);
     setOpen(false);
   }

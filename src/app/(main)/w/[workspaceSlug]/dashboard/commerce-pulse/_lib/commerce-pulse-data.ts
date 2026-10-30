@@ -1,3 +1,4 @@
+import { refundLineSales } from "@/lib/commerce/reporting";
 import { prisma } from "@/lib/prisma";
 
 export const commercePulsePeriodOptions = [
@@ -20,7 +21,6 @@ export type CommercePulseData = Awaited<ReturnType<typeof getCommercePulseData>>
 type OrderWithItems = Awaited<ReturnType<typeof getOrdersForRange>>[number];
 type ReturnWithItems = Awaited<ReturnType<typeof getReturnsForRange>>[number];
 
-const estimatedFallbackMargin = 0.3;
 const dayInMs = 24 * 60 * 60 * 1000;
 
 export function parseCommercePulsePeriod(value?: string | string[]): CommercePulsePeriod {
@@ -36,7 +36,7 @@ export function parseCommercePulseScope(value?: string | string[]): CommercePuls
 }
 
 function startOfDay(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
 }
 
 function addDays(value: Date, days: number) {
@@ -44,12 +44,12 @@ function addDays(value: Date, days: number) {
 }
 
 function addMonths(value: Date, months: number) {
-  return new Date(value.getFullYear(), value.getMonth() + months, value.getDate());
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + months, value.getUTCDate()));
 }
 
 function getPeriodRange(period: CommercePulsePeriod, now = new Date()) {
   const today = startOfDay(now);
-  const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const thisMonthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
 
   if (period === "last-month") {
     const start = addMonths(thisMonthStart, -1);
@@ -72,7 +72,7 @@ function getPeriodRange(period: CommercePulsePeriod, now = new Date()) {
     return {
       end: addDays(today, 1),
       label: "Year to date",
-      start: new Date(today.getFullYear(), 0, 1),
+      start: new Date(Date.UTC(today.getUTCFullYear(), 0, 1)),
     };
   }
 
@@ -95,6 +95,7 @@ function getOrdersForRange(ownerId: string, start: Date, end: Date) {
   return prisma.order.findMany({
     where: {
       ownerId,
+      orderStatus: "Active",
       orderDate: {
         gte: start,
         lt: end,
@@ -144,67 +145,124 @@ function getScopedReturnItems(orderReturn: ReturnWithItems, scope: CommercePulse
 }
 
 function getScopedOrderRevenue(order: OrderWithItems, scope: CommercePulseScope) {
-  if (scope === "all") return Number(order.total);
-  return getScopedItems(order, scope).reduce((total, item) => total + Number(item.lineTotal), 0);
+  return (
+    getScopedItems(order, scope).reduce(
+      (total, item) => total + Number(item.lineTotal) - Number(item.discountAmount),
+      0,
+    ) + (scope === "all" ? Number(order.shippingAmount) : 0)
+  );
 }
 
-function getScopedRefundAmount(orderReturn: ReturnWithItems, scope: CommercePulseScope) {
-  if (scope === "all") return Number(orderReturn.refundAmount);
+type RefundWithOrder = Awaited<ReturnType<typeof getRefundsForRange>>[number];
 
-  return getScopedReturnItems(orderReturn, scope).reduce((total, item) => total + Number(item.lineRefund), 0);
+function getRefundsForRange(ownerId: string, start: Date, end: Date) {
+  return prisma.orderRefund.findMany({
+    where: { ownerId, status: "succeeded", refundedAt: { gte: start, lt: end } },
+    include: { order: { include: { items: true } }, orderReturn: { include: { items: true } } },
+  });
+}
+
+function getRefundSalesAmount(refund: RefundWithOrder, scope: CommercePulseScope) {
+  if (refund.order.orderStatus === "Cancelled") return 0;
+  const amount = Number(refund.amount);
+  if (refund.orderReturn) {
+    const receipt = refund.orderReturn;
+    if (!Number(receipt.refundAmount)) return 0;
+    const items = scope === "inventory" ? receipt.items.filter((item) => item.inventoryItemId) : receipt.items;
+    const attributed = items.reduce((sum, item) => sum + refundLineSales(item), 0);
+    const merchandise = (attributed * amount) / Number(receipt.refundAmount);
+    const tax = receipt.items.reduce((sum, item) => sum + Number(item.lineRefund) - refundLineSales(item), 0);
+    return scope === "all" ? Math.max(amount - (tax * amount) / Number(receipt.refundAmount), 0) : merchandise;
+  }
+  const total = Number(refund.order.total);
+  if (!total) return 0;
+  const sales =
+    scope === "inventory"
+      ? refund.order.items
+          .filter((item) => item.inventoryItemId)
+          .reduce((sum, item) => sum + Number(item.lineTotal) - Number(item.discountAmount), 0)
+      : total - Number(refund.order.taxAmount);
+  return (amount * sales) / total;
 }
 
 function getItemProfit(item: OrderWithItems["items"][number]) {
-  const revenue = Number(item.lineTotal);
-  const unitCost = item.inventoryItem
-    ? Number(item.inventoryItem.cost)
-    : Number(item.unitPrice) * (1 - estimatedFallbackMargin);
-  return revenue - unitCost * item.quantity;
+  return Number(item.lineTotal) - Number(item.discountAmount) - Number(item.unitCost ?? 0) * item.quantity;
 }
 
-function summarizeCommerce(orders: OrderWithItems[], orderReturns: ReturnWithItems[], scope: CommercePulseScope) {
+function summarizeCommerce(
+  orders: OrderWithItems[],
+  orderReturns: ReturnWithItems[],
+  scope: CommercePulseScope,
+  moneyRefunds: RefundWithOrder[],
+) {
   const visibleOrders =
     scope === "inventory" ? orders.filter((order) => getScopedItems(order, scope).length > 0) : orders;
   const visibleReturns =
     scope === "inventory"
-      ? orderReturns.filter((orderReturn) => getScopedReturnItems(orderReturn, scope).length > 0)
+      ? orderReturns.filter((receipt) => getScopedReturnItems(receipt, scope).length > 0)
       : orderReturns;
-  const grossRevenue = visibleOrders.reduce((total, order) => total + getScopedOrderRevenue(order, scope), 0);
-  const refunds = visibleReturns.reduce((total, orderReturn) => total + getScopedRefundAmount(orderReturn, scope), 0);
-  const grossProfit = visibleOrders.reduce(
-    (total, order) =>
-      total + getScopedItems(order, scope).reduce((itemTotal, item) => itemTotal + getItemProfit(item), 0),
+  const discountedRevenue = visibleOrders.reduce((sum, order) => sum + getScopedOrderRevenue(order, scope), 0);
+  const grossRevenue = visibleOrders.reduce(
+    (sum, order) =>
+      sum +
+      getScopedItems(order, scope).reduce((value, item) => value + Number(item.lineTotal), 0) +
+      (scope === "all" ? Number(order.shippingAmount) : 0),
     0,
   );
-  const orderCount = visibleOrders.length;
+  const refundedSales = moneyRefunds.reduce((sum, refund) => sum + getRefundSalesAmount(refund, scope), 0);
+  const refunds = moneyRefunds.reduce(
+    (sum, refund) => sum + (scope === "all" ? Number(refund.amount) : getRefundSalesAmount(refund, scope)),
+    0,
+  );
+  const recoveredCost = visibleReturns.reduce(
+    (sum, receipt) =>
+      sum +
+      getScopedReturnItems(receipt, scope)
+        .filter((item) => item.restock)
+        .reduce((value, item) => value + Number(item.unitCost ?? 0) * item.returnQuantity, 0),
+    0,
+  );
+  const unknownCosts =
+    visibleOrders.some((order) => getScopedItems(order, scope).some((item) => item.unitCost === null)) ||
+    visibleReturns.some((receipt) =>
+      getScopedReturnItems(receipt, scope).some((item) => item.restock && item.unitCost === null),
+    );
+  const grossProfit = visibleOrders.reduce(
+    (sum, order) =>
+      sum +
+      getScopedItems(order, scope).reduce((value, item) => value + getItemProfit(item), 0) +
+      (scope === "all" ? Number(order.shippingAmount) : 0),
+    0,
+  );
   const grossUnitsSold = visibleOrders.reduce(
-    (total, order) => total + getScopedItems(order, scope).reduce((itemTotal, item) => itemTotal + item.quantity, 0),
+    (sum, order) => sum + getScopedItems(order, scope).reduce((value, item) => value + item.quantity, 0),
     0,
   );
   const returnedUnits = visibleReturns.reduce(
-    (total, orderReturn) =>
-      total + getScopedReturnItems(orderReturn, scope).reduce((itemTotal, item) => itemTotal + item.returnQuantity, 0),
+    (sum, receipt) =>
+      sum + getScopedReturnItems(receipt, scope).reduce((value, item) => value + item.returnQuantity, 0),
     0,
   );
-  const netRevenue = Math.max(grossRevenue - refunds, 0);
-  const netUnitsSold = Math.max(grossUnitsSold - returnedUnits, 0);
-
+  const netRevenue = discountedRevenue - refundedSales;
   return {
-    averageOrder: orderCount ? netRevenue / orderCount : 0,
+    averageOrder: visibleOrders.length ? netRevenue / visibleOrders.length : 0,
     grossProfit,
     grossRevenue,
     grossUnitsSold,
-    netProfit: grossProfit - refunds,
+    netProfit: grossProfit - refundedSales + recoveredCost,
+    unknownCosts,
     netRevenue,
-    netUnitsSold,
-    orderCount,
-    refundCount: visibleReturns.filter((orderReturn) => getScopedRefundAmount(orderReturn, scope) > 0).length,
+    netUnitsSold: grossUnitsSold - returnedUnits,
+    orderCount: visibleOrders.length,
+    refundCount: moneyRefunds.filter((refund) => scope === "all" || getRefundSalesAmount(refund, scope) > 0).length,
     refunds,
     returnCount: visibleReturns.length,
-    returnRate: orderCount ? (visibleReturns.length / orderCount) * 100 : 0,
+    returnRate: visibleOrders.length ? (visibleReturns.length / visibleOrders.length) * 100 : 0,
     returnedUnits,
-    unfulfilledCount: visibleOrders.filter((order) => order.fulfillmentStatus === "Unfulfilled").length,
-    unpaidCount: visibleOrders.filter((order) => order.paymentStatus === "Pending").length,
+    unfulfilledCount: visibleOrders.filter((order) => order.fulfillmentStatus !== "Fulfilled").length,
+    unpaidCount: visibleOrders.filter(
+      (order) => order.paymentStatus === "Pending" || order.paymentStatus === "Partially Paid",
+    ).length,
   };
 }
 
@@ -230,12 +288,12 @@ function getBucketKey(date: Date, bucketCount: number, start: Date, end: Date) {
 function formatBucketLabel(index: number, bucketCount: number, start: Date, end: Date) {
   const duration = end.getTime() - start.getTime();
   const bucketStart = new Date(start.getTime() + (duration / bucketCount) * index);
-  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(bucketStart);
+  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", timeZone: "UTC" }).format(bucketStart);
 }
 
 function buildSalesOverview(
   orders: OrderWithItems[],
-  orderReturns: ReturnWithItems[],
+  moneyRefunds: RefundWithOrder[],
   scope: CommercePulseScope,
   start: Date,
   end: Date,
@@ -243,6 +301,7 @@ function buildSalesOverview(
   const bucketCount = 12;
   const buckets = Array.from({ length: bucketCount }, (_, index) => ({
     grossSales: 0,
+    discounts: 0,
     netSales: 0,
     period: formatBucketLabel(index, bucketCount, start, end),
     refunds: 0,
@@ -250,39 +309,44 @@ function buildSalesOverview(
 
   for (const order of orders) {
     const bucket = buckets[getBucketKey(order.orderDate, bucketCount, start, end)];
-    bucket.grossSales += getScopedOrderRevenue(order, scope);
+    const discount = getScopedItems(order, scope).reduce((sum, item) => sum + Number(item.discountAmount), 0);
+    bucket.grossSales += getScopedOrderRevenue(order, scope) + discount;
+    bucket.discounts += discount;
   }
 
-  for (const orderReturn of orderReturns) {
-    const bucket = buckets[getBucketKey(orderReturn.returnDate, bucketCount, start, end)];
-    bucket.refunds += getScopedRefundAmount(orderReturn, scope);
+  for (const refund of moneyRefunds) {
+    const bucket = buckets[getBucketKey(refund.refundedAt, bucketCount, start, end)];
+    bucket.refunds += getRefundSalesAmount(refund, scope);
   }
 
   return buckets.map((bucket) => ({
     ...bucket,
     grossSales: Math.round(bucket.grossSales),
-    netSales: Math.round(Math.max(bucket.grossSales - bucket.refunds, 0)),
+    netSales: Math.round(bucket.grossSales - bucket.discounts - bucket.refunds),
     refunds: Math.round(bucket.refunds),
   }));
 }
 
-function buildTopProducts(orders: OrderWithItems[], orderReturns: ReturnWithItems[], scope: CommercePulseScope) {
-  const products = new Map<
-    string,
-    {
-      category: string;
-      grossQuantity: number;
-      grossRevenue: number;
-      name: string;
-      returnedQuantity: number;
-      returnRevenue: number;
-    }
-  >();
-
-  for (const order of orders) {
-    for (const item of getScopedItems(order, scope)) {
-      const key = item.inventoryItemId ?? item.product;
-      const current = products.get(key) ?? {
+function buildTopProducts(
+  orders: OrderWithItems[],
+  orderReturns: ReturnWithItems[],
+  scope: CommercePulseScope,
+  moneyRefunds: RefundWithOrder[],
+) {
+  type Product = {
+    category: string;
+    grossQuantity: number;
+    grossRevenue: number;
+    name: string;
+    returnedQuantity: number;
+    returnRevenue: number;
+  };
+  const products = new Map<string, Product>();
+  function row(item: { inventoryItemId: string | null; product: string; category: string | null }) {
+    const key = item.inventoryItemId ?? item.product;
+    let current = products.get(key);
+    if (!current) {
+      current = {
         category: item.category ?? "Uncategorized",
         grossQuantity: 0,
         grossRevenue: 0,
@@ -290,26 +354,33 @@ function buildTopProducts(orders: OrderWithItems[], orderReturns: ReturnWithItem
         returnedQuantity: 0,
         returnRevenue: 0,
       };
-      current.grossQuantity += item.quantity;
-      current.grossRevenue += Number(item.lineTotal);
       products.set(key, current);
     }
+    return current;
   }
-
-  for (const orderReturn of orderReturns) {
-    for (const item of getScopedReturnItems(orderReturn, scope)) {
-      const key = item.inventoryItemId ?? item.product;
-      const current = products.get(key) ?? {
-        category: item.category ?? "Uncategorized",
-        grossQuantity: 0,
-        grossRevenue: 0,
-        name: item.product,
-        returnedQuantity: 0,
-        returnRevenue: 0,
-      };
-      current.returnedQuantity += item.returnQuantity;
-      current.returnRevenue += Number(item.lineRefund);
-      products.set(key, current);
+  for (const order of orders)
+    for (const item of getScopedItems(order, scope)) {
+      const current = row(item);
+      current.grossQuantity += item.quantity;
+      current.grossRevenue += Number(item.lineTotal) - Number(item.discountAmount);
+    }
+  for (const receipt of orderReturns)
+    for (const item of getScopedReturnItems(receipt, scope)) row(item).returnedQuantity += item.returnQuantity;
+  // Attribute by refund date even when the return happened in an earlier period.
+  for (const refund of moneyRefunds) {
+    if (refund.order.orderStatus === "Cancelled") continue;
+    if (refund.orderReturn && Number(refund.orderReturn.refundAmount) > 0) {
+      for (const item of refund.orderReturn.items) {
+        if (scope === "inventory" && !item.inventoryItemId) continue;
+        row(item).returnRevenue +=
+          (refundLineSales(item) * Number(refund.amount)) / Number(refund.orderReturn.refundAmount);
+      }
+    } else if (Number(refund.order.total) > 0) {
+      for (const item of refund.order.items) {
+        if (scope === "inventory" && !item.inventoryItemId) continue;
+        row(item).returnRevenue +=
+          (Number(refund.amount) * (Number(item.lineTotal) - Number(item.discountAmount))) / Number(refund.order.total);
+      }
     }
   }
 
@@ -362,6 +433,7 @@ async function getInventorySummary(ownerId: string) {
     prisma.inventoryItem.findMany({
       where: {
         ownerId,
+        itemStatus: "Active",
       },
       select: {
         cost: true,
@@ -409,17 +481,34 @@ async function getInventorySummary(ownerId: string) {
 export async function getCommercePulseData(ownerId: string, period: CommercePulsePeriod, scope: CommercePulseScope) {
   const range = getPeriodRange(period);
   const previousRange = getPreviousRange(range.start, range.end);
-  const [currentOrders, previousOrders, currentReturns, previousReturns, inventory] = await Promise.all([
+  const [
+    currentOrders,
+    previousOrders,
+    currentReturns,
+    previousReturns,
+    inventory,
+    currentRefunds,
+    previousRefunds,
+    collections,
+  ] = await Promise.all([
     getOrdersForRange(ownerId, range.start, range.end),
     getOrdersForRange(ownerId, previousRange.start, previousRange.end),
     getReturnsForRange(ownerId, range.start, range.end),
     getReturnsForRange(ownerId, previousRange.start, previousRange.end),
     getInventorySummary(ownerId),
+    getRefundsForRange(ownerId, range.start, range.end),
+    getRefundsForRange(ownerId, previousRange.start, previousRange.end),
+    prisma.orderPayment.aggregate({
+      where: { ownerId, paidAt: { gte: range.start, lt: range.end } },
+      _sum: { amount: true },
+    }),
   ]);
-  const current = summarizeCommerce(currentOrders, currentReturns, scope);
-  const previous = summarizeCommerce(previousOrders, previousReturns, scope);
+  const current = summarizeCommerce(currentOrders, currentReturns, scope, currentRefunds);
+  const previous = summarizeCommerce(previousOrders, previousReturns, scope, previousRefunds);
 
   return {
+    collections: Number(collections._sum.amount ?? 0),
+    profitHasUnknownCosts: current.unknownCosts,
     inventory,
     kpis: {
       averageOrder: { delta: getDelta(current.averageOrder, previous.averageOrder), value: current.averageOrder },
@@ -440,7 +529,7 @@ export async function getCommercePulseData(ownerId: string, period: CommercePuls
       unpaidOrders: { delta: getDelta(current.unpaidCount, previous.unpaidCount), value: current.unpaidCount },
     },
     range,
-    salesOverview: buildSalesOverview(currentOrders, currentReturns, scope, range.start, range.end),
-    topProducts: buildTopProducts(currentOrders, currentReturns, scope),
+    salesOverview: buildSalesOverview(currentOrders, currentRefunds, scope, range.start, range.end),
+    topProducts: buildTopProducts(currentOrders, currentReturns, scope, currentRefunds),
   };
 }

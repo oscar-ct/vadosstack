@@ -5,7 +5,7 @@ import { getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { getReturnRefundDocumentData, sanitizeReturnReceiptFilename } from "../_lib/return-data";
 import { renderReturnReceiptPdfBuffer } from "../_lib/return-pdf";
 
-async function getAuthorizedReturnReceipt(orderId: string) {
+async function getAuthorizedReturnReceipt(orderId: string, returnId?: string) {
   const authorization = await getPermittedDashboardAuthorization("orders.view");
 
   if (!authorization) {
@@ -14,7 +14,7 @@ async function getAuthorizedReturnReceipt(orderId: string) {
     };
   }
 
-  const data = await getReturnRefundDocumentData(authorization.workspaceId, orderId);
+  const data = await getReturnRefundDocumentData(authorization.workspaceId, orderId, returnId);
 
   if (!data) {
     return {
@@ -39,7 +39,10 @@ export async function GET(
   },
 ) {
   const { orderId } = await params;
-  const result = await getAuthorizedReturnReceipt(orderId);
+  const result = await getAuthorizedReturnReceipt(
+    orderId,
+    new URL(_request.url).searchParams.get("returnId") ?? undefined,
+  );
 
   if (result.response) {
     return result.response;
@@ -67,7 +70,10 @@ export async function HEAD(
   },
 ) {
   const { orderId } = await params;
-  const result = await getAuthorizedReturnReceipt(orderId);
+  const result = await getAuthorizedReturnReceipt(
+    orderId,
+    new URL(_request.url).searchParams.get("returnId") ?? undefined,
+  );
 
   if (result.response) {
     return result.response;

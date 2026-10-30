@@ -47,15 +47,6 @@ function formatOrderDate(value: string) {
   }).format(date);
 }
 
-function formatTaxRate(value: number) {
-  if (!Number.isFinite(value)) return "0%";
-
-  return `${value.toLocaleString("en-US", {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: value % 1 === 0 ? 0 : 2,
-  })}%`;
-}
-
 function downloadOrderPdf(href: string) {
   const link = document.createElement("a");
 
@@ -190,7 +181,6 @@ function OrderReceiptPaper({
   const subtotal = getOrderSubtotal(order);
   const shipping = Number.isFinite(order.shipping) ? order.shipping : 0;
   const tax = getOrderTaxAmount(order);
-  const taxRate = Number.isFinite(order.tax) ? order.tax : 0;
   const discount = Number.isFinite(order.discount) ? order.discount : 0;
   const total = getOrderTotal(order);
   const cityStateZip = formatCityStateZip(order);
@@ -250,6 +240,9 @@ function OrderReceiptPaper({
             </div>
             <div className="min-w-0">
               <div className="truncate font-medium text-sm">{item.product || "Product name"}</div>
+              {item.description ? (
+                <p className="line-clamp-2 text-muted-foreground text-xs">{item.description}</p>
+              ) : null}
               <div className="truncate text-[11px] text-neutral-500">
                 {[item.sku, item.category || "Category"].filter(Boolean).join(" · ")}
               </div>
@@ -311,7 +304,7 @@ function OrderReceiptPaper({
             ) : (
               <div className={"text-right"}>
                 <div className="font-medium text-[11px] text-neutral-500">Status</div>
-                <div className="mt-1.5 font-medium text-sm">Payment pending</div>
+                <div className="mt-1.5 font-medium text-sm">{order.paymentStatus}</div>
               </div>
             )}
           </OrderReceiptSection>
@@ -326,7 +319,7 @@ function OrderReceiptPaper({
               <span className="tabular-nums">{formatOrderCurrency(shipping)}</span>
             </div>
             <div className="flex items-center justify-between gap-4 text-xs">
-              <span className="text-neutral-500">Tax ({formatTaxRate(taxRate)})</span>
+              <span className="text-neutral-500">Sales tax</span>
               <span className="tabular-nums">{formatOrderCurrency(tax)}</span>
             </div>
             <div className="flex items-center justify-between gap-4 text-xs">

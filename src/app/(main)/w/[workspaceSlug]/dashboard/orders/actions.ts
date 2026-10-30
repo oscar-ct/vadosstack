@@ -6,6 +6,10 @@ import { z } from "zod";
 
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
+import { getOrderBalance, refreshOrderPaymentStatus, requireVersion } from "@/lib/commerce/ledger";
+import { calculateOrderTotals, cents } from "@/lib/commerce/money";
+import { adjustStock, CommerceError, commerceTransaction, lockOrder } from "@/lib/commerce/transaction";
+import { type OrderInput, orderInputSchema, parseCommerceInput, submissionKeySchema } from "@/lib/commerce/validation";
 import { allocateDocumentNumber, attachDocumentNumber } from "@/lib/document-numbering";
 import { escapeHtml, plainTextToEmailHtml, sanitizeEmailHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
@@ -20,44 +24,9 @@ import { revalidateWorkspacePath } from "@/lib/workspace-revalidation";
 
 import { getOrderDocumentData, sanitizeOrderPdfFilename } from "./_lib/order-document";
 import { renderOrderPdfBuffer } from "./_lib/order-pdf";
+import { createHash } from "node:crypto";
 
-type CreateOrderLineItemInput = {
-  category?: string | null;
-  inventoryItemId?: string | null;
-  product: string;
-  quantity: number;
-  sku?: string | null;
-  taxRate?: number;
-  taxable?: boolean;
-  unitPrice: number;
-};
-
-type CreateOrderInput = {
-  customerEmail?: string | null;
-  customerId?: string | null;
-  customerName?: string | null;
-  customerNotes?: string | null;
-  customerPhone?: string | null;
-  discountAmount?: number;
-  estimatedDelivery?: Date | null;
-  footerMessage?: string | null;
-  fulfillmentStatus: "Fulfilled" | "Unfulfilled";
-  items: CreateOrderLineItemInput[];
-  orderDate: Date;
-  orderNumber: string;
-  paymentMethod?: string | null;
-  paymentReference?: string | null;
-  paymentStatus: "Paid" | "Pending";
-  shippingAmount?: number;
-  shippingCity?: string | null;
-  shippingLine1?: string | null;
-  shippingLine2?: string | null;
-  shippingPostalCode?: string | null;
-  shippingService?: string | null;
-  shippingState?: string | null;
-  taxRate?: number;
-  trackingNumber?: string | null;
-};
+type CreateOrderInput = OrderInput;
 
 type EmailOrderState = {
   success: boolean;
@@ -66,7 +35,7 @@ type EmailOrderState = {
   submittedAt?: number;
 };
 
-class OrderActionError extends Error {}
+class OrderActionError extends CommerceError {}
 
 const emailOrderSchema = z.object({
   orderId: z.string().trim().min(1, "Order is required."),
@@ -102,9 +71,9 @@ function optionalString(value?: string | null) {
   return text || null;
 }
 
-async function resolveCustomerId(ownerId: string, input: CreateOrderInput) {
+async function resolveCustomerId(tx: Prisma.TransactionClient, ownerId: string, input: CreateOrderInput) {
   if (input.customerId) {
-    const customer = await prisma.customer.findFirst({
+    const customer = await tx.customer.findFirst({
       where: {
         id: input.customerId,
         ownerId,
@@ -114,13 +83,14 @@ async function resolveCustomerId(ownerId: string, input: CreateOrderInput) {
       },
     });
 
-    return customer?.id ?? null;
+    if (!customer) throw new OrderActionError("Customer was not found in this workspace.");
+    return customer.id;
   }
 
   const email = optionalString(input.customerEmail);
   if (!email) return null;
 
-  const customer = await prisma.customer.findFirst({
+  const customer = await tx.customer.findFirst({
     where: {
       ownerId,
       email,
@@ -133,97 +103,59 @@ async function resolveCustomerId(ownerId: string, input: CreateOrderInput) {
   return customer?.id ?? null;
 }
 
-function normalizeOrderItems(items: CreateOrderLineItemInput[]) {
-  return items
-    .map((item) => ({
-      ...item,
-      product: optionalString(item.product) ?? "",
-      quantity: Math.max(Math.trunc(Number(item.quantity) || 0), 0),
-      unitPrice: Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : 0,
-    }))
-    .filter((item) => item.product && item.quantity > 0);
-}
-
 async function prepareOrderItems(
   tx: Prisma.TransactionClient,
   ownerId: string,
   input: CreateOrderInput,
-  existingInventoryQuantityById = new Map<string, number>(),
+  existing: Awaited<ReturnType<typeof tx.orderItem.findMany>> = [],
 ) {
-  const normalizedItems = normalizeOrderItems(input.items);
-
-  if (normalizedItems.length === 0) {
-    throw new OrderActionError("Add at least one valid order item.");
-  }
-
-  const preparedItems = await Promise.all(
-    normalizedItems.map(async (item) => {
+  return Promise.all(
+    input.items.map(async (item) => {
+      const old = item.id ? existing.find((line) => line.id === item.id) : undefined;
+      if (old && old.inventoryItemId !== (item.inventoryItemId ?? null))
+        throw new OrderActionError("Remove the old line before replacing its product.");
+      if (old && cents(old.unitPrice) !== cents(item.unitPrice))
+        throw new OrderActionError("Saved line prices are fixed. Add a new order for a different price.");
       const inventoryItem = item.inventoryItemId
         ? await tx.inventoryItem.findFirst({
-            where: {
-              id: item.inventoryItemId,
-              ownerId,
-            },
-            include: {
-              category: true,
-            },
+            where: { id: item.inventoryItemId, ownerId },
+            include: { category: true },
           })
         : null;
-
-      if (item.inventoryItemId && !inventoryItem) {
-        throw new OrderActionError(`${item.product || "Inventory item"} was not found.`);
-      }
-
-      const unitPrice = inventoryItem ? Number(inventoryItem.unitPrice) : item.unitPrice;
-      const lineTotal = item.quantity * unitPrice;
-      const taxable = inventoryItem?.taxable ?? item.taxable ?? true;
-      const taxRate = Number(inventoryItem?.taxRate ?? item.taxRate ?? input.taxRate ?? 0);
-      const previousQuantity = inventoryItem ? (existingInventoryQuantityById.get(inventoryItem.id) ?? 0) : 0;
-      const stockDecrease = item.quantity - previousQuantity;
-
-      if (inventoryItem && stockDecrease > inventoryItem.stock) {
-        throw new OrderActionError(`${inventoryItem.product} only has ${inventoryItem.stock} available.`);
-      }
-
+      if (
+        !old &&
+        inventoryItem &&
+        (cents(inventoryItem.unitPrice) !== cents(item.unitPrice) ||
+          (item.taxRate !== undefined && item.taxRate !== Number(inventoryItem.taxRate)) ||
+          (item.taxable !== undefined && item.taxable !== inventoryItem.taxable))
+      )
+        throw new OrderActionError("Catalog pricing or tax changed. Refresh the product before saving.");
+      if (item.inventoryItemId && !inventoryItem) throw new OrderActionError("Inventory item was not found.");
+      if (inventoryItem?.itemStatus !== "Active" && inventoryItem && (!old || item.quantity > old.quantity))
+        throw new OrderActionError("Inactive products cannot be added to orders.");
       return {
-        inventoryItem,
-        category: inventoryItem?.category?.name ?? item.category ?? null,
-        lineTotal,
-        product: inventoryItem?.product ?? item.product,
+        id: old?.id,
+        inventoryItemId: inventoryItem?.id ?? null,
+        category: old ? old.category : (inventoryItem?.category?.name ?? item.category ?? null),
+        product: old?.product ?? inventoryItem?.product ?? item.product,
+        sku: old ? old.sku : (inventoryItem?.sku ?? item.sku ?? null),
+        description: old ? old.description : (inventoryItem?.description ?? item.description ?? null),
+        unit: old ? old.unit : (inventoryItem?.unit ?? item.unit ?? null),
         quantity: item.quantity,
-        sku: inventoryItem?.sku ?? item.sku ?? null,
-        stockDecrease,
-        taxable,
-        taxRate,
-        unitPrice,
+        unitPrice: Number(old?.unitPrice ?? inventoryItem?.unitPrice ?? item.unitPrice),
+        unitCost: old ? old.unitCost : (inventoryItem?.cost ?? null),
+        taxable: old?.taxable ?? inventoryItem?.taxable ?? item.taxable ?? true,
+        taxRate: Number(old?.taxRate ?? inventoryItem?.taxRate ?? item.taxRate ?? input.taxRate),
       };
     }),
   );
-
-  return preparedItems;
-}
-
-function getOrderTotals(items: Awaited<ReturnType<typeof prepareOrderItems>>, input: CreateOrderInput) {
-  const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
-  const taxAmount = items.reduce((sum, item) => sum + (item.taxable ? item.lineTotal * (item.taxRate / 100) : 0), 0);
-  const shippingAmount = input.shippingAmount ?? 0;
-  const discountAmount = input.discountAmount ?? 0;
-  const total = Math.max(subtotal + shippingAmount + taxAmount - discountAmount, 0);
-
-  return {
-    discountAmount,
-    shippingAmount,
-    subtotal,
-    taxAmount,
-    total,
-  };
 }
 
 function orderData(
   ownerId: string,
   customerId: string | null,
   input: CreateOrderInput,
-  totals: ReturnType<typeof getOrderTotals>,
+  totals: ReturnType<typeof calculateOrderTotals>,
   orderNumber: string,
 ) {
   return {
@@ -257,291 +189,288 @@ function orderData(
   };
 }
 
-export async function createOrderWithInventoryAdjustments(input: CreateOrderInput) {
-  const authorization = await getPermittedDashboardAuthorization("orders.create");
-
-  if (!authorization) {
-    throw new Error("You do not have permission to create orders.");
-  }
-  const workspaceId = authorization.workspaceId;
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { orderMessageText: true },
-  });
-  if (!workspace) throw new Error("Workspace could not be found.");
-
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const customerId = await resolveCustomerId(workspaceId, input);
-      const preparedItems = await prepareOrderItems(tx, workspaceId, input);
-      const totals = getOrderTotals(preparedItems, input);
-      const orderNumberAssignment = await allocateDocumentNumber(tx, workspaceId, "order");
-
-      const order = await tx.order.create({
-        data: {
-          ...orderData(workspaceId, customerId, input, totals, orderNumberAssignment.documentNumber),
-          footerMessage: input.footerMessage ?? workspace.orderMessageText,
-        },
-      });
-      await attachDocumentNumber(tx, orderNumberAssignment.assignmentId, order.id);
-
-      for (const item of preparedItems) {
-        const orderItem = await tx.orderItem.create({
-          data: {
-            ownerId: workspaceId,
-            orderId: order.id,
-            inventoryItemId: item.inventoryItem?.id ?? null,
-            sku: item.sku,
-            product: item.product,
-            category: item.category,
-            quantity: item.quantity,
-            unitPrice: toDecimal(item.unitPrice),
-            lineTotal: toDecimal(item.lineTotal),
-            taxable: item.taxable,
-            taxRate: toDecimal(item.taxRate),
-          },
-        });
-
-        if (item.inventoryItem) {
-          await tx.inventoryItem.update({
-            where: {
-              id: item.inventoryItem.id,
-            },
-            data: {
-              stock: {
-                decrement: item.stockDecrease,
-              },
-            },
-          });
-          await tx.inventoryStockMovement.create({
-            data: {
-              ownerId: workspaceId,
-              inventoryItemId: item.inventoryItem.id,
-              orderId: order.id,
-              orderItemId: orderItem.id,
-              quantityChange: -item.stockDecrease,
-              reason: "Order created",
-              notes: order.orderNumber,
-            },
-          });
-        }
-      }
-
-      await recordAuthorizationAuditEvent(
-        {
-          workspaceId,
-          actorUserId: authorization.principal.user.id,
-          membershipId: authorization.membership.id,
-          action: "order.create",
-          targetType: "Order",
-          targetId: order.id,
-        },
-        tx,
-      );
-
-      revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/orders");
-      revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
-
-      return {
-        id: order.id,
-        orderNumber: order.orderNumber,
-      };
-    });
-  } catch (error) {
-    console.error("Order creation failed.", error);
-    throw new Error(error instanceof OrderActionError ? error.message : "Order could not be created.");
-  }
+function hashSubmission(input: unknown) {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
 
-export async function updateOrderWithInventoryAdjustments(orderId: string, input: CreateOrderInput) {
-  const authorization = await getPermittedDashboardAuthorization("orders.update");
+function revalidateCommerce(slug: string, orderId?: string) {
+  for (const path of [
+    "/dashboard/orders",
+    "/dashboard/inventory",
+    "/dashboard/commerce-pulse",
+    ...(orderId ? [`/dashboard/orders/${orderId}/edit`, `/dashboard/orders/${orderId}/return`] : []),
+  ])
+    revalidateWorkspacePath(slug, path);
+}
 
-  if (!authorization) {
-    throw new Error("You do not have permission to update orders.");
-  }
+export async function createOrderWithInventoryAdjustments(rawInput: CreateOrderInput) {
+  const authorization = await getPermittedDashboardAuthorization("orders.create");
+  if (!authorization) throw new Error("You do not have permission to create orders.");
+  const input = parseCommerceInput(orderInputSchema, rawInput);
+  const submissionKey = parseCommerceInput(submissionKeySchema, input.submissionKey);
+  if (!["Paid", "Pending"].includes(input.paymentStatus) || input.fulfillmentStatus === "Partially Fulfilled")
+    throw new OrderActionError("Use Pending or Paid for a new order.");
+  if (
+    input.paymentStatus === "Paid" &&
+    (!can(authorization.membership, "orders.payments.manage") ||
+      !input.externalPaymentConfirmed ||
+      !input.paymentMethod?.trim())
+  )
+    throw new OrderActionError("Confirm the external payment and its method, or create the order as Pending.");
   const workspaceId = authorization.workspaceId;
-
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const existingOrder = await tx.order.findFirst({
-        where: {
-          id: orderId,
-          ownerId: workspaceId,
-        },
-        include: {
-          items: true,
-        },
-      });
-
-      if (!existingOrder) {
-        throw new OrderActionError("Order was not found.");
-      }
-
-      const existingInventoryQuantityById = new Map<string, number>();
-      for (const item of existingOrder.items) {
-        if (!item.inventoryItemId) continue;
-        existingInventoryQuantityById.set(
-          item.inventoryItemId,
-          (existingInventoryQuantityById.get(item.inventoryItemId) ?? 0) + item.quantity,
-        );
-      }
-
-      const customerId = await resolveCustomerId(workspaceId, input);
-      const preparedItems = await prepareOrderItems(tx, workspaceId, input, existingInventoryQuantityById);
-      const totals = getOrderTotals(preparedItems, input);
-
-      await tx.orderItem.deleteMany({
-        where: {
-          orderId: existingOrder.id,
-          ownerId: workspaceId,
-        },
-      });
-
-      const newInventoryQuantityById = new Map<string, number>();
-
-      for (const item of preparedItems) {
-        await tx.orderItem.create({
-          data: {
-            ownerId: workspaceId,
-            orderId: existingOrder.id,
-            inventoryItemId: item.inventoryItem?.id ?? null,
-            sku: item.sku,
-            product: item.product,
-            category: item.category,
-            quantity: item.quantity,
-            unitPrice: toDecimal(item.unitPrice),
-            lineTotal: toDecimal(item.lineTotal),
-            taxable: item.taxable,
-            taxRate: toDecimal(item.taxRate),
-          },
-        });
-
-        if (item.inventoryItem) {
-          newInventoryQuantityById.set(
-            item.inventoryItem.id,
-            (newInventoryQuantityById.get(item.inventoryItem.id) ?? 0) + item.quantity,
-          );
-        }
-      }
-
-      const touchedInventoryIds = new Set([
-        ...existingInventoryQuantityById.keys(),
-        ...newInventoryQuantityById.keys(),
-      ]);
-      for (const inventoryItemId of touchedInventoryIds) {
-        const oldQuantity = existingInventoryQuantityById.get(inventoryItemId) ?? 0;
-        const newQuantity = newInventoryQuantityById.get(inventoryItemId) ?? 0;
-        const quantityChange = oldQuantity - newQuantity;
-
-        if (quantityChange === 0) continue;
-
-        await tx.inventoryItem.update({
-          where: {
-            id: inventoryItemId,
-          },
-          data: {
-            stock: {
-              increment: quantityChange,
-            },
-          },
-        });
-        await tx.inventoryStockMovement.create({
-          data: {
-            ownerId: workspaceId,
-            inventoryItemId,
-            orderId: existingOrder.id,
-            quantityChange,
-            reason: "Order updated",
-            notes: existingOrder.orderNumber,
-          },
-        });
-      }
-
-      const order = await tx.order.update({
-        where: {
-          id: existingOrder.id,
-        },
-        data: orderData(workspaceId, customerId, input, totals, existingOrder.orderNumber),
-      });
-      await recordAuthorizationAuditEvent(
-        {
-          workspaceId,
-          actorUserId: authorization.principal.user.id,
-          membershipId: authorization.membership.id,
-          action: "order.update",
-          targetType: "Order",
-          targetId: order.id,
-        },
-        tx,
-      );
-
-      revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/orders");
-      revalidateWorkspacePath(authorization.membership.workspaceSlug, `/dashboard/orders/${order.id}/edit`);
-      revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
-
-      return {
-        id: order.id,
-        orderNumber: order.orderNumber,
-      };
+  const submissionHash = hashSubmission(input);
+  const result = await commerceTransaction(async (tx) => {
+    const previous = await tx.order.findUnique({
+      where: { ownerId_submissionKey: { ownerId: workspaceId, submissionKey } },
     });
-  } catch (error) {
-    console.error("Order update failed.", error);
-    throw new Error(error instanceof OrderActionError ? error.message : "Order could not be updated.");
-  }
+    if (previous) {
+      if (previous.submissionHash !== submissionHash)
+        throw new OrderActionError("This submission key was already used for a different order.");
+      return { id: previous.id, orderNumber: previous.orderNumber, version: previous.version };
+    }
+    const workspace = await tx.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { orderMessageText: true },
+    });
+    const customerId = await resolveCustomerId(tx, workspaceId, input);
+    const prepared = await prepareOrderItems(tx, workspaceId, input);
+    const totals = calculateOrderTotals(prepared, input.shippingAmount, input.discountAmount, input.taxRate);
+    if (cents(input.discountAmount) > cents(totals.subtotal))
+      throw new OrderActionError("Discount cannot exceed the merchandise subtotal.");
+    const number = await allocateDocumentNumber(tx, workspaceId, "order");
+    const order = await tx.order.create({
+      data: {
+        ...orderData(workspaceId, customerId, input, totals, number.documentNumber),
+        submissionKey,
+        submissionHash,
+        reservationExpiresAt:
+          input.paymentStatus === "Pending" && input.fulfillmentStatus === "Unfulfilled"
+            ? new Date(Date.now() + 7 * 86400000)
+            : null,
+        footerMessage: input.footerMessage ?? workspace.orderMessageText,
+      },
+    });
+    await attachDocumentNumber(tx, number.assignmentId, order.id);
+    for (const [index, item] of prepared.entries()) {
+      const { id: _id, ...data } = item;
+      const line = await tx.orderItem.create({
+        data: {
+          ...data,
+          ...totals.lines[index],
+          ownerId: workspaceId,
+          orderId: order.id,
+          shippedQuantity: input.fulfillmentStatus === "Fulfilled" ? item.quantity : 0,
+        },
+      });
+      if (item.inventoryItemId)
+        await adjustStock(tx, {
+          ownerId: workspaceId,
+          inventoryItemId: item.inventoryItemId,
+          quantityChange: -item.quantity,
+          reason: "Order reserved",
+          orderId: order.id,
+          orderItemId: line.id,
+          notes: order.orderNumber,
+          actorUserId: authorization.principal.user.id,
+        });
+    }
+    if (input.paymentStatus === "Paid" && totals.total > 0)
+      await tx.orderPayment.create({
+        data: {
+          ownerId: workspaceId,
+          orderId: order.id,
+          amount: totals.total,
+          method: input.paymentMethod?.trim() ?? "",
+          reference: optionalString(input.paymentReference),
+          idempotencyKey: `order:${submissionKey}`,
+          actorUserId: authorization.principal.user.id,
+        },
+      });
+    await refreshOrderPaymentStatus(tx, workspaceId, order.id);
+    await recordAuthorizationAuditEvent(
+      {
+        workspaceId,
+        actorUserId: authorization.principal.user.id,
+        membershipId: authorization.membership.id,
+        action: "order.create",
+        targetType: "Order",
+        targetId: order.id,
+      },
+      tx,
+    );
+    return { id: order.id, orderNumber: order.orderNumber, version: order.version };
+  });
+  revalidateCommerce(authorization.membership.workspaceSlug, result.id);
+  return result;
+}
+
+export async function updateOrderWithInventoryAdjustments(orderId: string, rawInput: CreateOrderInput) {
+  const authorization = await getPermittedDashboardAuthorization("orders.update");
+  if (!authorization) throw new Error("You do not have permission to update orders.");
+  const input = parseCommerceInput(orderInputSchema, rawInput);
+  const workspaceId = authorization.workspaceId;
+  const result = await commerceTransaction(async (tx) => {
+    await lockOrder(tx, workspaceId, orderId);
+    const existing = await tx.order.findFirstOrThrow({
+      where: { id: orderId, ownerId: workspaceId },
+      include: { items: true, returns: { include: { items: true } }, shipments: true },
+    });
+    requireVersion(existing.version, input.expectedVersion);
+    if (existing.orderStatus !== "Active") throw new OrderActionError("Cancelled orders cannot be edited.");
+    if (input.paymentStatus !== existing.paymentStatus || input.fulfillmentStatus !== existing.fulfillmentStatus)
+      throw new OrderActionError("Use the payment and shipping controls to change order status.");
+    const prepared = await prepareOrderItems(tx, workspaceId, input, existing.items);
+    const totals = calculateOrderTotals(prepared, input.shippingAmount, input.discountAmount, input.taxRate);
+    if (cents(input.discountAmount) > cents(totals.subtotal))
+      throw new OrderActionError("Discount cannot exceed the merchandise subtotal.");
+    const hasHistory = existing.returns.length > 0 || existing.items.some((line) => line.shippedQuantity > 0);
+    const financialChanged =
+      prepared.length !== existing.items.length ||
+      prepared.some((line) => {
+        const old = existing.items.find((item) => item.id === line.id);
+        return !old || old.quantity !== line.quantity || cents(old.unitPrice) !== cents(line.unitPrice);
+      }) ||
+      cents(existing.shippingAmount) !== cents(totals.shippingAmount) ||
+      cents(existing.discountAmount) !== cents(totals.discountAmount);
+    if (hasHistory && financialChanged)
+      throw new OrderActionError(
+        "Orders with shipments or returns keep their original financial lines. Use a new order for additional items.",
+      );
+    const balance = await getOrderBalance(tx, workspaceId, orderId);
+    if (balance.paid - balance.refunded > cents(totals.total))
+      throw new OrderActionError("Refund the excess payment before reducing the order total.");
+    // Preserve legacy rounded amounts on metadata-only edits as well.
+    const savedTotals = financialChanged
+      ? totals
+      : {
+          ...totals,
+          subtotal: Number(existing.subtotal),
+          taxAmount: Number(existing.taxAmount),
+          total: Number(existing.total),
+        };
+    for (const old of existing.items) {
+      if (prepared.some((line) => line.id === old.id)) continue;
+      if (old.inventoryItemId)
+        await adjustStock(tx, {
+          ownerId: workspaceId,
+          inventoryItemId: old.inventoryItemId,
+          quantityChange: old.quantity,
+          reason: "Order line removed",
+          orderId,
+          orderItemId: old.id,
+          actorUserId: authorization.principal.user.id,
+        });
+      await tx.orderItem.delete({ where: { id: old.id } });
+    }
+    for (const [index, line] of prepared.entries()) {
+      const old = existing.items.find((item) => item.id === line.id);
+      const { id, ...data } = line;
+      const pricing =
+        !financialChanged && old
+          ? { lineTotal: old.lineTotal, discountAmount: old.discountAmount, taxAmount: old.taxAmount }
+          : totals.lines[index];
+      const saved = old
+        ? await tx.orderItem.update({ where: { id: old.id }, data: { ...data, ...pricing } })
+        : await tx.orderItem.create({ data: { ...data, ...pricing, orderId, ownerId: workspaceId } });
+      if (line.inventoryItemId)
+        await adjustStock(tx, {
+          ownerId: workspaceId,
+          inventoryItemId: line.inventoryItemId,
+          quantityChange: (old?.quantity ?? 0) - line.quantity,
+          reason: "Order updated",
+          orderId,
+          orderItemId: saved.id,
+          actorUserId: authorization.principal.user.id,
+        });
+    }
+    const customerId = await resolveCustomerId(tx, workspaceId, input);
+    const order = await tx.order.update({
+      where: { id: orderId },
+      data: {
+        ...orderData(workspaceId, customerId, input, savedTotals, existing.orderNumber),
+        version: { increment: 1 },
+      },
+    });
+    await refreshOrderPaymentStatus(tx, workspaceId, orderId);
+    await recordAuthorizationAuditEvent(
+      {
+        workspaceId,
+        actorUserId: authorization.principal.user.id,
+        membershipId: authorization.membership.id,
+        action: "order.update",
+        targetType: "Order",
+        targetId: orderId,
+      },
+      tx,
+    );
+    return { id: order.id, orderNumber: order.orderNumber, version: order.version };
+  });
+  revalidateCommerce(authorization.membership.workspaceSlug, orderId);
+  return result;
 }
 
 export async function updateOrderStatusesAction(
   orderId: string,
-  statuses: Partial<{
-    fulfillmentStatus: "Fulfilled" | "Unfulfilled";
-    paymentStatus: "Paid" | "Pending";
-  }>,
+  rawStatuses: Partial<{ fulfillmentStatus: "Fulfilled" | "Unfulfilled"; paymentStatus: "Paid" | "Pending" }>,
+  expectedVersion?: number,
 ) {
   const authorization = await getPermittedDashboardAuthorization("orders.update");
-
-  if (!authorization) {
-    throw new Error("You do not have permission to update orders.");
-  }
-  const workspaceId = authorization.workspaceId;
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      const order = await tx.order.updateMany({
-        where: {
-          id: orderId,
-          ownerId: workspaceId,
-        },
-        data: statuses,
-      });
-
-      if (order.count === 0) {
-        throw new OrderActionError("Order was not found.");
-      }
-      await recordAuthorizationAuditEvent(
-        {
-          workspaceId,
-          actorUserId: authorization.principal.user.id,
-          membershipId: authorization.membership.id,
-          action: "order.status.update",
-          targetType: "Order",
-          targetId: orderId,
-          metadata: statuses,
-        },
-        tx,
-      );
+  if (!authorization) throw new Error("You do not have permission to update orders.");
+  const statuses = parseCommerceInput(
+    z
+      .object({
+        fulfillmentStatus: z.enum(["Fulfilled", "Unfulfilled"]).optional(),
+        paymentStatus: z.enum(["Paid", "Pending"]).optional(),
+      })
+      .strict(),
+    rawStatuses,
+  );
+  if (statuses.paymentStatus) throw new OrderActionError("Record a payment using the order payment controls.");
+  if (statuses.fulfillmentStatus !== "Fulfilled")
+    throw new OrderActionError("Use a return to reverse a completed shipment.");
+  await commerceTransaction(async (tx) => {
+    await lockOrder(tx, authorization.workspaceId, orderId);
+    const order = await tx.order.findFirstOrThrow({
+      where: { id: orderId, ownerId: authorization.workspaceId },
+      include: { items: true, returns: true },
     });
-  } catch (error) {
-    console.error("Order status update failed.", error);
-    throw new Error(error instanceof OrderActionError ? error.message : "Order could not be updated.");
-  }
-
-  revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/orders");
-  revalidateWorkspacePath(authorization.membership.workspaceSlug, `/dashboard/orders/${orderId}/edit`);
-
-  return {
-    success: true,
-    message: "Order updated.",
-  };
+    requireVersion(order.version, expectedVersion);
+    if (order.orderStatus !== "Active" || order.returns.length)
+      throw new OrderActionError("Cancelled or returned orders cannot be fulfilled.");
+    const remaining = order.items.filter((item) => item.shippedQuantity < item.quantity);
+    if (remaining.length)
+      await tx.orderShipment.create({
+        data: {
+          orderId,
+          idempotencyKey: `complete:${order.version}`,
+          actorUserId: authorization.principal.user.id,
+          carrier: order.shippingService,
+          trackingNumber: order.trackingNumber,
+          items: {
+            create: remaining.map((item) => ({ orderItemId: item.id, quantity: item.quantity - item.shippedQuantity })),
+          },
+        },
+      });
+    for (const item of remaining)
+      await tx.orderItem.update({ where: { id: item.id }, data: { shippedQuantity: item.quantity } });
+    await tx.order.update({
+      where: { id: orderId },
+      data: { fulfillmentStatus: "Fulfilled", reservationExpiresAt: null, version: { increment: 1 } },
+    });
+    await recordAuthorizationAuditEvent(
+      {
+        workspaceId: authorization.workspaceId,
+        actorUserId: authorization.principal.user.id,
+        membershipId: authorization.membership.id,
+        action: "order.ship",
+        targetType: "Order",
+        targetId: orderId,
+      },
+      tx,
+    );
+  });
+  revalidateCommerce(authorization.membership.workspaceSlug, orderId);
+  return { success: true, message: "Order fulfilled." };
 }
 
 export async function emailOrderAction(_previousState: EmailOrderState, formData: FormData): Promise<EmailOrderState> {

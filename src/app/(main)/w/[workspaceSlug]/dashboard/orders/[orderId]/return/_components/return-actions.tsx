@@ -32,7 +32,7 @@ function createReturnReceiptHtml({
   return [
     `<p>Hi ${escapeHtml(greetingName)},</p>`,
     `<p>Your return receipt <strong>${escapeHtml(returnNumber)}</strong> from ${escapeHtml(companyName)} is attached as a PDF.</p>`,
-    `<p><span style="color:#18181b;font-size:22px"><strong>${escapeHtml(refundAmount)}</strong></span><br><span style="color:#52525b">Refund amount</span></p>`,
+    `<p><span style="color:#18181b;font-size:22px"><strong>${escapeHtml(refundAmount)}</strong></span><br><span style="color:#52525b">Requested refund amount</span></p>`,
     `<p><strong>Return date:</strong> ${escapeHtml(returnDate)}</p>`,
     "<p>Please keep this for your records. If you have any questions, reply to this email and we will be happy to help.</p>",
     `<p>Thank you,<br><strong>${escapeHtml(companyName)}</strong></p>`,
@@ -73,7 +73,7 @@ export function ReturnReceiptActions({
     `Hi ${customerName?.trim() || "there"},`,
     "",
     `Your return receipt ${returnNumber} from ${companyName} is attached as a PDF.`,
-    `Refund amount: ${refundAmount}`,
+    `Requested refund amount: ${refundAmount}`,
     `Return date: ${returnDate}`,
     "",
     "Please keep this for your records.",
@@ -105,7 +105,7 @@ export function ReturnReceiptActions({
         { label: "Return receipt", value: returnNumber },
         { label: "Recipient", value: customerEmail ?? "No email on file" },
         { label: "Customer", value: customerName ?? "No customer name" },
-        { label: "Refund amount", value: refundAmount },
+        { label: "Requested refund amount", value: refundAmount },
         { label: "Return date", value: returnDate },
       ]}
       documentId={orderId}

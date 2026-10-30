@@ -1,9 +1,16 @@
+import { calculateOrderTotals } from "@/lib/commerce/money";
+import type { fulfillmentStatuses, paymentStatuses } from "@/lib/commerce/validation";
+
 export interface OrderLineItem {
+  description?: string | null;
+  unit?: string | null;
   category: string;
   id: string;
   inventoryItemId?: string;
   product: string;
   quantity: number;
+  taxable?: boolean;
+  taxRate?: number;
   sku?: string;
   unitPrice: number;
 }
@@ -34,10 +41,13 @@ export interface OrderCompany {
   phone: string | null;
 }
 
-export type OrderPaymentStatus = "Paid" | "Pending";
-export type OrderFulfillmentStatus = "Fulfilled" | "Unfulfilled";
+export type OrderPaymentStatus = (typeof paymentStatuses)[number];
+export type OrderFulfillmentStatus = (typeof fulfillmentStatuses)[number];
 
 export interface OrderFormValues {
+  expectedVersion?: number;
+  externalPaymentConfirmed?: boolean;
+  persistedTotals?: { signature: string; subtotal: number; taxAmount: number; total: number };
   apartment: string;
   city: string;
   customerEmail: string;
@@ -98,7 +108,7 @@ export const blankOrderValues: OrderFormValues = {
   tax: defaultOrderTaxRate,
   trackingNumber: "",
   discount: 0,
-  paymentStatus: "Paid",
+  paymentStatus: "Pending",
   fulfillmentStatus: "Unfulfilled",
   footerMessage: defaultOrderFooterMessage,
   items: [
@@ -126,20 +136,32 @@ export function getLineAmount(item?: OrderLineItem) {
   return quantity * unitPrice;
 }
 
+export function pricingSignature(order: Pick<OrderFormValues, "items" | "shipping" | "discount">) {
+  return JSON.stringify([
+    order.items.map((item) => [
+      item.id,
+      item.inventoryItemId,
+      item.quantity,
+      item.unitPrice,
+      item.taxable,
+      item.taxRate,
+    ]),
+    order.shipping,
+    order.discount,
+  ]);
+}
+
+function totals(order: OrderFormValues) {
+  if (order.persistedTotals?.signature === pricingSignature(order)) return order.persistedTotals;
+  return calculateOrderTotals(order.items, order.shipping, order.discount, order.tax);
+}
+
 export function getOrderSubtotal(order: OrderFormValues) {
-  return order.items.reduce((subtotal, item) => subtotal + getLineAmount(item), 0);
+  return totals(order).subtotal;
 }
-
 export function getOrderTaxAmount(order: OrderFormValues) {
-  const taxRate = Number.isFinite(order.tax) ? order.tax : 0;
-
-  return getOrderSubtotal(order) * (taxRate / 100);
+  return totals(order).taxAmount;
 }
-
 export function getOrderTotal(order: OrderFormValues) {
-  const shipping = Number.isFinite(order.shipping) ? order.shipping : 0;
-  const tax = getOrderTaxAmount(order);
-  const discount = Number.isFinite(order.discount) ? order.discount : 0;
-
-  return Math.max(getOrderSubtotal(order) + shipping + tax - discount, 0);
+  return totals(order).total;
 }

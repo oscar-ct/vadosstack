@@ -1,11 +1,20 @@
 "use server";
 
-import { Prisma } from "@prisma/client";
 import { format } from "date-fns";
 import { z } from "zod";
 
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
+import { getOrderBalance, requireVersion } from "@/lib/commerce/ledger";
+import { allocateCents, cents, money, prorate } from "@/lib/commerce/money";
+import { adjustStock, CommerceError, commerceTransaction, lockOrder } from "@/lib/commerce/transaction";
+import {
+  amountSchema,
+  CommerceInputError,
+  parseCommerceInput,
+  submissionKeySchema,
+  taxRateSchema,
+} from "@/lib/commerce/validation";
 import { escapeHtml, plainTextToEmailHtml, sanitizeEmailHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
 import {
@@ -18,15 +27,12 @@ import { prisma } from "@/lib/prisma";
 import { revalidateWorkspacePath } from "@/lib/workspace-revalidation";
 
 import {
-  getCalculatedRefundAmount,
-  getCalculatedRefundStatus,
   getReturnRefundDocumentData,
-  parseReturnDisposition,
-  parseReturnRefundStatus,
   type ReturnRefundFormValues,
   sanitizeReturnReceiptFilename,
 } from "./_lib/return-data";
 import { renderReturnReceiptPdfBuffer } from "./_lib/return-pdf";
+import { createHash } from "node:crypto";
 
 export type SaveReturnRefundResult =
   | {
@@ -48,9 +54,8 @@ type EmailReturnReceiptState = {
 const emailReturnReceiptSchema = z.object({
   orderId: z.string().trim().min(1, "Order is required."),
 });
-const REFUND_EXPLANATION_MAX_LENGTH = 80;
 
-class ReturnActionError extends Error {}
+class ReturnActionError extends CommerceError {}
 
 function createEmailReturnReceiptState(
   success: boolean,
@@ -77,252 +82,231 @@ function getSubmittedEmailContent(formData: FormData, fallback: { html: string; 
   };
 }
 
-function parseDate(value: string) {
-  const date = value ? new Date(`${value}T12:00:00`) : new Date();
-
-  return Number.isNaN(date.getTime()) ? new Date() : date;
-}
-
 function optionalString(value: string) {
   const text = value.trim();
 
   return text || null;
 }
 
-function getLineRefund(quantity: number, unitPrice: number) {
-  return new Prisma.Decimal((quantity * unitPrice).toFixed(2));
-}
-
-function getValidationError(input: ReturnRefundFormValues) {
-  if (!input.returnDate) return "Return date is required.";
-  if (!input.items.some((item) => item.returnQuantity > 0)) return "Choose at least one item to resolve.";
-
-  const invalidItem = input.items.find(
-    (item) =>
-      item.returnQuantity < 0 || item.returnQuantity > item.orderedQuantity || !Number.isFinite(item.returnQuantity),
-  );
-
-  if (invalidItem) return `${invalidItem.product} has an invalid return quantity.`;
-  if (input.refundStatus === "Other" && (!Number.isFinite(input.refundAmount) || input.refundAmount < 0)) {
-    return "Enter a custom refund amount.";
-  }
-  if (input.refundExplanation.length > REFUND_EXPLANATION_MAX_LENGTH) {
-    return `Refund explanation must be ${REFUND_EXPLANATION_MAX_LENGTH} characters or less.`;
-  }
-
-  return null;
-}
+const returnInputSchema = z
+  .object({
+    returnId: z.string().optional(),
+    submissionKey: submissionKeySchema,
+    orderVersion: z.number().int().positive(),
+    customerEmail: z.string().max(500),
+    customerName: z.string().max(500),
+    customerPhone: z.string().max(100),
+    customerNote: z.string().max(5000),
+    internalNotes: z.string().max(5000),
+    reason: z.string().max(5000),
+    orderDate: z.string(),
+    orderNumber: z.string(),
+    originalDiscountAmount: amountSchema,
+    originalSubtotal: amountSchema,
+    originalTaxAmount: amountSchema,
+    originalTotal: amountSchema,
+    refundAmount: amountSchema,
+    refundExplanation: z.string().max(80),
+    refundMethod: z.string().max(100),
+    refundReference: z.string().max(200),
+    refundStatus: z.enum(["Full Refund", "Partial Refund", "No Refund", "Other"]),
+    refundState: z.string().optional(),
+    restockItems: z.boolean(),
+    returnDate: z.iso.date(),
+    returnNumber: z.string().max(100),
+    returnStatus: z.enum(["Draft", "Returned"]),
+    shippingAddressLines: z.array(z.string()),
+    items: z
+      .array(
+        z
+          .object({
+            id: z.string(),
+            orderItemId: z.string().min(1),
+            inventoryItemId: z.string().optional(),
+            category: z.string(),
+            product: z.string(),
+            description: z.string().max(5000).nullish(),
+            unit: z.string().max(40).nullish(),
+            sku: z.string(),
+            disposition: z.enum(["Returned", "Damaged", "Lost", "No physical return"]),
+            orderedQuantity: z.number().int().min(0),
+            returnQuantity: z.number().int().min(0).max(1000000),
+            restock: z.boolean(),
+            unitPrice: amountSchema,
+            taxable: z.boolean(),
+            taxRate: taxRateSchema,
+            originalDiscountAmount: amountSchema.optional(),
+            originalTaxAmount: amountSchema.optional(),
+            originalQuantity: z.number().int().positive().optional(),
+            previouslyReturnedQuantity: z.number().int().min(0).optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(250),
+  })
+  .strict();
 
 export async function saveReturnRefundAction(
   orderId: string,
-  input: ReturnRefundFormValues,
+  rawInput: ReturnRefundFormValues,
 ): Promise<SaveReturnRefundResult> {
   const authorization = await getPermittedDashboardAuthorization("orders.returns.manage");
-
-  if (!authorization) {
-    return {
-      message: "You do not have permission to manage returns.",
-      success: false,
-    };
-  }
+  if (!authorization) return { message: "You do not have permission to manage returns.", success: false };
   const workspaceId = authorization.workspaceId;
-
-  const validationError = getValidationError(input);
-
-  if (validationError) {
-    return {
-      message: validationError,
-      success: false,
-    };
-  }
-
   try {
-    const savedReturn = await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findFirst({
-        where: {
-          id: orderId,
-          ownerId: workspaceId,
-        },
-        include: {
-          items: true,
-          returns: {
-            include: {
-              items: true,
-            },
-            take: 1,
-          },
-        },
+    const input = parseCommerceInput(returnInputSchema, rawInput);
+    const submissionHash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+    const savedReturn = await commerceTransaction(async (tx) => {
+      await lockOrder(tx, workspaceId, orderId);
+      const previous = await tx.orderReturn.findUnique({
+        where: { ownerId_submissionKey: { ownerId: workspaceId, submissionKey: input.submissionKey } },
       });
-
-      if (!order) {
-        throw new ReturnActionError("Order could not be found.");
+      if (previous) {
+        if (previous.orderId !== orderId || previous.submissionHash !== submissionHash)
+          throw new ReturnActionError("Submission key already used for a different return.");
+        return previous;
       }
-
-      const orderItemsById = new Map(order.items.map((item) => [item.id, item]));
-      const existingReturn = order.returns[0];
-      const existingItemsByOrderItemId = new Map(existingReturn?.items.map((item) => [item.orderItemId, item]) ?? []);
-      const normalizedItems = input.items.map((item) => {
-        const orderItem = orderItemsById.get(item.orderItemId);
-        const returnQuantity = orderItem ? Math.max(0, Math.min(item.returnQuantity, orderItem.quantity)) : 0;
-
-        return {
-          ...item,
-          orderedQuantity: orderItem?.quantity ?? item.orderedQuantity,
-          returnQuantity,
-          taxable: orderItem?.taxable ?? item.taxable,
-          taxRate: Number(orderItem?.taxRate ?? item.taxRate ?? 0),
-          unitPrice: Number(orderItem?.unitPrice ?? item.unitPrice),
-        };
+      if (input.returnId)
+        throw new ReturnActionError("Saved returns are final. Start another return for additional items.");
+      const order = await tx.order.findFirstOrThrow({
+        where: { id: orderId, ownerId: workspaceId },
+        include: { items: true, returns: { include: { items: true } } },
       });
-      const refundCalculationValues: ReturnRefundFormValues = {
-        ...input,
-        items: normalizedItems,
-        originalDiscountAmount: Number(order.discountAmount),
-        originalSubtotal: Number(order.subtotal),
-        originalTaxAmount: Number(order.taxAmount),
-        originalTotal: Number(order.total),
-      };
-      const requestedRefundStatus = parseReturnRefundStatus(input.refundStatus);
-      const refundStatus =
-        requestedRefundStatus === "No Refund" || requestedRefundStatus === "Other"
-          ? requestedRefundStatus
-          : getCalculatedRefundStatus(refundCalculationValues);
+      requireVersion(order.version, input.orderVersion);
+      if (order.orderStatus !== "Active") throw new ReturnActionError("Cancelled orders cannot be returned.");
+      if (new Set(input.items.map((item) => item.orderItemId)).size !== input.items.length)
+        throw new ReturnActionError("Each return line must be unique.");
+      const lines = input.items
+        .map((item) => {
+          const original = order.items.find((entry) => entry.id === item.orderItemId);
+          if (!original) throw new ReturnActionError("Return item does not belong to this order.");
+          const alreadyReturned = order.returns
+            .flatMap((receipt) => receipt.items)
+            .filter((entry) => entry.orderItemId === original.id)
+            .reduce((sum, entry) => sum + entry.returnQuantity, 0);
+          if (item.returnQuantity > original.quantity - alreadyReturned)
+            throw new ReturnActionError(`${original.product} exceeds the quantity remaining to return.`);
+          const quantity = item.returnQuantity;
+          const discountAmount = money(
+            prorate(cents(original.discountAmount), alreadyReturned + quantity, original.quantity) -
+              prorate(cents(original.discountAmount), alreadyReturned, original.quantity),
+          );
+          const taxAmount = money(
+            prorate(cents(original.taxAmount), alreadyReturned + quantity, original.quantity) -
+              prorate(cents(original.taxAmount), alreadyReturned, original.quantity),
+          );
+          const grossAmount = money(
+            prorate(cents(original.lineTotal), alreadyReturned + quantity, original.quantity) -
+              prorate(cents(original.lineTotal), alreadyReturned, original.quantity),
+          );
+          return {
+            original,
+            quantity,
+            disposition: item.disposition,
+            restock:
+              item.disposition === "Returned" &&
+              input.restockItems &&
+              item.restock &&
+              Boolean(original.inventoryItemId),
+            discountAmount,
+            taxAmount,
+            calculatedRefund: Math.max(cents(grossAmount) - cents(discountAmount) + cents(taxAmount), 0),
+          };
+        })
+        .filter((line) => line.quantity > 0);
+      if (!lines.length) throw new ReturnActionError("Choose at least one item to resolve.");
+      const calculatedAmount = lines.reduce((sum, line) => sum + line.calculatedRefund, 0);
       const refundAmount =
-        refundStatus === "No Refund"
+        input.refundStatus === "No Refund"
           ? 0
-          : refundStatus === "Other"
-            ? input.refundAmount
-            : getCalculatedRefundAmount(refundCalculationValues);
-      const refundExplanation =
-        refundStatus === "No Refund" || refundStatus === "Other"
-          ? optionalString(input.refundExplanation.slice(0, REFUND_EXPLANATION_MAX_LENGTH))
-          : null;
-      const returnDate = parseDate(input.returnDate);
-      const returnRecord = existingReturn
-        ? await tx.orderReturn.update({
-            where: {
-              id: existingReturn.id,
-            },
-            data: {
-              customerNote: optionalString(input.customerNote),
-              internalNotes: optionalString(input.internalNotes),
-              reason: optionalString(input.reason),
-              refundAmount: new Prisma.Decimal(refundAmount.toFixed(2)),
-              refundExplanation,
-              refundMethod: optionalString(input.refundMethod),
-              refundReference: optionalString(input.refundReference),
-              refundStatus,
-              restockItems: input.restockItems,
-              returnDate,
-              returnStatus: "Returned",
-              savedAt: existingReturn.savedAt ?? new Date(),
-            },
-          })
-        : await tx.orderReturn.create({
-            data: {
-              customerNote: optionalString(input.customerNote),
-              internalNotes: optionalString(input.internalNotes),
-              orderId: order.id,
-              ownerId: workspaceId,
-              reason: optionalString(input.reason),
-              refundAmount: new Prisma.Decimal(refundAmount.toFixed(2)),
-              refundExplanation,
-              refundMethod: optionalString(input.refundMethod),
-              refundReference: optionalString(input.refundReference),
-              refundStatus,
-              restockItems: input.restockItems,
-              returnDate,
-              returnNumber: input.returnNumber,
-              returnStatus: "Returned",
-              savedAt: new Date(),
-            },
+          : input.refundStatus === "Other"
+            ? cents(input.refundAmount)
+            : calculatedAmount;
+      const balance = await getOrderBalance(tx, workspaceId, orderId);
+      const committedRefunds = order.returns.reduce((sum, receipt) => sum + cents(receipt.refundAmount), 0);
+      const unlinkedRefunds = balance.refunds
+        .filter((refund) => !refund.orderReturnId)
+        .reduce((sum, refund) => sum + cents(refund.amount), 0);
+      if (refundAmount > Math.max(balance.paid - committedRefunds - unlinkedRefunds, 0))
+        throw new ReturnActionError(
+          "Requested refund exceeds the paid balance available after previous returns and refunds.",
+        );
+      const refundStatus =
+        input.refundStatus === "No Refund" || input.refundStatus === "Other"
+          ? input.refundStatus
+          : order.items.every((original) =>
+                lines.some((line) => line.original.id === original.id && line.quantity === original.quantity),
+              )
+            ? "Full Refund"
+            : "Partial Refund";
+      const allocatedRefunds = allocateCents(
+        Math.min(refundAmount, calculatedAmount),
+        lines.map((line) => line.calculatedRefund),
+      );
+      const returnRecord = await tx.orderReturn.create({
+        data: {
+          ownerId: workspaceId,
+          orderId,
+          returnNumber: `${order.orderNumber}-RET-${order.returns.length + 1}`,
+          submissionKey: input.submissionKey,
+          submissionHash,
+          returnStatus: "Returned",
+          savedAt: new Date(),
+          returnDate: new Date(`${input.returnDate}T12:00:00Z`),
+          customerNote: optionalString(input.customerNote),
+          internalNotes: optionalString(input.internalNotes),
+          reason: optionalString(input.reason),
+          refundAmount: money(refundAmount),
+          refundStatus,
+          refundState: refundAmount ? "requested" : "not_required",
+          refundExplanation: optionalString(input.refundExplanation),
+          // Payment details are recorded only after an external refund actually completes.
+          refundMethod: null,
+          refundReference: null,
+          restockItems: input.restockItems,
+        },
+      });
+      for (const [index, line] of lines.entries()) {
+        const original = line.original;
+        await tx.orderReturnItem.create({
+          data: {
+            ownerId: workspaceId,
+            orderReturnId: returnRecord.id,
+            orderItemId: original.id,
+            inventoryItemId: original.inventoryItemId,
+            sku: original.sku,
+            product: original.product,
+            description: original.description,
+            unit: original.unit,
+            category: original.category,
+            orderedQuantity: original.quantity,
+            returnQuantity: line.quantity,
+            disposition: line.disposition,
+            restock: line.restock,
+            unitPrice: original.unitPrice,
+            unitCost: original.unitCost,
+            discountAmount: line.discountAmount,
+            taxAmount: line.taxAmount,
+            lineRefund: money(allocatedRefunds[index]),
+          },
+        });
+        if (line.restock && original.inventoryItemId)
+          await adjustStock(tx, {
+            ownerId: workspaceId,
+            inventoryItemId: original.inventoryItemId,
+            quantityChange: line.quantity,
+            reason: "Return",
+            notes: returnRecord.returnNumber,
+            orderId,
+            orderItemId: original.id,
+            actorUserId: authorization.principal.user.id,
           });
-
-      const touchedInventoryIds = new Set<string>();
-
-      for (const item of input.items) {
-        const orderItem = orderItemsById.get(item.orderItemId);
-
-        if (!orderItem) continue;
-
-        const returnQuantity = Math.max(0, Math.min(item.returnQuantity, orderItem.quantity));
-        const existingItem = existingItemsByOrderItemId.get(orderItem.id);
-        const disposition = parseReturnDisposition(item.disposition);
-        const shouldRestock =
-          disposition === "Returned" && input.restockItems && item.restock && Boolean(orderItem.inventoryItemId);
-        const previousRestockedQuantity =
-          existingItem?.inventoryItemId && existingItem.restock ? existingItem.returnQuantity : 0;
-        const nextRestockedQuantity = shouldRestock ? returnQuantity : 0;
-        const restockDelta = nextRestockedQuantity - previousRestockedQuantity;
-
-        if (existingItem) {
-          await tx.orderReturnItem.update({
-            where: {
-              id: existingItem.id,
-            },
-            data: {
-              category: orderItem.category,
-              disposition,
-              inventoryItemId: orderItem.inventoryItemId,
-              orderedQuantity: orderItem.quantity,
-              product: orderItem.product,
-              restock: shouldRestock,
-              returnQuantity,
-              sku: orderItem.sku,
-              unitPrice: orderItem.unitPrice,
-              lineRefund: getLineRefund(returnQuantity, Number(orderItem.unitPrice)),
-            },
-          });
-        } else {
-          await tx.orderReturnItem.create({
-            data: {
-              category: orderItem.category,
-              disposition,
-              inventoryItemId: orderItem.inventoryItemId,
-              lineRefund: getLineRefund(returnQuantity, Number(orderItem.unitPrice)),
-              orderItemId: orderItem.id,
-              orderReturnId: returnRecord.id,
-              orderedQuantity: orderItem.quantity,
-              ownerId: workspaceId,
-              product: orderItem.product,
-              restock: shouldRestock,
-              returnQuantity,
-              sku: orderItem.sku,
-              unitPrice: orderItem.unitPrice,
-            },
-          });
-        }
-
-        if (orderItem.inventoryItemId && restockDelta !== 0) {
-          touchedInventoryIds.add(orderItem.inventoryItemId);
-          const updatedInventory = await tx.inventoryItem.updateMany({
-            where: {
-              id: orderItem.inventoryItemId,
-              ownerId: workspaceId,
-            },
-            data: {
-              stock: {
-                increment: restockDelta,
-              },
-            },
-          });
-          if (updatedInventory.count !== 1) {
-            throw new ReturnActionError("A returned inventory item could not be found.");
-          }
-          await tx.inventoryStockMovement.create({
-            data: {
-              inventoryItemId: orderItem.inventoryItemId,
-              notes: `${returnRecord.returnNumber} for ${order.orderNumber}`,
-              orderId: order.id,
-              orderItemId: orderItem.id,
-              ownerId: workspaceId,
-              quantityChange: restockDelta,
-              reason: "Return",
-            },
-          });
-        }
       }
-
+      await tx.order.update({
+        where: { id: orderId },
+        data: { version: { increment: 1 }, reservationExpiresAt: null },
+      });
       await recordAuthorizationAuditEvent(
         {
           workspaceId,
@@ -331,33 +315,35 @@ export async function saveReturnRefundAction(
           action: "order.return.save",
           targetType: "OrderReturn",
           targetId: returnRecord.id,
-          metadata: { orderId: order.id },
+          metadata: { orderId },
         },
         tx,
       );
-
       return returnRecord;
     });
-
-    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/orders");
-    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
-    revalidateWorkspacePath(authorization.membership.workspaceSlug, `/dashboard/orders/${orderId}/edit`);
-    revalidateWorkspacePath(authorization.membership.workspaceSlug, `/dashboard/orders/${orderId}/return`);
-
-    return {
-      id: savedReturn.id,
-      success: true,
-    };
+    for (const path of [
+      "/dashboard/orders",
+      "/dashboard/inventory",
+      "/dashboard/commerce-pulse",
+      `/dashboard/orders/${orderId}/edit`,
+      `/dashboard/orders/${orderId}/return`,
+    ])
+      revalidateWorkspacePath(authorization.membership.workspaceSlug, path);
+    return { id: savedReturn.id, success: true };
   } catch (error) {
     console.error("Return save failed.", error);
     return {
-      message: error instanceof ReturnActionError ? error.message : "Return could not be saved.",
+      message:
+        error instanceof CommerceError || error instanceof CommerceInputError
+          ? error.message
+          : "Return could not be saved. Please try again.",
       success: false,
     };
   }
 }
 
 export async function emailReturnReceiptAction(
+  returnId: string | null,
   _previousState: EmailReturnReceiptState,
   formData: FormData,
 ): Promise<EmailReturnReceiptState> {
@@ -383,6 +369,7 @@ export async function emailReturnReceiptAction(
     prisma.orderReturn.findFirst({
       where: {
         orderId: parsed.data.orderId,
+        ...(returnId ? { id: returnId } : {}),
         ownerId: workspaceId,
       },
       include: {
@@ -449,7 +436,7 @@ export async function emailReturnReceiptAction(
   let subject: string | undefined;
 
   try {
-    const documentData = await getReturnRefundDocumentData(workspaceId, parsed.data.orderId);
+    const documentData = await getReturnRefundDocumentData(workspaceId, parsed.data.orderId, orderReturn.id);
 
     if (!documentData) {
       return createEmailReturnReceiptState(false, "Return receipt could not be found.");
@@ -459,7 +446,7 @@ export async function emailReturnReceiptAction(
       html: [
         `<p>Hi ${escapeHtml(orderReturn.order.customerName?.trim() || "there")},</p>`,
         `<p>Your return receipt <strong>${escapeHtml(orderReturn.returnNumber)}</strong> from ${escapeHtml(workspace.name)} is attached as a PDF.</p>`,
-        `<p><span style="color:#18181b;font-size:22px"><strong>${documentData.refundAmount}</strong></span><br><span style="color:#52525b">Refund amount</span></p>`,
+        `<p><span style="color:#18181b;font-size:22px"><strong>${documentData.refundAmount}</strong></span><br><span style="color:#52525b">Requested refund amount</span></p>`,
         `<p><strong>Return date:</strong> ${escapeHtml(format(orderReturn.returnDate, "MMM d, yyyy"))}</p>`,
         "<p>Please keep this for your records. If you have any questions, reply to this email and we will be happy to help.</p>",
         `<p>Thank you,<br><strong>${escapeHtml(workspace.name)}</strong></p>`,
@@ -469,7 +456,7 @@ export async function emailReturnReceiptAction(
         `Hi ${orderReturn.order.customerName?.trim() || "there"},`,
         "",
         `Your return receipt ${orderReturn.returnNumber} from ${workspace.name} is attached as a PDF.`,
-        `Refund amount: ${documentData.refundAmount}`,
+        `Requested refund amount: ${documentData.refundAmount}`,
         `Return date: ${format(orderReturn.returnDate, "MMM d, yyyy")}`,
         "",
         "Please keep this for your records.",

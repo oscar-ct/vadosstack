@@ -148,6 +148,7 @@ function ReturnReceiptPdf({ data }: { data: ReturnRefundDocumentData }) {
             <View key={item.id} style={styles.item}>
               <View style={styles.itemMain}>
                 <Text style={styles.value}>{item.product}</Text>
+                {item.description ? <Text style={styles.muted}>{item.description.slice(0, 120)}</Text> : null}
                 <Text style={styles.muted}>{[item.sku, item.category].filter(Boolean).join(" · ")}</Text>
                 <Text style={styles.muted}>
                   Qty {item.returnQuantity} · {getReturnDispositionLabel(item.disposition)} · {item.unitPrice}
@@ -193,7 +194,7 @@ function ReturnReceiptPdf({ data }: { data: ReturnRefundDocumentData }) {
             </View>
           ) : null}
           <View style={[styles.totalRow, styles.totalFinal]}>
-            <Text>Refund Amount</Text>
+            <Text>Requested Refund</Text>
             <Text>{data.refundAmount}</Text>
           </View>
           {data.refundExplanation ? (

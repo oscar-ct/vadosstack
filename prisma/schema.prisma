@@ -319,6 +319,9 @@ model Workspace {
   suspensionNote             String?
   suspendedUntil             DateTime?
   legacyOwnerId              String?                     @unique
+  inventoryProducts          InventoryProduct[]
+  orderPayments              OrderPayment[]
+  orderRefunds               OrderRefund[]
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
   legacyOwner                User?                       @relation("LegacyWorkspaceOwner", fields: [legacyOwnerId], references: [id], onDelete: SetNull)
@@ -828,6 +831,7 @@ model InventorySettings {
   criticalStockThreshold Int       @default(8)
   defaultReorderPoint    Int       @default(20)
   defaultMaxStock        Int       @default(100)
+  restockAlertEmail      String?
   autoRestockAlerts      Boolean   @default(true)
   includeOutOfStock      Boolean   @default(true)
   createdAt              DateTime  @default(now())
@@ -837,9 +841,23 @@ model InventorySettings {
   @@map("inventory_settings")
 }
 
+model InventoryProduct {
+  id        String          @id @default(cuid())
+  ownerId   String
+  createdAt DateTime        @default(now())
+  owner     Workspace       @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  items     InventoryItem[]
+
+  @@unique([id, ownerId], map: "inventory_products_id_ownerid_key")
+  @@index([ownerId])
+  @@map("inventory_products")
+}
+
 model InventoryItem {
   id             String                   @id @default(cuid())
   ownerId        String
+  productId      String                   @default(dbgenerated("(gen_random_uuid())::text"))
+  identity       InventoryProduct         @relation(fields: [productId, ownerId], references: [id, ownerId], onDelete: Restrict)
   categoryId     String?
   locationId     String?
   sku            String?
@@ -865,10 +883,12 @@ model InventoryItem {
   orderItems     OrderItem[]
   returnItems    OrderReturnItem[]
   stockMovements InventoryStockMovement[]
+  stockAlert     InventoryStockAlert?
 
   @@unique([id, ownerId])
   @@unique([ownerId, sku])
   @@index([ownerId])
+  @@index([ownerId, productId])
   @@index([categoryId])
   @@index([locationId])
   @@index([itemStatus])
@@ -876,45 +896,57 @@ model InventoryItem {
 }
 
 model Order {
-  id                 String                   @id @default(cuid())
-  ownerId            String
-  customerId         String?
-  orderNumber        String
-  paymentStatus      String                   @default("Paid")
-  fulfillmentStatus  String                   @default("Unfulfilled")
-  orderDate          DateTime                 @default(now())
-  estimatedDelivery  DateTime?
-  shippingService    String?
-  trackingNumber     String?
-  paymentMethod      String?
-  paymentReference   String?
-  customerNotes      String?
-  internalNotes      String?
-  customerName       String?
-  customerEmail      String?
-  customerPhone      String?
-  shippingLine1      String?
-  shippingLine2      String?
-  shippingCity       String?
-  shippingState      String?
-  shippingPostalCode String?
-  subtotal           Decimal                  @default(0)
-  shippingAmount     Decimal                  @default(0)
-  taxRate            Decimal                  @default(0)
-  taxAmount          Decimal                  @default(0)
-  discountAmount     Decimal                  @default(0)
-  total              Decimal                  @default(0)
-  footerMessage      String                   @default("Thank you for your order. We appreciate your business and will keep you updated if anything changes.")
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
-  owner              Workspace                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  customer           Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  items              OrderItem[]
-  returns            OrderReturn[]
-  stockMovements     InventoryStockMovement[]
+  id                   String                   @id @default(cuid())
+  ownerId              String
+  customerId           String?
+  version              Int                      @default(1)
+  submissionKey        String?
+  submissionHash       String?
+  orderStatus          String                   @default("Active")
+  cancelledAt          DateTime?
+  reservationExpiresAt DateTime?
+  orderNumber          String
+  paymentStatus        String                   @default("Pending")
+  fulfillmentStatus    String                   @default("Unfulfilled")
+  orderDate            DateTime                 @default(now())
+  estimatedDelivery    DateTime?
+  shippingService      String?
+  trackingNumber       String?
+  paymentMethod        String?
+  paymentReference     String?
+  customerNotes        String?
+  internalNotes        String?
+  customerName         String?
+  customerEmail        String?
+  customerPhone        String?
+  shippingLine1        String?
+  shippingLine2        String?
+  shippingCity         String?
+  shippingState        String?
+  shippingPostalCode   String?
+  subtotal             Decimal                  @default(0)
+  shippingAmount       Decimal                  @default(0)
+  taxRate              Decimal                  @default(0)
+  taxAmount            Decimal                  @default(0)
+  discountAmount       Decimal                  @default(0)
+  total                Decimal                  @default(0)
+  footerMessage        String                   @default("Thank you for your order. We appreciate your business and will keep you updated if anything changes.")
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  owner                Workspace                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customer             Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  payments             OrderPayment[]
+  refunds              OrderRefund[]
+  shipments            OrderShipment[]
+  items                OrderItem[]
+  returns              OrderReturn[]
+  stockMovements       InventoryStockMovement[]
 
   @@unique([id, ownerId])
   @@unique([ownerId, orderNumber])
+  @@unique([ownerId, submissionKey])
+  @@index([ownerId, orderDate, id])
+  @@index([orderStatus, reservationExpiresAt])
   @@index([ownerId])
   @@index([customerId])
   @@index([paymentStatus])
@@ -930,7 +962,14 @@ model OrderItem {
   inventoryItemId String?
   sku             String?
   product         String
+  description     String?
+  unit            String?
   category        String?
+  shippedQuantity Int                      @default(0)
+  unitCost        Decimal?
+  discountAmount  Decimal                  @default(0)
+  taxAmount       Decimal                  @default(0)
+  shipmentItems   OrderShipmentItem[]
   quantity        Int                      @default(1)
   unitPrice       Decimal                  @default(0)
   lineTotal       Decimal                  @default(0)
@@ -954,6 +993,11 @@ model OrderItem {
 model OrderReturn {
   id                String            @id @default(cuid())
   ownerId           String
+  version           Int               @default(1)
+  submissionKey     String?
+  submissionHash    String?
+  refundState       String            @default("not_required")
+  refunds           OrderRefund[]
   orderId           String
   returnNumber      String
   refundStatus      String            @default("No Refund")
@@ -975,7 +1019,7 @@ model OrderReturn {
   items             OrderReturnItem[]
 
   @@unique([id, ownerId])
-  @@unique([ownerId, orderId])
+  @@unique([ownerId, submissionKey])
   @@unique([ownerId, returnNumber])
   @@index([ownerId])
   @@index([orderId])
@@ -991,10 +1035,15 @@ model OrderReturnItem {
   inventoryItemId String?
   sku             String?
   product         String
+  description     String?
+  unit            String?
   category        String?
   orderedQuantity Int            @default(0)
   returnQuantity  Int            @default(0)
   disposition     String         @default("Returned")
+  unitCost        Decimal?
+  discountAmount  Decimal        @default(0)
+  taxAmount       Decimal        @default(0)
   unitPrice       Decimal        @default(0)
   lineRefund      Decimal        @default(0)
   restock         Boolean        @default(true)
@@ -1002,7 +1051,7 @@ model OrderReturnItem {
   updatedAt       DateTime       @updatedAt
   owner           Workspace      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   orderReturn     OrderReturn    @relation(fields: [orderReturnId], references: [id], onDelete: Cascade)
-  orderItem       OrderItem      @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  orderItem       OrderItem      @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
   inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
 
   @@unique([id, ownerId])
@@ -1020,16 +1069,22 @@ model InventoryStockMovement {
   inventoryItemId String
   orderId         String?
   orderItemId     String?
+  actorUserId     String?
+  balanceAfter    Int?
+  idempotencyKey  String?
+  itemSnapshot    Json?
+  snapshotSource  String        @default("event")
   quantityChange  Int
   reason          String
   notes           String?
   createdAt       DateTime      @default(now())
   owner           Workspace     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
   order           Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
   orderItem       OrderItem?    @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
 
   @@unique([id, ownerId])
+  @@unique([ownerId, idempotencyKey])
   @@index([ownerId])
   @@index([inventoryItemId])
   @@index([orderId])
@@ -1369,4 +1424,102 @@ model CustomerPhoneNumber {
 
   @@index([customerId])
   @@map("customer_phone_numbers")
+}
+
+// An immutable record of money confirmed received outside VadosStack.
+model OrderPayment {
+  id             String        @id @default(cuid())
+  ownerId        String
+  orderId        String
+  amount         Decimal
+  currency       String        @default("USD")
+  method         String
+  reference      String?
+  source         String        @default("external")
+  idempotencyKey String
+  actorUserId    String?
+  paidAt         DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  owner          Workspace     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  refunds        OrderRefund[]
+
+  @@unique([ownerId, idempotencyKey])
+  @@index([orderId])
+  @@index([ownerId, paidAt])
+  @@map("order_payments")
+}
+
+model OrderRefund {
+  id             String       @id @default(cuid())
+  ownerId        String
+  orderId        String
+  paymentId      String
+  orderReturnId  String?
+  amount         Decimal
+  currency       String       @default("USD")
+  status         String       @default("succeeded")
+  method         String
+  reference      String?
+  source         String       @default("external")
+  idempotencyKey String
+  actorUserId    String?
+  refundedAt     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  owner          Workspace    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  payment        OrderPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  orderReturn    OrderReturn? @relation(fields: [orderReturnId], references: [id], onDelete: Restrict)
+
+  @@unique([ownerId, idempotencyKey])
+  @@index([orderId])
+  @@index([paymentId])
+  @@index([orderReturnId])
+  @@index([ownerId, refundedAt])
+  @@map("order_refunds")
+}
+
+model OrderShipment {
+  id             String              @id @default(cuid())
+  orderId        String
+  idempotencyKey String
+  actorUserId    String?
+  carrier        String?
+  trackingNumber String?
+  shippedAt      DateTime            @default(now())
+  order          Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  items          OrderShipmentItem[]
+
+  @@unique([orderId, idempotencyKey])
+  @@index([orderId, shippedAt])
+  @@map("order_shipments")
+}
+
+model OrderShipmentItem {
+  id          String        @id @default(cuid())
+  shipmentId  String
+  orderItemId String
+  quantity    Int
+  shipment    OrderShipment @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  orderItem   OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+
+  @@unique([shipmentId, orderItemId])
+  @@index([orderItemId])
+  @@map("order_shipment_items")
+}
+
+model InventoryStockAlert {
+  id              String        @id @default(cuid())
+  inventoryItemId String        @unique
+  episodeKey      String
+  status          String        @default("open")
+  deliveredAt     DateTime?
+  claimedAt       DateTime?
+  lastError       String?
+  attemptCount    Int           @default(0)
+  updatedAt       DateTime      @updatedAt
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  @@index([status, deliveredAt])
+  @@map("inventory_stock_alerts")
 }

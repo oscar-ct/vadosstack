@@ -5,6 +5,8 @@ export type OrderPdfLineItem = {
   id: string;
   lineTotal: string;
   product: string;
+  description?: string | null;
+  unit?: string | null;
   quantity: number;
   sku: string | null;
   unitPrice: string;
@@ -22,6 +24,7 @@ export type OrderPdfData = {
   estimatedDelivery: string | null;
   footerMessage: string;
   isPaid: boolean;
+  paymentStatus?: string;
   items: OrderPdfLineItem[];
   orderDate: string;
   orderNumber: string;
@@ -270,11 +273,15 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
                 </View>
                 <View style={styles.itemBody}>
                   <Text style={styles.value}>{item.product || "Product name"}</Text>
+                  {item.description ? (
+                    <Text style={[styles.tiny, styles.muted]}>{item.description.slice(0, 120)}</Text>
+                  ) : null}
                   <Text style={[styles.tiny, styles.muted]}>
                     {[item.sku, item.category].filter(Boolean).join(" · ")}
                   </Text>
                   <Text style={[styles.tiny, styles.muted]}>
-                    {item.quantity} x {item.unitPrice}
+                    {item.quantity}
+                    {item.unit ? ` ${item.unit}` : ""} x {item.unitPrice}
                   </Text>
                 </View>
                 <Text style={styles.itemTotal}>{item.lineTotal}</Text>
@@ -323,7 +330,7 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
                     ) : (
                       <>
                         <Text style={styles.label}>Status</Text>
-                        <Text style={styles.value}>Payment pending</Text>
+                        <Text style={styles.value}>{data.paymentStatus ?? "Pending"}</Text>
                       </>
                     )}
                   </View>
@@ -339,7 +346,7 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
                     <Text style={styles.text}>{data.shippingAmount}</Text>
                   </View>
                   <View style={styles.totalRow}>
-                    <Text style={[styles.text, styles.muted]}>Tax ({data.taxRate})</Text>
+                    <Text style={[styles.text, styles.muted]}>Sales tax</Text>
                     <Text style={styles.text}>{data.taxAmount}</Text>
                   </View>
                   <View style={styles.totalRow}>

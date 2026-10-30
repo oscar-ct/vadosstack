@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { RotateCcw, Save, Undo, Unlock } from "lucide-react";
+import { RotateCcw, Save, Undo } from "lucide-react";
 import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -17,9 +17,6 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
-import { formatCurrency } from "@/lib/utils";
-
-import type { OrderCompany } from "../../../create/_components/data";
 import {
   getCalculatedRefundAmount,
   getCalculatedRefundStatus,
@@ -31,7 +28,10 @@ import {
   type ReturnDisposition,
   type ReturnRefundFormValues,
   type ReturnRefundStatus,
-} from "../_lib/return-data";
+} from "@/lib/commerce/returns";
+import { formatCurrency } from "@/lib/utils";
+
+import type { OrderCompany } from "../../../create/_components/data";
 import { saveReturnRefundAction } from "../actions";
 import { ReturnRefundPreview } from "./return-preview";
 
@@ -431,7 +431,7 @@ function RefundDetailsSection({ disabled }: { disabled: boolean }) {
             </div>
           ) : null}
           <div className="mt-1 flex justify-between gap-4">
-            <span className="text-muted-foreground">Receipt refund amount</span>
+            <span className="text-muted-foreground">Requested refund amount</span>
             <span className="font-medium tabular-nums">{formatCurrency(getDefaultRefundAmount(values))}</span>
           </div>
           {isCustomRefund ? (
@@ -537,6 +537,7 @@ export function ReturnRefundWorkspace({
   const router = useRouter();
   const [locked, setLocked] = React.useState(Boolean(returnId));
   const [isSaving, setIsSaving] = React.useState(false);
+  const submissionKey = React.useRef<string | null>(null);
   const form = useForm<ReturnRefundFormValues>({
     defaultValues,
   });
@@ -557,7 +558,8 @@ export function ReturnRefundWorkspace({
     setIsSaving(true);
 
     try {
-      const result = await saveReturnRefundAction(orderId, nextValues);
+      submissionKey.current ??= crypto.randomUUID();
+      const result = await saveReturnRefundAction(orderId, { ...nextValues, submissionKey: submissionKey.current });
 
       if (!result.success) {
         toast.error(result.message);
@@ -566,7 +568,7 @@ export function ReturnRefundWorkspace({
 
       toast.success("Return/refund saved.");
       setLocked(true);
-      form.reset(nextValues);
+      router.replace(`/dashboard/orders/${orderId}/return?returnId=${result.id}`);
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Return/refund could not be saved.");
@@ -592,7 +594,8 @@ export function ReturnRefundWorkspace({
                   </span>
                 </h1>
                 <p className="text-muted-foreground text-sm">
-                  Review returned items, refund details, and the customer-facing return receipt.
+                  Saved returns are final. Saving a return requests a refund; record the completed external refund on
+                  the order.
                 </p>
               </div>
             </div>
@@ -602,14 +605,11 @@ export function ReturnRefundWorkspace({
                 <Button
                   type="button"
                   size="sm"
-                  className={headerActionButtonClassName}
                   onClick={() => {
-                    setLocked(false);
-                    toast.success("Return/refund unlocked.");
+                    window.location.href = `?new=1`;
                   }}
                 >
-                  <Unlock />
-                  Unlock Return
+                  Start another return
                 </Button>
               ) : (
                 <>

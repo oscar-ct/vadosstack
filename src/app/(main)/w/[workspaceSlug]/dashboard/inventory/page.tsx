@@ -1,22 +1,22 @@
 import { AlertTriangle, Boxes, Plus, Settings2 } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
+import { CommerceIndexControls } from "@/components/commerce-index-controls";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { inventoryListWhere, parseInventoryVisibility } from "@/lib/commerce/inventory-filter";
+import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 
 import { InventoryItemDialog, InventorySettingsMenu } from "./_components/inventory-actions";
 import { type InventoryItem, InventoryTable } from "./_components/inventory-table";
+import { StockOperations } from "./_components/stock-operations";
 import { getInventoryItems, getInventoryOptions, getInventoryStockRules } from "./_lib/inventory-data";
 
 function getInventoryValue(items: InventoryItem[]) {
   return items.reduce((total, item) => total + item.stock * item.unitPrice, 0);
-}
-
-function needsRestock(item: InventoryItem) {
-  return item.stock <= item.reorderPoint;
 }
 
 function getUniqueOptions(items: InventoryItem[], key: "category" | "location") {
@@ -27,7 +27,11 @@ function mergeOptions(...optionSets: string[][]) {
   return Array.from(new Set(optionSets.flat().filter(Boolean))).sort();
 }
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string; visibility?: string }>;
+}) {
   const authorization = await getPermittedDashboardAuthorization("inventory.view");
 
   if (!authorization) {
@@ -42,13 +46,27 @@ export default async function Page() {
   const canExport = can(authorization.membership, "reports.export");
   const canManage = can(authorization.membership, "inventory.manage");
 
+  const params = await searchParams;
+  const q = (params.q ?? "").trim().slice(0, 200);
+  const visibility = parseInventoryVisibility(params.visibility);
+  const inventoryWhere = inventoryListWhere(workspaceId, q, visibility);
+  const [total, productCount] = await Promise.all([
+    prisma.inventoryItem.count({ where: inventoryWhere }),
+    prisma.inventoryProduct.count({ where: { ownerId: workspaceId, items: { some: inventoryWhere } } }),
+  ]);
+  const page = Math.min(Math.max(1, Math.trunc(Number(params.page)) || 1), Math.max(1, Math.ceil(total / 50)));
   const [inventoryItems, inventoryOptions, stockRules] = await Promise.all([
-    getInventoryItems(workspaceId),
+    getInventoryItems(workspaceId, { q, page, visibility }),
     getInventoryOptions(workspaceId),
     getInventoryStockRules(workspaceId),
   ]);
   const totalValue = getInventoryValue(inventoryItems);
-  const restockCount = stockRules.autoRestockAlerts ? inventoryItems.filter(needsRestock).length : 0;
+  const restockCount = stockRules.autoRestockAlerts
+    ? inventoryItems.filter(
+        (item) =>
+          item.itemStatus === "Active" && item.stock <= Math.max(item.reorderPoint, stockRules.lowStockThreshold),
+      ).length
+    : 0;
   const categories = mergeOptions(inventoryOptions.categories, getUniqueOptions(inventoryItems, "category"));
   const locations = mergeOptions(inventoryOptions.locations, getUniqueOptions(inventoryItems, "location"));
 
@@ -64,14 +82,15 @@ export default async function Page() {
               </div>
             </CardTitle>
             <CardDescription>
-              {inventoryItems.length} products · {formatCurrency(totalValue)} total value
+              {productCount} matching products · {total} location records · {formatCurrency(totalValue)} retail value on
+              this page
             </CardDescription>
           </div>
           <CardAction className="flex flex-wrap items-center gap-2">
             {restockCount ? (
               <Badge className="border-red-600 bg-red-600 text-white hover:bg-red-600">
                 <AlertTriangle />
-                {restockCount} need restock
+                {restockCount} stock alerts
               </Badge>
             ) : null}
             {canManage ? (
@@ -109,7 +128,16 @@ export default async function Page() {
         </div>
       </CardHeader>
       <CardContent>
+        <CommerceIndexControls
+          path="/dashboard/inventory"
+          query={q}
+          page={page}
+          total={total}
+          inventoryVisibility={visibility}
+        />
+        {canManage ? <StockOperations items={inventoryItems} /> : null}
         <InventoryTable
+          key={visibility}
           canExport={canExport}
           canManage={canManage}
           categories={categories}

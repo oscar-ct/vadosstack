@@ -49,6 +49,7 @@ export default async function Page() {
 
   return (
     <OrderWorkspace
+      canRecordPayment={can(authorization.membership, "orders.payments.manage")}
       company={company}
       customers={customers}
       defaultValues={defaultValues}

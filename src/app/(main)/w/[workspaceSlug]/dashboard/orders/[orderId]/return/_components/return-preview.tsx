@@ -9,6 +9,15 @@ import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { useWorkspacePath } from "@/components/workspace-path-provider";
+import {
+  getDefaultRefundAmount,
+  getEffectiveRefundStatus,
+  getReturnDispositionLabel,
+  getReturnedItemsDiscount,
+  getReturnedItemsSubtotal,
+  getReturnedItemsTax,
+  type ReturnRefundFormValues,
+} from "@/lib/commerce/returns";
 import { formatPhoneNumber } from "@/lib/phone";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -19,15 +28,6 @@ import {
   ORDER_RECEIPT_PAPER_WIDTH,
 } from "../../../create/_components/data";
 import { useVisibleCenterPosition } from "../../../create/_components/use-visible-center-position";
-import {
-  getDefaultRefundAmount,
-  getEffectiveRefundStatus,
-  getReturnDispositionLabel,
-  getReturnedItemsDiscount,
-  getReturnedItemsSubtotal,
-  getReturnedItemsTax,
-  type ReturnRefundFormValues,
-} from "../_lib/return-data";
 
 function formatReturnDate(value: string) {
   const date = new Date(`${value}T12:00:00`);
@@ -93,7 +93,7 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
         </div>
         <div className="mt-1.5 grid justify-items-center gap-0.5">
           <h3 className="font-medium text-base">Return Receipt</h3>
-          <span className="text-neutral-500 text-xs">Refund and return confirmation</span>
+          <span className="text-neutral-500 text-xs">Return confirmation and refund request</span>
         </div>
       </header>
 
@@ -128,6 +128,9 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
               </div>
               <div className="min-w-0">
                 <div className="truncate font-medium text-sm">{item.product || "Product"}</div>
+                {item.description ? (
+                  <p className="line-clamp-2 text-muted-foreground text-xs">{item.description}</p>
+                ) : null}
                 <div className="truncate text-[11px] text-neutral-500">
                   {[item.sku, item.category || "Category"].filter(Boolean).join(" · ")}
                 </div>
@@ -159,7 +162,9 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
         <div className="text-right">
           <div className="font-medium text-[11px] text-neutral-500">Refund</div>
           <div className="mt-1.5 grid gap-0.5">
-            <span className="font-medium text-sm">{refundStatus}</span>
+            <span className="font-medium text-sm">
+              {refundStatus} · {values.refundState ?? "draft"}
+            </span>
             <span className="text-[11px] text-neutral-500">{values.refundMethod || "Refund method pending"}</span>
             {values.refundReference ? (
               <span className="break-all text-[11px] text-neutral-500">Ref # {values.refundReference}</span>
@@ -188,7 +193,7 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
           <span className="tabular-nums">{formatCurrency(values.originalTotal)}</span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-4 border-neutral-200 border-t pt-2">
-          <span className="font-medium">Refund Amount</span>
+          <span className="font-medium">Requested Refund</span>
           <span className="font-medium text-base tabular-nums">{formatCurrency(refundAmount)}</span>
         </div>
         {(refundStatus === "No Refund" || refundStatus === "Other") && values.refundExplanation ? (
@@ -286,7 +291,13 @@ export function ReturnRefundPreview({
               variant="outline"
               className="h-7 px-2 text-xs"
               disabled={actionsDisabled}
-              onClick={() => downloadReturnReceipt(workspacePath(`/dashboard/orders/${orderId}/return/pdf`))}
+              onClick={() =>
+                downloadReturnReceipt(
+                  workspacePath(
+                    `/dashboard/orders/${orderId}/return/pdf${values.returnId ? `?returnId=${values.returnId}` : ""}`,
+                  ),
+                )
+              }
             >
               <Download data-icon="inline-start" className="size-3.5" />
               Download

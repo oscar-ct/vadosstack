@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Boxes, MapPin, Plus, Search, Settings, Tags, Trash2 } from "lucide-react";
+import { Boxes, MapPin, MoreHorizontal, Plus, Search, Settings, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -14,7 +14,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +25,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,12 +42,21 @@ import { useWorkspaceRouter as useRouter } from "@/components/workspace-path-pro
 import type { InventoryStockRules } from "../_lib/inventory-data";
 import type { InventoryActionState } from "../actions";
 import {
+  archiveInventoryItemAction,
   createInventoryListItemAction,
-  deleteInventoryItemAction,
   deleteInventoryListItemAction,
   saveInventoryItemAction,
   saveInventoryStockRulesAction,
 } from "../actions";
+import {
+  InventoryRecordHeader,
+  InventoryRecordSection,
+  InventoryRecordValue,
+  inventoryDialogBodyClassName,
+  inventoryDialogClassName,
+  inventoryDialogFooterClassName,
+} from "./inventory-record-layout";
+import { InventoryStockSummary } from "./inventory-stock-summary";
 import type { InventoryItem } from "./inventory-table";
 
 const initialInventoryActionState: InventoryActionState = {
@@ -85,73 +99,104 @@ type InventorySettingsMenuProps = {
   stockRules: InventoryStockRules;
 };
 
-function DeleteInventoryItemButton({ item, onDeleted }: { item: InventoryItem; onDeleted: () => void }) {
+export function InventoryRecordMenu({
+  item,
+  onArchived,
+  disabled = false,
+}: {
+  item: InventoryItem;
+  onArchived: () => void;
+  disabled?: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = React.useState("");
   const [isPending, startTransition] = React.useTransition();
+  const [archived, setArchived] = React.useState(false);
+  const [archiveOpen, setArchiveOpen] = React.useState(false);
 
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button type="button" variant="destructive">
-          <Trash2 />
-          Delete item
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete item?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Delete {item.product} from inventory. This will not remove existing order item snapshots.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <dl className="grid gap-2 rounded-md border bg-muted/30 p-3">
-          <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
-            <dt className="text-muted-foreground">SKU</dt>
-            <dd className="font-medium">{item.sku}</dd>
-          </div>
-          <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
-            <dt className="text-muted-foreground">Category</dt>
-            <dd className="font-medium">{item.category}</dd>
-          </div>
-          <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
-            <dt className="text-muted-foreground">Location</dt>
-            <dd className="font-medium">{item.location}</dd>
-          </div>
-          <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
-            <dt className="text-muted-foreground">Stock</dt>
-            <dd className="font-medium tabular-nums">{item.stock}</dd>
-          </div>
-        </dl>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            variant="destructive"
-            disabled={isPending}
-            onClick={(event) => {
-              event.preventDefault();
-              setError("");
-              startTransition(async () => {
-                const result = await deleteInventoryItemAction(item.id);
-
-                if (result.success) {
-                  router.refresh();
-                  toast.success(result.message || "Inventory item deleted.");
-                  onDeleted();
-                  return;
-                }
-
-                toast.error(result.message || "Inventory item could not be deleted.");
-                setError(result.message);
-              });
-            }}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="More item actions"
+            disabled={disabled ? true : isPending}
           >
-            {isPending ? "Deleting..." : "Delete item"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-        {error ? <p className="text-destructive text-sm">{error}</p> : null}
-      </AlertDialogContent>
-    </AlertDialog>
+            <MoreHorizontal className="size-4" />
+            More
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem
+            disabled={isPending || item.itemStatus === "Inactive" || archived}
+            onSelect={() => setArchiveOpen(true)}
+          >
+            <Trash2 className="size-4" />
+            {item.itemStatus === "Inactive" || archived ? "Record already archived" : "Archive this location’s record"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this location’s record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Archive {item.product} at {item.location} to stop new sales from this record. Stock and history are
+              preserved. Records at other locations are unchanged.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <dl className="grid gap-2 rounded-md border bg-muted/30 p-3">
+            <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
+              <dt className="text-muted-foreground">SKU</dt>
+              <dd className="font-medium">{item.sku}</dd>
+            </div>
+            <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
+              <dt className="text-muted-foreground">Category</dt>
+              <dd className="font-medium">{item.category}</dd>
+            </div>
+            <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
+              <dt className="text-muted-foreground">Location</dt>
+              <dd className="font-medium">{item.location}</dd>
+            </div>
+            <div className="grid grid-cols-[5.5rem_1fr] gap-3 text-sm">
+              <dt className="text-muted-foreground">Stock</dt>
+              <dd className="font-medium tabular-nums">{item.stock}</dd>
+            </div>
+          </dl>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                setError("");
+                startTransition(async () => {
+                  const result = await archiveInventoryItemAction(item.id);
+
+                  if (result.success) {
+                    setArchived(true);
+                    router.refresh();
+                    toast.success(result.message || "Inventory item archived.");
+                    onArchived();
+                    return;
+                  }
+
+                  toast.error(result.message || "Inventory item could not be archived.");
+                  setError(result.message);
+                });
+              }}
+            >
+              {isPending ? "Archiving..." : "Archive item"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -220,257 +265,324 @@ export function InventoryItemForm({
 
   return (
     <form
-      className="grid min-w-0 gap-4"
+      className="flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault();
-
         const formData = new FormData(event.currentTarget);
-
         startSubmitTransition(() => {
           formAction(formData);
         });
       }}
     >
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
-        <div className="grid min-w-0 gap-2" data-inventory-field="product">
-          <Label htmlFor={`inventory-${mode}-product`}>Product name</Label>
-          <Input
-            id={`inventory-${mode}-product`}
-            name="product"
-            defaultValue={item?.product ?? ""}
-            placeholder="Wireless Headphones Pro"
-            required
-          />
-        </div>
-        <div className="grid min-w-0 gap-2" data-inventory-field="sku">
-          <Label htmlFor={`inventory-${mode}-sku`}>SKU</Label>
-          <Input id={`inventory-${mode}-sku`} name="sku" defaultValue={item?.sku ?? ""} placeholder="WH-1001" />
-        </div>
-      </div>
-
-      <div className="grid gap-2" data-inventory-field="description">
-        <Label htmlFor={`inventory-${mode}-description`}>Description</Label>
-        <Textarea
-          id={`inventory-${mode}-description`}
-          name="description"
-          defaultValue={item?.description ?? ""}
-          placeholder="Short product description..."
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <div className="grid min-w-0 gap-2" data-inventory-field="category">
-          <Label htmlFor={`inventory-${mode}-category`}>Category</Label>
-          <Select name="category" defaultValue={item?.category ?? categories[0]}>
-            <SelectTrigger id={`inventory-${mode}-category`} className="w-full">
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent align="start" position="popper">
-              <SelectGroup>
-                {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid min-w-0 gap-2" data-inventory-field="location">
-          <Label htmlFor={`inventory-${mode}-location`}>Location</Label>
-          <Select name="location" defaultValue={item?.location ?? locations[0]}>
-            <SelectTrigger id={`inventory-${mode}-location`} className="w-full">
-              <SelectValue placeholder="Select location" />
-            </SelectTrigger>
-            <SelectContent align="start" position="popper">
-              <SelectGroup>
-                {locations.map((location) => (
-                  <SelectItem key={location} value={location}>
-                    {location}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-        <div className="grid min-w-0 gap-2" data-inventory-field="unit">
-          <Label htmlFor={`inventory-${mode}-unit`}>Unit</Label>
-          <Select name="unit" defaultValue={item?.unit ?? "each"}>
-            <SelectTrigger id={`inventory-${mode}-unit`} className="w-full">
-              <SelectValue placeholder="Select unit" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {unitOptions.map((unit) => (
-                  <SelectItem key={unit} value={unit}>
-                    {unit}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid min-w-0 gap-2" data-inventory-field="itemStatus">
-          <Label htmlFor={`inventory-${mode}-status`}>Status</Label>
-          <Select name="itemStatus" defaultValue={item?.itemStatus ?? "Active"}>
-            <SelectTrigger id={`inventory-${mode}-status`} className="w-full">
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Inactive">Inactive</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-        <div
-          className="flex min-h-16 items-center justify-between gap-3 rounded-md px-3 py-2"
-          data-inventory-field="taxable"
-        >
-          <input type="hidden" name="taxable" value={isTaxable ? "true" : "false"} />
-          <div className="grid gap-0.5">
-            <Label htmlFor={`inventory-${mode}-taxable`}>Taxable</Label>
+      <input type="hidden" name="expectedUpdatedAt" value={item?.updatedAt ?? ""} />
+      {item ? <input type="hidden" name="stock" value={item.stock} /> : null}
+      {item && item.locationLocked !== false ? <input type="hidden" name="location" value={item.location} /> : null}
+      <div className={inventoryDialogBodyClassName}>
+        <div className="grid gap-5">
+          {item ? <InventoryStockSummary item={item} compact /> : null}
+          <div className="grid items-start gap-5 lg:grid-cols-2">
+            <div className="grid min-w-0 gap-5">
+              <InventoryRecordSection
+                title="Product information"
+                description="Descriptions and category changes apply to future activity."
+              >
+                {item?.identityLocked ? (
+                  <>
+                    <input type="hidden" name="product" value={item.product} />
+                    <input type="hidden" name="sku" value={item.sku} />
+                    <input type="hidden" name="unit" value={item.unit} />
+                    <input type="hidden" name="barcode" value={item.barcode ?? ""} />
+                    <dl className="grid grid-cols-2 gap-4">
+                      <InventoryRecordValue label="Unit" value={item.unit} />
+                      <InventoryRecordValue label="Barcode / UPC" value={item.barcode} />
+                    </dl>
+                    <p className="text-muted-foreground text-xs">
+                      Product identity is protected by recorded history. Create a new item for a different product.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid min-w-0 gap-2" data-inventory-field="product">
+                        <Label htmlFor={`inventory-${mode}-product`}>Product name</Label>
+                        <Input
+                          id={`inventory-${mode}-product`}
+                          readOnly={item?.identityLocked}
+                          className={item?.identityLocked ? "bg-muted text-muted-foreground" : undefined}
+                          name="product"
+                          defaultValue={item?.product ?? ""}
+                          placeholder="Wireless Headphones Pro"
+                          required
+                        />
+                      </div>
+                      <div className="grid min-w-0 gap-2" data-inventory-field="sku">
+                        <Label htmlFor={`inventory-${mode}-sku`}>SKU</Label>
+                        <Input
+                          readOnly={item?.identityLocked}
+                          className={item?.identityLocked ? "bg-muted text-muted-foreground" : undefined}
+                          id={`inventory-${mode}-sku`}
+                          name="sku"
+                          defaultValue={item?.sku ?? ""}
+                          placeholder="WH-1001"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid min-w-0 gap-2" data-inventory-field="unit">
+                        <Label htmlFor={`inventory-${mode}-unit`}>Unit</Label>
+                        {item?.identityLocked ? <input type="hidden" name="unit" value={item.unit} /> : null}
+                        <Select
+                          name={item?.identityLocked ? undefined : "unit"}
+                          disabled={item?.identityLocked}
+                          defaultValue={item?.unit ?? "each"}
+                        >
+                          <SelectTrigger id={`inventory-${mode}-unit`} className="w-full">
+                            <SelectValue placeholder="Select unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {unitOptions.map((unit) => (
+                                <SelectItem key={unit} value={unit}>
+                                  {unit}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid min-w-0 gap-2" data-inventory-field="barcode">
+                        <Label htmlFor={`inventory-${mode}-barcode`}>Barcode / UPC</Label>
+                        <Input
+                          id={`inventory-${mode}-barcode`}
+                          readOnly={item?.identityLocked}
+                          className={item?.identityLocked ? "bg-muted text-muted-foreground" : undefined}
+                          name="barcode"
+                          defaultValue={item?.barcode ?? ""}
+                          placeholder="012345678905"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+                <div className="grid gap-2" data-inventory-field="description">
+                  <Label htmlFor={`inventory-${mode}-description`}>Description</Label>
+                  <Textarea
+                    id={`inventory-${mode}-description`}
+                    name="description"
+                    defaultValue={item?.description ?? ""}
+                    placeholder="Short product description..."
+                  />
+                </div>
+                <div className="grid min-w-0 gap-2" data-inventory-field="category">
+                  <Label htmlFor={`inventory-${mode}-category`}>Category</Label>
+                  <Select name="category" defaultValue={item?.category ?? categories[0] ?? "Uncategorized"}>
+                    <SelectTrigger id={`inventory-${mode}-category`} className="w-full">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent align="start" position="popper">
+                      <SelectGroup>
+                        <SelectItem value="Uncategorized">Uncategorized</SelectItem>
+                        {categories
+                          .filter((category) => category !== "Uncategorized")
+                          .map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
+                            </SelectItem>
+                          ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </InventoryRecordSection>
+              <InventoryRecordSection title="Notes">
+                <div className="grid gap-2" data-inventory-field="notes">
+                  <Label className="sr-only" htmlFor={`inventory-${mode}-notes`}>
+                    Notes
+                  </Label>
+                  <Textarea
+                    id={`inventory-${mode}-notes`}
+                    name="notes"
+                    defaultValue={item?.notes ?? ""}
+                    placeholder="Optional item notes..."
+                  />
+                </div>
+              </InventoryRecordSection>
+            </div>
+            <div className="grid min-w-0 gap-5">
+              <InventoryRecordSection
+                title="Pricing & purchasing"
+                description="Prices and purchasing details for this location."
+              >
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid min-w-0 gap-2" data-inventory-field="unitPrice">
+                    <Label htmlFor={`inventory-${mode}-unit-price`}>Unit price</Label>
+                    <Input
+                      id={`inventory-${mode}-unit-price`}
+                      name="unitPrice"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      defaultValue={formatMoneyInputValue(item?.unitPrice)}
+                      onBlur={formatMoneyInputOnBlur}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="grid min-w-0 gap-2" data-inventory-field="cost">
+                    <Label htmlFor={`inventory-${mode}-cost`}>Cost</Label>
+                    <Input
+                      id={`inventory-${mode}-cost`}
+                      name="cost"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      defaultValue={formatMoneyInputValue(item?.cost)}
+                      onBlur={formatMoneyInputOnBlur}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div className="grid min-w-0 gap-2" data-inventory-field="vendor">
+                  <Label htmlFor={`inventory-${mode}-vendor`}>Supplier</Label>
+                  <Input
+                    id={`inventory-${mode}-vendor`}
+                    name="vendor"
+                    defaultValue={item?.vendor ?? ""}
+                    placeholder="Supplier"
+                  />
+                </div>
+                <div className="grid grid-cols-2 items-start gap-4">
+                  <div
+                    className="flex min-h-16 items-center justify-between gap-3 rounded-md px-3 py-2"
+                    data-inventory-field="taxable"
+                  >
+                    <input type="hidden" name="taxable" value={isTaxable ? "true" : "false"} />
+                    <div className="grid gap-0.5">
+                      <Label htmlFor={`inventory-${mode}-taxable`}>Taxable</Label>
+                    </div>
+                    <Switch id={`inventory-${mode}-taxable`} checked={isTaxable} onCheckedChange={setIsTaxable} />
+                  </div>
+                  <div className="grid min-w-0 gap-2" data-inventory-field="taxRate">
+                    <Label htmlFor={`inventory-${mode}-tax-rate`}>Tax rate</Label>
+                    <Input
+                      id={`inventory-${mode}-tax-rate`}
+                      name="taxRate"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      defaultValue={item?.taxRate ?? "8.25"}
+                      disabled={!isTaxable}
+                      placeholder="8.25"
+                    />
+                  </div>
+                </div>
+              </InventoryRecordSection>
+              <InventoryRecordSection title="Inventory settings" description="Applies to this location’s record.">
+                {!item || item.locationLocked === false ? (
+                  <div className="grid min-w-0 gap-2" data-inventory-field="location">
+                    <Label htmlFor={`inventory-${mode}-location`}>Location</Label>
+                    <Select name="location" defaultValue={item?.location ?? locations[0] ?? "Unassigned"}>
+                      <SelectTrigger id={`inventory-${mode}-location`} className="w-full">
+                        <SelectValue placeholder="Select location" />
+                      </SelectTrigger>
+                      <SelectContent align="start" position="popper">
+                        <SelectGroup>
+                          <SelectItem value="Unassigned">Unassigned</SelectItem>
+                          {locations
+                            .filter((location) => location !== "Unassigned")
+                            .map((location) => (
+                              <SelectItem key={location} value={location}>
+                                {location}
+                              </SelectItem>
+                            ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+                {!item ? (
+                  <div className="grid min-w-0 gap-2" data-inventory-field="stock">
+                    <Label htmlFor={`inventory-${mode}-stock`}>Starting available stock</Label>
+                    <Input
+                      id={`inventory-${mode}-stock`}
+                      name="stock"
+                      type="number"
+                      min="0"
+                      step="1"
+                      defaultValue={0}
+                    />
+                  </div>
+                ) : null}
+                <div className="grid min-w-0 gap-2" data-inventory-field="itemStatus">
+                  <Label htmlFor={`inventory-${mode}-status`}>Status</Label>
+                  <Select name="itemStatus" defaultValue={item?.itemStatus ?? "Active"}>
+                    <SelectTrigger id={`inventory-${mode}-status`} className="w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="Active">Active</SelectItem>
+                        <SelectItem value="Inactive">Archived (inactive)</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid min-w-0 gap-2" data-inventory-field="reorderPoint">
+                    <Label htmlFor={`inventory-${mode}-reorder-point`}>Reorder point</Label>
+                    <Input
+                      id={`inventory-${mode}-reorder-point`}
+                      name="reorderPoint"
+                      type="number"
+                      min="0"
+                      step="1"
+                      defaultValue={item?.reorderPoint ?? stockRules?.defaultReorderPoint ?? ""}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="grid min-w-0 gap-2" data-inventory-field="maxStock">
+                    <Label htmlFor={`inventory-${mode}-max-stock`}>Max stock</Label>
+                    <Input
+                      id={`inventory-${mode}-max-stock`}
+                      name="maxStock"
+                      type="number"
+                      min="0"
+                      step="1"
+                      defaultValue={item?.maxStock ?? stockRules?.defaultMaxStock ?? ""}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                {item?.itemStatus === "Inactive" ? (
+                  <p className="text-muted-foreground text-xs">
+                    To restore this record, choose Active and save changes.
+                  </p>
+                ) : null}
+              </InventoryRecordSection>
+            </div>
           </div>
-          <Switch id={`inventory-${mode}-taxable`} checked={isTaxable} onCheckedChange={setIsTaxable} />
-        </div>
-        <div className="grid min-w-0 gap-2" data-inventory-field="taxRate">
-          <Label htmlFor={`inventory-${mode}-tax-rate`}>Tax rate</Label>
-          <Input
-            id={`inventory-${mode}-tax-rate`}
-            name="taxRate"
-            type="number"
-            min="0"
-            max="100"
-            step="0.01"
-            defaultValue={item?.taxRate ?? "8.25"}
-            disabled={!isTaxable}
-            placeholder="8.25"
-          />
         </div>
       </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-        <div className="grid min-w-0 gap-2" data-inventory-field="stock">
-          <Label htmlFor={`inventory-${mode}-stock`}>Stock</Label>
-          <Input
-            id={`inventory-${mode}-stock`}
-            name="stock"
-            type="number"
-            min="0"
-            step="1"
-            defaultValue={item?.stock ?? ""}
-            placeholder="0"
-          />
-        </div>
-        <div className="grid min-w-0 gap-2" data-inventory-field="unitPrice">
-          <Label htmlFor={`inventory-${mode}-unit-price`}>Unit price</Label>
-          <Input
-            id={`inventory-${mode}-unit-price`}
-            name="unitPrice"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={formatMoneyInputValue(item?.unitPrice)}
-            onBlur={formatMoneyInputOnBlur}
-            placeholder="0.00"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <div className="grid min-w-0 gap-2" data-inventory-field="cost">
-          <Label htmlFor={`inventory-${mode}-cost`}>Cost</Label>
-          <Input
-            id={`inventory-${mode}-cost`}
-            name="cost"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={formatMoneyInputValue(item?.cost)}
-            onBlur={formatMoneyInputOnBlur}
-            placeholder="0.00"
-          />
-        </div>
-        <div className="grid min-w-0 gap-2" data-inventory-field="vendor">
-          <Label htmlFor={`inventory-${mode}-vendor`}>Supplier</Label>
-          <Input
-            id={`inventory-${mode}-vendor`}
-            name="vendor"
-            defaultValue={item?.vendor ?? ""}
-            placeholder="Supplier"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <div className="grid min-w-0 gap-2" data-inventory-field="maxStock">
-          <Label htmlFor={`inventory-${mode}-max-stock`}>Max stock</Label>
-          <Input
-            id={`inventory-${mode}-max-stock`}
-            name="maxStock"
-            type="number"
-            min="0"
-            step="1"
-            defaultValue={item?.maxStock ?? stockRules?.defaultMaxStock ?? ""}
-            placeholder="0"
-          />
-        </div>
-        <div className="grid min-w-0 gap-2" data-inventory-field="reorderPoint">
-          <Label htmlFor={`inventory-${mode}-reorder-point`}>Reorder point</Label>
-          <Input
-            id={`inventory-${mode}-reorder-point`}
-            name="reorderPoint"
-            type="number"
-            min="0"
-            step="1"
-            defaultValue={item?.reorderPoint ?? stockRules?.defaultReorderPoint ?? ""}
-            placeholder="0"
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:gap-4">
-        <div className="grid min-w-0 gap-2" data-inventory-field="barcode">
-          <Label htmlFor={`inventory-${mode}-barcode`}>Barcode / UPC</Label>
-          <Input
-            id={`inventory-${mode}-barcode`}
-            name="barcode"
-            defaultValue={item?.barcode ?? ""}
-            placeholder="012345678905"
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-2" data-inventory-field="notes">
-        <Label htmlFor={`inventory-${mode}-notes`}>Notes</Label>
-        <Textarea
-          id={`inventory-${mode}-notes`}
-          name="notes"
-          defaultValue={item?.notes ?? ""}
-          placeholder="Optional item notes..."
-        />
-      </div>
-
-      <DialogFooter>
+      {state.message && !state.success ? (
+        <p role="alert" className="shrink-0 border-t px-5 py-2 text-destructive text-sm">
+          {state.message}
+        </p>
+      ) : null}
+      <div className={inventoryDialogFooterClassName}>
         {item ? (
-          <div className="mr-auto">
-            <DeleteInventoryItemButton item={item} onDeleted={onDone} />
-          </div>
-        ) : null}
-        <div className="flex flex-col-reverse gap-2 sm:flex-row">
+          <InventoryRecordMenu item={item} onArchived={onDone} disabled={pending} />
+        ) : (
+          <span className="text-muted-foreground text-xs">New inventory record</span>
+        )}
+        <div className="flex items-center gap-2">
           <Button type="button" variant="outline" disabled={pending} onClick={onDone}>
             Cancel
           </Button>
           <Button type="submit" disabled={pending}>
-            {pending ? "Saving..." : item ? "Save item" : "Add item"}
+            {pending ? "Saving…" : item ? "Save changes" : "Add item"}
           </Button>
         </div>
-      </DialogFooter>
-      {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
+      </div>
     </form>
   );
 }
@@ -487,7 +599,6 @@ export function InventoryItemDialog({
   const isControlled = open !== undefined;
   const dialogOpen = isControlled ? open : internalOpen;
   const setDialogOpen = onOpenChange ?? setInternalOpen;
-  const title = item ? "Edit item" : "Add item";
 
   return (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -499,19 +610,8 @@ export function InventoryItemDialog({
           </Button>
         </DialogTrigger>
       ) : null}
-      <DialogContent className="max-h-[calc(100svh-2rem)] w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
-        <DialogHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3 pr-8">
-            <div className="grid gap-1">
-              <DialogTitle>{title}</DialogTitle>
-              <DialogDescription>
-                {item
-                  ? "Update the item details used by inventory and future orders."
-                  : "Create a draft inventory item."}
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
+      <DialogContent className={inventoryDialogClassName}>
+        <InventoryRecordHeader item={item} editing />
         <InventoryItemForm
           categories={categories}
           item={item}
@@ -812,6 +912,20 @@ function InventoryStockRulesPanel({ open, stockRules }: { open: boolean; stockRu
           </div>
 
           <div className="grid gap-2 rounded-lg border p-3">
+            <label htmlFor="restock-alert-email" className="grid gap-2 text-sm">
+              Low-stock email recipient (optional)
+              <Input
+                id="restock-alert-email"
+                name="restockAlertEmail"
+                type="email"
+                defaultValue={stockRules.restockAlertEmail ?? ""}
+                placeholder="inventory@company.com"
+              />
+            </label>
+            <p className="text-muted-foreground text-xs">
+              When enabled, a daily check emails this address once per low-stock episode. Leave blank for dashboard
+              alerts only.
+            </p>
             <input type="hidden" name="autoRestockAlerts" value={String(autoRestockAlerts)} />
             <input type="hidden" name="includeOutOfStock" value={String(includeOutOfStock)} />
             <div className="flex items-center justify-between gap-3">

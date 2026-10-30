@@ -4,9 +4,9 @@ import type { InventoryItem } from "../../inventory/_components/inventory-table"
 import type { OrderTableItem } from "../_components/orders-table";
 import {
   defaultOrderFooterMessage,
-  defaultOrderTaxRate,
   type OrderCustomer,
   type OrderFormValues,
+  pricingSignature,
 } from "../create/_components/data";
 
 export async function getOrderCustomers(ownerId: string): Promise<OrderCustomer[]> {
@@ -48,11 +48,24 @@ export async function getOrderCustomers(ownerId: string): Promise<OrderCustomer[
   }));
 }
 
-export async function getOrderTableItems(ownerId: string): Promise<OrderTableItem[]> {
+export async function getOrderTableItems(
+  ownerId: string,
+  options: { q?: string; page?: number } = {},
+): Promise<OrderTableItem[]> {
   const orders = await prisma.order.findMany({
     where: {
       ownerId,
+      ...(options.q
+        ? {
+            OR: [
+              { orderNumber: { contains: options.q, mode: "insensitive" as const } },
+              { customerName: { contains: options.q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
     },
+    take: 50,
+    skip: ((options.page ?? 1) - 1) * 50,
     include: {
       _count: {
         select: {
@@ -67,13 +80,12 @@ export async function getOrderTableItems(ownerId: string): Promise<OrderTableIte
           refundAmount: true,
           refundStatus: true,
           returnNumber: true,
+          refundState: true,
         },
         take: 1,
       },
     },
-    orderBy: {
-      orderDate: "desc",
-    },
+    orderBy: [{ orderDate: "desc" }, { id: "desc" }],
   });
 
   return orders.map((order) => {
@@ -83,15 +95,21 @@ export async function getOrderTableItems(ownerId: string): Promise<OrderTableIte
       id: order.id,
       orderNumber: order.orderNumber,
       customerName: order.customerName ?? "Walk-in Customer",
-      paymentStatus: order.paymentStatus === "Pending" ? "Pending" : "Paid",
-      fulfillmentStatus:
-        order.fulfillmentStatus === "Fulfilled" || order.fulfillmentStatus === "Returned" ? "Fulfilled" : "Unfulfilled",
+      paymentStatus: order.paymentStatus as OrderTableItem["paymentStatus"],
+      version: order.version,
+      orderStatus: order.orderStatus,
+      fulfillmentStatus: order.fulfillmentStatus as OrderFormValues["fulfillmentStatus"],
       itemCount: order._count.items,
       total: Number(order.total),
       orderedAt: order.orderDate.toISOString(),
       returnNumber: orderReturn?.returnNumber ?? null,
-      returnRefundAmount: orderReturn ? Number(orderReturn.refundAmount) : null,
-      returnRefundStatus: orderReturn?.refundStatus ?? null,
+      returnRefundAmount: orderReturn?.refundState === "succeeded" ? Number(orderReturn.refundAmount) : null,
+      returnRefundStatus:
+        orderReturn?.refundState === "succeeded"
+          ? orderReturn.refundStatus
+          : orderReturn
+            ? `Refund ${orderReturn.refundState}`
+            : null,
     };
   });
 }
@@ -121,6 +139,7 @@ export async function getOrderInventoryItems(ownerId: string): Promise<Inventory
 
   return items.map((item) => ({
     id: item.id,
+    updatedAt: item.updatedAt.toISOString(),
     sku: item.sku ?? "",
     product: item.product,
     category: item.category?.name ?? "Uncategorized",
@@ -162,7 +181,8 @@ export async function getOrderFormValues(ownerId: string, orderId: string): Prom
 
   if (!order) return null;
 
-  return {
+  const values: OrderFormValues = {
+    expectedVersion: order.version,
     apartment: order.shippingLine2 ?? "",
     city: order.shippingCity ?? "",
     customerEmail: order.customerEmail ?? "",
@@ -173,14 +193,18 @@ export async function getOrderFormValues(ownerId: string, orderId: string): Prom
     deliveryRange: toDateInputValue(order.estimatedDelivery),
     discount: Number(order.discountAmount),
     footerMessage: order.footerMessage || defaultOrderFooterMessage,
-    fulfillmentStatus:
-      order.fulfillmentStatus === "Fulfilled" || order.fulfillmentStatus === "Returned" ? "Fulfilled" : "Unfulfilled",
+    fulfillmentStatus: order.fulfillmentStatus as OrderFormValues["fulfillmentStatus"],
     items: order.items.map((item) => ({
       category: item.category ?? "",
+      description: item.description,
+      unit: item.unit,
       id: item.id,
+      updatedAt: item.updatedAt.toISOString(),
       inventoryItemId: item.inventoryItemId ?? undefined,
       product: item.product,
       quantity: item.quantity,
+      taxable: item.taxable,
+      taxRate: Number(item.taxRate),
       sku: item.sku ?? "",
       unitPrice: Number(item.unitPrice),
     })),
@@ -188,12 +212,19 @@ export async function getOrderFormValues(ownerId: string, orderId: string): Prom
     orderNumber: order.orderNumber,
     paymentMethod: order.paymentMethod ?? "",
     paymentReference: order.paymentReference ?? "",
-    paymentStatus: order.paymentStatus === "Pending" ? "Pending" : "Paid",
+    paymentStatus: order.paymentStatus as OrderFormValues["paymentStatus"],
     shipping: Number(order.shippingAmount),
     state: order.shippingState ?? "",
     streetAddress: order.shippingLine1 ?? "",
-    tax: Number(order.taxRate) || defaultOrderTaxRate,
+    tax: Number(order.taxRate),
     trackingNumber: order.trackingNumber ?? "",
     zip: order.shippingPostalCode ?? "",
   };
+  values.persistedTotals = {
+    signature: pricingSignature(values),
+    subtotal: Number(order.subtotal),
+    taxAmount: Number(order.taxAmount),
+    total: Number(order.total),
+  };
+  return values;
 }

@@ -81,6 +81,7 @@ export const PERMISSION_GROUPS = [
       { key: "orders.update", label: "Edit orders" },
       { key: "orders.delete", label: "Delete orders" },
       { key: "orders.returns.manage", label: "Manage returns" },
+      { key: "orders.payments.manage", label: "Record external order payments and refunds" },
       { key: "inventory.view", label: "View inventory" },
       { key: "inventory.manage", label: "Manage inventory" },
     ],

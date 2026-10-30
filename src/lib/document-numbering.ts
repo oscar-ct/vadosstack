@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 
-import { formatTrackedDocumentNumber, getDocumentNumberConfig, type NumberedDocumentType } from "@/lib/document-number";
+import {
+  formatTrackedDocumentNumber,
+  getDocumentNumberConfig,
+  type NumberedDocumentType,
+  parseTrackedDocumentNumber,
+} from "@/lib/document-number";
 import { prisma } from "@/lib/prisma";
 
 type DocumentNumberTransaction = Prisma.TransactionClient;
@@ -55,7 +60,10 @@ async function getCurrentMaxSequence(tx: DocumentNumberTransaction, ownerId: str
     },
   });
 
-  return Math.max(0, ...orders.map((order) => parseSequenceNumber(order.orderNumber)));
+  return orders.reduce((maximum, order) => {
+    const parsed = parseTrackedDocumentNumber("order", order.orderNumber);
+    return parsed && parsed.sequenceNumber < 2147483647 ? Math.max(maximum, parsed.sequenceNumber) : maximum;
+  }, 0);
 }
 
 async function ensureSequence(tx: DocumentNumberTransaction, ownerId: string, type: NumberedDocumentType) {

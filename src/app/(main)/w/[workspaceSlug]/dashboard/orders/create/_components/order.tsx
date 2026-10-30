@@ -21,6 +21,7 @@ const headerActionButtonClassName = "min-w-32 justify-center";
 
 type OrderWorkspaceProps = {
   canEdit?: boolean;
+  canRecordPayment?: boolean;
   company: OrderCompany;
   customers: OrderCustomer[];
   defaultValues: OrderFormValues;
@@ -47,8 +48,10 @@ function optionalString(value: string) {
 
 function orderValuesToInput(order: OrderFormValues) {
   return {
+    expectedVersion: order.expectedVersion,
+    externalPaymentConfirmed: order.externalPaymentConfirmed,
     customerEmail: optionalString(order.customerEmail),
-    customerName: optionalString(order.customerName),
+    customerName: order.customerName.trim(),
     customerNotes: optionalString(order.customerNotes),
     customerPhone: optionalString(order.customerPhone),
     discountAmount: Number.isFinite(order.discount) ? order.discount : 0,
@@ -56,9 +59,14 @@ function orderValuesToInput(order: OrderFormValues) {
     footerMessage: clampOrderFooterMessage(order.footerMessage),
     fulfillmentStatus: order.fulfillmentStatus,
     items: order.items.map((item) => ({
+      id: item.id,
+      taxable: item.taxable,
+      taxRate: item.taxRate,
       category: optionalString(item.category),
       inventoryItemId: item.inventoryItemId ?? null,
       product: item.product,
+      description: item.description ?? null,
+      unit: item.unit ?? null,
       quantity: Number.isFinite(item.quantity) ? item.quantity : 0,
       sku: optionalString(item.sku ?? ""),
       unitPrice: Number.isFinite(item.unitPrice) ? item.unitPrice : 0,
@@ -116,6 +124,7 @@ function getOrderValidationError(order: OrderFormValues) {
 
 export function OrderWorkspace({
   canEdit = true,
+  canRecordPayment = false,
   company,
   customers,
   defaultValues,
@@ -128,6 +137,7 @@ export function OrderWorkspace({
   title,
 }: OrderWorkspaceProps) {
   const router = useRouter();
+  const submissionKey = React.useRef<string | null>(null);
   const [locked, setLocked] = React.useState(mode === "edit");
   const [isSaving, setIsSaving] = React.useState(false);
   const form = useForm<OrderFormValues>({
@@ -154,7 +164,22 @@ export function OrderWorkspace({
 
     try {
       if (isCreate) {
-        const createdOrder = await createOrderWithInventoryAdjustments(input);
+        const storageKey = `commerce:order-submission:${window.location.pathname}`;
+        try {
+          submissionKey.current ??= sessionStorage.getItem(storageKey) ?? crypto.randomUUID();
+          sessionStorage.setItem(storageKey, submissionKey.current);
+        } catch {
+          submissionKey.current ??= crypto.randomUUID();
+        }
+        const createdOrder = await createOrderWithInventoryAdjustments({
+          ...input,
+          submissionKey: submissionKey.current,
+        });
+        try {
+          sessionStorage.removeItem(storageKey);
+        } catch {
+          /* Storage may be disabled. */
+        }
         toast.success("Order created.");
         router.push(`/dashboard/orders/${createdOrder.id}/edit`);
         router.refresh();
@@ -166,7 +191,8 @@ export function OrderWorkspace({
         return;
       }
 
-      await updateOrderWithInventoryAdjustments(orderId, input);
+      const updated = await updateOrderWithInventoryAdjustments(orderId, input);
+      values.expectedVersion = updated.version;
       toast.success("Order saved.");
       setLocked(true);
       form.reset(values);
@@ -255,7 +281,13 @@ export function OrderWorkspace({
       {/*xl:grid-cols-[minmax(0,0.95fr)_minmax(28rem,1.05fr)]*/}
       <FormProvider {...form}>
         <div className="grid gap-5 xl:grid-cols-[minmax(0,0.56fr)_minmax(380px,0.44fr)]">
-          <OrderForm customers={customers} disabled={isReadOnly} inventoryItems={inventoryItems} />
+          <OrderForm
+            customers={customers}
+            disabled={isReadOnly}
+            creating={isCreate}
+            canRecordPayment={canRecordPayment}
+            inventoryItems={inventoryItems}
+          />
           <OrderPreview
             actionsDisabled={!isCreate && !locked}
             company={company}

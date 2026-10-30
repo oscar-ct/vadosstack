@@ -49,10 +49,12 @@ import { cn, formatCurrency } from "@/lib/utils";
 
 import { updateOrderStatusesAction } from "../actions";
 
-export type OrderPaymentStatus = "Paid" | "Pending";
-export type OrderFulfillmentStatus = "Fulfilled" | "Unfulfilled";
+export type OrderPaymentStatus = import("../create/_components/data").OrderPaymentStatus;
+export type OrderFulfillmentStatus = import("../create/_components/data").OrderFulfillmentStatus;
 
 export type OrderTableItem = {
+  version: number;
+  orderStatus: string;
   customerName: string;
   fulfillmentStatus: OrderFulfillmentStatus;
   id: string;
@@ -163,6 +165,7 @@ function OrderStatusBadge({
 }
 
 function getReturnBadgeLabel(order: OrderTableItem) {
+  if (order.orderStatus === "Cancelled") return "Cancelled";
   if (!order.returnNumber) return null;
   if (order.returnRefundStatus === "Full Refund") return "Refunded";
   if (order.returnRefundStatus === "Partial Refund") return "Partial refund";
@@ -195,10 +198,14 @@ function RefundAmountText({ order }: { order: OrderTableItem }) {
 }
 
 function matchesFilter(order: OrderTableItem, filter: OrderFilter) {
-  if (filter === "needs-action") return order.paymentStatus === "Pending" || order.fulfillmentStatus === "Unfulfilled";
+  if (filter === "all") return true;
+  if (order.orderStatus !== "Active") return false;
+  const unpaid = order.paymentStatus === "Pending" || order.paymentStatus === "Partially Paid";
+  const unfulfilled = order.fulfillmentStatus !== "Fulfilled";
+  if (filter === "needs-action") return unpaid || unfulfilled;
   if (filter === "returns") return Boolean(order.returnNumber);
-  if (filter === "unfulfilled") return order.fulfillmentStatus === "Unfulfilled";
-  if (filter === "unpaid") return order.paymentStatus === "Pending";
+  if (filter === "unfulfilled") return unfulfilled;
+  if (filter === "unpaid") return unpaid;
   return true;
 }
 
@@ -240,7 +247,7 @@ function OrderActions({
   function updateStatus(statuses: Parameters<typeof updateOrderStatusesAction>[1], successMessage: string) {
     startTransition(async () => {
       try {
-        const result = await updateOrderStatusesAction(order.id, statuses);
+        const result = await updateOrderStatusesAction(order.id, statuses, order.version);
         toast.success(result.message || successMessage);
         router.refresh();
       } catch (error) {
@@ -264,7 +271,9 @@ function OrderActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44" data-row-click-ignore>
         <DropdownMenuItem
-          disabled={!canUpdate || isPending || order.fulfillmentStatus === "Fulfilled"}
+          disabled={
+            !canUpdate || isPending || order.orderStatus !== "Active" || order.fulfillmentStatus === "Fulfilled"
+          }
           onSelect={() => updateStatus({ fulfillmentStatus: "Fulfilled" }, "Order marked fulfilled.")}
         >
           <PackageCheck className="size-4" />
