@@ -46,6 +46,14 @@ export async function getReturnRefundWorkspaceData(ownerId: string, orderId: str
             createdAt: "asc",
           },
         },
+        payments: {
+          include: {
+            refunds: {
+              where: { status: "succeeded" },
+            },
+          },
+          orderBy: { paidAt: "asc" },
+        },
         returns: {
           include: {
             items: {
@@ -90,6 +98,19 @@ export async function getReturnRefundWorkspaceData(ownerId: string, orderId: str
   const streetLine = [order.shippingLine1, order.shippingLine2].filter(Boolean).join(", ");
   const shippingAddressLines = [streetLine, cityStateZip].filter(Boolean);
   const orderItemsById = new Map(order.items.map((item) => [item.id, item]));
+  const existingRefundPaymentId = existingReturn
+    ? order.payments.find((payment) => payment.refunds.some((refund) => refund.orderReturnId === existingReturn.id))?.id
+    : undefined;
+  const paymentOptions = order.payments
+    .map((payment) => ({
+      amount: Number(payment.amount),
+      id: payment.id,
+      method: payment.method,
+      reference: payment.reference,
+      refundableAmount:
+        Number(payment.amount) - payment.refunds.reduce((sum, refund) => sum + Number(refund.amount), 0),
+    }))
+    .filter((payment) => payment.refundableAmount > 0.001 || payment.id === existingRefundPaymentId);
   const company: OrderCompany = {
     address: workspace.companyAddress,
     email: workspace.companyEmail ?? workspace.legacyOwner?.email ?? "",
@@ -133,6 +154,7 @@ export async function getReturnRefundWorkspaceData(ownerId: string, orderId: str
         originalSubtotal: Number(order.subtotal),
         originalTaxAmount: Number(order.taxAmount),
         originalTotal: Number(order.total),
+        paymentId: existingRefundPaymentId ?? "",
         reason: existingReturn.reason ?? "",
         refundAmount: Number(existingReturn.refundAmount),
         refundExplanation: existingReturn.refundExplanation ?? "",
@@ -150,7 +172,7 @@ export async function getReturnRefundWorkspaceData(ownerId: string, orderId: str
         refundState: "draft",
         customerEmail: order.customerEmail ?? "",
         customerName: order.customerName ?? "",
-        customerNote: "Any requested refund is recorded separately after it is issued externally.",
+        customerNote: "Your completed refund is included on this return receipt.",
         customerPhone: order.customerPhone ?? "",
         internalNotes: "",
         items: order.items
@@ -182,6 +204,7 @@ export async function getReturnRefundWorkspaceData(ownerId: string, orderId: str
         originalSubtotal: Number(order.subtotal),
         originalTaxAmount: Number(order.taxAmount),
         originalTotal: Number(order.total),
+        paymentId: paymentOptions.length === 1 ? paymentOptions[0].id : "",
         reason: "",
         refundAmount: 0,
         refundExplanation: "",
@@ -204,6 +227,7 @@ export async function getReturnRefundWorkspaceData(ownerId: string, orderId: str
   return {
     company,
     orderId,
+    payments: paymentOptions,
     returnId: existingReturn?.id ?? null,
     values,
   };

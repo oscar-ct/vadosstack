@@ -22,9 +22,13 @@ import {
   CalendarIcon,
   Check,
   ChevronsUpDown,
+  CircleDollarSign,
+  Clock3,
   GripVertical,
   Hash,
+  PackageCheck,
   PackageSearch,
+  PackageX,
   Plus,
   Trash2,
   UserRound,
@@ -58,6 +62,7 @@ import type { InventoryItem } from "../../../inventory/_components/inventory-tab
 import {
   clampOrderFooterMessage,
   getLineAmount,
+  getOrderTotal,
   type OrderCustomer,
   type OrderCustomerAddress,
   type OrderFormValues,
@@ -68,6 +73,8 @@ import {
   orderFooterMaxLines,
   orderNeedsShipping,
 } from "./data";
+import { getOrderStepValidationError } from "./order-input";
+import { type OrderStep, orderSteps } from "./order-steps";
 
 const customAddressValue = "new-address";
 const newCustomerValue = "new-customer";
@@ -106,40 +113,205 @@ export function OrderForm({
   disabled = false,
   creating = false,
   canRecordPayment = false,
+  canOverridePrices = false,
   inventoryItems,
+  activeStep = "customer",
+  furthestStep = 0,
+  onStepChange,
+  validationError,
+  validationAttempt = 0,
+  footer,
 }: {
   customers: OrderCustomer[];
   disabled?: boolean;
   creating?: boolean;
   canRecordPayment?: boolean;
+  canOverridePrices?: boolean;
   inventoryItems: InventoryItem[];
+  activeStep?: OrderStep;
+  furthestStep?: number;
+  onStepChange?: (step: OrderStep) => void;
+  validationError?: string | null;
+  validationAttempt?: number;
+  footer?: React.ReactNode;
+}) {
+  const { control } = useFormContext<OrderFormValues>();
+  const order = useWatch({ control }) as OrderFormValues;
+  const headingRef = React.useRef<HTMLHeadingElement>(null);
+  const errorRef = React.useRef<HTMLParagraphElement>(null);
+  const formRef = React.useRef<HTMLDivElement>(null);
+  const previousStep = React.useRef(activeStep);
+  const panelId = React.useId();
+  React.useEffect(() => {
+    if (previousStep.current !== activeStep) {
+      headingRef.current?.focus({ preventScroll: true });
+      formRef.current?.scrollIntoView({ block: "start" });
+    }
+    previousStep.current = activeStep;
+  }, [activeStep]);
+  React.useEffect(() => {
+    if (validationAttempt > 0) {
+      errorRef.current?.focus({ preventScroll: true });
+      errorRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [validationAttempt]);
+  const review = (
+    <>
+      {creating ? <OrderReviewSummary order={order} onStepChange={onStepChange} disabled={disabled} /> : null}
+      <OrderDetails disabled={disabled} creating={creating} canRecordPayment={canRecordPayment} />
+      <Separator />
+      <OrderAdjustments disabled={disabled} />
+      <Separator />
+      <OrderFooterMessage disabled={disabled} />
+    </>
+  );
+  const customer = <CustomerDetails customers={customers} disabled={disabled} />;
+  const items = (
+    <OrderItems disabled={disabled} inventoryItems={inventoryItems} canOverridePrices={canOverridePrices} />
+  );
+  const stepIndex = orderSteps.findIndex((step) => step.id === activeStep);
+  const step = orderSteps[stepIndex];
+  return (
+    <div ref={formRef} className="flex min-w-0 scroll-mt-20 flex-col gap-5 rounded-xl border bg-card p-4">
+      {creating ? (
+        <>
+          <nav aria-label="Order creation steps">
+            <ol className="grid grid-cols-3 gap-2">
+              {orderSteps.map((entry, index) => {
+                const completed = index < furthestStep && !getOrderStepValidationError(order, entry.id, true);
+                return (
+                  <li key={entry.id} className="min-w-0">
+                    <button
+                      type="button"
+                      aria-current={activeStep === entry.id ? "step" : undefined}
+                      aria-controls={panelId}
+                      aria-label={`Step ${index + 1}: ${entry.title}${completed ? ", completed" : ""}`}
+                      disabled={disabled ? true : index > furthestStep}
+                      className={cn(
+                        "flex h-full w-full min-w-0 flex-col items-start gap-2 rounded-lg border p-2 text-left text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50 sm:flex-row sm:items-center sm:p-3 sm:text-sm",
+                        activeStep === entry.id
+                          ? "border-primary bg-primary/5 font-medium"
+                          : "border-transparent bg-muted/40 hover:bg-muted",
+                      )}
+                      onClick={() => onStepChange?.(entry.id)}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "grid size-6 shrink-0 place-items-center rounded-full text-xs",
+                          activeStep === entry.id
+                            ? "bg-primary text-primary-foreground"
+                            : completed
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {completed ? <Check className="size-3.5" /> : index + 1}
+                      </span>
+                      <span className="min-w-0 leading-tight">{entry.title}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+          <section
+            id={panelId}
+            aria-labelledby={`${panelId}-title`}
+            aria-describedby={validationError ? `${panelId}-error` : undefined}
+            className="flex flex-col gap-4"
+          >
+            <div className="grid gap-1">
+              <p className="text-muted-foreground text-xs">
+                Step {stepIndex + 1} of {orderSteps.length}
+              </p>
+              <h2
+                id={`${panelId}-title`}
+                ref={headingRef}
+                tabIndex={-1}
+                className="w-fit font-medium text-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {step.title}
+              </h2>
+              <p className="text-muted-foreground text-sm">{step.description}</p>
+            </div>
+            {validationError ? (
+              <p
+                id={`${panelId}-error`}
+                role="alert"
+                tabIndex={-1}
+                ref={errorRef}
+                className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive text-sm"
+              >
+                {validationError}
+              </p>
+            ) : null}
+            {activeStep === "customer" ? customer : activeStep === "items" ? items : review}
+          </section>
+          {footer ? <div className="border-t pt-4">{footer}</div> : null}
+        </>
+      ) : (
+        <Tabs defaultValue="customer" className="gap-4">
+          <TabsList className="w-full">
+            <TabsTrigger value="customer">Customer</TabsTrigger>
+            <TabsTrigger value="items">Items</TabsTrigger>
+            <TabsTrigger value="review">Order details</TabsTrigger>
+          </TabsList>
+          <TabsContent value="customer" className="mt-0">
+            {customer}
+          </TabsContent>
+          <TabsContent value="items" className="mt-0">
+            {items}
+          </TabsContent>
+          <TabsContent value="review" className="mt-0 flex flex-col gap-4">
+            {review}
+          </TabsContent>
+        </Tabs>
+      )}
+    </div>
+  );
+}
+
+function OrderReviewSummary({
+  order,
+  onStepChange,
+  disabled,
+}: {
+  order: OrderFormValues;
+  onStepChange?: (step: OrderStep) => void;
+  disabled: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
-      <Tabs defaultValue="order" className="gap-4">
-        <TabsList className="w-full">
-          <TabsTrigger value="order">Order</TabsTrigger>
-          <TabsTrigger value="customer">Customer</TabsTrigger>
-          <TabsTrigger value="items">Items</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="order" className="mt-0 flex flex-col gap-4">
-          <OrderDetails disabled={disabled} creating={creating} canRecordPayment={canRecordPayment} />
-          <Separator />
-          <OrderAdjustments disabled={disabled} />
-          <Separator />
-          <OrderFooterMessage disabled={disabled} />
-        </TabsContent>
-
-        <TabsContent value="customer" className="mt-0">
-          <CustomerDetails customers={customers} disabled={disabled} />
-        </TabsContent>
-
-        <TabsContent value="items" className="mt-0">
-          <OrderItems disabled={disabled} inventoryItems={inventoryItems} />
-        </TabsContent>
-      </Tabs>
-    </div>
+    <section aria-label="Order summary" className="grid gap-3 rounded-lg border bg-muted/20 p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid min-w-0 gap-1">
+          <h3 className="font-medium">{isWalkInOrder(order) ? WALK_IN_CUSTOMER_NAME : order.customerName}</h3>
+          <p className="break-words text-muted-foreground text-xs">
+            {orderNeedsShipping(order)
+              ? ["Delivery", order.streetAddress, order.apartment, order.city, order.state, order.zip]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "In-person pickup"}
+          </p>
+        </div>
+        <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onStepChange?.("customer")}>
+          Edit customer
+        </Button>
+      </div>
+      <div className="flex items-center justify-between gap-3 border-t pt-3">
+        <p>
+          {order.items.length} {order.items.length === 1 ? "item" : "items"} ·{" "}
+          {order.items.reduce((sum, item) => sum + item.quantity, 0)} units
+        </p>
+        <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onStepChange?.("items")}>
+          Edit items
+        </Button>
+      </div>
+      <div className="flex items-center justify-between gap-3 border-t pt-3 font-medium">
+        <span>Order total</span>
+        <span className="tabular-nums">{formatOrderCurrency(getOrderTotal(order))}</span>
+      </div>
+    </section>
   );
 }
 
@@ -152,8 +324,9 @@ function OrderDetails({
   creating: boolean;
   canRecordPayment: boolean;
 }) {
-  const { control, register } = useFormContext<OrderFormValues>();
-  const needsDelivery = orderNeedsShipping(useWatch({ control }) as OrderFormValues);
+  const { control, register, setValue } = useFormContext<OrderFormValues>();
+  const watchedOrder = useWatch({ control }) as OrderFormValues;
+  const needsDelivery = orderNeedsShipping(watchedOrder);
 
   return (
     <section className="flex flex-col gap-3">
@@ -170,77 +343,128 @@ function OrderDetails({
           </InputGroup>
         </Field>
 
-        <div className="grid grid-cols-2 gap-3 sm:gap-5">
-          <Controller
-            control={control}
-            name="paymentStatus"
-            render={({ field }) => (
-              <Field className="gap-1">
-                <FieldLabel className="text-xs" htmlFor="payment-status">
-                  Payment Status
-                </FieldLabel>
-                <Select
-                  disabled={disabled || !creating || !canRecordPayment}
-                  value={field.value}
-                  onValueChange={field.onChange}
-                >
-                  <SelectTrigger id="payment-status" className="w-full text-base md:text-sm">
-                    <SelectValue placeholder="Payment status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {paymentStatusOptions
-                        .filter((status) => !creating || status === "Paid" || status === "Pending")
-                        .map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {status}
-                          </SelectItem>
-                        ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-            )}
-          />
-          <Controller
-            control={control}
-            name="fulfillmentStatus"
-            render={({ field }) => (
-              <Field className="gap-1">
-                <FieldLabel className="text-xs" htmlFor="fulfillment-status">
-                  Fulfillment Status
-                </FieldLabel>
-                <Select disabled={disabled || !creating} value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger id="fulfillment-status" className="w-full text-base md:text-sm">
-                    <SelectValue placeholder="Fulfillment status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {fulfillmentStatusOptions
-                        .filter((status) => !creating || status !== "Partially Fulfilled")
-                        .map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {status}
-                          </SelectItem>
-                        ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-            )}
-          />
-        </div>
+        <section className="grid gap-4 rounded-xl border-2 border-primary/25 bg-primary/[0.025] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="grid gap-1">
+              <h3 className="font-semibold text-base">Confirm order status</h3>
+              <p className="text-muted-foreground text-xs">
+                Choose what has actually happened. These selections create payment and fulfillment records.
+              </p>
+            </div>
+            <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary text-xs">
+              Review carefully
+            </span>
+          </div>
 
-        {creating && canRecordPayment ? (
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" disabled={disabled} {...register("externalPaymentConfirmed")} />I confirm any Paid
-            amount has already been received externally. VadosStack records it without charging a card.
-          </label>
-        ) : null}
-        <p className="text-muted-foreground text-xs">
-          Unpaid, unshipped orders hold stock for seven days. Backorders are not accepted. Saved payments and shipments
-          are managed in the order operations panel.
-        </p>
+          <div className={cn("grid gap-4", !creating && "sm:grid-cols-2")}>
+            <Controller
+              control={control}
+              name="paymentStatus"
+              render={({ field }) => {
+                const options = creating
+                  ? paymentStatusOptions.filter((status) => status === "Paid" || status === "Pending")
+                  : [field.value];
+                return (
+                  <Field className="gap-2">
+                    <FieldLabel className="font-semibold text-sm" id="payment-status-label">
+                      1. Has payment been received?
+                    </FieldLabel>
+                    <div
+                      aria-labelledby="payment-status-label"
+                      className={cn("grid gap-2", creating && "sm:grid-cols-2")}
+                      role="radiogroup"
+                    >
+                      {options.map((status) => (
+                        <StatusChoice
+                          key={status}
+                          checked={field.value === status}
+                          description={paymentStatusDescription(status)}
+                          disabled={disabled || !creating || !canRecordPayment}
+                          icon={status === "Paid" ? <CircleDollarSign /> : <Clock3 />}
+                          label={status}
+                          name="payment-status"
+                          onClick={() => {
+                            if (field.value !== status)
+                              setValue("externalPaymentConfirmed", false, { shouldDirty: true });
+                            field.onChange(status);
+                          }}
+                          tone={status === "Paid" ? "success" : "warning"}
+                        />
+                      ))}
+                    </div>
+                    {creating && !canRecordPayment ? (
+                      <p className="text-muted-foreground text-xs">
+                        You can create this order as Pending. An authorized user can record payment afterward.
+                      </p>
+                    ) : null}
+                  </Field>
+                );
+              }}
+            />
+            <Controller
+              control={control}
+              name="fulfillmentStatus"
+              render={({ field }) => {
+                const options = creating
+                  ? fulfillmentStatusOptions.filter((status) => status !== "Partially Fulfilled")
+                  : [field.value];
+                return (
+                  <Field className="gap-2">
+                    <FieldLabel className="font-semibold text-sm" id="fulfillment-status-label">
+                      2. Have the items left your possession?
+                    </FieldLabel>
+                    <div
+                      aria-labelledby="fulfillment-status-label"
+                      className={cn("grid gap-2", creating && "sm:grid-cols-2")}
+                      role="radiogroup"
+                    >
+                      {options.map((status) => (
+                        <StatusChoice
+                          key={status}
+                          checked={field.value === status}
+                          description={fulfillmentStatusDescription(status)}
+                          disabled={disabled || !creating}
+                          icon={status === "Fulfilled" ? <PackageCheck /> : <PackageX />}
+                          label={status}
+                          name="fulfillment-status"
+                          onClick={() => field.onChange(status)}
+                          tone={status === "Fulfilled" ? "success" : "warning"}
+                        />
+                      ))}
+                    </div>
+                  </Field>
+                );
+              }}
+            />
+          </div>
+
+          {creating && canRecordPayment && watchedOrder.paymentStatus === "Paid" ? (
+            <label className="flex items-start gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/40">
+              <input
+                className="mt-0.5 size-4 shrink-0 accent-emerald-600"
+                type="checkbox"
+                disabled={disabled}
+                {...register("externalPaymentConfirmed")}
+              />
+              <span className="grid gap-0.5">
+                <strong>Required payment confirmation</strong>
+                <span>
+                  I confirm the full order amount has already been received externally. VadosStack will record it but
+                  will not charge a card.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
+          <p className="rounded-md bg-background/80 px-3 py-2 font-medium text-sm" aria-live="polite">
+            This order will be recorded as <strong>{watchedOrder.paymentStatus}</strong> and{" "}
+            <strong>{watchedOrder.fulfillmentStatus}</strong>.
+          </p>
+          <p className="text-muted-foreground text-xs">
+            Unpaid, unshipped orders hold stock for seven days. Backorders are not accepted. After creation, use Order
+            operations to record payments, fulfillment, corrections, and returns.
+          </p>
+        </section>
         <div className="grid grid-cols-2 gap-3 sm:gap-5">
           <Controller
             control={control}
@@ -323,6 +547,72 @@ function OrderDetails({
         </div>
       </FieldGroup>
     </section>
+  );
+}
+
+function paymentStatusDescription(status: OrderPaymentStatus) {
+  if (status === "Paid") return "The full amount has already been received.";
+  if (status === "Pending") return "No payment has been received; the full balance is due.";
+  if (status === "Partially Paid") return "Part of the order total has been received.";
+  if (status === "Partially Refunded") return "Some received funds have been returned.";
+  return "All received funds have been returned.";
+}
+
+function fulfillmentStatusDescription(status: OrderFulfillmentStatus) {
+  if (status === "Fulfilled") return "Every item has been shipped or handed to the customer.";
+  if (status === "Unfulfilled") return "No item has been shipped or handed to the customer.";
+  return "Only some of the ordered items have left your possession.";
+}
+
+function StatusChoice({
+  checked,
+  description,
+  disabled,
+  icon,
+  label,
+  name,
+  onClick,
+  tone,
+}: {
+  checked: boolean;
+  description: string;
+  disabled: boolean;
+  icon: React.ReactNode;
+  label: string;
+  name: string;
+  onClick: () => void;
+  tone: "success" | "warning";
+}) {
+  return (
+    <label
+      className={cn(
+        "flex min-h-24 items-start gap-3 rounded-lg border bg-background p-3 text-left transition-colors",
+        "has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
+        disabled ? "cursor-not-allowed opacity-75" : "cursor-pointer hover:border-primary/50",
+        checked &&
+          (tone === "success"
+            ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500 dark:bg-emerald-950/40"
+            : "border-amber-500 bg-amber-50 ring-1 ring-amber-500 dark:bg-amber-950/40"),
+      )}
+    >
+      <input checked={checked} className="sr-only" disabled={disabled} name={name} onChange={onClick} type="radio" />
+      <span
+        className={cn(
+          "grid size-9 shrink-0 place-items-center rounded-full [&>svg]:size-4",
+          checked
+            ? tone === "success"
+              ? "bg-emerald-600 text-white"
+              : "bg-amber-500 text-white"
+            : "bg-muted text-muted-foreground",
+        )}
+      >
+        {checked ? <Check /> : icon}
+      </span>
+      <span className="grid gap-1">
+        <span className="font-semibold text-sm">{label}</span>
+        <span className="text-muted-foreground text-xs leading-relaxed">{description}</span>
+      </span>
+    </label>
   );
 }
 
@@ -571,20 +861,21 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
       </Field>
       {showCustomerFields ? (
         <FieldGroup>
-          <div className="grid gap-5 md:grid-cols-2">
-            {!isWalkIn ? (
-              <Field className="gap-1">
-                <FieldLabel className="text-xs" htmlFor="customer-name">
-                  Name
-                </FieldLabel>
-                <Input id="customer-name" disabled={disabled} placeholder="Jane Smith" {...register("customerName")} />
-              </Field>
-            ) : null}
+          {!isWalkIn ? (
+            <Field className="gap-1">
+              <FieldLabel className="text-xs" htmlFor="customer-name">
+                Name
+              </FieldLabel>
+              <Input id="customer-name" disabled={disabled} placeholder="Jane Smith" {...register("customerName")} />
+            </Field>
+          ) : null}
+
+          <div className="grid min-w-0 gap-4 md:grid-cols-2">
             <Controller
               control={control}
               name="customerPhone"
               render={({ field }) => (
-                <Field className="gap-1">
+                <Field className="min-w-0 gap-1">
                   <FieldLabel className="text-xs" htmlFor="customer-phone">
                     {isWalkIn ? "Phone (optional)" : "Phone Number"}
                   </FieldLabel>
@@ -603,7 +894,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                 </Field>
               )}
             />
-            <Field className="gap-1 md:col-span-2">
+            <Field className="min-w-0 gap-1">
               <FieldLabel className="text-xs" htmlFor="customer-email">
                 {isWalkIn ? "Email (optional)" : "Email"}
               </FieldLabel>
@@ -651,8 +942,8 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                 </Field>
               ) : null}
 
-              <div className="grid gap-5">
-                <Field className="gap-1">
+              <div className="grid min-w-0 grid-cols-2 gap-4 md:grid-cols-3">
+                <Field className="col-span-2 min-w-0 gap-1">
                   <FieldLabel className="text-xs" htmlFor="shipping-street">
                     Street Address
                   </FieldLabel>
@@ -660,55 +951,64 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                     id="shipping-street"
                     disabled={disabled}
                     placeholder="123 Main St"
+                    autoComplete="shipping address-line1"
                     {...register("streetAddress")}
                   />
                 </Field>
-              </div>
-
-              <div className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-3 md:grid-cols-[minmax(180px,0.45fr)_minmax(0,1fr)_150px_140px] md:gap-5">
-                <Field className="gap-1">
+                <Field className="min-w-0 gap-1">
                   <FieldLabel className="text-xs" htmlFor="shipping-apartment">
                     Apt/Suite
                   </FieldLabel>
-                  <Input id="shipping-apartment" disabled={disabled} placeholder="Unit B" {...register("apartment")} />
+                  <Input
+                    id="shipping-apartment"
+                    disabled={disabled}
+                    placeholder="Apartment, suite, or unit"
+                    autoComplete="shipping address-line2"
+                    {...register("apartment")}
+                  />
                 </Field>
-                <Field className="gap-1">
+                <Field className="min-w-0 gap-1 md:col-span-3">
                   <FieldLabel className="text-xs" htmlFor="shipping-city">
                     City
                   </FieldLabel>
-                  <Input id="shipping-city" disabled={disabled} placeholder="Houston" {...register("city")} />
-                </Field>
-                <div className="col-span-2 grid grid-cols-2 gap-5 md:contents">
-                  <Controller
-                    control={control}
-                    name="state"
-                    render={({ field }) => (
-                      <Field className="gap-1">
-                        <FieldLabel className="text-xs" htmlFor="shipping-state">
-                          State
-                        </FieldLabel>
-                        <UsStateSelect
-                          id="shipping-state"
-                          disabled={disabled}
-                          value={field.value}
-                          onChange={(event) => field.onChange(event.target.value)}
-                        />
-                      </Field>
-                    )}
+                  <Input
+                    id="shipping-city"
+                    disabled={disabled}
+                    placeholder="Houston"
+                    autoComplete="shipping address-level2"
+                    {...register("city")}
                   />
-                  <Field className="gap-1">
-                    <FieldLabel className="text-xs" htmlFor="shipping-zip">
-                      ZIP
-                    </FieldLabel>
-                    <Input
-                      id="shipping-zip"
-                      inputMode="numeric"
-                      disabled={disabled}
-                      placeholder="77001"
-                      {...register("zip")}
-                    />
-                  </Field>
-                </div>
+                </Field>
+                <Controller
+                  control={control}
+                  name="state"
+                  render={({ field }) => (
+                    <Field className="min-w-0 gap-1 md:col-span-2">
+                      <FieldLabel className="text-xs" htmlFor="shipping-state">
+                        State
+                      </FieldLabel>
+                      <UsStateSelect
+                        id="shipping-state"
+                        disabled={disabled}
+                        value={field.value}
+                        onChange={(event) => field.onChange(event.target.value)}
+                      />
+                    </Field>
+                  )}
+                />
+                <Field className="min-w-0 gap-1">
+                  <FieldLabel className="text-xs" htmlFor="shipping-zip">
+                    ZIP
+                  </FieldLabel>
+                  <Input
+                    id="shipping-zip"
+                    inputMode="numeric"
+                    disabled={disabled}
+                    placeholder="77001"
+                    autoComplete="shipping postal-code"
+                    {...register("zip")}
+                  />
+                </Field>
               </div>
             </>
           ) : null}
@@ -731,7 +1031,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
 }
 
 function OrderAdjustments({ disabled }: { disabled: boolean }) {
-  const { register, control } = useFormContext<OrderFormValues>();
+  const { register, control, setValue } = useFormContext<OrderFormValues>();
 
   const needsDelivery = orderNeedsShipping(useWatch({ control }) as OrderFormValues);
 
@@ -771,10 +1071,18 @@ function OrderAdjustments({ disabled }: { disabled: boolean }) {
               min="0"
               step="0.01"
               disabled={disabled}
-              {...register("tax", { valueAsNumber: true })}
+              {...register("tax", {
+                valueAsNumber: true,
+                onChange: () => setValue("overrideTaxRate", true, { shouldDirty: true }),
+              })}
+              max="100"
+              aria-describedby="order-tax-help"
             />
             <InputGroupAddon align="inline-end">%</InputGroupAddon>
           </InputGroup>
+          <p id="order-tax-help" className="text-muted-foreground text-xs">
+            Applies to taxable items in this order. Enter 0 for no tax. Tax-exempt items stay exempt.
+          </p>
         </Field>
         <Field className="col-span-2 gap-1 sm:col-span-1">
           <FieldLabel className="text-xs" htmlFor="order-discount">
@@ -905,7 +1213,15 @@ function parseDateValue(value: string) {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-function OrderItems({ disabled, inventoryItems }: { disabled: boolean; inventoryItems: InventoryItem[] }) {
+function OrderItems({
+  disabled,
+  inventoryItems,
+  canOverridePrices,
+}: {
+  disabled: boolean;
+  inventoryItems: InventoryItem[];
+  canOverridePrices: boolean;
+}) {
   const { control, register, setValue } = useFormContext<OrderFormValues>();
   const { append, fields, move, remove } = useFieldArray({
     control,
@@ -953,7 +1269,9 @@ function OrderItems({ disabled, inventoryItems }: { disabled: boolean; inventory
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="font-medium tracking-tight">Order Items</h2>
-          <p className="text-muted-foreground text-sm">Add products, categories, quantities, and pricing.</p>
+          <p className="text-muted-foreground text-sm">
+            Choose products and quantities. Use a custom item for one-off products.
+          </p>
         </div>
         <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={handleAddItem}>
           <Plus />
@@ -974,6 +1292,7 @@ function OrderItems({ disabled, inventoryItems }: { disabled: boolean; inventory
               {fields.map((field, index) => (
                 <SortableOrderItemRow
                   key={field.fieldKey}
+                  canOverridePrices={canOverridePrices}
                   disabled={disabled}
                   id={field.id}
                   index={index}
@@ -995,6 +1314,7 @@ function OrderItems({ disabled, inventoryItems }: { disabled: boolean; inventory
 }
 
 function SortableOrderItemRow({
+  canOverridePrices,
   disabled,
   id,
   index,
@@ -1015,6 +1335,7 @@ function SortableOrderItemRow({
   orderItems: OrderLineItem[];
   register: UseFormRegister<OrderFormValues>;
   removeDisabled: boolean;
+  canOverridePrices: boolean;
   setValue: UseFormSetValue<OrderFormValues>;
 }) {
   const { attributes, isDragging, listeners, setActivatorNodeRef, setNodeRef, transform, transition } = useSortable({
@@ -1054,13 +1375,19 @@ function SortableOrderItemRow({
             <FieldLabel className="text-xs" htmlFor={`order-item-sku-${index}`}>
               SKU
             </FieldLabel>
-            <Input
-              id={`order-item-sku-${index}`}
-              className="font-mono text-base md:text-sm"
-              disabled={disabled}
-              placeholder="SKU"
-              {...register(`items.${index}.sku` as const)}
-            />
+            {item?.inventoryItemId ? (
+              <p id={`order-item-sku-${index}`} className="min-h-9 break-words py-2 text-sm">
+                {item.sku || "—"}
+              </p>
+            ) : (
+              <Input
+                id={`order-item-sku-${index}`}
+                className="font-mono text-base md:text-sm"
+                disabled={disabled}
+                placeholder="SKU"
+                {...register(`items.${index}.sku` as const)}
+              />
+            )}
           </Field>
           <Field className="col-span-2 row-start-1 min-w-0 gap-1 lg:col-span-3 lg:col-start-2 xl:col-span-2 xl:col-start-1">
             <FieldLabel className="text-xs" htmlFor={`order-item-product-${index}`}>
@@ -1080,15 +1407,26 @@ function SortableOrderItemRow({
             <FieldLabel className="text-xs" htmlFor={`order-item-category-${index}`}>
               Category
             </FieldLabel>
-            <Input
-              id={`order-item-category-${index}`}
-              className="min-w-0 text-base md:text-sm"
-              disabled={disabled}
-              placeholder="Category"
-              {...register(`items.${index}.category` as const)}
-            />
+            {item?.inventoryItemId ? (
+              <p id={`order-item-category-${index}`} className="min-h-9 break-words py-2 text-sm">
+                {item.category || "—"}
+              </p>
+            ) : (
+              <Input
+                id={`order-item-category-${index}`}
+                className="min-w-0 text-base md:text-sm"
+                disabled={disabled}
+                placeholder="Category"
+                {...register(`items.${index}.category` as const)}
+              />
+            )}
           </Field>
-          <div className="col-span-2 row-start-3 grid min-w-0 grid-cols-2 items-end gap-3 lg:col-span-3 lg:col-start-2 lg:row-start-2 xl:col-span-2 xl:col-start-1 xl:row-start-3">
+          <div
+            className={cn(
+              "col-span-2 row-start-3 grid min-w-0 items-start gap-3 lg:col-span-3 lg:col-start-2 lg:row-start-2 xl:col-span-2 xl:col-start-1 xl:row-start-3",
+              item?.priceOverride ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2",
+            )}
+          >
             <Field className="min-w-0 gap-1 lg:max-xl:max-w-24">
               <FieldLabel className="text-xs" htmlFor={`order-item-quantity-${index}`}>
                 Qty
@@ -1107,15 +1445,13 @@ function SortableOrderItemRow({
               <FieldLabel className="text-xs" htmlFor={`order-item-unit-price-${index}`}>
                 Unit Price
               </FieldLabel>
-              <Input
-                id={`order-item-unit-price-${index}`}
-                type="number"
-                min="0"
-                step="0.01"
-                className="min-w-0 text-base md:text-sm"
+              <OrderItemPrice
+                item={item}
+                index={index}
                 disabled={disabled}
-                {...register(`items.${index}.unitPrice` as const, { min: 0, valueAsNumber: true })}
-                onBlur={formatMoneyInputOnBlur}
+                canOverridePrices={canOverridePrices}
+                register={register}
+                setValue={setValue}
               />
             </Field>
           </div>
@@ -1137,6 +1473,99 @@ function SortableOrderItemRow({
       >
         <Trash2 />
       </Button>
+    </div>
+  );
+}
+
+function OrderItemPrice({
+  item,
+  index,
+  disabled,
+  canOverridePrices,
+  register,
+  setValue,
+}: {
+  item?: OrderLineItem;
+  index: number;
+  disabled: boolean;
+  canOverridePrices: boolean;
+  register: UseFormRegister<OrderFormValues>;
+  setValue: UseFormSetValue<OrderFormValues>;
+}) {
+  const inventoryLine = Boolean(item?.inventoryItemId);
+  const editingOverride = inventoryLine && item?.priceOverride === true;
+  const canEditPrice = !inventoryLine || (editingOverride && canOverridePrices);
+  const referencePrice = item?.catalogUnitPrice;
+  function cancelOverride() {
+    setValue(`items.${index}.unitPrice`, item?.savedUnitPrice ?? referencePrice ?? item?.unitPrice ?? 0, {
+      shouldDirty: true,
+    });
+    setValue(`items.${index}.priceOverride`, false, { shouldDirty: true });
+    setValue(`items.${index}.priceOverrideReason`, item?.savedPriceOverrideReason ?? "", { shouldDirty: true });
+  }
+  return (
+    <div className="grid min-w-0 gap-2">
+      {canEditPrice ? (
+        <Input
+          id={`order-item-unit-price-${index}`}
+          type="number"
+          min="0"
+          step="0.01"
+          className="min-w-0 text-base md:text-sm"
+          disabled={disabled}
+          {...register(`items.${index}.unitPrice`, { min: 0, valueAsNumber: true })}
+          onBlur={formatMoneyInputOnBlur}
+        />
+      ) : (
+        <p id={`order-item-unit-price-${index}`} className="min-h-9 py-2 text-sm tabular-nums">
+          {formatOrderCurrency(item?.unitPrice ?? 0)}
+        </p>
+      )}
+      {inventoryLine && referencePrice != null && (editingOverride || item?.priceOverrideReason) ? (
+        <p className="text-muted-foreground text-xs">Original catalog price: {formatOrderCurrency(referencePrice)}</p>
+      ) : null}
+      {inventoryLine && editingOverride && referencePrice == null && item?.savedUnitPrice != null ? (
+        <p className="text-muted-foreground text-xs">
+          Price before this change: {formatOrderCurrency(item.savedUnitPrice)}. Original catalog price was not recorded.
+        </p>
+      ) : null}
+      {editingOverride ? (
+        <>
+          <FieldLabel className="text-xs" htmlFor={`order-item-price-reason-${index}`}>
+            Price override reason
+          </FieldLabel>
+          <Textarea
+            id={`order-item-price-reason-${index}`}
+            disabled={disabled || !canOverridePrices}
+            required
+            maxLength={500}
+            rows={2}
+            placeholder="Why is this order's price different?"
+            {...register(`items.${index}.priceOverrideReason`)}
+          />
+          {!disabled && canOverridePrices ? (
+            <Button type="button" variant="ghost" size="sm" className="justify-start px-0" onClick={cancelOverride}>
+              Cancel override
+            </Button>
+          ) : null}
+        </>
+      ) : inventoryLine ? (
+        <>
+          {item?.priceOverrideReason ? (
+            <p className="break-words text-muted-foreground text-xs">Override reason: {item.priceOverrideReason}</p>
+          ) : null}
+          {!disabled && canOverridePrices ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setValue(`items.${index}.priceOverride`, true, { shouldDirty: true })}
+            >
+              Override price
+            </Button>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -1164,8 +1593,20 @@ function InventoryProductPicker({
     ? inventoryItems.find((inventoryItem) => inventoryItem.id === item.inventoryItemId)
     : undefined;
   const buttonLabel = item?.product || "Select product";
+  if (item?.inventoryItemId && item.savedUnitPrice !== undefined) {
+    return (
+      <p id={`order-item-product-${index}`} className="min-h-9 break-words py-2 text-sm">
+        {item.product}
+      </p>
+    );
+  }
 
   function selectCustomItem() {
+    setValue(`items.${index}.catalogUnitPrice`, null, { shouldDirty: true });
+    setValue(`items.${index}.priceOverride`, false, { shouldDirty: true });
+    setValue(`items.${index}.priceOverrideReason`, "", { shouldDirty: true });
+    setValue(`items.${index}.savedUnitPrice`, undefined, { shouldDirty: true });
+    setValue(`items.${index}.savedPriceOverrideReason`, undefined, { shouldDirty: true });
     setValue(`items.${index}.inventoryItemId`, undefined, { shouldDirty: true });
     setValue(`items.${index}.taxable`, true, { shouldDirty: true });
     setValue(`items.${index}.taxRate`, undefined, { shouldDirty: true });
@@ -1178,13 +1619,18 @@ function InventoryProductPicker({
   }
 
   function selectInventoryItem(inventoryItem: InventoryItem) {
+    setValue(`items.${index}.catalogUnitPrice`, inventoryItem.unitPrice, { shouldDirty: true });
+    setValue(`items.${index}.priceOverride`, false, { shouldDirty: true });
+    setValue(`items.${index}.priceOverrideReason`, "", { shouldDirty: true });
+    setValue(`items.${index}.savedUnitPrice`, undefined, { shouldDirty: true });
+    setValue(`items.${index}.savedPriceOverrideReason`, undefined, { shouldDirty: true });
     setValue(`items.${index}.inventoryItemId`, inventoryItem.id, { shouldDirty: true });
     setValue(`items.${index}.sku`, inventoryItem.sku, { shouldDirty: true });
     setValue(`items.${index}.product`, inventoryItem.product, { shouldDirty: true });
     setValue(`items.${index}.category`, inventoryItem.category, { shouldDirty: true });
     setValue(`items.${index}.unitPrice`, inventoryItem.unitPrice, { shouldDirty: true });
     setValue(`items.${index}.taxable`, inventoryItem.taxable, { shouldDirty: true });
-    setValue(`items.${index}.taxRate`, inventoryItem.taxRate, { shouldDirty: true });
+    setValue(`items.${index}.taxRate`, undefined, { shouldDirty: true });
     setManualMode(false);
     setOpen(false);
   }

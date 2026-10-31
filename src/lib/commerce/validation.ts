@@ -31,6 +31,7 @@ export const orderInputSchema = z
     discountAmount: amountSchema.default(0),
     shippingAmount: amountSchema.default(0),
     taxRate: taxRateSchema.default(0),
+    overrideTaxRate: z.boolean().optional(),
     estimatedDelivery: z.date().nullish(),
     orderDate: z.date(),
     orderNumber: z.string().max(100),
@@ -61,6 +62,9 @@ export const orderInputSchema = z
             taxRate: taxRateSchema.optional(),
             taxable: z.boolean().optional(),
             unitPrice: amountSchema,
+            priceOverride: z.boolean().optional(),
+            priceOverrideReason: z.string().trim().max(500).nullish(),
+            expectedCatalogUnitPrice: amountSchema.nullish(),
           })
           .strict(),
       )

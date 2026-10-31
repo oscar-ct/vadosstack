@@ -14,7 +14,6 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
@@ -44,10 +43,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useCommerceSearch } from "@/components/use-commerce-search";
 import { useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
 import { cn, formatCurrency } from "@/lib/utils";
 
-import { updateOrderStatusesAction } from "../actions";
+import { FulfillmentWizard } from "./fulfillment-wizard";
 
 export type OrderPaymentStatus = import("../create/_components/data").OrderPaymentStatus;
 export type OrderFulfillmentStatus = import("../create/_components/data").OrderFulfillmentStatus;
@@ -59,6 +59,7 @@ export type OrderTableItem = {
   fulfillmentStatus: OrderFulfillmentStatus;
   id: string;
   itemCount: number;
+  fulfillmentItems?: Array<{ id: string; product: string; remaining: number }>;
   orderNumber: string;
   orderedAt: string;
   paymentStatus: OrderPaymentStatus;
@@ -209,22 +210,6 @@ function matchesFilter(order: OrderTableItem, filter: OrderFilter) {
   return true;
 }
 
-function getSearchText(order: OrderTableItem) {
-  return [
-    order.orderNumber,
-    order.customerName,
-    order.paymentStatus,
-    order.fulfillmentStatus,
-    order.returnNumber,
-    order.returnRefundStatus,
-    getReturnBadgeLabel(order),
-    formatCurrency(order.total),
-    formatOrderDate(order.orderedAt),
-  ]
-    .join(" ")
-    .toLowerCase();
-}
-
 function shouldIgnoreRowClick(target: EventTarget | null) {
   return target instanceof HTMLElement
     ? !!target.closest("a, button, input, label, select, textarea, [data-row-click-ignore]")
@@ -241,51 +226,54 @@ function OrderActions({
   order: OrderTableItem;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = React.useTransition();
+  const [fulfillmentOpen, setFulfillmentOpen] = React.useState(false);
   const returnHref = `/dashboard/orders/${order.id}/return`;
 
-  function updateStatus(statuses: Parameters<typeof updateOrderStatusesAction>[1], successMessage: string) {
-    startTransition(async () => {
-      try {
-        const result = await updateOrderStatusesAction(order.id, statuses, order.version);
-        toast.success(result.message || successMessage);
-        router.refresh();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Order could not be updated.");
-      }
-    });
-  }
-
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          aria-label={`Open ${order.orderNumber} actions`}
-        >
-          <MoreHorizontal className="size-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-44" data-row-click-ignore>
-        <DropdownMenuItem
-          disabled={
-            !canUpdate || isPending || order.orderStatus !== "Active" || order.fulfillmentStatus === "Fulfilled"
-          }
-          onSelect={() => updateStatus({ fulfillmentStatus: "Fulfilled" }, "Order marked fulfilled.")}
-        >
-          <PackageCheck className="size-4" />
-          Mark fulfilled{canUpdate ? "" : " (unavailable)"}
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled={!canManageReturns} onSelect={() => router.push(returnHref)}>
-          <RotateCcw className="size-4" />
-          {order.returnNumber ? "View return/refund" : "Start return/refund"}
-          {canManageReturns ? "" : " (unavailable)"}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={`Open ${order.orderNumber} actions`}
+          >
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44" data-row-click-ignore>
+          <DropdownMenuItem
+            disabled={
+              !canUpdate ||
+              order.orderStatus !== "Active" ||
+              order.fulfillmentStatus === "Fulfilled" ||
+              Boolean(order.returnNumber)
+            }
+            onSelect={() => setFulfillmentOpen(true)}
+          >
+            <PackageCheck className="size-4" />
+            Record fulfillment{canUpdate ? "" : " (unavailable)"}
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={!canManageReturns} onSelect={() => router.push(returnHref)}>
+            <RotateCcw className="size-4" />
+            {order.returnNumber ? "View return/refund" : "Start return/refund"}
+            {canManageReturns ? "" : " (unavailable)"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <FulfillmentWizard
+        orderId={order.id}
+        open={fulfillmentOpen}
+        onOpenChange={setFulfillmentOpen}
+        initialOrder={
+          order.fulfillmentItems
+            ? { id: order.id, version: order.version, orderNumber: order.orderNumber, items: order.fulfillmentItems }
+            : undefined
+        }
+      />
+    </>
   );
 }
 
@@ -347,25 +335,25 @@ export function OrdersTable({
   canUpdate = true,
   exportSlotId,
   orders,
+  query,
 }: {
   canExport?: boolean;
   canManageReturns?: boolean;
   canUpdate?: boolean;
   exportSlotId?: string;
   orders: OrderTableItem[];
+  query: string;
 }) {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = React.useState<OrderFilter>("all");
   const [pageIndex, setPageIndex] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(20);
-  const [searchQuery, setSearchQuery] = React.useState("");
+  const [searchQuery, setSearchQuery] = useCommerceSearch("/dashboard/orders", query);
   const [sortValue, setSortValue] = React.useState<OrderSort>("newest");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredOrders = React.useMemo(() => {
-    const visibleOrders = orders
-      .filter((order) => matchesFilter(order, activeFilter))
-      .filter((order) => (normalizedQuery ? getSearchText(order).includes(normalizedQuery) : true));
+    const visibleOrders = orders.filter((order) => matchesFilter(order, activeFilter));
 
     return [...visibleOrders].sort((left, right) => {
       const leftTime = new Date(left.orderedAt).getTime();
@@ -392,7 +380,7 @@ export function OrdersTable({
       }
       return rightTime - leftTime;
     });
-  }, [activeFilter, normalizedQuery, orders, sortValue]);
+  }, [activeFilter, orders, sortValue]);
   const pageCount = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const safePageIndex = Math.min(pageIndex, pageCount - 1);
   const paginatedOrders = filteredOrders.slice(safePageIndex * pageSize, safePageIndex * pageSize + pageSize);
@@ -487,6 +475,7 @@ export function OrdersTable({
                 value={searchQuery}
                 onChange={(event) => updateSearch(event.target.value)}
                 placeholder="Search orders..."
+                maxLength={200}
               />
             </div>
             <div className="md:hidden">

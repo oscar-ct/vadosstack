@@ -79,6 +79,7 @@ export const PERMISSION_GROUPS = [
       { key: "orders.view", label: "View orders" },
       { key: "orders.create", label: "Create orders" },
       { key: "orders.update", label: "Edit orders" },
+      { key: "orders.prices.override", label: "Override inventory prices on orders" },
       { key: "orders.delete", label: "Delete orders" },
       { key: "orders.returns.manage", label: "Manage returns" },
       { key: "orders.payments.manage", label: "Record external order payments and refunds" },
@@ -173,7 +174,8 @@ export const DEFAULT_ROLE_TEMPLATES = [
       (permission) =>
         permission !== "roles.manage" &&
         permission !== "email.account.manage" &&
-        permission !== "settings.branding.manage",
+        permission !== "settings.branding.manage" &&
+        permission !== "orders.prices.override",
     ),
   },
   {

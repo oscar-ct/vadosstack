@@ -8,6 +8,7 @@ import { clearCurrentSession } from "@/lib/auth";
 import { getCurrentPrincipal, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
 import { updateWorkspaceNameAndSlug } from "@/lib/authorization/workspace-slug";
+import { taxRateSchema } from "@/lib/commerce/validation";
 import { escapeHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
 import {
@@ -91,6 +92,10 @@ const generalEmailSchema = z.object({
 });
 
 const companySettingsSchema = z.object({
+  defaultOrderTaxRate: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() ? Number(value) : value),
+    taxRateSchema,
+  ),
   companyName: z.string().trim().min(1, "Company name is required.").max(120, "Company name is too long."),
   companyAddress: z.string().trim().max(300, "Company address is too long.").optional(),
   companyEmail: z
@@ -483,6 +488,7 @@ export async function updateCompanySettingsAction(
     companyPhone: formData.get("companyPhone"),
     estimateValidDays: formData.get("estimateValidDays"),
     invoiceDueDays: formData.get("invoiceDueDays"),
+    defaultOrderTaxRate: formData.get("defaultOrderTaxRate"),
     workspaceMode: formData.get("workspaceMode"),
     deleteLogo: formData.get("deleteLogo"),
   });
@@ -546,6 +552,7 @@ export async function updateCompanySettingsAction(
       companyPhone: emptyToNull(parsed.data.companyPhone),
       estimateValidDays: parsed.data.estimateValidDays,
       invoiceDueDays: parsed.data.invoiceDueDays,
+      defaultOrderTaxRate: parsed.data.defaultOrderTaxRate,
       workspaceMode: parsed.data.workspaceMode,
       ...(parsed.data.deleteLogo
         ? { companyLogoDataUrl: null, companyLogoKey: null, companyLogoType: null }

@@ -47,7 +47,7 @@ function addMonths(value: Date, months: number) {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + months, value.getUTCDate()));
 }
 
-function getPeriodRange(period: CommercePulsePeriod, now = new Date()) {
+export function getPeriodRange(period: CommercePulsePeriod, now = new Date()) {
   const today = startOfDay(now);
   const thisMonthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
 

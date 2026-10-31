@@ -2,7 +2,15 @@
 
 import * as React from "react";
 
-import { ArrowRight, ArrowRightLeft, ClipboardCheck, PackageMinus, PackagePlus } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowRightLeft,
+  ClipboardCheck,
+  PackageMinus,
+  PackagePlus,
+  SearchX,
+  ShieldAlert,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -42,6 +50,22 @@ const actions = {
     note: "e.g. Two units damaged in storage",
     icon: PackageMinus,
   },
+  Lost: {
+    title: "Remove lost stock",
+    description: "Record missing inventory",
+    quantityLabel: "Units to remove",
+    help: "Remove units that cannot be located after checking inventory.",
+    note: "e.g. Missing during the October warehouse count",
+    icon: SearchX,
+  },
+  Stolen: {
+    title: "Remove stolen stock",
+    description: "Record inventory theft",
+    quantityLabel: "Units to remove",
+    help: "Remove units believed or confirmed to have been stolen.",
+    note: "e.g. Incident report or other theft reference",
+    icon: ShieldAlert,
+  },
   Transfer: {
     title: "Move stock",
     description: "Move units to another location",
@@ -52,7 +76,7 @@ const actions = {
   },
 } as const;
 
-const kinds: StockAdjustmentKind[] = ["Receive", "Count", "Damage", "Transfer"];
+const kinds: StockAdjustmentKind[] = ["Receive", "Count", "Damage", "Lost", "Stolen", "Transfer"];
 
 type TransferDestination = Awaited<ReturnType<typeof getStockTransferLocationsAction>>[number];
 type AdjustmentPayload = Omit<Parameters<typeof adjustInventoryStockAction>[0], "submissionKey">;
@@ -227,6 +251,8 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
         Receive: "Stock added",
         Count: "Count saved",
         Damage: "Damaged stock removed",
+        Lost: "Lost stock removed",
+        Stolen: "Stolen stock removed",
         Transfer: "Stock moved",
       }[review.payload.kind];
       const message = `${resultLabel} for ${review.product}.`;
@@ -256,9 +282,9 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
       ? `Set available stock to ${review.payload.quantity.toLocaleString()}`
       : review.payload.kind === "Receive"
         ? `Add ${review.payload.quantity.toLocaleString()} ${unitWord}`
-        : review.payload.kind === "Damage"
-          ? `Remove ${review.payload.quantity.toLocaleString()} damaged ${unitWord}`
-          : `Move ${review.payload.quantity.toLocaleString()} ${unitWord}`
+        : review.payload.kind === "Transfer"
+          ? `Move ${review.payload.quantity.toLocaleString()} ${unitWord}`
+          : `Remove ${review.payload.quantity.toLocaleString()} ${review.payload.kind.toLowerCase()} ${unitWord}`
     : "Confirm adjustment";
 
   return (

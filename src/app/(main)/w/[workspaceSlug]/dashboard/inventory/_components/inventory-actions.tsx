@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Boxes, MapPin, MoreHorizontal, Plus, Search, Settings, Tags, Trash2 } from "lucide-react";
+import { Boxes, MapPin, MoreHorizontal, Plus, Settings, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -38,16 +38,12 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import type { InventoryOptionSummary } from "@/lib/commerce/inventory-options";
 
 import type { InventoryStockRules } from "../_lib/inventory-data";
 import type { InventoryActionState } from "../actions";
-import {
-  archiveInventoryItemAction,
-  createInventoryListItemAction,
-  deleteInventoryListItemAction,
-  saveInventoryItemAction,
-  saveInventoryStockRulesAction,
-} from "../actions";
+import { archiveInventoryItemAction, saveInventoryItemAction, saveInventoryStockRulesAction } from "../actions";
+import { InventoryOptionManager } from "./inventory-option-manager";
 import {
   InventoryRecordHeader,
   InventoryRecordSection,
@@ -94,8 +90,8 @@ type InventoryItemDialogProps = {
 };
 
 type InventorySettingsMenuProps = {
-  categories: string[];
-  locations: string[];
+  categories: InventoryOptionSummary[];
+  locations: InventoryOptionSummary[];
   stockRules: InventoryStockRules;
 };
 
@@ -450,7 +446,7 @@ export function InventoryItemForm({
                     placeholder="Supplier"
                   />
                 </div>
-                <div className="grid grid-cols-2 items-start gap-4">
+                <div className="grid items-start gap-4">
                   <div
                     className="flex min-h-16 items-center justify-between gap-3 rounded-md px-3 py-2"
                     data-inventory-field="taxable"
@@ -458,22 +454,9 @@ export function InventoryItemForm({
                     <input type="hidden" name="taxable" value={isTaxable ? "true" : "false"} />
                     <div className="grid gap-0.5">
                       <Label htmlFor={`inventory-${mode}-taxable`}>Taxable</Label>
+                      <p className="text-muted-foreground text-xs">Uses the sales tax rate set on the order.</p>
                     </div>
                     <Switch id={`inventory-${mode}-taxable`} checked={isTaxable} onCheckedChange={setIsTaxable} />
-                  </div>
-                  <div className="grid min-w-0 gap-2" data-inventory-field="taxRate">
-                    <Label htmlFor={`inventory-${mode}-tax-rate`}>Tax rate</Label>
-                    <Input
-                      id={`inventory-${mode}-tax-rate`}
-                      name="taxRate"
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      defaultValue={item?.taxRate ?? "8.25"}
-                      disabled={!isTaxable}
-                      placeholder="8.25"
-                    />
                   </div>
                 </div>
               </InventoryRecordSection>
@@ -621,204 +604,6 @@ export function InventoryItemDialog({
         />
       </DialogContent>
     </Dialog>
-  );
-}
-
-function ManageListDeleteButton({
-  itemLabel,
-  itemType,
-  onDeleted,
-}: {
-  itemLabel: string;
-  itemType: "category" | "location";
-  onDeleted: (message: string) => void;
-}) {
-  const router = useRouter();
-  const [isPending, startTransition] = React.useTransition();
-
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className="size-8 text-muted-foreground hover:text-red-600"
-      disabled={isPending}
-      onClick={() => {
-        startTransition(async () => {
-          const result = await deleteInventoryListItemAction(itemType, itemLabel);
-
-          if (result.success) {
-            router.refresh();
-            toast.success(result.message || `${itemLabel} deleted.`);
-          }
-
-          onDeleted(result.message);
-        });
-      }}
-    >
-      <Trash2 className="size-4" />
-      <span className="sr-only">Delete {itemLabel}</span>
-    </Button>
-  );
-}
-
-function InventoryListManagerPanel({
-  addLabel,
-  description,
-  emptyLabel,
-  itemType,
-  items,
-  open,
-  placeholder,
-  searchPlaceholder,
-  title,
-}: {
-  addLabel: string;
-  description: string;
-  emptyLabel: string;
-  itemType: "category" | "location";
-  items: string[];
-  open: boolean;
-  placeholder: string;
-  searchPlaceholder: string;
-  title: string;
-}) {
-  const [draftItems, setDraftItems] = React.useState(items);
-  const [newItem, setNewItem] = React.useState("");
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const router = useRouter();
-  const action = createInventoryListItemAction.bind(null, itemType);
-  const [state, formAction, isPending] = React.useActionState(action, initialInventoryActionState);
-  const [actionMessage, setActionMessage] = React.useState("");
-  const [actionSucceeded, setActionSucceeded] = React.useState(false);
-  const [deleteMessage, setDeleteMessage] = React.useState("");
-  const submittedItemRef = React.useRef("");
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredItems = draftItems.filter((item) => item.toLowerCase().includes(normalizedQuery));
-
-  React.useEffect(() => {
-    if (!open) return;
-
-    setActionMessage("");
-    setActionSucceeded(false);
-    setDeleteMessage("");
-    setDraftItems(items);
-  }, [items, open]);
-
-  React.useEffect(() => {
-    const currentState = state;
-
-    if (currentState.message && !currentState.success) {
-      setActionMessage(currentState.message);
-      setActionSucceeded(false);
-      return;
-    }
-
-    if (!currentState.success) return;
-
-    const addedItem = submittedItemRef.current;
-
-    setActionMessage(currentState.message || (itemType === "category" ? "Category added." : "Location added."));
-    setActionSucceeded(true);
-    toast.success(currentState.message || (itemType === "category" ? "Category added." : "Location added."));
-    if (addedItem) {
-      setDraftItems((currentItems) => {
-        if (currentItems.some((currentItem) => currentItem.toLowerCase() === addedItem.toLowerCase())) {
-          return currentItems;
-        }
-
-        return [...currentItems, addedItem].sort((left, right) => left.localeCompare(right));
-      });
-    }
-    submittedItemRef.current = "";
-    setNewItem("");
-    router.refresh();
-  }, [itemType, router, state]);
-
-  return (
-    <section className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
-      <div className="grid gap-1">
-        <h3 className="font-medium text-sm">{title}</h3>
-        <p className="text-muted-foreground text-sm">{description}</p>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <form
-          className="flex flex-col gap-2 sm:flex-row"
-          action={(formData) => {
-            submittedItemRef.current = newItem.trim();
-            formAction(formData);
-          }}
-        >
-          <div className="grid min-w-0 flex-1 gap-2">
-            <Label htmlFor={`inventory-new-${itemType}`}>{addLabel}</Label>
-            <Input
-              id={`inventory-new-${itemType}`}
-              name="name"
-              value={newItem}
-              onChange={(event) => setNewItem(event.target.value)}
-              placeholder={placeholder}
-            />
-          </div>
-          <Button type="submit" className="sm:self-end" disabled={isPending}>
-            <Plus />
-            {isPending ? "Adding..." : "Add"}
-          </Button>
-        </form>
-        {actionMessage ? (
-          <p className={actionSucceeded ? "text-muted-foreground text-sm" : "text-destructive text-sm"}>
-            {actionMessage}
-          </p>
-        ) : null}
-        {deleteMessage ? (
-          <p
-            className={deleteMessage.includes("deleted") ? "text-muted-foreground text-sm" : "text-destructive text-sm"}
-          >
-            {deleteMessage}
-          </p>
-        ) : null}
-
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="pl-8"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder={searchPlaceholder}
-          />
-        </div>
-
-        <div className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto rounded-lg border p-2">
-          {filteredItems.length ? (
-            filteredItems.map((item) => (
-              <div
-                key={item}
-                className="flex min-h-11 items-center justify-between gap-3 rounded-md px-3 py-2 hover:bg-muted/50"
-              >
-                <div className="min-w-0">
-                  <div className="truncate font-medium text-sm">{item}</div>
-                  <div className="text-muted-foreground text-xs">Inventory {itemType}</div>
-                </div>
-                <ManageListDeleteButton
-                  itemLabel={item}
-                  itemType={itemType}
-                  onDeleted={(message) => {
-                    setDeleteMessage(message);
-                    if (message.includes("deleted")) {
-                      setDraftItems((currentItems) => currentItems.filter((currentItem) => currentItem !== item));
-                    }
-                  }}
-                />
-              </div>
-            ))
-          ) : (
-            <div className="rounded-md border border-dashed p-6 text-center text-muted-foreground text-sm">
-              {emptyLabel}
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -999,31 +784,11 @@ export function InventorySettingsMenu({ categories, locations, stockRules }: Inv
           </TabsList>
 
           <TabsContent value="categories" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
-            <InventoryListManagerPanel
-              addLabel="New category"
-              description="Add, search, and remove inventory categories."
-              emptyLabel="No categories found."
-              itemType="category"
-              items={categories}
-              open={open}
-              placeholder="Accessories"
-              searchPlaceholder="Search categories..."
-              title="Categories"
-            />
+            <InventoryOptionManager kind="category" items={categories} open={open} />
           </TabsContent>
 
           <TabsContent value="locations" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
-            <InventoryListManagerPanel
-              addLabel="New location"
-              description="Add, search, and remove inventory storage locations."
-              emptyLabel="No locations found."
-              itemType="location"
-              items={locations}
-              open={open}
-              placeholder="Warehouse D"
-              searchPlaceholder="Search locations..."
-              title="Locations"
-            />
+            <InventoryOptionManager kind="location" items={locations} open={open} />
           </TabsContent>
 
           <TabsContent value="stock-rules" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">

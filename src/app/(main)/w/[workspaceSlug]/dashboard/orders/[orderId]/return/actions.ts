@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
-import { getOrderBalance, requireVersion } from "@/lib/commerce/ledger";
+import { getOrderBalance, refreshOrderPaymentStatus, requireVersion } from "@/lib/commerce/ledger";
 import { allocateCents, cents, money, prorate } from "@/lib/commerce/money";
 import { adjustStock, CommerceError, commerceTransaction, lockOrder } from "@/lib/commerce/transaction";
 import {
@@ -105,6 +105,7 @@ const returnInputSchema = z
     originalSubtotal: amountSchema,
     originalTaxAmount: amountSchema,
     originalTotal: amountSchema,
+    paymentId: z.string().max(200),
     refundAmount: amountSchema,
     refundExplanation: z.string().max(80),
     refundMethod: z.string().max(100),
@@ -171,7 +172,11 @@ export async function saveReturnRefundAction(
         throw new ReturnActionError("Saved returns are final. Start another return for additional items.");
       const order = await tx.order.findFirstOrThrow({
         where: { id: orderId, ownerId: workspaceId },
-        include: { items: true, returns: { include: { items: true } } },
+        include: {
+          items: true,
+          payments: { include: { refunds: { where: { status: "succeeded" } } } },
+          returns: { include: { items: true } },
+        },
       });
       requireVersion(order.version, input.orderVersion);
       if (order.orderStatus !== "Active") throw new ReturnActionError("Cancelled orders cannot be returned.");
@@ -232,6 +237,14 @@ export async function saveReturnRefundAction(
         throw new ReturnActionError(
           "Requested refund exceeds the paid balance available after previous returns and refunds.",
         );
+      const payment = refundAmount ? order.payments.find((entry) => entry.id === input.paymentId) : undefined;
+      if (refundAmount && !can(authorization.membership, "orders.payments.manage"))
+        throw new ReturnActionError("You do not have permission to record the completed refund.");
+      if (refundAmount && !payment) throw new ReturnActionError("Choose the original payment for this refund.");
+      if (refundAmount && !input.refundMethod.trim()) throw new ReturnActionError("Refund method is required.");
+      const paymentRefunded = payment ? payment.refunds.reduce((sum, refund) => sum + cents(refund.amount), 0) : 0;
+      if (payment && refundAmount > cents(payment.amount) - paymentRefunded)
+        throw new ReturnActionError("Refund exceeds the selected payment's refundable balance.");
       const refundStatus =
         input.refundStatus === "No Refund" || input.refundStatus === "Other"
           ? input.refundStatus
@@ -259,11 +272,10 @@ export async function saveReturnRefundAction(
           reason: optionalString(input.reason),
           refundAmount: money(refundAmount),
           refundStatus,
-          refundState: refundAmount ? "requested" : "not_required",
+          refundState: refundAmount ? "succeeded" : "not_required",
           refundExplanation: optionalString(input.refundExplanation),
-          // Payment details are recorded only after an external refund actually completes.
-          refundMethod: null,
-          refundReference: null,
+          refundMethod: refundAmount ? input.refundMethod.trim() : null,
+          refundReference: refundAmount ? optionalString(input.refundReference) : null,
           restockItems: input.restockItems,
         },
       });
@@ -303,10 +315,38 @@ export async function saveReturnRefundAction(
             actorUserId: authorization.principal.user.id,
           });
       }
+      if (payment && refundAmount) {
+        const refund = await tx.orderRefund.create({
+          data: {
+            ownerId: workspaceId,
+            orderId,
+            paymentId: payment.id,
+            orderReturnId: returnRecord.id,
+            amount: money(refundAmount),
+            method: input.refundMethod.trim(),
+            reference: optionalString(input.refundReference),
+            idempotencyKey: input.submissionKey,
+            actorUserId: authorization.principal.user.id,
+          },
+        });
+        await recordAuthorizationAuditEvent(
+          {
+            workspaceId,
+            actorUserId: authorization.principal.user.id,
+            membershipId: authorization.membership.id,
+            action: "order.refund.record",
+            targetType: "OrderRefund",
+            targetId: refund.id,
+            metadata: { orderId, amount: money(refundAmount), orderReturnId: returnRecord.id },
+          },
+          tx,
+        );
+      }
       await tx.order.update({
         where: { id: orderId },
         data: { version: { increment: 1 }, reservationExpiresAt: null },
       });
+      await refreshOrderPaymentStatus(tx, workspaceId, orderId);
       await recordAuthorizationAuditEvent(
         {
           workspaceId,
@@ -324,6 +364,7 @@ export async function saveReturnRefundAction(
     for (const path of [
       "/dashboard/orders",
       "/dashboard/inventory",
+      "/dashboard/inventory-analytics",
       "/dashboard/commerce-pulse",
       `/dashboard/orders/${orderId}/edit`,
       `/dashboard/orders/${orderId}/return`,

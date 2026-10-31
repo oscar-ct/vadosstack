@@ -1,8 +1,4 @@
-import { RotateCcw } from "lucide-react";
-
 import { AuthRequiredState } from "@/components/auth-required-state";
-import { Button } from "@/components/ui/button";
-import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { getRenderedDocumentEmailTemplates } from "@/lib/email-templates";
@@ -39,28 +35,17 @@ export default async function Page({ params }: PageProps) {
   const canManageGmailAccount = can(authorization.membership, "email.account.manage");
 
   const { orderId } = await params;
-  const [order, customers, inventoryItems, googleMailAccount, documentData, orderReturn, workspace] = await Promise.all(
-    [
-      getOrderFormValues(workspaceId, orderId),
-      can(authorization.membership, "customers.view") ? getOrderCustomers(workspaceId) : [],
-      can(authorization.membership, "inventory.view") ? getOrderInventoryItems(workspaceId) : [],
-      canSend ? prisma.googleMailAccount.findUnique({ where: { workspaceId } }) : null,
-      getOrderDocumentData(workspaceId, orderId),
-      prisma.orderReturn.findFirst({
-        where: {
-          orderId,
-          ownerId: workspaceId,
-        },
-        select: {
-          returnNumber: true,
-        },
-      }),
-      prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        include: { legacyOwner: { select: { email: true } } },
-      }),
-    ],
-  );
+  const [order, customers, inventoryItems, googleMailAccount, documentData, workspace] = await Promise.all([
+    getOrderFormValues(workspaceId, orderId),
+    can(authorization.membership, "customers.view") ? getOrderCustomers(workspaceId) : [],
+    can(authorization.membership, "inventory.view") ? getOrderInventoryItems(workspaceId) : [],
+    canSend ? prisma.googleMailAccount.findUnique({ where: { workspaceId } }) : null,
+    getOrderDocumentData(workspaceId, orderId),
+    prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      include: { legacyOwner: { select: { email: true } } },
+    }),
+  ]);
 
   if (!order || !documentData || !workspace) {
     return (
@@ -77,7 +62,7 @@ export default async function Page({ params }: PageProps) {
       items: true,
       payments: { orderBy: { paidAt: "asc" } },
       refunds: { where: { status: "succeeded" }, orderBy: { refundedAt: "asc" } },
-      shipments: { orderBy: { shippedAt: "asc" } },
+      shipments: { include: { reversal: true }, orderBy: { shippedAt: "asc" } },
       returns: { orderBy: { createdAt: "asc" } },
     },
   });
@@ -113,96 +98,91 @@ export default async function Page({ params }: PageProps) {
     : [];
 
   return (
-    <div className="grid gap-5">
-      <OrderOperations
-        canManageMoney={can(authorization.membership, "orders.payments.manage")}
-        canShip={canEdit}
-        canManageReturns={canManageReturns}
-        order={{
-          id: operations.id,
-          version: operations.version,
-          total: Number(operations.total),
-          orderStatus: operations.orderStatus,
-          reservationExpiresAt: operations.reservationExpiresAt?.toISOString() ?? null,
-          items: operations.items.map((item) => ({
-            id: item.id,
-            product: item.product,
-            quantity: item.quantity,
-            shippedQuantity: item.shippedQuantity,
-          })),
-          payments: operations.payments.map((entry) => ({
-            id: entry.id,
-            amount: Number(entry.amount),
-            method: entry.method,
-            reference: entry.reference,
-            source: entry.source,
-          })),
-          refunds: operations.refunds.map((entry) => ({
-            id: entry.id,
-            paymentId: entry.paymentId,
-            orderReturnId: entry.orderReturnId,
-            amount: Number(entry.amount),
-            method: entry.method,
-            reference: entry.reference,
-          })),
-          returns: operations.returns.map((entry) => ({
-            id: entry.id,
-            returnNumber: entry.returnNumber,
-            refundAmount: Number(entry.refundAmount),
-            refundState: entry.refundState,
-          })),
-          shipments: operations.shipments.map((entry) => ({
-            id: entry.id,
-            carrier: entry.carrier,
-            trackingNumber: entry.trackingNumber,
-            shippedAt: entry.shippedAt.toISOString(),
-          })),
-        }}
-      />
-      <OrderWorkspace
-        key={operations.version}
-        canEdit={canEdit && operations.orderStatus === "Active"}
-        company={company}
-        customers={customers}
-        defaultValues={order}
-        description="Review this order in read-only mode. Unlock it when you need to make changes."
-        headerActions={
-          canManageReturns ? (
-            <Button asChild variant={orderReturn ? "default" : "outline"} size="sm" className="min-w-32 justify-center">
-              <Link href={`/dashboard/orders/${orderId}/return`}>
-                <RotateCcw />
-                {orderReturn ? `View ${orderReturn.returnNumber}` : "Start return/refund"}
-              </Link>
-            </Button>
-          ) : null
-        }
-        inventoryItems={inventoryItems}
-        mode="edit"
-        orderId={orderId}
-        previewActions={
-          canSend ? (
-            <OrderActions
-              action={emailOrderAction}
-              canManageGmailAccount={canManageGmailAccount}
-              companyName={company.name}
-              customerEmail={order.customerEmail}
-              customerName={order.customerName}
-              fulfillmentStatus={order.fulfillmentStatus}
-              gmailConnected={Boolean(googleMailAccount)}
-              gmailSenderEmail={googleMailAccount?.email}
-              orderDate={documentData.orderDate}
-              orderId={orderId}
-              orderNumber={order.orderNumber}
-              orderTitle={orderTitle}
-              orderTotal={documentData.total}
-              paymentStatus={order.paymentStatus}
-              returnTo={`/dashboard/orders/${orderId}/edit`}
-              templates={templates}
-            />
-          ) : null
-        }
-        title={`Order ${order.orderNumber}`}
-      />
-    </div>
+    <OrderWorkspace
+      key={operations.version}
+      operations={
+        <OrderOperations
+          canManageMoney={can(authorization.membership, "orders.payments.manage")}
+          canShip={canEdit}
+          canManageReturns={canManageReturns}
+          order={{
+            id: operations.id,
+            orderNumber: operations.orderNumber,
+            version: operations.version,
+            total: Number(operations.total),
+            orderStatus: operations.orderStatus,
+            reservationExpiresAt: operations.reservationExpiresAt?.toISOString() ?? null,
+            items: operations.items.map((item) => ({
+              id: item.id,
+              product: item.product,
+              quantity: item.quantity,
+              shippedQuantity: item.shippedQuantity,
+            })),
+            payments: operations.payments.map((entry) => ({
+              id: entry.id,
+              amount: Number(entry.amount),
+              method: entry.method,
+              reference: entry.reference,
+              source: entry.source,
+            })),
+            refunds: operations.refunds.map((entry) => ({
+              id: entry.id,
+              paymentId: entry.paymentId,
+              orderReturnId: entry.orderReturnId,
+              amount: Number(entry.amount),
+              method: entry.method,
+              reference: entry.reference,
+            })),
+            returns: operations.returns.map((entry) => ({
+              id: entry.id,
+              returnNumber: entry.returnNumber,
+              refundAmount: Number(entry.refundAmount),
+              refundState: entry.refundState,
+            })),
+            shipments: operations.shipments.map((entry) => ({
+              id: entry.id,
+              carrier: entry.carrier,
+              trackingNumber: entry.trackingNumber,
+              shippedAt: entry.shippedAt.toISOString(),
+              reversal: entry.reversal
+                ? { reason: entry.reversal.reason, reversedAt: entry.reversal.reversedAt.toISOString() }
+                : null,
+            })),
+          }}
+        />
+      }
+      canEdit={canEdit && operations.orderStatus === "Active"}
+      canOverridePrices={can(authorization.membership, "orders.prices.override")}
+      company={company}
+      customers={customers}
+      defaultValues={order}
+      description="Review this order in read-only mode. Unlock it when you need to make changes."
+      inventoryItems={inventoryItems}
+      mode="edit"
+      orderId={orderId}
+      previewActions={
+        canSend ? (
+          <OrderActions
+            action={emailOrderAction}
+            canManageGmailAccount={canManageGmailAccount}
+            companyName={company.name}
+            customerEmail={order.customerEmail}
+            customerName={order.customerName}
+            fulfillmentStatus={order.fulfillmentStatus}
+            gmailConnected={Boolean(googleMailAccount)}
+            gmailSenderEmail={googleMailAccount?.email}
+            orderDate={documentData.orderDate}
+            orderId={orderId}
+            orderNumber={order.orderNumber}
+            orderTitle={orderTitle}
+            orderTotal={documentData.total}
+            paymentStatus={order.paymentStatus}
+            returnTo={`/dashboard/orders/${orderId}/edit`}
+            templates={templates}
+          />
+        ) : null
+      }
+      title={`Order ${order.orderNumber}`}
+    />
   );
 }

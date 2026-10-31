@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { useSearchParams } from "next/navigation";
+
 import {
   ChevronLeft,
   ChevronRight,
@@ -46,6 +48,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useCommerceSearch } from "@/components/use-commerce-search";
+import { useWorkspaceRouter } from "@/components/workspace-path-provider";
+import type { InventoryVisibility } from "@/lib/commerce/inventory-filter";
 import type { InventoryStockOverview } from "@/lib/commerce/inventory-summary";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -173,7 +178,6 @@ function getInventoryExportColumns(stockRules: InventoryStockRules): CsvColumn<I
     { header: "Unit price", value: (item) => item.unitPrice },
     { header: "Unit", value: (item) => item.unit },
     { header: "Taxable", value: (item) => (item.taxable ? "Yes" : "No") },
-    { header: "Tax rate", value: (item) => (item.taxable ? `${item.taxRate.toFixed(2)}%` : "") },
     { header: "Item status", value: (item) => item.itemStatus },
     { header: "Vendor", value: (item) => item.vendor },
     { header: "Value", value: (item) => getInventoryValue(item).toFixed(2) },
@@ -216,12 +220,6 @@ function getStockClassName(status: InventoryStatus) {
   if (status === "Out of Stock" || status === "Critical") return "text-red-600";
   if (status === "Low Stock") return "text-amber-600";
   return "text-foreground";
-}
-
-function getSearchText(item: InventoryItem, stockRules: InventoryStockRules) {
-  return [item.sku, item.product, item.category, item.location, getInventoryStatus(item, stockRules)]
-    .join(" ")
-    .toLowerCase();
 }
 
 function sortInventoryItems(items: InventoryItem[], sortValue: SortValue, stockRules: InventoryStockRules) {
@@ -300,10 +298,6 @@ function InventoryItemViewFields({ item }: { item: InventoryItem }) {
                 <InventoryRecordValue label="Supplier" value={item.vendor} />
                 <div className="grid grid-cols-2 gap-4">
                   <InventoryRecordValue label="Taxable" value={item.taxable ? "Yes" : "No"} />
-                  <InventoryRecordValue
-                    label="Tax rate"
-                    value={item.taxable ? `${item.taxRate.toFixed(2)}%` : "Not applicable"}
-                  />
                 </div>
               </dl>
             </InventoryRecordSection>
@@ -431,6 +425,23 @@ function InventoryItemDetailsDialog({
   );
 }
 
+function InventoryProductMeta({ item }: { item: InventoryItem }) {
+  return (
+    <div className="truncate text-muted-foreground text-xs">
+      {item.sku ? (
+        <>
+          <span title={item.sku}>
+            <span className="sr-only">SKU: {item.sku}</span>
+            <span aria-hidden="true">{item.sku.length > 7 ? `${item.sku.slice(0, 7)}…` : item.sku}</span>
+          </span>
+          {" · "}
+        </>
+      ) : null}
+      {item.category}
+    </div>
+  );
+}
+
 function MobileInventoryCard({
   item,
   onView,
@@ -454,9 +465,7 @@ function MobileInventoryCard({
         <div className="relative flex min-w-0 flex-1 items-start gap-3">
           <div className="pointer-events-none min-w-0">
             <div className="truncate font-medium">{item.product}</div>
-            <div className="truncate text-muted-foreground text-xs">
-              {item.sku} · {item.category}
-            </div>
+            <InventoryProductMeta item={item} />
             {item.stockOverview && item.stockOverview.locations.length > 1 ? (
               <div className="mt-1 truncate text-muted-foreground text-xs">
                 {item.stockOverview.locations.length} locations · {item.stockOverview.totalAvailable} total available
@@ -501,7 +510,9 @@ export function InventoryTable({
   exportSlotId,
   items,
   locations = [],
+  query,
   stockRules = fallbackStockRules,
+  visibility,
 }: {
   canExport?: boolean;
   canManage?: boolean;
@@ -509,9 +520,13 @@ export function InventoryTable({
   exportSlotId?: string;
   items: InventoryItem[];
   locations?: string[];
+  query: string;
   stockRules?: InventoryStockRules;
+  visibility: InventoryVisibility;
 }) {
-  const [searchQuery, setSearchQuery] = React.useState("");
+  const router = useWorkspaceRouter();
+  const searchParams = useSearchParams();
+  const [searchQuery, setSearchQuery] = useCommerceSearch("/dashboard/inventory", query);
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [categoryFilter, setCategoryFilter] = React.useState("all");
   const [locationFilter, setLocationFilter] = React.useState("all");
@@ -541,13 +556,12 @@ export function InventoryTable({
   );
   const filteredItems = React.useMemo(() => {
     const filtered = items
-      .filter((item) => (normalizedQuery ? getSearchText(item, stockRules).includes(normalizedQuery) : true))
       .filter((item) => (statusFilter === "all" ? true : getInventoryStatus(item, stockRules) === statusFilter))
       .filter((item) => (categoryFilter === "all" ? true : item.category === categoryFilter))
       .filter((item) => (locationFilter === "all" ? true : item.location === locationFilter));
 
     return sortInventoryItems(filtered, sortValue, stockRules);
-  }, [categoryFilter, items, locationFilter, normalizedQuery, sortValue, statusFilter, stockRules]);
+  }, [categoryFilter, items, locationFilter, sortValue, statusFilter, stockRules]);
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const safePageIndex = Math.min(pageIndex, pageCount - 1);
   const paginatedItems = filteredItems.slice(safePageIndex * pageSize, safePageIndex * pageSize + pageSize);
@@ -620,6 +634,13 @@ export function InventoryTable({
     setPageIndex(0);
   }
 
+  function updateVisibility(value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("visibility", value);
+    params.delete("page");
+    router.push(`/dashboard/inventory?${params.toString()}`);
+  }
+
   function updateSort(value: SortValue) {
     setSortValue(value);
     setPageIndex(0);
@@ -679,6 +700,7 @@ export function InventoryTable({
               <Input
                 className="h-7 rounded-[min(var(--radius-md),12px)] pl-8"
                 placeholder="Search inventory..."
+                maxLength={200}
                 value={searchQuery}
                 onChange={(event) => updateSearch(event.target.value)}
               />
@@ -700,6 +722,19 @@ export function InventoryTable({
                     </DrawerDescription>
                   </DrawerHeader>
                   <DrawerBody className="grid gap-4 px-4 pb-1 landscape:gap-3">
+                    <div className="grid gap-2">
+                      <Label htmlFor="inventory-mobile-visibility">Records</Label>
+                      <Select value={visibility} onValueChange={updateVisibility}>
+                        <SelectTrigger id="inventory-mobile-visibility" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active records</SelectItem>
+                          <SelectItem value="archived">Archived records</SelectItem>
+                          <SelectItem value="all">All records</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="grid gap-2">
                       <Label htmlFor="inventory-mobile-status">Status</Label>
                       <Select value={statusFilter} onValueChange={updateStatusFilter}>
@@ -786,6 +821,24 @@ export function InventoryTable({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
+                    {visibility === "active"
+                      ? "Active records"
+                      : visibility === "archived"
+                        ? "Archived records"
+                        : "All records"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuRadioGroup value={visibility} onValueChange={updateVisibility}>
+                    <DropdownMenuRadioItem value="active">Active records</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="archived">Archived records</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="all">All records</DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
                     <PackageSearch />
                     Status
                   </Button>
@@ -845,16 +898,15 @@ export function InventoryTable({
         </div>
 
         <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
-          <Table className="min-w-[70rem] table-fixed">
+          <Table className="min-w-[62rem] table-fixed">
             <colgroup>
               <col className="w-[4%]" />
-              <col className="w-[15%]" />
-              <col className="w-[21%]" />
-              <col className="w-[6%]" />
-              <col className="w-[10%]" />
-              <col className="w-[10%]" />
-              <col className="w-[16%]" />
+              <col className="w-[26%]" />
+              <col className="w-[8%]" />
               <col className="w-[12%]" />
+              <col className="w-[12%]" />
+              <col className="w-[18%]" />
+              <col className="w-[14%]" />
               <col className="w-[6%]" />
             </colgroup>
             <TableHeader>
@@ -866,14 +918,7 @@ export function InventoryTable({
                     onCheckedChange={(value) => toggleVisibleItems(value === true)}
                   />
                 </TableHead>
-                <TableHead className="sticky top-12 z-20 w-[10rem] border-b bg-card">
-                  <SortableTableHeader
-                    direction={inventorySortDirection(sortValue, "sku-asc", "sku-desc")}
-                    label="SKU"
-                    onSort={() => updateSort(sortValue === "sku-asc" ? "sku-desc" : "sku-asc")}
-                  />
-                </TableHead>
-                <TableHead className="sticky top-12 z-20 min-w-[14rem] border-b bg-card">
+                <TableHead className="sticky top-12 z-20 min-w-[12rem] border-b bg-card">
                   <SortableTableHeader
                     direction={inventorySortDirection(sortValue, "product-asc", "product-desc")}
                     label="Product"
@@ -946,16 +991,13 @@ export function InventoryTable({
                           onCheckedChange={(value) => toggleItem(item.id, value === true)}
                         />
                       </TableCell>
-                      <TableCell className="overflow-hidden font-mono text-muted-foreground text-xs">
-                        <span className="block truncate" title={item.sku}>
-                          {item.sku || "—"}
-                        </span>
-                      </TableCell>
                       <TableCell>
                         <div className="truncate font-medium leading-normal" title={item.product}>
                           {item.product}
                         </div>
-                        <div className="mt-1 truncate text-muted-foreground text-xs">{item.category}</div>
+                        <div className="mt-1">
+                          <InventoryProductMeta item={item} />
+                        </div>
                         {item.stockOverview && item.stockOverview.locations.length > 1 ? (
                           <div className="mt-1 truncate text-muted-foreground text-xs">
                             {item.stockOverview.locations.length} locations · {item.stockOverview.totalAvailable} total
@@ -1001,7 +1043,7 @@ export function InventoryTable({
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center">
+                  <TableCell colSpan={8} className="h-24 text-center">
                     No results.
                   </TableCell>
                 </TableRow>

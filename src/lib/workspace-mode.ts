@@ -12,7 +12,12 @@ export function getWorkspaceHomePath(mode: WorkspaceMode) {
   return mode === "commerce" ? "/dashboard/commerce-pulse" : "/dashboard/overview";
 }
 
-const commercePaths = ["/dashboard/commerce-pulse", "/dashboard/orders", "/dashboard/inventory"];
+const commercePaths = [
+  "/dashboard/commerce-pulse",
+  "/dashboard/inventory-analytics",
+  "/dashboard/orders",
+  "/dashboard/inventory",
+];
 const servicePaths = [
   "/dashboard/overview",
   "/dashboard/calendar",
@@ -56,7 +61,7 @@ export function getWorkspaceModeLabel(mode: WorkspaceMode) {
 }
 
 export function getWorkspaceModeDescription(mode: WorkspaceMode) {
-  if (mode === "commerce") return "Show orders, inventory, Commerce Analytics, employees, email, and admin tools.";
+  if (mode === "commerce") return "Show orders, inventory, Commerce Overview, employees, email, and admin tools.";
   if (mode === "service") return "Show dashboard, customers, jobs, estimates, invoices, email, and admin tools.";
   return "Show service business and e-commerce tools together.";
 }

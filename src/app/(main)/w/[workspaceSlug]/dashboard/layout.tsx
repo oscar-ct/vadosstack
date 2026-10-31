@@ -334,6 +334,7 @@ export default async function Layout({
                     email: currentUser.email,
                     companyLogoSrc,
                     invoiceDueDays: activeWorkspace.invoiceDueDays,
+                    defaultOrderTaxRate: Number(activeWorkspace.defaultOrderTaxRate),
                     workspaceMode: activeWorkspaceMode,
                     workspaceSlug: workspaceSlug ?? "",
                     admin: currentUser.admin,

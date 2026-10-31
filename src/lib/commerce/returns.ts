@@ -44,6 +44,7 @@ export type ReturnRefundFormValues = {
   originalSubtotal: number;
   originalTaxAmount: number;
   originalTotal: number;
+  paymentId: string;
   reason: string;
   refundAmount: number;
   refundExplanation: string;

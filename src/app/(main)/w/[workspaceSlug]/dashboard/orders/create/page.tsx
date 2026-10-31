@@ -44,16 +44,18 @@ export default async function Page() {
   const defaultValues = {
     ...blankOrderValues,
     footerMessage: workspace.orderMessageText,
+    tax: Number(workspace.defaultOrderTaxRate),
     orderNumber: nextOrderNumber,
   };
 
   return (
     <OrderWorkspace
       canRecordPayment={can(authorization.membership, "orders.payments.manage")}
+      canOverridePrices={can(authorization.membership, "orders.prices.override")}
       company={company}
       customers={customers}
       defaultValues={defaultValues}
-      description="Add order details, review the confirmation preview, and save it when the order workflow is ready."
+      description="Choose a customer, add items, then review and create the order."
       inventoryItems={inventoryItems}
       mode="create"
       title="Create Order"

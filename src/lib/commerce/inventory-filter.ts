@@ -19,6 +19,8 @@ export function inventoryListWhere(
           OR: [
             { product: { contains: query, mode: "insensitive" as const } },
             { sku: { contains: query, mode: "insensitive" as const } },
+            { category: { name: { contains: query, mode: "insensitive" as const } } },
+            { location: { name: { contains: query, mode: "insensitive" as const } } },
           ],
         }
       : {}),

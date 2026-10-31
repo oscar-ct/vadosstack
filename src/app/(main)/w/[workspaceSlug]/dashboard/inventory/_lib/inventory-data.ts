@@ -1,4 +1,5 @@
 import { type InventoryVisibility, inventoryListWhere } from "@/lib/commerce/inventory-filter";
+import type { InventoryOptionSummary } from "@/lib/commerce/inventory-options";
 import { summarizeInventoryStock } from "@/lib/commerce/inventory-summary";
 import { prisma } from "@/lib/prisma";
 
@@ -90,7 +91,7 @@ export async function getInventoryItems(
 }
 
 export async function getInventoryOptions(ownerId: string) {
-  const [categories, locations] = await Promise.all([
+  const [categories, locations, usage] = await Promise.all([
     prisma.inventoryCategory.findMany({
       where: {
         ownerId,
@@ -99,7 +100,9 @@ export async function getInventoryOptions(ownerId: string) {
         name: "asc",
       },
       select: {
+        id: true,
         name: true,
+        updatedAt: true,
       },
     }),
     prisma.inventoryLocation.findMany({
@@ -110,14 +113,61 @@ export async function getInventoryOptions(ownerId: string) {
         name: "asc",
       },
       select: {
+        id: true,
         name: true,
+        updatedAt: true,
       },
     }),
+    prisma.$queryRaw<
+      Array<{
+        kind: string;
+        id: string | null;
+        records: bigint;
+        products: bigint;
+        archived: bigint;
+        available: bigint;
+        reserved: bigint;
+      }>
+    >`
+      WITH reservations AS (
+        SELECT oi."inventoryItemId", SUM(GREATEST(oi.quantity - GREATEST(oi."shippedQuantity",
+          COALESCE((SELECT SUM(r."returnQuantity") FROM order_return_items r WHERE r."orderItemId" = oi.id), 0)), 0)) AS reserved
+        FROM order_items oi JOIN orders o ON o.id = oi."orderId"
+        WHERE oi."ownerId" = ${ownerId} AND o."orderStatus" = 'Active'
+        GROUP BY oi."inventoryItemId"
+      ), records AS (
+        SELECT i.*, COALESCE(r.reserved, 0) AS reserved FROM inventory_items i
+        LEFT JOIN reservations r ON r."inventoryItemId" = i.id WHERE i."ownerId" = ${ownerId}
+      )
+      SELECT 'category' AS kind, "categoryId" AS id, COUNT(*) AS records, COUNT(DISTINCT "productId") AS products,
+        COUNT(*) FILTER (WHERE "itemStatus" = 'Inactive') AS archived, COALESCE(SUM(stock),0)::bigint AS available,
+        COALESCE(SUM(reserved),0)::bigint AS reserved FROM records GROUP BY "categoryId"
+      UNION ALL
+      SELECT 'location', "locationId", COUNT(*), COUNT(DISTINCT "productId"), COUNT(*) FILTER (WHERE "itemStatus" = 'Inactive'),
+        COALESCE(SUM(stock),0)::bigint, COALESCE(SUM(reserved),0)::bigint FROM records GROUP BY "locationId"
+    `,
   ]);
-
+  const countsByKey = new Map(usage.map((entry) => [`${entry.kind}:${entry.id}`, entry]));
+  function details(kind: string, records: typeof categories): InventoryOptionSummary[] {
+    return records.map((record) => {
+      const counts = countsByKey.get(`${kind}:${record.id}`);
+      return {
+        id: record.id,
+        name: record.name,
+        updatedAt: record.updatedAt.toISOString(),
+        recordCount: Number(counts?.records ?? 0),
+        productCount: Number(counts?.products ?? 0),
+        archivedCount: Number(counts?.archived ?? 0),
+        available: Number(counts?.available ?? 0),
+        reserved: Number(counts?.reserved ?? 0),
+      };
+    });
+  }
   return {
     categories: categories.map((category) => category.name),
     locations: locations.map((location) => location.name),
+    categoryDetails: details("category", categories),
+    locationDetails: details("location", locations),
   };
 }
 

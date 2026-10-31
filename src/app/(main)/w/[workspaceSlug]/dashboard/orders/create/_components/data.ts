@@ -3,6 +3,11 @@ import { hasOrderShipping, type OrderCustomerMode, type OrderDeliveryMethod } fr
 import type { fulfillmentStatuses, paymentStatuses } from "@/lib/commerce/validation";
 
 export interface OrderLineItem {
+  catalogUnitPrice?: number | null;
+  priceOverride?: boolean;
+  priceOverrideReason?: string | null;
+  savedUnitPrice?: number;
+  savedPriceOverrideReason?: string | null;
   description?: string | null;
   unit?: string | null;
   category: string;
@@ -51,6 +56,7 @@ export interface OrderFormValues {
   customerSelection?: string;
   addressSelection?: string;
   deliveryMethod?: OrderDeliveryMethod;
+  overrideTaxRate?: boolean;
   expectedVersion?: number;
   externalPaymentConfirmed?: boolean;
   persistedTotals?: { signature: string; subtotal: number; taxAmount: number; total: number };
@@ -145,7 +151,9 @@ export function getLineAmount(item?: OrderLineItem) {
   return quantity * unitPrice;
 }
 
-export function pricingSignature(order: Pick<OrderFormValues, "items" | "shipping" | "discount" | "deliveryMethod">) {
+export function pricingSignature(
+  order: Pick<OrderFormValues, "items" | "shipping" | "discount" | "deliveryMethod" | "tax" | "overrideTaxRate">,
+) {
   return JSON.stringify([
     order.items.map((item) => [
       item.id,
@@ -157,12 +165,23 @@ export function pricingSignature(order: Pick<OrderFormValues, "items" | "shippin
     ]),
     order.deliveryMethod === "pickup" ? 0 : order.shipping,
     order.discount,
+    order.tax,
+    order.overrideTaxRate === true,
   ]);
 }
 
 function totals(order: OrderFormValues) {
   if (order.persistedTotals?.signature === pricingSignature(order)) return order.persistedTotals;
-  return calculateOrderTotals(order.items, orderNeedsShipping(order) ? order.shipping : 0, order.discount, order.tax);
+  return calculateOrderTotals(
+    order.items.map((item) =>
+      (!order.persistedTotals || order.overrideTaxRate) && item.taxable !== false
+        ? { ...item, taxRate: order.tax }
+        : item,
+    ),
+    orderNeedsShipping(order) ? order.shipping : 0,
+    order.discount,
+    order.tax,
+  );
 }
 
 export function getOrderSubtotal(order: OrderFormValues) {

@@ -45,6 +45,7 @@ type ReturnRefundWorkspaceProps = {
   defaultValues: ReturnRefundFormValues;
   emailAction?: React.ReactNode;
   orderId: string;
+  payments: Array<{ amount: number; id: string; method: string; reference: string | null; refundableAmount: number }>;
   returnId: string | null;
 };
 
@@ -57,6 +58,8 @@ function getValidationError(values: ReturnRefundFormValues) {
   if (values.refundStatus === "Other" && (!Number.isFinite(values.refundAmount) || values.refundAmount < 0)) {
     return "Enter a refund amount or choose No Refund.";
   }
+  if (values.refundStatus !== "No Refund" && !values.paymentId) return "Choose the original payment to refund.";
+  if (values.refundStatus !== "No Refund" && !values.refundMethod.trim()) return "Refund method is required.";
   if (values.refundExplanation.length > refundExplanationMaxLength) {
     return `Refund explanation must be ${refundExplanationMaxLength} characters or less.`;
   }
@@ -254,7 +257,13 @@ function ReturnItemsSection({ disabled }: { disabled: boolean }) {
   );
 }
 
-function RefundDetailsSection({ disabled }: { disabled: boolean }) {
+function RefundDetailsSection({
+  disabled,
+  payments,
+}: {
+  disabled: boolean;
+  payments: ReturnRefundWorkspaceProps["payments"];
+}) {
   const { control, register, setValue } = useReturnForm();
   const values = useWatch({ control }) as ReturnRefundFormValues;
   const calculatedRefundAmount = getCalculatedRefundAmount(values);
@@ -304,10 +313,43 @@ function RefundDetailsSection({ disabled }: { disabled: boolean }) {
       <div>
         <h2 className="font-medium tracking-tight">Refund Details</h2>
         <p className="text-muted-foreground text-sm">
-          Record the refund amount, method, and reference shown on the receipt.
+          Record the completed refund. Saving the return also adds it to the order's payment history.
         </p>
       </div>
       <FieldGroup>
+        {values.refundStatus !== "No Refund" ? (
+          <Controller
+            control={control}
+            name="paymentId"
+            render={({ field }) => (
+              <Field className="gap-1">
+                <FieldLabel className="text-xs" htmlFor="refund-payment">
+                  Refund From
+                </FieldLabel>
+                <Select disabled={disabled || payments.length === 0} value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="refund-payment" className="w-full text-base md:text-sm">
+                    <SelectValue placeholder="Select the original payment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {payments.map((payment) => (
+                        <SelectItem key={payment.id} value={payment.id}>
+                          {payment.method} ·{" "}
+                          {formatCurrency(payment.refundableAmount > 0.001 ? payment.refundableAmount : payment.amount)}{" "}
+                          {payment.refundableAmount > 0.001 ? "available" : "refunded"}
+                          {payment.reference ? ` · ${payment.reference}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                {payments.length === 0 ? (
+                  <p className="text-destructive text-xs">No refundable payment remains on this order.</p>
+                ) : null}
+              </Field>
+            )}
+          />
+        ) : null}
         <div className="grid grid-cols-2 gap-3 sm:gap-5">
           <Controller
             control={control}
@@ -405,7 +447,13 @@ function RefundDetailsSection({ disabled }: { disabled: boolean }) {
             <FieldLabel className="text-xs" htmlFor="refund-method">
               Refund Method
             </FieldLabel>
-            <Input id="refund-method" disabled={disabled} placeholder="Card refund" {...register("refundMethod")} />
+            <Input
+              id="refund-method"
+              disabled={disabled}
+              placeholder="Card refund"
+              required={values.refundStatus !== "No Refund"}
+              {...register("refundMethod")}
+            />
           </Field>
           <Field className="gap-1">
             <FieldLabel className="text-xs" htmlFor="refund-reference">
@@ -532,6 +580,7 @@ export function ReturnRefundWorkspace({
   defaultValues,
   emailAction,
   orderId,
+  payments,
   returnId,
 }: ReturnRefundWorkspaceProps) {
   const router = useRouter();
@@ -594,8 +643,8 @@ export function ReturnRefundWorkspace({
                   </span>
                 </h1>
                 <p className="text-muted-foreground text-sm">
-                  Saved returns are final. Saving a return requests a refund; record the completed external refund on
-                  the order.
+                  Saved returns are final. If a refund is included, saving records the completed refund and updates
+                  inventory in one step.
                 </p>
               </div>
             </div>
@@ -637,7 +686,11 @@ export function ReturnRefundWorkspace({
                     onClick={saveReturnRefund}
                   >
                     <Save />
-                    {isSaving ? "Saving..." : "Save Return"}
+                    {isSaving
+                      ? "Saving..."
+                      : values.refundStatus === "No Refund"
+                        ? "Save return"
+                        : "Save return & refund"}
                   </Button>
                 </>
               )}
@@ -656,7 +709,7 @@ export function ReturnRefundWorkspace({
                   <ReturnItemsSection disabled={locked} />
                 </TabsContent>
                 <TabsContent value="refund" className="mt-0">
-                  <RefundDetailsSection disabled={locked} />
+                  <RefundDetailsSection disabled={locked} payments={payments} />
                 </TabsContent>
                 <TabsContent value="receipt" className="mt-0">
                   <ReceiptDetailsSection disabled={locked} />

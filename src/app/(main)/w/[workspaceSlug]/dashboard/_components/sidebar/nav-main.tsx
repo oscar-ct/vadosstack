@@ -59,6 +59,7 @@ interface NavMainProps {
   readonly companyPhone: string | null;
   readonly estimateValidDays: number;
   readonly invoiceDueDays: number;
+  readonly defaultOrderTaxRate: number;
   readonly workspaceMode: WorkspaceMode;
   readonly gmailConnected: boolean;
   readonly gmailSenderEmail: string | null;
@@ -315,6 +316,7 @@ function CompanySettingsDialog({
   companyPhone,
   estimateValidDays,
   invoiceDueDays,
+  defaultOrderTaxRate,
   workspaceMode,
   logoSrc,
   onSaved,
@@ -326,6 +328,7 @@ function CompanySettingsDialog({
   readonly companyPhone: string | null;
   readonly estimateValidDays: number;
   readonly invoiceDueDays: number;
+  readonly defaultOrderTaxRate: number;
   readonly workspaceMode: WorkspaceMode;
   readonly logoSrc: string;
   readonly onSaved: () => void;
@@ -494,6 +497,23 @@ function CompanySettingsDialog({
               onChange={(event) => setCompanyPhoneDigits(normalizePhoneNumber(event.target.value).slice(0, 10))}
             />
           </div>
+          <div className="grid gap-2 rounded-lg border bg-muted/20 p-3">
+            <Label htmlFor="default-order-tax-rate">Default sales tax rate</Label>
+            <Input
+              id="default-order-tax-rate"
+              name="defaultOrderTaxRate"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              defaultValue={defaultOrderTaxRate}
+              required
+            />
+            <p className="text-muted-foreground text-xs">
+              Percentage preset on new orders. You can change it per order, including to 0%. Saved orders keep their
+              existing taxes.
+            </p>
+          </div>
           {selectedWorkspaceMode === "commerce" ? (
             <>
               <input type="hidden" name="estimateValidDays" value={estimateValidDays} />
@@ -646,6 +666,7 @@ export function NavMain({
   emailRecipients,
   dueTodayTaskCount,
   invoiceDueDays,
+  defaultOrderTaxRate,
   workspaceMode,
   logoSrc,
   onCompanySettingsSaved,
@@ -689,6 +710,7 @@ export function NavMain({
                   companyPhone={companyPhone}
                   estimateValidDays={estimateValidDays}
                   invoiceDueDays={invoiceDueDays}
+                  defaultOrderTaxRate={defaultOrderTaxRate}
                   workspaceMode={workspaceMode}
                   logoSrc={logoSrc}
                   onSaved={onCompanySettingsSaved}

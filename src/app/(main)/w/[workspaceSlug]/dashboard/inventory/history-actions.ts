@@ -13,7 +13,17 @@ const historyInput = z
     page: z.number().int().min(1).max(100000).default(1),
     query: z.string().trim().max(200).default(""),
     filter: z
-      .enum(["activity", "Receive", "Count", "Damage", "Transfer", "Location changed", "Migration reconciliation"])
+      .enum([
+        "activity",
+        "Receive",
+        "Count",
+        "Damage",
+        "Lost",
+        "Stolen",
+        "Transfer",
+        "Location changed",
+        "Migration reconciliation",
+      ])
       .default("activity"),
   })
   .strict();

@@ -1,4 +1,5 @@
 import { hasOrderShipping, isWalkInOrder } from "@/lib/commerce/order-customer";
+import { orderListWhere } from "@/lib/commerce/order-filter";
 import { prisma } from "@/lib/prisma";
 
 import type { InventoryItem } from "../../inventory/_components/inventory-table";
@@ -54,20 +55,11 @@ export async function getOrderTableItems(
   options: { q?: string; page?: number } = {},
 ): Promise<OrderTableItem[]> {
   const orders = await prisma.order.findMany({
-    where: {
-      ownerId,
-      ...(options.q
-        ? {
-            OR: [
-              { orderNumber: { contains: options.q, mode: "insensitive" as const } },
-              { customerName: { contains: options.q, mode: "insensitive" as const } },
-            ],
-          }
-        : {}),
-    },
+    where: orderListWhere(ownerId, options.q),
     take: 50,
     skip: ((options.page ?? 1) - 1) * 50,
     include: {
+      items: { select: { id: true, product: true, quantity: true, shippedQuantity: true } },
       _count: {
         select: {
           items: true,
@@ -101,6 +93,9 @@ export async function getOrderTableItems(
       orderStatus: order.orderStatus,
       fulfillmentStatus: order.fulfillmentStatus as OrderFormValues["fulfillmentStatus"],
       itemCount: order._count.items,
+      fulfillmentItems: order.items
+        .map((item) => ({ id: item.id, product: item.product, remaining: item.quantity - item.shippedQuantity }))
+        .filter((item) => item.remaining > 0),
       total: Number(order.total),
       orderedAt: order.orderDate.toISOString(),
       returnNumber: orderReturn?.returnNumber ?? null,
@@ -213,6 +208,10 @@ export async function getOrderFormValues(ownerId: string, orderId: string): Prom
       taxRate: Number(item.taxRate),
       sku: item.sku ?? "",
       unitPrice: Number(item.unitPrice),
+      catalogUnitPrice: item.catalogUnitPrice == null ? null : Number(item.catalogUnitPrice),
+      priceOverrideReason: item.priceOverrideReason,
+      savedUnitPrice: Number(item.unitPrice),
+      savedPriceOverrideReason: item.priceOverrideReason,
     })),
     orderDate: toDateInputValue(order.orderDate),
     orderNumber: order.orderNumber,

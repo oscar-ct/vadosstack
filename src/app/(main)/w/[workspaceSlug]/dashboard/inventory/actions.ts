@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
 import { CommerceError, commerceTransaction } from "@/lib/commerce/transaction";
-import { amountSchema, CommerceInputError, parseCommerceInput, taxRateSchema } from "@/lib/commerce/validation";
+import { amountSchema, CommerceInputError, parseCommerceInput } from "@/lib/commerce/validation";
 import { prisma } from "@/lib/prisma";
 import { revalidateWorkspacePath } from "@/lib/workspace-revalidation";
 
@@ -14,8 +14,6 @@ export type InventoryActionState = {
   message: string;
   success: boolean;
 };
-
-type InventoryListItemType = "category" | "location";
 
 class InventoryActionError extends CommerceError {}
 
@@ -41,42 +39,21 @@ function requiredString(value: FormDataEntryValue | null, label: string) {
   return text;
 }
 
-async function getOrCreateCategory(tx: Prisma.TransactionClient, ownerId: string, name: string) {
-  return tx.inventoryCategory.upsert({
-    where: {
-      ownerId_name: {
-        ownerId,
-        name,
-      },
-    },
-    update: {},
-    create: {
-      ownerId,
-      name,
-    },
-    select: {
-      id: true,
-    },
-  });
-}
-
-async function getOrCreateLocation(tx: Prisma.TransactionClient, ownerId: string, name: string) {
-  return tx.inventoryLocation.upsert({
-    where: {
-      ownerId_name: {
-        ownerId,
-        name,
-      },
-    },
-    update: {},
-    create: {
-      ownerId,
-      name,
-    },
-    select: {
-      id: true,
-    },
-  });
+async function resolveOption(
+  tx: Prisma.TransactionClient,
+  kind: "category" | "location",
+  ownerId: string,
+  name: string,
+) {
+  const result =
+    kind === "category"
+      ? await tx.inventoryCategory.findFirst({ where: { ownerId, name }, select: { id: true } })
+      : await tx.inventoryLocation.findFirst({ where: { ownerId, name }, select: { id: true } });
+  if (!result)
+    throw new InventoryActionError(
+      `${kind === "category" ? "Category" : "Location"} changed or no longer exists. Refresh and choose an existing option, or add one in Manage inventory.`,
+    );
+  return result;
 }
 
 export async function saveInventoryItemAction(
@@ -108,7 +85,6 @@ export async function saveInventoryItemAction(
         cost: amountSchema,
         unitPrice: amountSchema,
         taxable: z.boolean(),
-        taxRate: taxRateSchema,
         itemStatus: z.enum(["Active", "Inactive"]),
         barcode: z.string().max(200).nullable(),
         vendor: z.string().max(200).nullable(),
@@ -124,7 +100,6 @@ export async function saveInventoryItemAction(
         cost: Number(formData.get("cost")),
         unitPrice: Number(formData.get("unitPrice")),
         taxable: formData.get("taxable") === "true",
-        taxRate: formData.get("taxable") === "true" ? Number(formData.get("taxRate")) : 0,
         unit: optionalString(formData.get("unit")) ?? "each",
         itemStatus: formData.get("itemStatus"),
         barcode: optionalString(formData.get("barcode")),
@@ -167,8 +142,9 @@ export async function saveInventoryItemAction(
       const categoryName = requiredString(formData.get("category"), "Category");
       const locationName = requiredString(formData.get("location"), "Location");
       const category =
-        categoryName === "Uncategorized" ? null : await getOrCreateCategory(tx, workspaceId, categoryName);
-      const location = locationName === "Unassigned" ? null : await getOrCreateLocation(tx, workspaceId, locationName);
+        categoryName === "Uncategorized" ? null : await resolveOption(tx, "category", workspaceId, categoryName);
+      const location =
+        locationName === "Unassigned" ? null : await resolveOption(tx, "location", workspaceId, locationName);
       if (
         existing &&
         existing.locationId !== (location?.id ?? null) &&
@@ -223,6 +199,7 @@ export async function saveInventoryItemAction(
     });
 
     revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
+    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory-analytics");
 
     return {
       success: true,
@@ -278,6 +255,7 @@ export async function archiveInventoryItemAction(itemId: string): Promise<Invent
       return true;
     });
     revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
+    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory-analytics");
 
     return {
       success: true,
@@ -289,164 +267,6 @@ export async function archiveInventoryItemAction(itemId: string): Promise<Invent
     return {
       success: false,
       message: getInventoryErrorMessage(error, "Inventory item could not be archived."),
-    };
-  }
-}
-
-export async function createInventoryListItemAction(
-  itemType: InventoryListItemType,
-  _previousState: InventoryActionState,
-  formData: FormData,
-): Promise<InventoryActionState> {
-  const authorization = await getPermittedDashboardAuthorization("inventory.manage");
-
-  if (!authorization) {
-    return {
-      success: false,
-      message: "You do not have permission to manage inventory.",
-    };
-  }
-  const workspaceId = authorization.workspaceId;
-
-  try {
-    const name = requiredString(formData.get("name"), itemType === "category" ? "Category" : "Location");
-
-    if (itemType === "category") {
-      await prisma.inventoryCategory.upsert({
-        where: {
-          ownerId_name: {
-            ownerId: workspaceId,
-            name,
-          },
-        },
-        update: {},
-        create: {
-          ownerId: workspaceId,
-          name,
-        },
-      });
-    } else {
-      await prisma.inventoryLocation.upsert({
-        where: {
-          ownerId_name: {
-            ownerId: workspaceId,
-            name,
-          },
-        },
-        update: {},
-        create: {
-          ownerId: workspaceId,
-          name,
-        },
-      });
-    }
-
-    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
-
-    return {
-      success: true,
-      message: itemType === "category" ? "Category added." : "Location added.",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: getInventoryErrorMessage(error, "Inventory option could not be added."),
-    };
-  }
-}
-
-export async function deleteInventoryListItemAction(
-  itemType: InventoryListItemType,
-  name: string,
-): Promise<InventoryActionState> {
-  const authorization = await getPermittedDashboardAuthorization("inventory.manage");
-
-  if (!authorization) {
-    return {
-      success: false,
-      message: "You do not have permission to manage inventory.",
-    };
-  }
-  const workspaceId = authorization.workspaceId;
-
-  try {
-    const cleanName = requiredString(name, itemType === "category" ? "Category" : "Location");
-    await commerceTransaction(async (tx) => {
-      const record =
-        itemType === "category"
-          ? await tx.inventoryCategory.findUnique({
-              where: {
-                ownerId_name: {
-                  ownerId: workspaceId,
-                  name: cleanName,
-                },
-              },
-              select: {
-                id: true,
-              },
-            })
-          : await tx.inventoryLocation.findUnique({
-              where: {
-                ownerId_name: {
-                  ownerId: workspaceId,
-                  name: cleanName,
-                },
-              },
-              select: {
-                id: true,
-              },
-            });
-
-      if (!record) {
-        throw new InventoryActionError(itemType === "category" ? "Category was not found." : "Location was not found.");
-      }
-
-      const linkedItems = await tx.inventoryItem.count({
-        where:
-          itemType === "category"
-            ? {
-                ownerId: workspaceId,
-                categoryId: record.id,
-              }
-            : {
-                ownerId: workspaceId,
-                locationId: record.id,
-              },
-      });
-
-      if (linkedItems > 0) {
-        throw new InventoryActionError(
-          itemType === "category"
-            ? `Category is used by ${linkedItems} inventory ${linkedItems === 1 ? "item" : "items"}. Reassign those items before deleting it.`
-            : `Location is used by ${linkedItems} inventory ${linkedItems === 1 ? "item" : "items"}. Reassign those items before deleting it.`,
-        );
-      }
-
-      if (itemType === "category") {
-        await tx.inventoryCategory.delete({
-          where: {
-            id: record.id,
-          },
-        });
-      } else {
-        await tx.inventoryLocation.delete({
-          where: {
-            id: record.id,
-          },
-        });
-      }
-    });
-
-    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
-
-    return {
-      success: true,
-      message: itemType === "category" ? "Category deleted." : "Location deleted.",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: getInventoryErrorMessage(error, "Inventory option could not be deleted."),
     };
   }
 }
@@ -502,6 +322,7 @@ export async function saveInventoryStockRulesAction(
     });
 
     revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
+    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory-analytics");
 
     return {
       success: true,

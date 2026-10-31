@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { orderListWhere } from "@/lib/commerce/order-filter";
 import { prisma } from "@/lib/prisma";
 
 import { OrdersTable } from "./_components/orders-table";
@@ -27,17 +28,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
   const params = await searchParams;
   const q = (params.q ?? "").trim().slice(0, 200);
   const total = await prisma.order.count({
-    where: {
-      ownerId: authorization.workspaceId,
-      ...(q
-        ? {
-            OR: [
-              { orderNumber: { contains: q, mode: "insensitive" as const } },
-              { customerName: { contains: q, mode: "insensitive" as const } },
-            ],
-          }
-        : {}),
-    },
+    where: orderListWhere(authorization.workspaceId, q),
   });
   const page = Math.min(Math.max(1, Math.trunc(Number(params.page)) || 1), Math.max(1, Math.ceil(total / 50)));
   const orders = await getOrderTableItems(authorization.workspaceId, { q, page });
@@ -55,7 +46,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
             <PackageCheck className="size-4 text-muted-foreground" />
           </div>
         </CardTitle>
-        <CardDescription>A simple index of orders.</CardDescription>
+        <CardDescription>Manage orders and track payment and fulfillment status.</CardDescription>
         <CardAction className="flex items-center gap-2">
           {canCreate ? (
             <Button asChild size="sm">
@@ -75,13 +66,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
         </CardAction>
       </CardHeader>
       <CardContent>
-        <CommerceIndexControls path="/dashboard/orders" query={q} page={page} total={total} />
+        <CommerceIndexControls path="/dashboard/orders" query={q} page={page} total={total} showSearch={false} />
         <OrdersTable
           canExport={canExport}
           canManageReturns={canManageReturns}
           canUpdate={canUpdate}
           exportSlotId={canExport ? "orders-export-action" : undefined}
           orders={orders}
+          query={q}
         />
       </CardContent>
     </Card>

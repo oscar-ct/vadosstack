@@ -115,6 +115,7 @@ export default async function Page({ params, searchParams }: PageProps) {
         ) : null
       }
       orderId={orderId}
+      payments={workspaceData.payments}
       returnId={workspaceData.returnId}
     />
   );

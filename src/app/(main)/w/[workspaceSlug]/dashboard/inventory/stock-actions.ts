@@ -17,7 +17,7 @@ const adjustmentSchema = z
     inventoryItemId: z.string().min(1),
     expectedUpdatedAt: z.iso.datetime(),
     submissionKey: submissionKeySchema,
-    kind: z.enum(["Receive", "Damage", "Count", "Transfer"]),
+    kind: z.enum(["Receive", "Damage", "Lost", "Stolen", "Count", "Transfer"]),
     quantity: z.number().int().min(0).max(1000000),
     destinationItemId: z.string().min(1).optional(),
     destinationLocationId: z.string().min(1).optional(),
@@ -172,7 +172,12 @@ export async function adjustInventoryStockAction(raw: z.infer<typeof adjustmentS
     );
     return { id: item.id };
   });
-  for (const path of ["/dashboard/inventory", "/dashboard/orders", "/dashboard/commerce-pulse"])
+  for (const path of [
+    "/dashboard/inventory",
+    "/dashboard/inventory-analytics",
+    "/dashboard/orders",
+    "/dashboard/commerce-pulse",
+  ])
     revalidateWorkspacePath(auth.membership.workspaceSlug, path);
   return result;
 }

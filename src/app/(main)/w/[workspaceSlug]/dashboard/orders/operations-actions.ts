@@ -8,6 +8,7 @@ import { getOrderBalance, refreshOrderPaymentStatus, requireVersion } from "@/li
 import { cents } from "@/lib/commerce/money";
 import { adjustStock, CommerceError, commerceTransaction, lockOrder } from "@/lib/commerce/transaction";
 import { amountSchema, parseCommerceInput, quantitySchema, submissionKeySchema } from "@/lib/commerce/validation";
+import { prisma } from "@/lib/prisma";
 import { revalidateWorkspacePath } from "@/lib/workspace-revalidation";
 
 const operationSchema = z.object({
@@ -26,6 +27,7 @@ function refresh(slug: string, orderId: string) {
   for (const path of [
     "/dashboard/orders",
     "/dashboard/inventory",
+    "/dashboard/inventory-analytics",
     "/dashboard/commerce-pulse",
     `/dashboard/orders/${orderId}/edit`,
     `/dashboard/orders/${orderId}/return`,
@@ -189,6 +191,35 @@ const shipmentSchema = operationSchema
   })
   .strict();
 
+const shipmentReversalSchema = operationSchema
+  .extend({ reason: z.string().trim().min(1, "Enter a reason for undoing this fulfillment.").max(500) })
+  .strict();
+
+export async function getOrderFulfillmentAction(orderId: string) {
+  const auth = await getPermittedDashboardAuthorization("orders.update");
+  if (!auth) throw new Error("You do not have permission to fulfill orders.");
+  const id = z.string().trim().min(1).max(100).parse(orderId);
+  const order = await prisma.order.findFirst({
+    where: { id, ownerId: auth.workspaceId },
+    select: {
+      id: true,
+      version: true,
+      orderNumber: true,
+      orderStatus: true,
+      returns: { select: { id: true }, take: 1 },
+      items: { select: { id: true, product: true, quantity: true, shippedQuantity: true } },
+    },
+  });
+  if (!order) throw new Error("Order not found.");
+  if (order.orderStatus !== "Active" || order.returns.length)
+    throw new Error("Cancelled or returned orders cannot be fulfilled.");
+  const items = order.items
+    .map((item) => ({ id: item.id, product: item.product, remaining: item.quantity - item.shippedQuantity }))
+    .filter((item) => item.remaining > 0);
+  if (!items.length) throw new Error("There are no remaining items to fulfill.");
+  return { id: order.id, version: order.version, orderNumber: order.orderNumber, items };
+}
+
 export async function shipOrderItemsAction(raw: z.infer<typeof shipmentSchema>) {
   const auth = await getPermittedDashboardAuthorization("orders.update");
   if (!auth) throw new Error("You do not have permission to ship orders.");
@@ -260,6 +291,100 @@ export async function shipOrderItemsAction(raw: z.infer<typeof shipmentSchema>) 
       tx,
     );
     return { id: shipment.id };
+  });
+  refresh(auth.membership.workspaceSlug, input.orderId);
+  return result;
+}
+
+export async function reverseLatestOrderShipmentAction(raw: z.infer<typeof shipmentReversalSchema>) {
+  const auth = await getPermittedDashboardAuthorization("orders.update");
+  if (!auth) throw new Error("You do not have permission to undo fulfillment.");
+  const input = parseCommerceInput(shipmentReversalSchema, raw);
+  const result = await commerceTransaction(async (tx) => {
+    await lockOrder(tx, auth.workspaceId, input.orderId);
+    const previous = await tx.orderShipmentReversal.findUnique({
+      where: { idempotencyKey: input.submissionKey },
+      include: { shipment: { include: { order: true } } },
+    });
+    if (previous) {
+      if (
+        previous.shipment.orderId !== input.orderId ||
+        previous.shipment.order.ownerId !== auth.workspaceId ||
+        previous.reason !== input.reason
+      )
+        throw new CommerceError("Submission key already used for a different fulfillment reversal.");
+      return { id: previous.id };
+    }
+    const order = await tx.order.findFirstOrThrow({
+      where: { id: input.orderId, ownerId: auth.workspaceId },
+      include: {
+        items: true,
+        returns: true,
+        shipments: {
+          include: { items: true, reversal: true },
+          orderBy: { shippedAt: "desc" },
+        },
+      },
+    });
+    requireVersion(order.version, input.expectedVersion);
+    if (order.orderStatus !== "Active") throw new CommerceError("Cancelled orders cannot be changed.");
+    if (order.returns.length) throw new CommerceError("Fulfillment cannot be undone after a return has been started.");
+    const shipment = order.shipments.find((entry) => !entry.reversal);
+    if (!shipment) throw new CommerceError("There is no recorded fulfillment to undo.");
+
+    for (const shipmentItem of shipment.items) {
+      const line = order.items.find((entry) => entry.id === shipmentItem.orderItemId);
+      if (!line || line.shippedQuantity < shipmentItem.quantity)
+        throw new CommerceError("The fulfillment history does not match the order quantities.");
+      await tx.orderItem.update({
+        where: { id: line.id },
+        data: { shippedQuantity: { decrement: shipmentItem.quantity } },
+      });
+      line.shippedQuantity -= shipmentItem.quantity;
+    }
+
+    const reversal = await tx.orderShipmentReversal.create({
+      data: {
+        shipmentId: shipment.id,
+        idempotencyKey: input.submissionKey,
+        actorUserId: auth.principal.user.id,
+        reason: input.reason,
+      },
+    });
+    const priorShipment = order.shipments.find((entry) => entry.id !== shipment.id && !entry.reversal);
+    const shippedQuantity = order.items.reduce((sum, item) => sum + item.shippedQuantity, 0);
+    const fulfillmentStatus =
+      shippedQuantity === 0
+        ? "Unfulfilled"
+        : order.items.every((item) => item.shippedQuantity === item.quantity)
+          ? "Fulfilled"
+          : "Partially Fulfilled";
+    await tx.order.update({
+      where: { id: input.orderId },
+      data: {
+        fulfillmentStatus,
+        shippingService: priorShipment?.carrier ?? null,
+        trackingNumber: priorShipment?.trackingNumber ?? null,
+        reservationExpiresAt:
+          fulfillmentStatus === "Unfulfilled" && order.paymentStatus !== "Paid"
+            ? new Date(Date.now() + 7 * 86400000)
+            : null,
+        version: { increment: 1 },
+      },
+    });
+    await recordAuthorizationAuditEvent(
+      {
+        workspaceId: auth.workspaceId,
+        actorUserId: auth.principal.user.id,
+        membershipId: auth.membership.id,
+        action: "order.shipment.reverse",
+        targetType: "OrderShipmentReversal",
+        targetId: reversal.id,
+        metadata: { orderId: input.orderId, shipmentId: shipment.id, reason: input.reason },
+      },
+      tx,
+    );
+    return { id: reversal.id };
   });
   refresh(auth.membership.workspaceSlug, input.orderId);
   return result;

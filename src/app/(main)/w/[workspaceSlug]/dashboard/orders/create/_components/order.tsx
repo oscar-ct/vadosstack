@@ -2,20 +2,22 @@
 
 import * as React from "react";
 
-import { PackagePlus, Save, Send, Undo, Unlock } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, PackagePlus, Save, Send, Undo, Unlock } from "lucide-react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
 import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/ui/button";
 import { useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { cn } from "@/lib/utils";
 
 import type { InventoryItem } from "../../../inventory/_components/inventory-table";
 import { createOrderWithInventoryAdjustments, updateOrderWithInventoryAdjustments } from "../../actions";
-import type { OrderCompany, OrderCustomer, OrderFormValues } from "./data";
+import { getOrderTotal, type OrderCompany, type OrderCustomer, type OrderFormValues } from "./data";
 import { OrderForm } from "./order-form";
-import { getOrderValidationError, orderValuesToInput } from "./order-input";
+import { getOrderStepValidationError, getOrderValidationError, orderValuesToInput } from "./order-input";
 import { OrderPreview } from "./order-preview";
+import { type OrderStep, orderSteps } from "./order-steps";
 
 type OrderWorkspaceMode = "create" | "edit";
 const headerActionButtonClassName = "min-w-32 justify-center";
@@ -23,6 +25,7 @@ const headerActionButtonClassName = "min-w-32 justify-center";
 type OrderWorkspaceProps = {
   canEdit?: boolean;
   canRecordPayment?: boolean;
+  canOverridePrices?: boolean;
   company: OrderCompany;
   customers: OrderCustomer[];
   defaultValues: OrderFormValues;
@@ -31,6 +34,7 @@ type OrderWorkspaceProps = {
   inventoryItems: InventoryItem[];
   mode: OrderWorkspaceMode;
   orderId?: string;
+  operations?: React.ReactNode;
   previewActions?: React.ReactNode;
   title: string;
 };
@@ -38,6 +42,7 @@ type OrderWorkspaceProps = {
 export function OrderWorkspace({
   canEdit = true,
   canRecordPayment = false,
+  canOverridePrices = false,
   company,
   customers,
   defaultValues,
@@ -46,6 +51,7 @@ export function OrderWorkspace({
   inventoryItems,
   mode,
   orderId,
+  operations,
   previewActions,
   title,
 }: OrderWorkspaceProps) {
@@ -53,6 +59,12 @@ export function OrderWorkspace({
   const submissionKey = React.useRef<string | null>(null);
   const [locked, setLocked] = React.useState(mode === "edit");
   const [isSaving, setIsSaving] = React.useState(false);
+  const savingRef = React.useRef(false);
+  const [activeStep, setActiveStep] = React.useState<OrderStep>("customer");
+  const [furthestStep, setFurthestStep] = React.useState(0);
+  const [validationAttempts, setValidationAttempts] = React.useState(0);
+  const [previewOpen, setPreviewOpen] = React.useState(false);
+  const previewId = React.useId();
   const form = useForm<OrderFormValues>({
     defaultValues,
   });
@@ -60,10 +72,43 @@ export function OrderWorkspace({
   const isCreate = mode === "create";
   const isReadOnly = !isCreate && (locked || !canEdit);
 
+  const stepIndex = orderSteps.findIndex((step) => step.id === activeStep);
+  const stepError = validationAttempts > 0 ? getOrderStepValidationError(order, activeStep, true) : null;
+
+  function navigateStep(target: OrderStep) {
+    if (savingRef.current) return;
+    const targetIndex = orderSteps.findIndex((step) => step.id === target);
+    if (targetIndex < stepIndex) {
+      setActiveStep(target);
+      setValidationAttempts(0);
+      return;
+    }
+    for (let index = 0; index < targetIndex; index++) {
+      const error = getOrderStepValidationError(form.getValues(), orderSteps[index].id, true);
+      if (error) {
+        setActiveStep(orderSteps[index].id);
+        setValidationAttempts((attempts) => attempts + 1);
+        return;
+      }
+    }
+    setActiveStep(target);
+    setFurthestStep((furthest) => Math.max(furthest, targetIndex));
+    setValidationAttempts(0);
+  }
+
   async function saveOrder() {
-    if (isSaving) return;
+    if (savingRef.current || isReadOnly || (isCreate && activeStep !== "review")) return;
 
     const values = form.getValues();
+    if (isCreate) {
+      for (const step of orderSteps) {
+        if (getOrderStepValidationError(values, step.id, true)) {
+          setActiveStep(step.id);
+          setValidationAttempts((attempts) => attempts + 1);
+          return;
+        }
+      }
+    }
     const validationError = getOrderValidationError(values);
 
     if (validationError) {
@@ -73,6 +118,7 @@ export function OrderWorkspace({
 
     const input = orderValuesToInput(values);
 
+    savingRef.current = true;
     setIsSaving(true);
 
     try {
@@ -113,6 +159,7 @@ export function OrderWorkspace({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Order could not be saved.");
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   }
@@ -137,18 +184,7 @@ export function OrderWorkspace({
 
         <div className="flex flex-wrap items-center gap-2">
           {headerActions}
-          {isCreate ? (
-            <Button
-              type="button"
-              size="sm"
-              className={headerActionButtonClassName}
-              disabled={isSaving}
-              onClick={saveOrder}
-            >
-              <Send />
-              {isSaving ? "Creating..." : "Create Order"}
-            </Button>
-          ) : locked && canEdit ? (
+          {isCreate ? null : locked && canEdit ? (
             <Button
               type="button"
               size="sm"
@@ -191,23 +227,86 @@ export function OrderWorkspace({
           ) : null}
         </div>
       </div>
-      {/*xl:grid-cols-[minmax(0,0.95fr)_minmax(28rem,1.05fr)]*/}
+      {operations}
       <FormProvider {...form}>
         <div className="grid gap-5 xl:grid-cols-[minmax(0,0.56fr)_minmax(380px,0.44fr)]">
           <OrderForm
             customers={customers}
-            disabled={isReadOnly}
+            disabled={isReadOnly || isSaving}
             creating={isCreate}
+            activeStep={activeStep}
+            furthestStep={furthestStep}
+            onStepChange={navigateStep}
+            validationError={stepError}
+            validationAttempt={validationAttempts}
+            footer={
+              isCreate ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  {stepIndex > 0 ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isSaving}
+                      onClick={() => navigateStep(orderSteps[stepIndex - 1].id)}
+                    >
+                      <ArrowLeft />
+                      Back to {activeStep === "review" ? "items" : "customer"}
+                    </Button>
+                  ) : null}
+                  {activeStep === "review" ? (
+                    <Button type="button" size="sm" className="ml-auto" disabled={isSaving} onClick={saveOrder}>
+                      <Send />
+                      {isSaving ? "Creating..." : "Create order"}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="ml-auto"
+                      disabled={isSaving}
+                      onClick={() => navigateStep(orderSteps[stepIndex + 1].id)}
+                    >
+                      Continue to {activeStep === "customer" ? "items" : "review"}
+                      <ArrowRight />
+                    </Button>
+                  )}
+                </div>
+              ) : null
+            }
             canRecordPayment={canRecordPayment}
+            canOverridePrices={canOverridePrices}
             inventoryItems={inventoryItems}
           />
-          <OrderPreview
-            actionsDisabled={!isCreate && !locked}
-            company={company}
-            emailAction={previewActions}
-            order={order}
-            orderId={orderId}
-          />
+          <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start" aria-label="Receipt preview">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 rounded-xl border bg-card p-4 text-left text-sm xl:hidden"
+              aria-expanded={previewOpen}
+              aria-controls={previewId}
+              onClick={() => setPreviewOpen((open) => !open)}
+            >
+              <span className="grid gap-1">
+                <span className="font-medium">Receipt preview</span>
+                <span className="text-muted-foreground">
+                  {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(getOrderTotal(order))}
+                </span>
+              </span>
+              <ChevronDown
+                className={cn("size-4 transition-transform", previewOpen && "rotate-180")}
+                aria-hidden="true"
+              />
+            </button>
+            <div id={previewId} className={cn(previewOpen ? "mt-3 block" : "hidden", "xl:mt-0 xl:block")}>
+              <OrderPreview
+                actionsDisabled={!isCreate && !locked}
+                company={company}
+                emailAction={previewActions}
+                order={order}
+                orderId={orderId}
+              />
+            </div>
+          </aside>
         </div>
       </FormProvider>
     </div>

@@ -24,6 +24,8 @@ const reasonLabels: Record<string, string> = {
   Receive: "Stock received",
   Count: "Stock count",
   Damage: "Damaged stock removed",
+  Lost: "Lost stock removed",
+  Stolen: "Stolen stock removed",
   Transfer: "Stock transferred",
   "Location changed": "Location updated",
   "Migration reconciliation": "Imported starting balance",
@@ -246,6 +248,8 @@ export function StockHistory() {
               <option value="Receive">Stock received</option>
               <option value="Count">Stock counts</option>
               <option value="Damage">Damaged stock removed</option>
+              <option value="Lost">Lost stock removed</option>
+              <option value="Stolen">Stolen stock removed</option>
               <option value="Transfer">Transfers</option>
               <option value="Location changed">Location changes</option>
               <option value="Migration reconciliation">Imported starting balances</option>

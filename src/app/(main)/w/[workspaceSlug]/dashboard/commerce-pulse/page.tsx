@@ -41,7 +41,7 @@ export default async function Page({ searchParams }: PageProps) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="grid max-w-2xl gap-2">
           <h1 className="flex items-center gap-2 font-medium text-xl leading-none">
-            <span>Commerce Analytics</span>
+            <span>Commerce Overview</span>
             <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <Activity className="size-4" />
             </span>

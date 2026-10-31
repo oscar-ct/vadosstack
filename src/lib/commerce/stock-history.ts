@@ -5,6 +5,8 @@ export type StockHistoryFilter =
   | "Receive"
   | "Count"
   | "Damage"
+  | "Lost"
+  | "Stolen"
   | "Transfer"
   | "Location changed"
   | "Migration reconciliation";

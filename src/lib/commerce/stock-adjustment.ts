@@ -1,4 +1,4 @@
-export type StockAdjustmentKind = "Receive" | "Count" | "Damage" | "Transfer";
+export type StockAdjustmentKind = "Receive" | "Count" | "Damage" | "Lost" | "Stolen" | "Transfer";
 
 export function previewStockAdjustment(kind: StockAdjustmentKind, available: number, quantity: number) {
   if (!Number.isSafeInteger(quantity) || quantity < (kind === "Count" ? 0 : 1) || quantity > 1_000_000) {

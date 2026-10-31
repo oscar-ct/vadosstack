@@ -53,6 +53,7 @@ export function AppSidebar({
     estimateValidDays: number;
     email: string;
     invoiceDueDays: number;
+    defaultOrderTaxRate: number;
     workspaceMode: WorkspaceMode;
     workspaceSlug: string;
     admin: boolean;
@@ -184,6 +185,7 @@ export function AppSidebar({
           emailTemplates={currentUser?.emailTemplates ?? []}
           emailRecipients={currentUser?.emailRecipients ?? []}
           invoiceDueDays={currentUser?.invoiceDueDays ?? 15}
+          defaultOrderTaxRate={currentUser?.defaultOrderTaxRate ?? 8.25}
           workspaceMode={workspaceMode}
           logoSrc={logoSrc}
           onCompanySettingsSaved={refreshCompanyLogo}

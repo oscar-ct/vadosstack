@@ -311,6 +311,7 @@ model Workspace {
   invoiceMessageAlign        String                      @default("left")
   invoiceMessageText         String
   orderMessageText           String
+  defaultOrderTaxRate        Decimal                     @default(8.25) @db.Decimal(5, 2)
   workspaceMode              String                      @default("both")
   status                     String                      @default("Active")
   suspendedAt                DateTime?
@@ -320,6 +321,7 @@ model Workspace {
   suspendedUntil             DateTime?
   legacyOwnerId              String?                     @unique
   inventoryProducts          InventoryProduct[]
+  inventoryLocationMerges    InventoryLocationMerge[]
   orderPayments              OrderPayment[]
   orderRefunds               OrderRefund[]
   createdAt                  DateTime                    @default(now())
@@ -824,6 +826,25 @@ model InventoryLocation {
   @@map("inventory_locations")
 }
 
+model InventoryLocationMerge {
+  id               String    @id @default(cuid())
+  ownerId          String
+  sourceLocationId String
+  targetLocationId String
+  sourceName       String
+  targetName       String
+  actorUserId      String
+  reason           String
+  itemIds          String[]
+  transactionId    BigInt    @default(dbgenerated("txid_current()"))
+  createdAt        DateTime  @default(now())
+  owner            Workspace @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, sourceLocationId])
+  @@index([ownerId, sourceLocationId, targetLocationId, transactionId], map: "inventory_location_merge_guard_idx")
+  @@map("inventory_location_merges")
+}
+
 model InventorySettings {
   id                     String    @id @default(cuid())
   ownerId                String    @unique
@@ -956,32 +977,34 @@ model Order {
 }
 
 model OrderItem {
-  id              String                   @id @default(cuid())
-  ownerId         String
-  orderId         String
-  inventoryItemId String?
-  sku             String?
-  product         String
-  description     String?
-  unit            String?
-  category        String?
-  shippedQuantity Int                      @default(0)
-  unitCost        Decimal?
-  discountAmount  Decimal                  @default(0)
-  taxAmount       Decimal                  @default(0)
-  shipmentItems   OrderShipmentItem[]
-  quantity        Int                      @default(1)
-  unitPrice       Decimal                  @default(0)
-  lineTotal       Decimal                  @default(0)
-  taxable         Boolean                  @default(true)
-  taxRate         Decimal                  @default(0)
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
-  owner           Workspace                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  order           Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  inventoryItem   InventoryItem?           @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  returnItems     OrderReturnItem[]
-  stockMovements  InventoryStockMovement[]
+  id                  String                   @id @default(cuid())
+  ownerId             String
+  orderId             String
+  inventoryItemId     String?
+  sku                 String?
+  product             String
+  description         String?
+  unit                String?
+  category            String?
+  shippedQuantity     Int                      @default(0)
+  unitCost            Decimal?
+  discountAmount      Decimal                  @default(0)
+  taxAmount           Decimal                  @default(0)
+  shipmentItems       OrderShipmentItem[]
+  quantity            Int                      @default(1)
+  unitPrice           Decimal                  @default(0)
+  catalogUnitPrice    Decimal?
+  priceOverrideReason String?
+  lineTotal           Decimal                  @default(0)
+  taxable             Boolean                  @default(true)
+  taxRate             Decimal                  @default(0)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  owner               Workspace                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  order               Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  inventoryItem       InventoryItem?           @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  returnItems         OrderReturnItem[]
+  stockMovements      InventoryStockMovement[]
 
   @@unique([id, ownerId])
   @@index([ownerId])
@@ -1480,19 +1503,33 @@ model OrderRefund {
 }
 
 model OrderShipment {
-  id             String              @id @default(cuid())
+  id             String                 @id @default(cuid())
   orderId        String
   idempotencyKey String
   actorUserId    String?
   carrier        String?
   trackingNumber String?
-  shippedAt      DateTime            @default(now())
-  order          Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  shippedAt      DateTime               @default(now())
+  order          Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
   items          OrderShipmentItem[]
+  reversal       OrderShipmentReversal?
 
   @@unique([orderId, idempotencyKey])
   @@index([orderId, shippedAt])
   @@map("order_shipments")
+}
+
+model OrderShipmentReversal {
+  id             String        @id @default(cuid())
+  shipmentId     String        @unique
+  idempotencyKey String        @unique
+  actorUserId    String?
+  reason         String
+  reversedAt     DateTime      @default(now())
+  shipment       OrderShipment @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+
+  @@index([reversedAt])
+  @@map("order_shipment_reversals")
 }
 
 model OrderShipmentItem {

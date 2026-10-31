@@ -111,7 +111,7 @@ export function CsvExportMenu<T>({
       filenameSuffix: "filtered-rows",
       label: "Filtered rows",
       rows: currentRows,
-      summary: "Every record matching the current filters and search.",
+      summary: "Matching records on the current page.",
     },
     {
       disabled: allRows.length === 0,

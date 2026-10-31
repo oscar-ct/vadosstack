@@ -110,44 +110,65 @@ async function prepareOrderItems(
   ownerId: string,
   input: CreateOrderInput,
   existing: Awaited<ReturnType<typeof tx.orderItem.findMany>> = [],
+  canOverridePrices = false,
 ) {
   return Promise.all(
     input.items.map(async (item) => {
       const old = item.id ? existing.find((line) => line.id === item.id) : undefined;
       if (old && old.inventoryItemId !== (item.inventoryItemId ?? null))
         throw new OrderActionError("Remove the old line before replacing its product.");
-      if (old && cents(old.unitPrice) !== cents(item.unitPrice))
-        throw new OrderActionError("Saved line prices are fixed. Add a new order for a different price.");
       const inventoryItem = item.inventoryItemId
         ? await tx.inventoryItem.findFirst({
             where: { id: item.inventoryItemId, ownerId },
             include: { category: true },
           })
         : null;
-      if (
-        !old &&
-        inventoryItem &&
-        (cents(inventoryItem.unitPrice) !== cents(item.unitPrice) ||
-          (item.taxRate !== undefined && item.taxRate !== Number(inventoryItem.taxRate)) ||
-          (item.taxable !== undefined && item.taxable !== inventoryItem.taxable))
-      )
+      if (!old && inventoryItem && item.taxable !== undefined && item.taxable !== inventoryItem.taxable)
         throw new OrderActionError("Catalog pricing or tax changed. Refresh the product before saving.");
       if (item.inventoryItemId && !inventoryItem) throw new OrderActionError("Inventory item was not found.");
       if (inventoryItem?.itemStatus !== "Active" && inventoryItem && (!old || item.quantity > old.quantity))
         throw new OrderActionError("Inactive products cannot be added to orders.");
+      if (
+        !old &&
+        inventoryItem &&
+        item.expectedCatalogUnitPrice != null &&
+        cents(item.expectedCatalogUnitPrice) !== cents(inventoryItem.unitPrice)
+      )
+        throw new OrderActionError("Catalog price changed. Refresh the product before saving.");
+      const referencePrice = old?.unitPrice ?? inventoryItem?.unitPrice;
+      const priceChanged = referencePrice !== undefined && cents(referencePrice) !== cents(item.unitPrice);
+      const overrideReason = item.priceOverrideReason?.trim();
+      if (item.priceOverride && !inventoryItem)
+        throw new OrderActionError("Custom items do not use catalog price overrides.");
+      if (inventoryItem && (priceChanged || item.priceOverride)) {
+        if (!canOverridePrices) throw new OrderActionError("You do not have permission to override inventory prices.");
+        if (!item.priceOverride || !overrideReason)
+          throw new OrderActionError("Use Override price and enter a reason to change an inventory price.");
+      }
       return {
         id: old?.id,
         inventoryItemId: inventoryItem?.id ?? null,
-        category: old ? old.category : (inventoryItem?.category?.name ?? item.category ?? null),
-        product: old?.product ?? inventoryItem?.product ?? item.product,
-        sku: old ? old.sku : (inventoryItem?.sku ?? item.sku ?? null),
+        category: inventoryItem
+          ? old
+            ? old.category
+            : (inventoryItem.category?.name ?? null)
+          : (item.category ?? null),
+        product: inventoryItem ? (old?.product ?? inventoryItem.product) : item.product,
+        sku: inventoryItem ? (old ? old.sku : inventoryItem.sku) : (item.sku ?? null),
         description: old ? old.description : (inventoryItem?.description ?? item.description ?? null),
         unit: old ? old.unit : (inventoryItem?.unit ?? item.unit ?? null),
         quantity: item.quantity,
-        unitPrice: Number(old?.unitPrice ?? inventoryItem?.unitPrice ?? item.unitPrice),
+        unitPrice: item.unitPrice,
+        catalogUnitPrice: old ? (old.catalogUnitPrice ?? null) : (inventoryItem?.unitPrice ?? null),
+        priceOverrideReason: item.priceOverride ? (overrideReason ?? null) : (old?.priceOverrideReason ?? null),
         unitCost: old ? old.unitCost : (inventoryItem?.cost ?? null),
         taxable: old?.taxable ?? inventoryItem?.taxable ?? item.taxable ?? true,
-        taxRate: Number(old?.taxRate ?? inventoryItem?.taxRate ?? item.taxRate ?? input.taxRate),
+        taxRate:
+          old && !input.overrideTaxRate
+            ? Number(old.taxRate)
+            : (old?.taxable ?? inventoryItem?.taxable ?? item.taxable ?? true)
+              ? input.taxRate
+              : 0,
       };
     }),
   );
@@ -199,6 +220,7 @@ function revalidateCommerce(slug: string, orderId?: string) {
   for (const path of [
     "/dashboard/orders",
     "/dashboard/inventory",
+    "/dashboard/inventory-analytics",
     "/dashboard/commerce-pulse",
     ...(orderId ? [`/dashboard/orders/${orderId}/edit`, `/dashboard/orders/${orderId}/return`] : []),
   ])
@@ -235,7 +257,13 @@ export async function createOrderWithInventoryAdjustments(rawInput: CreateOrderI
       select: { orderMessageText: true },
     });
     const customerId = await resolveCustomerId(tx, workspaceId, input);
-    const prepared = await prepareOrderItems(tx, workspaceId, input);
+    const prepared = await prepareOrderItems(
+      tx,
+      workspaceId,
+      input,
+      [],
+      can(authorization.membership, "orders.prices.override"),
+    );
     const totals = calculateOrderTotals(prepared, input.shippingAmount, input.discountAmount, input.taxRate);
     if (cents(input.discountAmount) > cents(totals.subtotal))
       throw new OrderActionError("Discount cannot exceed the merchandise subtotal.");
@@ -253,6 +281,7 @@ export async function createOrderWithInventoryAdjustments(rawInput: CreateOrderI
       },
     });
     await attachDocumentNumber(tx, number.assignmentId, order.id);
+    const createdLines: Array<{ orderItemId: string; quantity: number }> = [];
     for (const [index, item] of prepared.entries()) {
       const { id: _id, ...data } = item;
       const line = await tx.orderItem.create({
@@ -264,6 +293,7 @@ export async function createOrderWithInventoryAdjustments(rawInput: CreateOrderI
           shippedQuantity: input.fulfillmentStatus === "Fulfilled" ? item.quantity : 0,
         },
       });
+      createdLines.push({ orderItemId: line.id, quantity: item.quantity });
       if (item.inventoryItemId)
         await adjustStock(tx, {
           ownerId: workspaceId,
@@ -276,6 +306,17 @@ export async function createOrderWithInventoryAdjustments(rawInput: CreateOrderI
           actorUserId: authorization.principal.user.id,
         });
     }
+    if (input.fulfillmentStatus === "Fulfilled")
+      await tx.orderShipment.create({
+        data: {
+          orderId: order.id,
+          idempotencyKey: `order:${submissionKey}`,
+          actorUserId: authorization.principal.user.id,
+          carrier: optionalString(input.shippingService),
+          trackingNumber: optionalString(input.trackingNumber),
+          items: { create: createdLines },
+        },
+      });
     if (input.paymentStatus === "Paid" && totals.total > 0)
       await tx.orderPayment.create({
         data: {
@@ -297,6 +338,20 @@ export async function createOrderWithInventoryAdjustments(rawInput: CreateOrderI
         action: "order.create",
         targetType: "Order",
         targetId: order.id,
+        metadata: {
+          priceOverrides: prepared.flatMap((line, index) =>
+            input.items[index].priceOverride
+              ? [
+                  {
+                    inventoryItemId: line.inventoryItemId,
+                    catalogUnitPrice: line.catalogUnitPrice == null ? null : Number(line.catalogUnitPrice),
+                    unitPrice: line.unitPrice,
+                    reason: line.priceOverrideReason,
+                  },
+                ]
+              : [],
+          ),
+        },
       },
       tx,
     );
@@ -321,7 +376,13 @@ export async function updateOrderWithInventoryAdjustments(orderId: string, rawIn
     if (existing.orderStatus !== "Active") throw new OrderActionError("Cancelled orders cannot be edited.");
     if (input.paymentStatus !== existing.paymentStatus || input.fulfillmentStatus !== existing.fulfillmentStatus)
       throw new OrderActionError("Use the payment and shipping controls to change order status.");
-    const prepared = await prepareOrderItems(tx, workspaceId, input, existing.items);
+    const prepared = await prepareOrderItems(
+      tx,
+      workspaceId,
+      input,
+      existing.items,
+      can(authorization.membership, "orders.prices.override"),
+    );
     const totals = calculateOrderTotals(prepared, input.shippingAmount, input.discountAmount, input.taxRate);
     if (cents(input.discountAmount) > cents(totals.subtotal))
       throw new OrderActionError("Discount cannot exceed the merchandise subtotal.");
@@ -330,11 +391,21 @@ export async function updateOrderWithInventoryAdjustments(orderId: string, rawIn
       prepared.length !== existing.items.length ||
       prepared.some((line) => {
         const old = existing.items.find((item) => item.id === line.id);
-        return !old || old.quantity !== line.quantity || cents(old.unitPrice) !== cents(line.unitPrice);
+        return (
+          !old ||
+          old.quantity !== line.quantity ||
+          cents(old.unitPrice) !== cents(line.unitPrice) ||
+          Number(old.taxRate) !== line.taxRate ||
+          old.taxable !== line.taxable
+        );
       }) ||
       cents(existing.shippingAmount) !== cents(totals.shippingAmount) ||
       cents(existing.discountAmount) !== cents(totals.discountAmount);
-    if (hasHistory && financialChanged)
+    const identityChanged = prepared.some((line) => {
+      const old = existing.items.find((item) => item.id === line.id);
+      return old && (old.product !== line.product || old.sku !== line.sku || old.category !== line.category);
+    });
+    if (hasHistory && (financialChanged || identityChanged))
       throw new OrderActionError(
         "Orders with shipments or returns keep their original financial lines. Use a new order for additional items.",
       );
@@ -402,6 +473,24 @@ export async function updateOrderWithInventoryAdjustments(orderId: string, rawIn
         action: "order.update",
         targetType: "Order",
         targetId: orderId,
+        metadata: {
+          priceOverrides: prepared.flatMap((line, index) =>
+            input.items[index].priceOverride
+              ? [
+                  {
+                    inventoryItemId: line.inventoryItemId,
+                    catalogUnitPrice: line.catalogUnitPrice == null ? null : Number(line.catalogUnitPrice),
+                    unitPrice: line.unitPrice,
+                    reason: line.priceOverrideReason,
+                    previousUnitPrice:
+                      existing.items.find((old) => old.id === line.id)?.unitPrice == null
+                        ? null
+                        : Number(existing.items.find((old) => old.id === line.id)?.unitPrice),
+                  },
+                ]
+              : [],
+          ),
+        },
       },
       tx,
     );
