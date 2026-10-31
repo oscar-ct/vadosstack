@@ -56,6 +56,55 @@ export async function getInventoryItems(
         },
       })
     : [];
+  const now = Date.now();
+  const soldSince30d = new Date(now - 30 * 24 * 60 * 60 * 1000);
+  const soldSince90d = new Date(now - 90 * 24 * 60 * 60 * 1000);
+  const soldItems = items.length
+    ? await prisma.orderItem.findMany({
+        where: {
+          ownerId,
+          inventoryItemId: { in: items.map((item) => item.id) },
+          order: { orderStatus: "Active" },
+        },
+        select: {
+          inventoryItemId: true,
+          quantity: true,
+          order: { select: { orderDate: true } },
+          returnItems: { select: { returnQuantity: true, createdAt: true } },
+        },
+      })
+    : [];
+  const salesByItem = new Map<
+    string,
+    {
+      totalSold: number;
+      sold30d: number;
+      sold90d: number;
+      totalReturned: number;
+      returned30d: number;
+      returned90d: number;
+    }
+  >();
+  for (const orderItem of soldItems) {
+    if (!orderItem.inventoryItemId) continue;
+    const sales = salesByItem.get(orderItem.inventoryItemId) ?? {
+      totalSold: 0,
+      sold30d: 0,
+      sold90d: 0,
+      totalReturned: 0,
+      returned30d: 0,
+      returned90d: 0,
+    };
+    sales.totalSold += orderItem.quantity;
+    if (orderItem.order.orderDate >= soldSince90d) sales.sold90d += orderItem.quantity;
+    if (orderItem.order.orderDate >= soldSince30d) sales.sold30d += orderItem.quantity;
+    for (const returnItem of orderItem.returnItems) {
+      sales.totalReturned += returnItem.returnQuantity;
+      if (returnItem.createdAt >= soldSince90d) sales.returned90d += returnItem.returnQuantity;
+      if (returnItem.createdAt >= soldSince30d) sales.returned30d += returnItem.returnQuantity;
+    }
+    salesByItem.set(orderItem.inventoryItemId, sales);
+  }
   const overviews = summarizeInventoryStock(balances);
   return items.map((item) => ({
     id: item.id,
@@ -73,6 +122,7 @@ export async function getInventoryItems(
     category: item.category?.name ?? "Uncategorized",
     description: item.description ?? "",
     stock: item.stock,
+    sales: salesByItem.get(item.id),
     locationLocked:
       item.stock !== 0 || item._count.orderItems > 0 || item._count.returnItems > 0 || item._count.stockMovements > 0,
     reorderPoint: item.reorderPoint,

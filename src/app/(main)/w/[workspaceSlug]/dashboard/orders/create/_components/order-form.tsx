@@ -29,6 +29,7 @@ import {
   PackageCheck,
   PackageSearch,
   PackageX,
+  Pencil,
   Plus,
   Trash2,
   UserRound,
@@ -62,6 +63,8 @@ import type { InventoryItem } from "../../../inventory/_components/inventory-tab
 import {
   clampOrderFooterMessage,
   getLineAmount,
+  getOrderSubtotal,
+  getOrderTaxAmount,
   getOrderTotal,
   type OrderCustomer,
   type OrderCustomerAddress,
@@ -157,7 +160,7 @@ export function OrderForm({
   }, [validationAttempt]);
   const review = (
     <>
-      {creating ? <OrderReviewSummary order={order} onStepChange={onStepChange} disabled={disabled} /> : null}
+      {creating ? <OrderReviewSummary order={order} /> : null}
       <OrderDetails disabled={disabled} creating={creating} canRecordPayment={canRecordPayment} />
       <Separator />
       <OrderAdjustments disabled={disabled} />
@@ -233,7 +236,7 @@ export function OrderForm({
               >
                 {step.title}
               </h2>
-              <p className="text-muted-foreground text-sm">{step.description}</p>
+              {step.description ? <p className="text-muted-foreground text-sm">{step.description}</p> : null}
             </div>
             {validationError ? (
               <p
@@ -272,44 +275,79 @@ export function OrderForm({
   );
 }
 
-function OrderReviewSummary({
-  order,
-  onStepChange,
-  disabled,
-}: {
-  order: OrderFormValues;
-  onStepChange?: (step: OrderStep) => void;
-  disabled: boolean;
-}) {
+function OrderReviewSummary({ order }: { order: OrderFormValues }) {
+  const cityLine = [order.city, order.state, order.zip].filter(Boolean).join(", ");
+
   return (
-    <section aria-label="Order summary" className="grid gap-3 rounded-lg border bg-muted/20 p-3 text-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="grid min-w-0 gap-1">
-          <h3 className="font-medium">{isWalkInOrder(order) ? WALK_IN_CUSTOMER_NAME : order.customerName}</h3>
-          <p className="break-words text-muted-foreground text-xs">
-            {orderNeedsShipping(order)
-              ? ["Delivery", order.streetAddress, order.apartment, order.city, order.state, order.zip]
-                  .filter(Boolean)
-                  .join(" · ")
-              : "In-person pickup"}
+    <section aria-label="Order summary" className="grid gap-3 rounded-lg border bg-muted/20 p-4 text-sm">
+      <div className="grid min-w-0 gap-1.5">
+        <h3 className="font-medium">{isWalkInOrder(order) ? WALK_IN_CUSTOMER_NAME : order.customerName}</h3>
+        {order.customerPhone ? (
+          <p className="text-muted-foreground text-xs">{formatPhoneNumber(order.customerPhone)}</p>
+        ) : null}
+        {order.customerEmail ? (
+          <p className="truncate text-muted-foreground text-xs" title={order.customerEmail}>
+            {order.customerEmail}
           </p>
+        ) : null}
+        {orderNeedsShipping(order) ? (
+          order.streetAddress || cityLine ? (
+            <div className="mt-1 grid gap-1 text-muted-foreground text-xs">
+              <span className="font-medium text-foreground/70">Ship to</span>
+              {order.streetAddress ? <span>{order.streetAddress}</span> : null}
+              {order.apartment ? <span>{order.apartment}</span> : null}
+              {cityLine ? <span>{cityLine}</span> : null}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-xs">Delivery address not added</p>
+          )
+        ) : (
+          <p className="text-muted-foreground text-xs">In-person pickup</p>
+        )}
+      </div>
+      <div className="flex items-start gap-3 border-t pt-3">
+        <div className="grid min-w-0 flex-1 gap-1">
+          {order.items.length ? (
+            order.items.map((item) => (
+              <div key={item.id} className="flex min-w-0 items-center justify-between gap-3 text-xs">
+                <span className="min-w-0 truncate" title={item.product}>
+                  {item.product}
+                </span>
+                <span className="shrink-0 text-muted-foreground tabular-nums">
+                  {item.quantity} × {formatOrderCurrency(item.unitPrice)}
+                </span>
+              </div>
+            ))
+          ) : (
+            <span className="text-muted-foreground text-xs">No items added</span>
+          )}
         </div>
-        <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onStepChange?.("customer")}>
-          Edit customer
-        </Button>
       </div>
-      <div className="flex items-center justify-between gap-3 border-t pt-3">
-        <p>
-          {order.items.length} {order.items.length === 1 ? "item" : "items"} ·{" "}
-          {order.items.reduce((sum, item) => sum + item.quantity, 0)} units
-        </p>
-        <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onStepChange?.("items")}>
-          Edit items
-        </Button>
-      </div>
-      <div className="flex items-center justify-between gap-3 border-t pt-3 font-medium">
-        <span>Order total</span>
-        <span className="tabular-nums">{formatOrderCurrency(getOrderTotal(order))}</span>
+      <div className="grid gap-1.5 border-t pt-3 text-xs">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Subtotal</span>
+          <span className="tabular-nums">{formatOrderCurrency(getOrderSubtotal(order))}</span>
+        </div>
+        {orderNeedsShipping(order) && order.shipping > 0 ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Shipping</span>
+            <span className="tabular-nums">{formatOrderCurrency(order.shipping)}</span>
+          </div>
+        ) : null}
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Sales tax</span>
+          <span className="tabular-nums">{formatOrderCurrency(getOrderTaxAmount(order))}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Discount</span>
+          <span className="text-emerald-600 tabular-nums">
+            {order.discount > 0 ? `-${formatOrderCurrency(order.discount)}` : formatOrderCurrency(0)}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3 border-t pt-3 font-medium text-sm">
+          <span>Order total</span>
+          <span className="tabular-nums">{formatOrderCurrency(getOrderTotal(order))}</span>
+        </div>
       </div>
     </section>
   );
@@ -342,6 +380,92 @@ function OrderDetails({
             </InputGroupAddon>
           </InputGroup>
         </Field>
+
+        <section className="grid gap-4 rounded-lg border border-primary/20 bg-primary/[0.025] p-3 sm:grid-cols-2">
+          <div className="grid gap-1 sm:col-span-2">
+            <h3 className="font-semibold text-sm">Date &amp; payment</h3>
+            <p className="text-muted-foreground text-xs">
+              Set the order date and payment information before continuing.
+            </p>
+          </div>
+          <Controller
+            control={control}
+            name="orderDate"
+            render={({ field }) => (
+              <Field className="gap-1">
+                <FieldLabel className="font-medium text-xs" htmlFor="order-date">
+                  Order Date
+                </FieldLabel>
+                <DatePicker disabled={disabled} id="order-date" value={field.value} onChange={field.onChange} />
+              </Field>
+            )}
+          />
+          <Field className="gap-1">
+            <FieldLabel className="font-medium text-xs" htmlFor="payment-method">
+              Payment Method
+            </FieldLabel>
+            <Input
+              id="payment-method"
+              disabled={disabled}
+              placeholder="Visa ending in 4242"
+              {...register("paymentMethod")}
+            />
+          </Field>
+          <Field className="gap-1 sm:col-span-2">
+            <FieldLabel className="font-medium text-xs" htmlFor="payment-reference">
+              Ref # <span className="font-normal text-muted-foreground">(optional)</span>
+            </FieldLabel>
+            <Input
+              id="payment-reference"
+              disabled={disabled}
+              placeholder="AUTH-8427"
+              {...register("paymentReference")}
+            />
+          </Field>
+        </section>
+
+        {needsDelivery ? (
+          <section className="grid gap-4 rounded-lg border border-primary/20 bg-primary/[0.025] p-3 sm:grid-cols-2">
+            <div className="grid gap-1 sm:col-span-2">
+              <h3 className="font-semibold text-sm">Delivery details</h3>
+              <p className="text-muted-foreground text-xs">Add the expected delivery date and shipping details.</p>
+            </div>
+            <Controller
+              control={control}
+              name="deliveryRange"
+              render={({ field }) => (
+                <Field className="gap-1">
+                  <FieldLabel className="font-medium text-xs" htmlFor="delivery-range">
+                    Estimated Delivery
+                  </FieldLabel>
+                  <DatePicker disabled={disabled} id="delivery-range" value={field.value} onChange={field.onChange} />
+                </Field>
+              )}
+            />
+            <Field className="gap-1">
+              <FieldLabel className="font-medium text-xs" htmlFor="delivery-company">
+                Shipping Service
+              </FieldLabel>
+              <Input
+                id="delivery-company"
+                disabled={disabled}
+                placeholder="USPS Priority Mail"
+                {...register("deliveryCompany")}
+              />
+            </Field>
+            <Field className="gap-1 sm:col-span-2">
+              <FieldLabel className="font-medium text-xs" htmlFor="tracking-number">
+                Tracking Number <span className="font-normal text-muted-foreground">(optional)</span>
+              </FieldLabel>
+              <Input
+                id="tracking-number"
+                disabled={disabled}
+                placeholder="1Z999AA..."
+                {...register("trackingNumber")}
+              />
+            </Field>
+          </section>
+        ) : null}
 
         <section className="grid gap-4 rounded-xl border-2 border-primary/25 bg-primary/[0.025] p-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -465,86 +589,6 @@ function OrderDetails({
             operations to record payments, fulfillment, corrections, and returns.
           </p>
         </section>
-        <div className="grid grid-cols-2 gap-3 sm:gap-5">
-          <Controller
-            control={control}
-            name="orderDate"
-            render={({ field }) => (
-              <Field className="gap-1">
-                <FieldLabel className="text-xs" htmlFor="order-date">
-                  Order Date
-                </FieldLabel>
-                <DatePicker disabled={disabled} id="order-date" value={field.value} onChange={field.onChange} />
-              </Field>
-            )}
-          />
-          {needsDelivery ? (
-            <Controller
-              control={control}
-              name="deliveryRange"
-              render={({ field }) => (
-                <Field className="gap-1">
-                  <FieldLabel className="text-xs" htmlFor="delivery-range">
-                    Estimated Delivery
-                  </FieldLabel>
-                  <DatePicker disabled={disabled} id="delivery-range" value={field.value} onChange={field.onChange} />
-                </Field>
-              )}
-            />
-          ) : null}
-        </div>
-
-        {needsDelivery ? (
-          <div className="grid gap-5 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-            <Field className="gap-1">
-              <FieldLabel className="text-xs" htmlFor="delivery-company">
-                Shipping Service
-              </FieldLabel>
-              <Input
-                id="delivery-company"
-                disabled={disabled}
-                placeholder="USPS Priority Mail"
-                {...register("deliveryCompany")}
-              />
-            </Field>
-            <Field className="gap-1">
-              <FieldLabel className="text-xs" htmlFor="tracking-number">
-                Tracking Number
-              </FieldLabel>
-              <Input
-                id="tracking-number"
-                disabled={disabled}
-                placeholder="1Z999AA..."
-                {...register("trackingNumber")}
-              />
-            </Field>
-          </div>
-        ) : null}
-
-        <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
-          <Field className="gap-1">
-            <FieldLabel className="text-xs" htmlFor="payment-method">
-              Payment Method
-            </FieldLabel>
-            <Input
-              id="payment-method"
-              disabled={disabled}
-              placeholder="Visa ending in 4242"
-              {...register("paymentMethod")}
-            />
-          </Field>
-          <Field className="gap-1">
-            <FieldLabel className="text-xs" htmlFor="payment-reference">
-              Ref #
-            </FieldLabel>
-            <Input
-              id="payment-reference"
-              disabled={disabled}
-              placeholder="AUTH-8427"
-              {...register("paymentReference")}
-            />
-          </Field>
-        </div>
       </FieldGroup>
     </section>
   );
@@ -755,8 +799,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
 
   return (
     <section className="flex flex-col gap-4">
-      <fieldset className="grid gap-2">
-        <legend className="mb-2 font-medium text-sm">Customer type</legend>
+      <fieldset className="grid gap-2" aria-label="Customer selection">
         <div className="grid grid-cols-2 gap-2">
           {[
             { value: "customer", label: "Customer details", help: "Choose a profile or enter a name" },
@@ -1266,13 +1309,7 @@ function OrderItems({
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="font-medium tracking-tight">Order Items</h2>
-          <p className="text-muted-foreground text-sm">
-            Choose products and quantities. Use a custom item for one-off products.
-          </p>
-        </div>
+      <div className="flex justify-end">
         <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={handleAddItem}>
           <Plus />
           Add Item
@@ -1505,22 +1542,37 @@ function OrderItemPrice({
   }
   return (
     <div className="grid min-w-0 gap-2">
-      {canEditPrice ? (
-        <Input
-          id={`order-item-unit-price-${index}`}
-          type="number"
-          min="0"
-          step="0.01"
-          className="min-w-0 text-base md:text-sm"
-          disabled={disabled}
-          {...register(`items.${index}.unitPrice`, { min: 0, valueAsNumber: true })}
-          onBlur={formatMoneyInputOnBlur}
-        />
-      ) : (
-        <p id={`order-item-unit-price-${index}`} className="min-h-9 py-2 text-sm tabular-nums">
-          {formatOrderCurrency(item?.unitPrice ?? 0)}
-        </p>
-      )}
+      <div className="flex min-w-0 items-center gap-1">
+        {canEditPrice ? (
+          <Input
+            id={`order-item-unit-price-${index}`}
+            type="number"
+            min="0"
+            step="0.01"
+            className="min-w-0 flex-1 text-base md:text-sm"
+            disabled={disabled}
+            {...register(`items.${index}.unitPrice`, { min: 0, valueAsNumber: true })}
+            onBlur={formatMoneyInputOnBlur}
+          />
+        ) : (
+          <p id={`order-item-unit-price-${index}`} className="min-h-9 flex-1 py-2 text-sm tabular-nums">
+            {formatOrderCurrency(item?.unitPrice ?? 0)}
+          </p>
+        )}
+        {inventoryLine && !editingOverride && !disabled && canOverridePrices ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0 text-muted-foreground"
+            aria-label="Override unit price"
+            title="Override unit price"
+            onClick={() => setValue(`items.${index}.priceOverride`, true, { shouldDirty: true })}
+          >
+            <Pencil />
+          </Button>
+        ) : null}
+      </div>
       {inventoryLine && referencePrice != null && (editingOverride || item?.priceOverrideReason) ? (
         <p className="text-muted-foreground text-xs">Original catalog price: {formatOrderCurrency(referencePrice)}</p>
       ) : null}
@@ -1544,27 +1596,15 @@ function OrderItemPrice({
             {...register(`items.${index}.priceOverrideReason`)}
           />
           {!disabled && canOverridePrices ? (
-            <Button type="button" variant="ghost" size="sm" className="justify-start px-0" onClick={cancelOverride}>
-              Cancel override
+            <Button type="button" variant="outline" size="sm" className="h-8 w-fit px-3" onClick={cancelOverride}>
+              Cancel
             </Button>
           ) : null}
         </>
       ) : inventoryLine ? (
-        <>
-          {item?.priceOverrideReason ? (
-            <p className="break-words text-muted-foreground text-xs">Override reason: {item.priceOverrideReason}</p>
-          ) : null}
-          {!disabled && canOverridePrices ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setValue(`items.${index}.priceOverride`, true, { shouldDirty: true })}
-            >
-              Override price
-            </Button>
-          ) : null}
-        </>
+        item?.priceOverrideReason ? (
+          <p className="break-words text-muted-foreground text-xs">Override reason: {item.priceOverrideReason}</p>
+        ) : null
       ) : null}
     </div>
   );

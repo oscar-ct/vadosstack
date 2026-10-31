@@ -60,6 +60,7 @@ export async function getOrderTableItems(
     skip: ((options.page ?? 1) - 1) * 50,
     include: {
       items: { select: { id: true, product: true, quantity: true, shippedQuantity: true } },
+      payments: { select: { amount: true } },
       _count: {
         select: {
           items: true,
@@ -93,10 +94,14 @@ export async function getOrderTableItems(
       orderStatus: order.orderStatus,
       fulfillmentStatus: order.fulfillmentStatus as OrderFormValues["fulfillmentStatus"],
       itemCount: order._count.items,
+      primaryProduct: order.items[0]?.product ?? null,
       fulfillmentItems: order.items
         .map((item) => ({ id: item.id, product: item.product, remaining: item.quantity - item.shippedQuantity }))
         .filter((item) => item.remaining > 0),
       total: Number(order.total),
+      originalValue: Number(order.subtotal),
+      discounts: Number(order.discountAmount),
+      collected: order.payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
       orderedAt: order.orderDate.toISOString(),
       returnNumber: orderReturn?.returnNumber ?? null,
       returnRefundAmount: orderReturn?.refundState === "succeeded" ? Number(orderReturn.refundAmount) : null,

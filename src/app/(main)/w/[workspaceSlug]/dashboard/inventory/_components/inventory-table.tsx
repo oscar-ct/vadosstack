@@ -79,6 +79,14 @@ export type InventoryItem = {
   productId?: string;
   identityLocked?: boolean;
   stockOverview?: InventoryStockOverview;
+  sales?: {
+    totalSold: number;
+    sold30d: number;
+    sold90d: number;
+    totalReturned: number;
+    returned30d: number;
+    returned90d: number;
+  };
   maxStock: number;
   notes?: string;
   product: string;
@@ -113,6 +121,8 @@ type InventoryFieldKey =
   | "unitPrice"
   | "vendor";
 type SortValue =
+  | "cost-asc"
+  | "cost-desc"
   | "location-asc"
   | "location-desc"
   | "product-asc"
@@ -123,6 +133,8 @@ type SortValue =
   | "status-desc"
   | "stock-asc"
   | "stock-desc"
+  | "sold-asc"
+  | "sold-desc"
   | "value-asc"
   | "value-desc";
 
@@ -145,8 +157,12 @@ const statusOptions = [
 
 const sortOptions: Array<{ label: string; value: SortValue }> = [
   { value: "value-desc", label: "Highest value" },
+  { value: "cost-asc", label: "Lowest cost" },
+  { value: "cost-desc", label: "Highest cost" },
   { value: "stock-asc", label: "Lowest stock" },
   { value: "stock-desc", label: "Highest stock" },
+  { value: "sold-desc", label: "Most sold · 30d" },
+  { value: "sold-asc", label: "Least sold · 30d" },
   { value: "product-asc", label: "Product A-Z" },
   { value: "product-desc", label: "Product Z-A" },
   { value: "sku-asc", label: "SKU A-Z" },
@@ -170,6 +186,7 @@ function getInventoryExportColumns(stockRules: InventoryStockRules): CsvColumn<I
     { header: "Product", value: (item) => item.product },
     { header: "Category", value: (item) => item.category },
     { header: "Stock", value: (item) => item.stock },
+    { header: "Sold", value: (item) => item.sales?.totalSold ?? 0 },
     { header: "Reorder point", value: (item) => item.reorderPoint },
     { header: "Max stock", value: (item) => item.maxStock },
     { header: "Status", value: (item) => getInventoryStatus(item, stockRules) },
@@ -224,8 +241,12 @@ function getStockClassName(status: InventoryStatus) {
 
 function sortInventoryItems(items: InventoryItem[], sortValue: SortValue, stockRules: InventoryStockRules) {
   return [...items].sort((left, right) => {
+    if (sortValue === "cost-asc") return left.cost - right.cost;
+    if (sortValue === "cost-desc") return right.cost - left.cost;
     if (sortValue === "stock-asc") return left.stock - right.stock;
     if (sortValue === "stock-desc") return right.stock - left.stock;
+    if (sortValue === "sold-asc") return (left.sales?.totalSold ?? 0) - (right.sales?.totalSold ?? 0);
+    if (sortValue === "sold-desc") return (right.sales?.totalSold ?? 0) - (left.sales?.totalSold ?? 0);
     if (sortValue === "product-asc") return left.product.localeCompare(right.product);
     if (sortValue === "product-desc") return right.product.localeCompare(left.product);
     if (sortValue === "sku-asc") return left.sku.localeCompare(right.sku, undefined, { numeric: true });
@@ -298,6 +319,20 @@ function InventoryItemViewFields({ item }: { item: InventoryItem }) {
                 <InventoryRecordValue label="Supplier" value={item.vendor} />
                 <div className="grid grid-cols-2 gap-4">
                   <InventoryRecordValue label="Taxable" value={item.taxable ? "Yes" : "No"} />
+                </div>
+              </dl>
+            </InventoryRecordSection>
+            <InventoryRecordSection title="Sales activity" description="Units sold and returned from active orders.">
+              <dl className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  <InventoryRecordValue label="Total sold" value={item.sales?.totalSold ?? 0} />
+                  <InventoryRecordValue label="Last 90 days" value={item.sales?.sold90d ?? 0} />
+                  <InventoryRecordValue label="Last 30 days" value={item.sales?.sold30d ?? 0} />
+                </div>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  <InventoryRecordValue label="Total returned" value={item.sales?.totalReturned ?? 0} />
+                  <InventoryRecordValue label="Returned · 90d" value={item.sales?.returned90d ?? 0} />
+                  <InventoryRecordValue label="Returned · 30d" value={item.sales?.returned30d ?? 0} />
                 </div>
               </dl>
             </InventoryRecordSection>
@@ -485,8 +520,19 @@ function MobileInventoryCard({
           <div className={cn("font-semibold tabular-nums", getStockClassName(status))}>{item.stock}</div>
         </div>
         <div className="min-w-0 text-right">
+          <div className="text-muted-foreground text-xs">Unit cost</div>
+          <div className="font-medium tabular-nums">{formatCurrency(item.cost)}</div>
+        </div>
+        <div className="min-w-0">
+          <div className="text-muted-foreground text-xs">Sold</div>
+          <div className="font-medium tabular-nums">{item.sales?.totalSold ?? 0}</div>
+        </div>
+        <div className="min-w-0 text-right">
           <div className="text-muted-foreground text-xs">Value</div>
           <div className="font-medium tabular-nums">{formatCurrency(getInventoryValue(item))}</div>
+          <div className="mt-0.5 text-muted-foreground text-xs tabular-nums">
+            {formatCurrency(item.unitPrice)} / {item.unit}
+          </div>
         </div>
         <div className="min-w-0">
           <div className="text-muted-foreground text-xs">Location</div>
@@ -898,15 +944,17 @@ export function InventoryTable({
         </div>
 
         <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
-          <Table className="min-w-[62rem] table-fixed">
+          <Table className="min-w-[58rem] table-fixed">
             <colgroup>
               <col className="w-[4%]" />
-              <col className="w-[26%]" />
+              <col className="w-[20%]" />
               <col className="w-[8%]" />
+              <col className="w-[9%]" />
               <col className="w-[12%]" />
               <col className="w-[12%]" />
-              <col className="w-[18%]" />
-              <col className="w-[14%]" />
+              <col className="w-[13%]" />
+              <col className="w-[7%]" />
+              <col className="w-[12%]" />
               <col className="w-[6%]" />
             </colgroup>
             <TableHeader>
@@ -933,6 +981,14 @@ export function InventoryTable({
                     onSort={() => updateSort(sortValue === "stock-asc" ? "stock-desc" : "stock-asc")}
                   />
                 </TableHead>
+                <TableHead className="sticky top-12 z-20 w-[6.5rem] border-b bg-card text-right">
+                  <SortableTableHeader
+                    align="right"
+                    direction={inventorySortDirection(sortValue, "sold-asc", "sold-desc")}
+                    label="Sold"
+                    onSort={() => updateSort(sortValue === "sold-asc" ? "sold-desc" : "sold-asc")}
+                  />
+                </TableHead>
                 <TableHead className="sticky top-12 z-20 w-[8.25rem] border-b bg-card">Level</TableHead>
                 <TableHead className="sticky top-12 z-20 w-[7.5rem] border-b bg-card">
                   <SortableTableHeader
@@ -946,6 +1002,14 @@ export function InventoryTable({
                     direction={inventorySortDirection(sortValue, "location-asc", "location-desc")}
                     label="Location"
                     onSort={() => updateSort(sortValue === "location-asc" ? "location-desc" : "location-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 w-[7rem] border-b bg-card text-right">
+                  <SortableTableHeader
+                    align="right"
+                    direction={inventorySortDirection(sortValue, "cost-asc", "cost-desc")}
+                    label="Cost"
+                    onSort={() => updateSort(sortValue === "cost-asc" ? "cost-desc" : "cost-asc")}
                   />
                 </TableHead>
                 <TableHead className="sticky top-12 z-20 w-[7.5rem] border-b bg-card text-right">
@@ -1010,6 +1074,11 @@ export function InventoryTable({
                           {item.stock}
                         </span>
                       </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        <span className="block truncate" title={`${item.sales?.totalSold ?? 0} units sold`}>
+                          {item.sales?.totalSold ?? 0}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <StockLevel item={item} stockRules={stockRules} />
                       </TableCell>
@@ -1027,9 +1096,19 @@ export function InventoryTable({
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
+                        <span className="block truncate" title={formatCurrency(item.cost)}>
+                          {formatCurrency(item.cost)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">
                         <span className="block truncate" title={formatCurrency(getInventoryValue(item))}>
                           {item.stock > 0 ? formatCurrency(getInventoryValue(item)) : "$0"}
                         </span>
+                        <div className="mt-1 text-muted-foreground text-xs">
+                          <span className="whitespace-nowrap">
+                            {formatCurrency(item.unitPrice)} / {item.unit}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <InventoryRowActions
@@ -1043,7 +1122,7 @@ export function InventoryTable({
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center">
+                  <TableCell colSpan={10} className="h-24 text-center">
                     No results.
                   </TableCell>
                 </TableRow>

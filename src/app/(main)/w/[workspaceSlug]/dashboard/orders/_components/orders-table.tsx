@@ -59,6 +59,7 @@ export type OrderTableItem = {
   fulfillmentStatus: OrderFulfillmentStatus;
   id: string;
   itemCount: number;
+  primaryProduct?: string | null;
   fulfillmentItems?: Array<{ id: string; product: string; remaining: number }>;
   orderNumber: string;
   orderedAt: string;
@@ -66,13 +67,18 @@ export type OrderTableItem = {
   returnRefundAmount?: number | null;
   returnRefundStatus?: string | null;
   returnNumber?: string | null;
+  originalValue: number;
+  discounts: number;
+  collected: number;
   total: number;
 };
 
 type OrderFilter = "all" | "needs-action" | "returns" | "unfulfilled" | "unpaid";
 type OrderSort =
-  | "customer-asc"
-  | "customer-desc"
+  | "collected-asc"
+  | "collected-desc"
+  | "discounts-asc"
+  | "discounts-desc"
   | "newest"
   | "oldest"
   | "order-asc"
@@ -93,12 +99,14 @@ const filterOptions: Array<{ label: string; value: OrderFilter }> = [
 const sortOptions: Array<{ label: string; value: OrderSort }> = [
   { value: "newest", label: "Newest first" },
   { value: "oldest", label: "Oldest first" },
-  { value: "total-asc", label: "Total low-high" },
-  { value: "total-desc", label: "Total high-low" },
+  { value: "total-asc", label: "Value low-high" },
+  { value: "total-desc", label: "Value high-low" },
+  { value: "discounts-asc", label: "Discounts low-high" },
+  { value: "discounts-desc", label: "Discounts high-low" },
+  { value: "collected-asc", label: "Collected low-high" },
+  { value: "collected-desc", label: "Collected high-low" },
   { value: "order-asc", label: "Order number A-Z" },
   { value: "order-desc", label: "Order number Z-A" },
-  { value: "customer-asc", label: "Customer A-Z" },
-  { value: "customer-desc", label: "Customer Z-A" },
   { value: "status-asc", label: "Status A-Z" },
   { value: "status-desc", label: "Status Z-A" },
 ];
@@ -112,10 +120,13 @@ function orderSortDirection(sortValue: OrderSort, ascending: OrderSort, descendi
 const orderExportColumns: CsvColumn<OrderTableItem>[] = [
   { header: "Order", value: (order) => order.orderNumber },
   { header: "Customer", value: (order) => order.customerName },
+  { header: "Product", value: (order) => order.primaryProduct ?? "" },
   { header: "Payment status", value: (order) => order.paymentStatus },
   { header: "Fulfillment status", value: (order) => order.fulfillmentStatus },
   { header: "Items", value: (order) => order.itemCount },
-  { header: "Total", value: (order) => order.total.toFixed(2) },
+  { header: "Value", value: (order) => order.originalValue.toFixed(2) },
+  { header: "Discount", value: (order) => order.discounts.toFixed(2) },
+  { header: "Collected", value: (order) => order.collected.toFixed(2) },
   { header: "Date", value: (order) => formatOrderDate(order.orderedAt) },
 ];
 
@@ -298,13 +309,24 @@ function MobileOrderCard({
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pr-10">
           <div className="min-w-0">
             <div className="font-medium text-sm">{order.orderNumber}</div>
-            <div className="text-muted-foreground text-xs">
-              {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
+            <div className="truncate text-muted-foreground text-xs">
+              {order.primaryProduct ?? "No products"}
+              {order.itemCount > 1 ? ` + ${order.itemCount - 1} more` : null}
             </div>
           </div>
           <div className="grid shrink-0 gap-0.5 text-right">
-            <div className="text-muted-foreground text-xs">Total</div>
-            <div className="font-medium text-sm tabular-nums">{formatCurrency(order.total)}</div>
+            <div className="flex items-baseline justify-end gap-2">
+              <span className="text-muted-foreground text-xs">Value</span>
+              <span className="text-sm tabular-nums">{formatCurrency(order.originalValue)}</span>
+            </div>
+            <div className="flex items-baseline justify-end gap-2">
+              <span className="text-muted-foreground text-xs">Discount</span>
+              <span className="text-sm tabular-nums">{formatCurrency(order.discounts)}</span>
+            </div>
+            <div className="mt-1 flex items-baseline justify-end gap-2">
+              <span className="text-xs">Collected</span>
+              <span className="font-medium text-sm tabular-nums">{formatCurrency(order.collected)}</span>
+            </div>
             <RefundAmountText order={order} />
           </div>
         </div>
@@ -360,14 +382,16 @@ export function OrdersTable({
       const rightTime = new Date(right.orderedAt).getTime();
 
       if (sortValue === "oldest") return leftTime - rightTime;
-      if (sortValue === "total-asc") return left.total - right.total;
-      if (sortValue === "total-desc") return right.total - left.total;
+      if (sortValue === "total-asc") return left.originalValue - right.originalValue;
+      if (sortValue === "total-desc") return right.originalValue - left.originalValue;
+      if (sortValue === "discounts-asc") return left.discounts - right.discounts;
+      if (sortValue === "discounts-desc") return right.discounts - left.discounts;
+      if (sortValue === "collected-asc") return left.collected - right.collected;
+      if (sortValue === "collected-desc") return right.collected - left.collected;
       if (sortValue === "order-asc")
         return left.orderNumber.localeCompare(right.orderNumber, undefined, { numeric: true });
       if (sortValue === "order-desc")
         return right.orderNumber.localeCompare(left.orderNumber, undefined, { numeric: true });
-      if (sortValue === "customer-asc") return left.customerName.localeCompare(right.customerName);
-      if (sortValue === "customer-desc") return right.customerName.localeCompare(left.customerName);
       if (sortValue === "status-asc") {
         return `${left.paymentStatus} ${left.fulfillmentStatus}`.localeCompare(
           `${right.paymentStatus} ${right.fulfillmentStatus}`,
@@ -569,15 +593,17 @@ export function OrdersTable({
           <div className="flex flex-wrap items-center gap-2">{!exportSlotId && canExport ? exportMenu : null}</div>
         </div>
 
-        <div className="hidden w-full min-w-0 max-w-full overflow-hidden md:block [&_th]:top-0">
-          <Table className="min-w-[60.5rem] table-fixed">
+        <div className="hidden w-full min-w-0 max-w-full overflow-x-auto md:block [&_th]:top-0">
+          <Table className="min-w-[58rem] table-fixed">
             <colgroup>
               <col className="w-[4%]" />
-              <col className="w-[14%]" />
               <col className="w-[20%]" />
-              <col className="w-[24%]" />
-              <col className="w-[14%]" />
-              <col className="w-[24%]" />
+              <col className="w-[10%]" />
+              <col className="w-[17%]" />
+              <col className="w-[8%]" />
+              <col className="w-[8%]" />
+              <col className="w-[8%]" />
+              <col className="w-[5%]" />
             </colgroup>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -595,32 +621,42 @@ export function OrdersTable({
                     onSort={() => updateSort(sortValue === "order-asc" ? "order-desc" : "order-asc")}
                   />
                 </TableHead>
-                <TableHead className="sticky top-12 z-20 min-w-[10rem] border-b bg-card">
+                <TableHead className="sticky top-12 z-20 w-[7rem] border-b bg-card">
                   <SortableTableHeader
-                    direction={orderSortDirection(sortValue, "customer-asc", "customer-desc")}
-                    label="Customer"
-                    onSort={() => updateSort(sortValue === "customer-asc" ? "customer-desc" : "customer-asc")}
+                    direction={orderSortDirection(sortValue, "oldest", "newest")}
+                    label="Date"
+                    onSort={() => updateSort(sortValue === "oldest" ? "newest" : "oldest")}
                   />
                 </TableHead>
-                <TableHead className="sticky top-12 z-20 min-w-[14rem] border-b bg-card">
+                <TableHead className="sticky top-12 z-20 min-w-[9rem] border-b bg-card">
                   <SortableTableHeader
                     direction={orderSortDirection(sortValue, "status-asc", "status-desc")}
                     label="Status"
                     onSort={() => updateSort(sortValue === "status-asc" ? "status-desc" : "status-asc")}
                   />
                 </TableHead>
-                <TableHead className="sticky top-12 z-20 w-[8rem] border-b bg-card">
+                <TableHead className="sticky top-12 z-20 w-[6rem] border-b bg-card text-right">
                   <SortableTableHeader
+                    align="right"
                     direction={orderSortDirection(sortValue, "total-asc", "total-desc")}
-                    label="Total"
+                    label="Value"
                     onSort={() => updateSort(sortValue === "total-asc" ? "total-desc" : "total-asc")}
                   />
                 </TableHead>
-                <TableHead className="sticky top-12 z-20 w-[13rem] border-b bg-card">
+                <TableHead className="sticky top-12 z-20 w-[6rem] border-b bg-card text-right">
                   <SortableTableHeader
-                    direction={orderSortDirection(sortValue, "oldest", "newest")}
-                    label="Date"
-                    onSort={() => updateSort(sortValue === "oldest" ? "newest" : "oldest")}
+                    align="right"
+                    direction={orderSortDirection(sortValue, "discounts-asc", "discounts-desc")}
+                    label="Discount"
+                    onSort={() => updateSort(sortValue === "discounts-asc" ? "discounts-desc" : "discounts-asc")}
+                  />
+                </TableHead>
+                <TableHead className="sticky top-12 z-20 w-[6rem] border-b bg-card text-right">
+                  <SortableTableHeader
+                    align="right"
+                    direction={orderSortDirection(sortValue, "collected-asc", "collected-desc")}
+                    label="Collected"
+                    onSort={() => updateSort(sortValue === "collected-asc" ? "collected-desc" : "collected-asc")}
                   />
                 </TableHead>
               </TableRow>
@@ -656,35 +692,46 @@ export function OrdersTable({
                     </TableCell>
                     <TableCell>
                       <div className="font-medium">{order.orderNumber}</div>
-                      <div className="text-muted-foreground text-xs">
-                        {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
+                      <div
+                        className="max-w-[16rem] truncate text-muted-foreground text-xs"
+                        title={order.primaryProduct ?? ""}
+                      >
+                        {order.primaryProduct ?? "No products"}
+                        {order.itemCount > 1 ? ` + ${order.itemCount - 1} more` : null}
                       </div>
                       <ReturnBadge order={order} />
                     </TableCell>
                     <TableCell>
-                      <div>{order.customerName}</div>
+                      <span className="whitespace-nowrap text-muted-foreground">
+                        {formatOrderDate(order.orderedAt)}
+                      </span>
                     </TableCell>
                     <TableCell>
+                      <div className="mb-1 truncate text-muted-foreground text-xs" title={order.customerName}>
+                        {order.customerName}
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         <OrderStatusBadge status={order.paymentStatus} type="payment" />
                         <OrderStatusBadge status={order.fulfillmentStatus} type="fulfillment" />
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium tabular-nums">{formatCurrency(order.total)}</div>
-                      <RefundAmountText order={order} />
+                      <div className="text-right font-mono tabular-nums">{formatCurrency(order.originalValue)}</div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex min-w-0 items-center justify-between gap-2">
-                        <span className="truncate text-muted-foreground">{formatOrderDate(order.orderedAt)}</span>
-                        <OrderActions canManageReturns={canManageReturns} canUpdate={canUpdate} order={order} />
-                      </div>
+                      <div className="text-right font-mono tabular-nums">{formatCurrency(order.discounts)}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-right font-mono tabular-nums">{formatCurrency(order.collected)}</div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <OrderActions canManageReturns={canManageReturns} canUpdate={canUpdate} order={order} />
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={8} className="h-24 text-center">
                     No orders found.
                   </TableCell>
                 </TableRow>
