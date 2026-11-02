@@ -1,9 +1,15 @@
 import { z } from "zod";
 
 import { isWalkInOrder, normalizeOrderChoices, WALK_IN_CUSTOMER_NAME } from "@/lib/commerce/order-customer";
-import { amountSchema, quantitySchema, taxRateSchema } from "@/lib/commerce/validation";
+import { amountSchema, taxRateSchema } from "@/lib/commerce/validation";
 
-import { clampOrderFooterMessage, getOrderSubtotal, type OrderFormValues, orderNeedsShipping } from "./data";
+import {
+  clampOrderFooterMessage,
+  getOrderDiscountValidationError,
+  getOrderQuantityValidationError,
+  type OrderFormValues,
+  orderNeedsShipping,
+} from "./data";
 import type { OrderStep } from "./order-steps";
 
 function parseOrderDate(value: string) {
@@ -99,7 +105,7 @@ function getItemsValidationError(order: OrderFormValues) {
 
   const invalidItemIndex = order.items.findIndex((item) => {
     const hasProduct = Boolean(item.product?.trim());
-    const hasQuantity = quantitySchema.safeParse(item.quantity).success;
+    const hasQuantity = !getOrderQuantityValidationError(item);
     const hasPrice = amountSchema.safeParse(item.unitPrice).success;
 
     return !hasProduct || !hasQuantity || !hasPrice;
@@ -116,8 +122,8 @@ function getReviewValidationError(order: OrderFormValues, creating: boolean) {
   if (!order.orderDate?.trim()) return "Order date is required.";
   if (!taxRateSchema.safeParse(order.tax).success)
     return "Enter a tax rate from 0 to 100 with at most two decimal places.";
-  if (!amountSchema.safeParse(order.discount).success) return "Enter a valid discount amount.";
-  if (order.discount > getOrderSubtotal(order)) return "Discount cannot exceed the merchandise subtotal.";
+  const discountError = getOrderDiscountValidationError(order);
+  if (discountError) return discountError;
   if (orderNeedsShipping(order) && !amountSchema.safeParse(order.shipping).success)
     return "Enter a valid shipping amount.";
   if (creating && order.paymentStatus === "Paid" && (!order.externalPaymentConfirmed || !order.paymentMethod?.trim()))

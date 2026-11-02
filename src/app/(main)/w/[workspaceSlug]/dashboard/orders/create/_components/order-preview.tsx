@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import {
   clampOrderFooterMessage,
   getLineAmount,
+  getOrderDiscountAmount,
   getOrderSubtotal,
   getOrderTaxAmount,
   getOrderTotal,
@@ -183,7 +184,7 @@ function OrderReceiptPaper({
   const subtotal = getOrderSubtotal(order);
   const shipping = Number.isFinite(order.shipping) ? order.shipping : 0;
   const tax = getOrderTaxAmount(order);
-  const discount = Number.isFinite(order.discount) ? order.discount : 0;
+  const discount = getOrderDiscountAmount(order);
   const total = getOrderTotal(order);
   const cityStateZip = formatCityStateZip(order);
   const streetLine = [order.streetAddress, order.apartment].filter(Boolean).join(", ");

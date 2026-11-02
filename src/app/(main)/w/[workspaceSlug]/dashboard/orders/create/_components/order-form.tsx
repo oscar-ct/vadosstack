@@ -63,6 +63,9 @@ import type { InventoryItem } from "../../../inventory/_components/inventory-tab
 import {
   clampOrderFooterMessage,
   getLineAmount,
+  getOrderDiscountAmount,
+  getOrderDiscountValidationError,
+  getOrderQuantityValidationError,
   getOrderSubtotal,
   getOrderTaxAmount,
   getOrderTotal,
@@ -341,7 +344,9 @@ function OrderReviewSummary({ order }: { order: OrderFormValues }) {
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground">Discount</span>
           <span className="text-emerald-600 tabular-nums">
-            {order.discount > 0 ? `-${formatOrderCurrency(order.discount)}` : formatOrderCurrency(0)}
+            {getOrderDiscountAmount(order) > 0
+              ? `-${formatOrderCurrency(getOrderDiscountAmount(order))}`
+              : formatOrderCurrency(0)}
           </span>
         </div>
         <div className="mt-2 flex items-center justify-between gap-3 border-t pt-3 font-medium text-sm">
@@ -1076,7 +1081,9 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
 function OrderAdjustments({ disabled }: { disabled: boolean }) {
   const { register, control, setValue } = useFormContext<OrderFormValues>();
 
-  const needsDelivery = orderNeedsShipping(useWatch({ control }) as OrderFormValues);
+  const order = useWatch({ control }) as OrderFormValues;
+  const needsDelivery = orderNeedsShipping(order);
+  const discountError = getOrderDiscountValidationError(order);
 
   return (
     <section className="flex flex-col gap-4">
@@ -1136,13 +1143,24 @@ function OrderAdjustments({ disabled }: { disabled: boolean }) {
               id="order-discount"
               type="number"
               min="0"
-              step="0.01"
+              max={Math.min(getOrderSubtotal(order), 1_000_000)}
+              step="1"
+              aria-invalid={Boolean(discountError)}
+              aria-describedby="order-discount-help"
               disabled={disabled}
               {...register("discount", { valueAsNumber: true })}
               onBlur={formatMoneyInputOnBlur}
             />
             <InputGroupAddon align="inline-end">$</InputGroupAddon>
           </InputGroup>
+          <p
+            id="order-discount-help"
+            className={cn("text-xs", discountError ? "text-destructive" : "text-muted-foreground")}
+            role={discountError ? "alert" : undefined}
+          >
+            {discountError ?? "Cannot exceed the merchandise subtotal."}
+            {discountError ? " Preview excludes this discount until corrected." : null}
+          </p>
         </Field>
       </div>
     </section>
@@ -1472,11 +1490,21 @@ function SortableOrderItemRow({
                 id={`order-item-quantity-${index}`}
                 type="number"
                 min="1"
+                max="1000000"
+                aria-invalid={Boolean(getOrderQuantityValidationError(item))}
+                aria-describedby={
+                  getOrderQuantityValidationError(item) ? `order-item-quantity-error-${index}` : undefined
+                }
                 step="1"
                 className="min-w-0 text-base md:text-sm"
                 disabled={disabled}
                 {...register(`items.${index}.quantity` as const, { min: 1, valueAsNumber: true })}
               />
+              {getOrderQuantityValidationError(item) ? (
+                <p id={`order-item-quantity-error-${index}`} role="alert" className="text-destructive text-xs">
+                  {getOrderQuantityValidationError(item)} Preview excludes this line until corrected.
+                </p>
+              ) : null}
             </Field>
             <Field className="min-w-0 gap-1">
               <FieldLabel className="text-xs" htmlFor={`order-item-unit-price-${index}`}>

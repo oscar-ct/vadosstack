@@ -1,6 +1,12 @@
-import { calculateOrderTotals } from "@/lib/commerce/money";
+import { calculateOrderTotals, cents } from "@/lib/commerce/money";
 import { hasOrderShipping, type OrderCustomerMode, type OrderDeliveryMethod } from "@/lib/commerce/order-customer";
-import type { fulfillmentStatuses, paymentStatuses } from "@/lib/commerce/validation";
+import {
+  amountSchema,
+  type fulfillmentStatuses,
+  type paymentStatuses,
+  quantitySchema,
+  taxRateSchema,
+} from "@/lib/commerce/validation";
 
 export interface OrderLineItem {
   catalogUnitPrice?: number | null;
@@ -142,13 +148,17 @@ export function formatOrderNumberFromCount(count: number) {
   return `ORD-${Math.max(count, 0).toString().padStart(4, "0")}`;
 }
 
+export function getOrderQuantityValidationError(item?: OrderLineItem) {
+  if (!item || !quantitySchema.safeParse(item.quantity).success)
+    return "Enter a whole-number quantity from 1 to 1,000,000.";
+  if (amountSchema.safeParse(item.unitPrice).success && (cents(item.unitPrice) * item.quantity) / 100 > 1_000_000_000)
+    return "Reduce the quantity; the line total cannot exceed $1,000,000,000.";
+  return null;
+}
+
 export function getLineAmount(item?: OrderLineItem) {
-  if (!item) return 0;
-
-  const quantity = Number.isFinite(item.quantity) ? item.quantity : 0;
-  const unitPrice = Number.isFinite(item.unitPrice) ? item.unitPrice : 0;
-
-  return quantity * unitPrice;
+  if (!item || getOrderQuantityValidationError(item) || !amountSchema.safeParse(item.unitPrice).success) return 0;
+  return (cents(item.unitPrice) * item.quantity) / 100;
 }
 
 export function pricingSignature(
@@ -171,17 +181,37 @@ export function pricingSignature(
 }
 
 function totals(order: OrderFormValues) {
-  if (order.persistedTotals?.signature === pricingSignature(order)) return order.persistedTotals;
-  return calculateOrderTotals(
-    order.items.map((item) =>
+  if (order.persistedTotals?.signature === pricingSignature(order))
+    return { ...order.persistedTotals, discountAmount: order.discount };
+  const tax = taxRateSchema.safeParse(order.tax).success ? order.tax : 0;
+  const items = order.items.map((item) => ({
+    ...item,
+    quantity: getOrderQuantityValidationError(item) ? 0 : item.quantity,
+    unitPrice: amountSchema.safeParse(item.unitPrice).success ? item.unitPrice : 0,
+    taxRate:
       (!order.persistedTotals || order.overrideTaxRate) && item.taxable !== false
-        ? { ...item, taxRate: order.tax }
-        : item,
-    ),
-    orderNeedsShipping(order) ? order.shipping : 0,
-    order.discount,
-    order.tax,
-  );
+        ? tax
+        : taxRateSchema.safeParse(item.taxRate ?? tax).success
+          ? (item.taxRate ?? tax)
+          : 0,
+  }));
+  const shipping = orderNeedsShipping(order) && amountSchema.safeParse(order.shipping).success ? order.shipping : 0;
+  const undiscounted = calculateOrderTotals(items, shipping, 0, tax);
+  // Draft input may be invalid while typing. Validate it before calling the strict money calculator.
+  if (!amountSchema.safeParse(order.discount).success || order.discount > undiscounted.subtotal) return undiscounted;
+  return calculateOrderTotals(items, shipping, order.discount, tax);
+}
+
+export function getOrderDiscountAmount(order: OrderFormValues) {
+  return totals(order).discountAmount;
+}
+
+export function getOrderDiscountValidationError(order: OrderFormValues) {
+  if (order.discount < 0) return "Discount cannot be negative.";
+  if (!amountSchema.safeParse(order.discount).success)
+    return "Enter a discount from $0 to $1,000,000 with at most two decimal places.";
+  if (order.discount > getOrderSubtotal(order)) return "Discount cannot exceed the merchandise subtotal.";
+  return null;
 }
 
 export function getOrderSubtotal(order: OrderFormValues) {
