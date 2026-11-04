@@ -2,6 +2,9 @@ import type { Prisma } from "@prisma/client";
 
 export type StockHistoryFilter =
   | "activity"
+  | "orders"
+  | "Return"
+  | "Order cancellation"
   | "Receive"
   | "Count"
   | "Damage"
@@ -25,6 +28,8 @@ type Movement = {
   reason: string;
   notes: string | null;
   createdAt: Date;
+  order?: { id: string; orderNumber: string } | null;
+  actorName?: string | null;
   inventoryItem: { product: string; sku: string | null; location: { name: string } | null };
 };
 
@@ -41,6 +46,8 @@ export function formatStockHistoryEntry(movement: Movement, locations: Map<strin
     id === "Unassigned" ? "Unassigned" : (locations.get(id) ?? "Former location (name unavailable)");
   return {
     id: movement.id,
+    order: movement.order ?? null,
+    actorName: movement.actorName ?? null,
     product: savedProduct ?? movement.inventoryItem.product,
     sku: savedProduct ? stringValue("sku") : movement.inventoryItem.sku,
     labelSource,
@@ -63,3 +70,11 @@ export function formatStockHistoryEntry(movement: Movement, locations: Map<strin
 }
 
 export type StockHistoryEntry = ReturnType<typeof formatStockHistoryEntry>;
+
+export function stockHistoryChangeTone(reason: string, change: number) {
+  if (["Damage", "Lost", "Stolen"].includes(reason) && change < 0) return "loss";
+  if (reason.startsWith("Order ") || reason === "Transfer") return "neutral";
+  if (change > 0 && reason !== "Migration reconciliation") return "increase";
+  if (change < 0 && reason === "Count") return "correction";
+  return "muted";
+}
