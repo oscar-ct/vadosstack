@@ -5,7 +5,7 @@ import { getDashboardViewPermission } from "./route-permissions";
 
 const dashboardLandingCandidates = [
   "/dashboard/overview",
-  "/dashboard/commerce-pulse",
+  "/dashboard/commerce-analytics",
   "/dashboard/time-tracking",
   "/dashboard/calendar",
   "/dashboard/jobs",

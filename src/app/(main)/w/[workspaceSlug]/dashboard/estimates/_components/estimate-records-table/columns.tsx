@@ -135,7 +135,7 @@ export function getEstimateRecordsColumns({
       cell: ({ row }) => (
         <div className="grid min-w-0 gap-1.5">
           <span className="truncate font-medium text-sm leading-none">{row.original.description}</span>
-          <span className="max-w-72 truncate text-muted-foreground text-xs leading-none">
+          <span className="max-w-full truncate text-muted-foreground text-xs leading-none">
             {row.original.scope ?? ""}
           </span>
         </div>

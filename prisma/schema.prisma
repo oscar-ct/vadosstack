@@ -361,6 +361,12 @@ model Workspace {
   employeeSessions           EmployeeSession[]
   googleMailAccount          GoogleMailAccount?
   tasks                      Task[]
+  inventoryInvestments       InventoryInvestmentEntry[]
+  orderAdjustments           OrderAdjustment[]
+  orderAdjustmentItems       OrderAdjustmentItem[]
+  physicalReturns            OrderReturnReceipt[]
+  physicalReturnItems        OrderReturnReceiptItem[]
+  shippingExpenses           OrderShippingExpense[]
   inventoryCategories        InventoryCategory[]
   inventorySettings          InventorySettings?
   inventoryLocations         InventoryLocation[]
@@ -846,18 +852,19 @@ model InventoryLocationMerge {
 }
 
 model InventorySettings {
-  id                     String    @id @default(cuid())
-  ownerId                String    @unique
-  lowStockThreshold      Int       @default(25)
-  criticalStockThreshold Int       @default(8)
-  defaultReorderPoint    Int       @default(20)
-  defaultMaxStock        Int       @default(100)
-  restockAlertEmail      String?
-  autoRestockAlerts      Boolean   @default(true)
-  includeOutOfStock      Boolean   @default(true)
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
-  owner                  Workspace @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  id                          String    @id @default(cuid())
+  ownerId                     String    @unique
+  investmentTrackingStartedAt DateTime?
+  lowStockThreshold           Int       @default(25)
+  criticalStockThreshold      Int       @default(8)
+  defaultReorderPoint         Int       @default(20)
+  defaultMaxStock             Int       @default(100)
+  restockAlertEmail           String?
+  autoRestockAlerts           Boolean   @default(true)
+  includeOutOfStock           Boolean   @default(true)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  owner                       Workspace @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@map("inventory_settings")
 }
@@ -875,36 +882,38 @@ model InventoryProduct {
 }
 
 model InventoryItem {
-  id             String                   @id @default(cuid())
-  ownerId        String
-  productId      String                   @default(dbgenerated("(gen_random_uuid())::text"))
-  identity       InventoryProduct         @relation(fields: [productId, ownerId], references: [id, ownerId], onDelete: Restrict)
-  categoryId     String?
-  locationId     String?
-  sku            String?
-  product        String
-  description    String?
-  stock          Int                      @default(0)
-  reorderPoint   Int                      @default(0)
-  maxStock       Int                      @default(0)
-  unit           String                   @default("each")
-  cost           Decimal                  @default(0)
-  unitPrice      Decimal                  @default(0)
-  taxable        Boolean                  @default(true)
-  taxRate        Decimal                  @default(0)
-  itemStatus     String                   @default("Active")
-  barcode        String?
-  vendor         String?
-  notes          String?
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
-  owner          Workspace                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  category       InventoryCategory?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  location       InventoryLocation?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  orderItems     OrderItem[]
-  returnItems    OrderReturnItem[]
-  stockMovements InventoryStockMovement[]
-  stockAlert     InventoryStockAlert?
+  id                  String                     @id @default(cuid())
+  ownerId             String
+  productId           String                     @default(dbgenerated("(gen_random_uuid())::text"))
+  identity            InventoryProduct           @relation(fields: [productId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  categoryId          String?
+  locationId          String?
+  sku                 String?
+  product             String
+  description         String?
+  stock               Int                        @default(0)
+  reorderPoint        Int                        @default(0)
+  maxStock            Int                        @default(0)
+  unit                String                     @default("each")
+  cost                Decimal                    @default(0)
+  unitPrice           Decimal                    @default(0)
+  taxable             Boolean                    @default(true)
+  taxRate             Decimal                    @default(0)
+  itemStatus          String                     @default("Active")
+  barcode             String?
+  vendor              String?
+  notes               String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  owner               Workspace                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  category            InventoryCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  location            InventoryLocation?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  orderItems          OrderItem[]
+  returnItems         OrderReturnItem[]
+  stockMovements      InventoryStockMovement[]
+  investments         InventoryInvestmentEntry[]
+  physicalReturnItems OrderReturnReceiptItem[]
+  stockAlert          InventoryStockAlert?
 
   @@unique([id, ownerId])
   @@unique([ownerId, sku])
@@ -962,6 +971,9 @@ model Order {
   items                OrderItem[]
   returns              OrderReturn[]
   stockMovements       InventoryStockMovement[]
+  adjustments          OrderAdjustment[]
+  physicalReturns      OrderReturnReceipt[]
+  shippingExpenses     OrderShippingExpense[]
 
   @@unique([id, ownerId])
   @@unique([ownerId, orderNumber])
@@ -1003,6 +1015,8 @@ model OrderItem {
   owner               Workspace                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   order               Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   inventoryItem       InventoryItem?           @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  adjustmentItems     OrderAdjustmentItem[]
+  physicalReturnItems OrderReturnReceiptItem[]
   returnItems         OrderReturnItem[]
   stockMovements      InventoryStockMovement[]
 
@@ -1014,31 +1028,32 @@ model OrderItem {
 }
 
 model OrderReturn {
-  id                String            @id @default(cuid())
+  id                String               @id @default(cuid())
   ownerId           String
-  version           Int               @default(1)
+  version           Int                  @default(1)
   submissionKey     String?
   submissionHash    String?
-  refundState       String            @default("not_required")
+  refundState       String               @default("not_required")
   refunds           OrderRefund[]
+  physicalReceipts  OrderReturnReceipt[]
   orderId           String
   returnNumber      String
-  refundStatus      String            @default("No Refund")
-  returnStatus      String            @default("Draft")
-  returnDate        DateTime          @default(now())
-  refundAmount      Decimal           @default(0)
+  refundStatus      String               @default("No Refund")
+  returnStatus      String               @default("Draft")
+  returnDate        DateTime             @default(now())
+  refundAmount      Decimal              @default(0)
   refundExplanation String?
   refundMethod      String?
   refundReference   String?
   reason            String?
   customerNote      String?
   internalNotes     String?
-  restockItems      Boolean           @default(true)
+  restockItems      Boolean              @default(true)
   savedAt           DateTime?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  owner             Workspace         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  order             Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  owner             Workspace            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  order             Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
   items             OrderReturnItem[]
 
   @@unique([id, ownerId])
@@ -1087,24 +1102,26 @@ model OrderReturnItem {
 }
 
 model InventoryStockMovement {
-  id              String        @id @default(cuid())
-  ownerId         String
-  inventoryItemId String
-  orderId         String?
-  orderItemId     String?
-  actorUserId     String?
-  balanceAfter    Int?
-  idempotencyKey  String?
-  itemSnapshot    Json?
-  snapshotSource  String        @default("event")
-  quantityChange  Int
-  reason          String
-  notes           String?
-  createdAt       DateTime      @default(now())
-  owner           Workspace     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
-  order           Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  orderItem       OrderItem?    @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  id                 String                    @id @default(cuid())
+  ownerId            String
+  inventoryItemId    String
+  orderId            String?
+  orderItemId        String?
+  actorUserId        String?
+  balanceAfter       Int?
+  idempotencyKey     String?
+  itemSnapshot       Json?
+  snapshotSource     String                    @default("event")
+  investment         InventoryInvestmentEntry?
+  physicalReturnItem OrderReturnReceiptItem?
+  quantityChange     Int
+  reason             String
+  notes              String?
+  createdAt          DateTime                  @default(now())
+  owner              Workspace                 @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  inventoryItem      InventoryItem             @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  order              Order?                    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderItem          OrderItem?                @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
 
   @@unique([id, ownerId])
   @@unique([ownerId, idempotencyKey])
@@ -1451,21 +1468,25 @@ model CustomerPhoneNumber {
 
 // An immutable record of money confirmed received outside VadosStack.
 model OrderPayment {
-  id             String        @id @default(cuid())
-  ownerId        String
-  orderId        String
-  amount         Decimal
-  currency       String        @default("USD")
-  method         String
-  reference      String?
-  source         String        @default("external")
-  idempotencyKey String
-  actorUserId    String?
-  paidAt         DateTime      @default(now())
-  createdAt      DateTime      @default(now())
-  owner          Workspace     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  order          Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  refunds        OrderRefund[]
+  id                String        @id @default(cuid())
+  ownerId           String
+  orderId           String
+  amount            Decimal
+  merchandiseAmount Decimal?      @db.Decimal(20, 2)
+  taxAmount         Decimal?      @db.Decimal(20, 2)
+  shippingAmount    Decimal?      @db.Decimal(20, 2)
+  allocationSource  String?
+  currency          String        @default("USD")
+  method            String
+  reference         String?
+  source            String        @default("external")
+  idempotencyKey    String
+  actorUserId       String?
+  paidAt            DateTime      @default(now())
+  createdAt         DateTime      @default(now())
+  owner             Workspace     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  refunds           OrderRefund[]
 
   @@unique([ownerId, idempotencyKey])
   @@index([orderId])
@@ -1474,25 +1495,31 @@ model OrderPayment {
 }
 
 model OrderRefund {
-  id             String       @id @default(cuid())
-  ownerId        String
-  orderId        String
-  paymentId      String
-  orderReturnId  String?
-  amount         Decimal
-  currency       String       @default("USD")
-  status         String       @default("succeeded")
-  method         String
-  reference      String?
-  source         String       @default("external")
-  idempotencyKey String
-  actorUserId    String?
-  refundedAt     DateTime     @default(now())
-  createdAt      DateTime     @default(now())
-  owner          Workspace    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  order          Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  payment        OrderPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
-  orderReturn    OrderReturn? @relation(fields: [orderReturnId], references: [id], onDelete: Restrict)
+  id                String           @id @default(cuid())
+  ownerId           String
+  orderId           String
+  paymentId         String
+  adjustmentId      String?
+  adjustment        OrderAdjustment? @relation(fields: [adjustmentId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  orderReturnId     String?
+  amount            Decimal
+  merchandiseAmount Decimal?         @db.Decimal(20, 2)
+  taxAmount         Decimal?         @db.Decimal(20, 2)
+  shippingAmount    Decimal?         @db.Decimal(20, 2)
+  allocationSource  String?
+  currency          String           @default("USD")
+  status            String           @default("succeeded")
+  method            String
+  reference         String?
+  source            String           @default("external")
+  idempotencyKey    String
+  actorUserId       String?
+  refundedAt        DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  owner             Workspace        @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  order             Order            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  payment           OrderPayment     @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  orderReturn       OrderReturn?     @relation(fields: [orderReturnId], references: [id], onDelete: Restrict)
 
   @@unique([ownerId, idempotencyKey])
   @@index([orderId])
@@ -1512,8 +1539,10 @@ model OrderShipment {
   shippedAt      DateTime               @default(now())
   order          Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
   items          OrderShipmentItem[]
+  expenses       OrderShippingExpense[]
   reversal       OrderShipmentReversal?
 
+  @@unique([id, orderId])
   @@unique([orderId, idempotencyKey])
   @@index([orderId, shippedAt])
   @@map("order_shipments")
@@ -1559,4 +1588,155 @@ model InventoryStockAlert {
 
   @@index([status, deliveredAt])
   @@map("inventory_stock_alerts")
+}
+
+// Append-only acquisition evidence. Amount can be signed only for corrections.
+model InventoryInvestmentEntry {
+  id              String                     @id @default(cuid())
+  ownerId         String
+  kind            String
+  inventoryItemId String?
+  stockMovementId String?                    @unique
+  quantity        Int?
+  unitCost        Decimal?                   @db.Decimal(20, 2)
+  amount          Decimal                    @db.Decimal(20, 2)
+  effectiveAt     DateTime                   @default(now())
+  createdAt       DateTime                   @default(now())
+  actorUserId     String?
+  reference       String?
+  notes           String?
+  evidence        Json?
+  estimated       Boolean                    @default(false)
+  correctionOfId  String?
+  idempotencyKey  String
+  submissionHash  String
+  owner           Workspace                  @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  inventoryItem   InventoryItem?             @relation(fields: [inventoryItemId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  stockMovement   InventoryStockMovement?    @relation(fields: [stockMovementId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  correctionOf    InventoryInvestmentEntry?  @relation("InvestmentCorrections", fields: [correctionOfId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  corrections     InventoryInvestmentEntry[] @relation("InvestmentCorrections")
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, idempotencyKey])
+  @@unique([stockMovementId, ownerId])
+  @@index([ownerId, effectiveAt])
+  @@map("inventory_investment_entries")
+}
+
+// Future cancellation/credit workflows use these records, without rewriting ordered quantities.
+model OrderAdjustment {
+  id                String                @id @default(cuid())
+  ownerId           String
+  orderId           String
+  kind              String
+  merchandiseAmount Decimal               @db.Decimal(20, 2)
+  discountAmount    Decimal               @default(0) @db.Decimal(20, 2)
+  taxAmount         Decimal               @db.Decimal(20, 2)
+  shippingAmount    Decimal               @db.Decimal(20, 2)
+  reason            String
+  actorUserId       String?
+  effectiveAt       DateTime              @default(now())
+  createdAt         DateTime              @default(now())
+  idempotencyKey    String
+  submissionHash    String
+  owner             Workspace             @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  order             Order                 @relation(fields: [orderId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  items             OrderAdjustmentItem[]
+  refunds           OrderRefund[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, idempotencyKey])
+  @@index([ownerId, effectiveAt])
+  @@map("order_adjustments")
+}
+
+model OrderAdjustmentItem {
+  id             String          @id @default(cuid())
+  ownerId        String
+  adjustmentId   String
+  orderItemId    String
+  quantity       Int
+  grossAmount    Decimal         @db.Decimal(20, 2)
+  discountAmount Decimal         @db.Decimal(20, 2)
+  taxAmount      Decimal         @db.Decimal(20, 2)
+  owner          Workspace       @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  adjustment     OrderAdjustment @relation(fields: [adjustmentId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  orderItem      OrderItem       @relation(fields: [orderItemId, ownerId], references: [id, ownerId], onDelete: Restrict)
+
+  @@unique([adjustmentId, orderItemId])
+  @@index([ownerId, orderItemId])
+  @@map("order_adjustment_items")
+}
+
+model OrderReturnReceipt {
+  id             String                   @id @default(cuid())
+  ownerId        String
+  orderId        String
+  orderReturnId  String?
+  receivedAt     DateTime                 @default(now())
+  createdAt      DateTime                 @default(now())
+  actorUserId    String?
+  idempotencyKey String
+  notes          String?
+  owner          Workspace                @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  order          Order                    @relation(fields: [orderId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  orderReturn    OrderReturn?             @relation(fields: [orderReturnId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  items          OrderReturnReceiptItem[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, idempotencyKey])
+  @@index([ownerId, receivedAt])
+  @@map("order_return_receipts")
+}
+
+model OrderReturnReceiptItem {
+  id                String                  @id @default(cuid())
+  ownerId           String
+  receiptId         String
+  orderItemId       String
+  inventoryItemId   String?
+  stockMovementId   String?                 @unique
+  receivedQuantity  Int
+  restockedQuantity Int
+  condition         String
+  unitCost          Decimal?                @db.Decimal(20, 2)
+  retailUnitPrice   Decimal                 @db.Decimal(20, 2)
+  evidence          Json?
+  owner             Workspace               @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  receipt           OrderReturnReceipt      @relation(fields: [receiptId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  orderItem         OrderItem               @relation(fields: [orderItemId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  inventoryItem     InventoryItem?          @relation(fields: [inventoryItemId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  stockMovement     InventoryStockMovement? @relation(fields: [stockMovementId, ownerId], references: [id, ownerId], onDelete: Restrict)
+
+  @@unique([receiptId, orderItemId])
+  @@unique([stockMovementId, ownerId])
+  @@index([ownerId, orderItemId])
+  @@map("order_return_receipt_items")
+}
+
+model OrderShippingExpense {
+  id             String                 @id @default(cuid())
+  ownerId        String
+  orderId        String
+  shipmentId     String?
+  kind           String
+  amount         Decimal                @db.Decimal(20, 2)
+  incurredAt     DateTime               @default(now())
+  createdAt      DateTime               @default(now())
+  actorUserId    String?
+  reference      String?
+  notes          String
+  correctionOfId String?
+  idempotencyKey String
+  submissionHash String
+  owner          Workspace              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  order          Order                  @relation(fields: [orderId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  shipment       OrderShipment?         @relation(fields: [shipmentId, orderId], references: [id, orderId], onDelete: Restrict)
+  correctionOf   OrderShippingExpense?  @relation("ShippingCorrections", fields: [correctionOfId, ownerId], references: [id, ownerId], onDelete: Restrict)
+  corrections    OrderShippingExpense[] @relation("ShippingCorrections")
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, idempotencyKey])
+  @@index([ownerId, incurredAt])
+  @@map("order_shipping_expenses")
 }

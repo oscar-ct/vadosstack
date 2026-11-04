@@ -9,10 +9,12 @@ export function parseWorkspaceMode(value: string | null | undefined): WorkspaceM
 }
 
 export function getWorkspaceHomePath(mode: WorkspaceMode) {
-  return mode === "commerce" ? "/dashboard/commerce-pulse" : "/dashboard/overview";
+  return mode === "commerce" ? "/dashboard/commerce-analytics" : "/dashboard/overview";
 }
 
 const commercePaths = [
+  "/dashboard/commerce-analytics",
+  // Keep retired aliases disabled in service-only workspaces.
   "/dashboard/commerce-pulse",
   "/dashboard/inventory-analytics",
   "/dashboard/orders",
@@ -61,7 +63,7 @@ export function getWorkspaceModeLabel(mode: WorkspaceMode) {
 }
 
 export function getWorkspaceModeDescription(mode: WorkspaceMode) {
-  if (mode === "commerce") return "Show orders, inventory, Commerce Overview, employees, email, and admin tools.";
+  if (mode === "commerce") return "Show orders, inventory, Analytics, employees, email, and admin tools.";
   if (mode === "service") return "Show dashboard, customers, jobs, estimates, invoices, email, and admin tools.";
   return "Show service business and e-commerce tools together.";
 }

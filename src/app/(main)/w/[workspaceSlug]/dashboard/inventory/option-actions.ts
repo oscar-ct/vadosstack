@@ -33,12 +33,7 @@ function message(error: unknown) {
   return "The inventory option could not be updated. Refresh and try again.";
 }
 function refresh(slug: string) {
-  for (const path of [
-    "/dashboard/inventory",
-    "/dashboard/inventory-analytics",
-    "/dashboard/orders/create",
-    "/dashboard/commerce-pulse",
-  ])
+  for (const path of ["/dashboard/commerce-analytics", "/dashboard/inventory", "/dashboard/orders/create"])
     revalidateWorkspacePath(slug, path);
 }
 async function lockOptions(tx: Prisma.TransactionClient, kind: InventoryOptionType, ownerId: string, ids: string[]) {

@@ -148,7 +148,15 @@ function getReceiptStackHeight(pageCount: number) {
   return pageCount * ORDER_RECEIPT_PAPER_HEIGHT + Math.max(pageCount - 1, 0) * RECEIPT_PAGE_GAP;
 }
 
-function PrintOrderReceipt({ company, order }: { company: OrderCompany; order: OrderFormValues }) {
+function PrintOrderReceipt({
+  company,
+  order,
+  originalDocument,
+}: {
+  company: OrderCompany;
+  order: OrderFormValues;
+  originalDocument?: boolean;
+}) {
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -162,7 +170,14 @@ function PrintOrderReceipt({ company, order }: { company: OrderCompany; order: O
   return createPortal(
     <div data-print-root>
       {pages.map((page) => (
-        <OrderReceiptPaper key={page.pageNumber} company={company} order={order} page={page} pageCount={pages.length} />
+        <OrderReceiptPaper
+          key={page.pageNumber}
+          originalDocument={originalDocument}
+          company={company}
+          order={order}
+          page={page}
+          pageCount={pages.length}
+        />
       ))}
     </div>,
     document.body,
@@ -170,6 +185,7 @@ function PrintOrderReceipt({ company, order }: { company: OrderCompany; order: O
 }
 
 function OrderReceiptPaper({
+  originalDocument,
   company,
   order,
   page,
@@ -177,6 +193,7 @@ function OrderReceiptPaper({
 }: {
   company: OrderCompany;
   order: OrderFormValues;
+  originalDocument?: boolean;
   page: ReceiptPage;
   pageCount: number;
 }) {
@@ -186,6 +203,7 @@ function OrderReceiptPaper({
   const tax = getOrderTaxAmount(order);
   const discount = getOrderDiscountAmount(order);
   const total = getOrderTotal(order);
+  const adjustment = order.adjustmentSummary;
   const cityStateZip = formatCityStateZip(order);
   const streetLine = [order.streetAddress, order.apartment].filter(Boolean).join(", ");
   const footerMessage = clampOrderFooterMessage(order.footerMessage).trim();
@@ -215,9 +233,21 @@ function OrderReceiptPaper({
         </div>
 
         <div className="mt-1.5 grid justify-items-center gap-0.5">
-          <h3 className="font-medium text-base">{isPaid ? "Order Receipt" : "Order Confirmation"}</h3>
+          <h3 className="font-medium text-base">
+            {originalDocument
+              ? "Original Order"
+              : adjustment
+                ? "Adjusted Order Receipt"
+                : isPaid
+                  ? "Order Receipt"
+                  : "Order Confirmation"}
+          </h3>
           <span className="text-neutral-500 text-xs">
-            {isPaid ? "Thank you for your purchase." : "Thank you for your order."}
+            {adjustment
+              ? "This reflects cancellations recorded after the original order."
+              : isPaid
+                ? "Thank you for your purchase."
+                : "Thank you for your order."}
           </span>
         </div>
       </header>
@@ -250,10 +280,25 @@ function OrderReceiptPaper({
                 {[item.sku, item.category || "Category"].filter(Boolean).join(" · ")}
               </div>
               <div className="truncate text-[11px] text-neutral-500">
-                {Number.isFinite(item.quantity) ? item.quantity : 0} x {formatOrderCurrency(item.unitPrice)}
+                {item.cancelledQuantity ? (
+                  <>
+                    {item.quantity} ordered · {item.cancelledQuantity} cancelled ·{" "}
+                    {Math.max(item.quantity - item.cancelledQuantity, 0)} remaining
+                  </>
+                ) : (
+                  <>
+                    {Number.isFinite(item.quantity) ? item.quantity : 0} x {formatOrderCurrency(item.unitPrice)}
+                  </>
+                )}
               </div>
             </div>
-            <div className="font-medium text-sm tabular-nums">{formatOrderCurrency(getLineAmount(item))}</div>
+            <div className="font-medium text-sm tabular-nums">
+              {formatOrderCurrency(
+                adjustment
+                  ? item.unitPrice * Math.max(item.quantity - (item.cancelledQuantity ?? 0), 0)
+                  : getLineAmount(item),
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -323,26 +368,66 @@ function OrderReceiptPaper({
           <OrderReceiptSection className="grid gap-1.5 py-2.5">
             <div className="flex items-center justify-between gap-4 text-xs">
               <span className="text-neutral-500">Subtotal</span>
-              <span className="tabular-nums">{formatOrderCurrency(subtotal)}</span>
+              <span className="tabular-nums">{formatOrderCurrency(adjustment?.effectiveSubtotal ?? subtotal)}</span>
             </div>
             {showShipping ? (
               <div className="flex items-center justify-between gap-4 text-xs">
                 <span className="text-neutral-500">Shipping</span>
-                <span className="tabular-nums">{formatOrderCurrency(shipping)}</span>
+                <span className="tabular-nums">{formatOrderCurrency(adjustment?.effectiveShipping ?? shipping)}</span>
               </div>
             ) : null}
             <div className="flex items-center justify-between gap-4 text-xs">
               <span className="text-neutral-500">Sales tax</span>
-              <span className="tabular-nums">{formatOrderCurrency(tax)}</span>
+              <span className="tabular-nums">{formatOrderCurrency(adjustment?.effectiveTax ?? tax)}</span>
             </div>
             <div className="flex items-center justify-between gap-4 text-xs">
               <span className="text-neutral-500">Discount</span>
-              <span className="text-emerald-600 tabular-nums">-{formatOrderCurrency(discount)}</span>
+              <span className="text-emerald-600 tabular-nums">
+                -{formatOrderCurrency(adjustment?.effectiveDiscount ?? discount)}
+              </span>
             </div>
+            {adjustment ? (
+              <>
+                <div className="flex items-center justify-between gap-4 text-xs">
+                  <span className="text-neutral-500">Original total</span>
+                  <span className="tabular-nums">{formatOrderCurrency(adjustment.originalTotal)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-4 text-xs">
+                  <span className="text-neutral-500">Cancellation credits</span>
+                  <span className="text-emerald-600 tabular-nums">-{formatOrderCurrency(adjustment.credited)}</span>
+                </div>
+              </>
+            ) : null}
             <div className="mt-0.5 flex items-center justify-between gap-4 border-neutral-200 border-t pt-2">
-              <span className="font-medium">{isPaid ? "Total Paid" : "Order Total"}</span>
-              <span className="font-medium text-base tabular-nums">{formatOrderCurrency(total)}</span>
+              <span className="font-medium">
+                {originalDocument
+                  ? "Original total"
+                  : adjustment
+                    ? "Effective total"
+                    : isPaid
+                      ? "Total Paid"
+                      : "Order Total"}
+              </span>
+              <span className="font-medium text-base tabular-nums">
+                {formatOrderCurrency(adjustment?.effectiveTotal ?? total)}
+              </span>
             </div>
+            {adjustment ? (
+              <>
+                <div className="flex items-center justify-between gap-4 text-xs">
+                  <span className="text-neutral-500">Paid / refunded</span>
+                  <span className="tabular-nums">
+                    {formatOrderCurrency(adjustment.paid)} / {formatOrderCurrency(adjustment.refunded)}
+                  </span>
+                </div>
+                {adjustment.creditOwed > 0 ? (
+                  <div className="flex items-center justify-between gap-4 font-medium text-amber-700 text-xs">
+                    <span>Credit owed</span>
+                    <span className="tabular-nums">{formatOrderCurrency(adjustment.creditOwed)}</span>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
           </OrderReceiptSection>
 
           <footer className="grid min-h-20 shrink-0 place-items-center border-neutral-200 border-t px-5 py-2">
@@ -361,12 +446,14 @@ function OrderReceiptPaper({
 }
 
 export function OrderPreview({
+  originalDocument = false,
   actionsDisabled = false,
   company,
   emailAction,
   order,
   orderId,
 }: {
+  originalDocument?: boolean;
   actionsDisabled?: boolean;
   company: OrderCompany;
   emailAction?: React.ReactNode;
@@ -386,10 +473,10 @@ export function OrderPreview({
 
   return (
     <>
-      <PrintOrderReceipt company={company} order={order} />
+      <PrintOrderReceipt company={company} order={order} originalDocument={originalDocument} />
       <div className="flex min-w-0 flex-col rounded-xl border bg-card xl:sticky xl:top-4 xl:self-start">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <h2 className="font-medium text-base">Preview</h2>
+          <h2 className="font-medium text-base">{originalDocument ? "Original order preview" : "Preview"}</h2>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <Button
               type="button"
@@ -416,7 +503,11 @@ export function OrderPreview({
                 size="sm"
                 variant="outline"
                 className="h-7 px-2 text-xs"
-                onClick={() => downloadOrderPdf(workspacePath(`/dashboard/orders/${orderId}/pdf`))}
+                onClick={() =>
+                  downloadOrderPdf(
+                    workspacePath(`/dashboard/orders/${orderId}/pdf${originalDocument ? "?original=1" : ""}`),
+                  )
+                }
               >
                 <Download data-icon="inline-start" className="size-3.5" />
                 Download
@@ -463,6 +554,7 @@ export function OrderPreview({
               {pages.map((page) => (
                 <OrderReceiptPaper
                   key={page.pageNumber}
+                  originalDocument={originalDocument}
                   company={company}
                   order={order}
                   page={page}

@@ -6,9 +6,12 @@ import { z } from "zod";
 
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
+import { checkComponents } from "@/lib/commerce/allocations";
 import { getOrderBalance, refreshOrderPaymentStatus, requireVersion } from "@/lib/commerce/ledger";
 import { calculateOrderTotals, cents } from "@/lib/commerce/money";
-import { isWalkInOrder } from "@/lib/commerce/order-customer";
+import { cancellableQuantity } from "@/lib/commerce/order-cancellation";
+import { hasOrderShipping, isWalkInOrder } from "@/lib/commerce/order-customer";
+import { getOrderEditPolicy } from "@/lib/commerce/order-edit-policy";
 import { adjustStock, CommerceError, commerceTransaction, lockOrder } from "@/lib/commerce/transaction";
 import { type OrderInput, orderInputSchema, parseCommerceInput, submissionKeySchema } from "@/lib/commerce/validation";
 import { allocateDocumentNumber, attachDocumentNumber } from "@/lib/document-numbering";
@@ -218,10 +221,9 @@ function hashSubmission(input: unknown) {
 
 function revalidateCommerce(slug: string, orderId?: string) {
   for (const path of [
+    "/dashboard/commerce-analytics",
     "/dashboard/orders",
     "/dashboard/inventory",
-    "/dashboard/inventory-analytics",
-    "/dashboard/commerce-pulse",
     ...(orderId ? [`/dashboard/orders/${orderId}/edit`, `/dashboard/orders/${orderId}/return`] : []),
   ])
     revalidateWorkspacePath(slug, path);
@@ -323,6 +325,11 @@ export async function createOrderWithInventoryAdjustments(rawInput: CreateOrderI
           ownerId: workspaceId,
           orderId: order.id,
           amount: totals.total,
+          ...checkComponents(totals.total, {
+            merchandiseAmount: totals.subtotal - totals.discountAmount,
+            taxAmount: totals.taxAmount,
+            shippingAmount: totals.shippingAmount,
+          }),
           method: input.paymentMethod?.trim() ?? "",
           reference: optionalString(input.paymentReference),
           idempotencyKey: `order:${submissionKey}`,
@@ -370,7 +377,14 @@ export async function updateOrderWithInventoryAdjustments(orderId: string, rawIn
     await lockOrder(tx, workspaceId, orderId);
     const existing = await tx.order.findFirstOrThrow({
       where: { id: orderId, ownerId: workspaceId },
-      include: { items: true, returns: { include: { items: true } }, shipments: true },
+      include: {
+        items: true,
+        returns: { include: { items: true } },
+        shipments: true,
+        payments: true,
+        refunds: true,
+        adjustments: true,
+      },
     });
     requireVersion(existing.version, input.expectedVersion);
     if (existing.orderStatus !== "Active") throw new OrderActionError("Cancelled orders cannot be edited.");
@@ -386,7 +400,14 @@ export async function updateOrderWithInventoryAdjustments(orderId: string, rawIn
     const totals = calculateOrderTotals(prepared, input.shippingAmount, input.discountAmount, input.taxRate);
     if (cents(input.discountAmount) > cents(totals.subtotal))
       throw new OrderActionError("Discount cannot exceed the merchandise subtotal.");
-    const hasHistory = existing.returns.length > 0 || existing.items.some((line) => line.shippedQuantity > 0);
+    const balance = await getOrderBalance(tx, workspaceId, orderId);
+    const editPolicy = getOrderEditPolicy({
+      ...existing,
+      payments: existing.payments ?? balance.payments,
+      refunds: existing.refunds ?? balance.refunds ?? [],
+      adjustments: existing.adjustments ?? balance.adjustments ?? [],
+    });
+    const hasHistory = editPolicy.financialLocked;
     const financialChanged =
       prepared.length !== existing.items.length ||
       prepared.some((line) => {
@@ -399,18 +420,65 @@ export async function updateOrderWithInventoryAdjustments(orderId: string, rawIn
           old.taxable !== line.taxable
         );
       }) ||
+      (input.overrideTaxRate === true && Number(existing.taxRate ?? 0) !== input.taxRate) ||
       cents(existing.shippingAmount) !== cents(totals.shippingAmount) ||
       cents(existing.discountAmount) !== cents(totals.discountAmount);
     const identityChanged = prepared.some((line) => {
       const old = existing.items.find((item) => item.id === line.id);
-      return old && (old.product !== line.product || old.sku !== line.sku || old.category !== line.category);
+      return (
+        old &&
+        (old.product !== line.product ||
+          old.sku !== line.sku ||
+          old.category !== line.category ||
+          (old.priceOverrideReason ?? null) !== line.priceOverrideReason)
+      );
     });
     if (hasHistory && (financialChanged || identityChanged))
       throw new OrderActionError(
-        "Orders with shipments or returns keep their original financial lines. Use a new order for additional items.",
+        "Orders with transaction history keep their original financial lines. Use Resolve items for cancellations or returns, or a new order for additional items.",
       );
-    const balance = await getOrderBalance(tx, workspaceId, orderId);
-    if (balance.paid - balance.refunded > cents(totals.total))
+    const normalized = (value: unknown) => (value == null || value === "" ? null : String(value));
+    const changed = (before: unknown, after: unknown) => normalized(before) !== normalized(after);
+    if (
+      editPolicy.financialLocked &&
+      (changed(existing.customerId, input.customerId) ||
+        changed(existing.customerName, input.customerName) ||
+        (existing.orderDate && format(existing.orderDate, "yyyy-MM-dd") !== format(input.orderDate, "yyyy-MM-dd")) ||
+        (input.deliveryMethod &&
+          input.deliveryMethod !==
+            (hasOrderShipping({ ...existing, shippingAmount: Number(existing.shippingAmount) })
+              ? "delivery"
+              : "pickup")))
+    )
+      throw new OrderActionError(
+        "Customer identity and order date are protected because this order has transaction history.",
+      );
+    if (
+      changed(existing.paymentMethod, input.paymentMethod) ||
+      changed(existing.paymentReference, input.paymentReference)
+    )
+      throw new OrderActionError("Use payment controls to record or correct payment details.");
+    if (
+      changed(existing.shippingService, input.shippingService) ||
+      changed(existing.trackingNumber, input.trackingNumber)
+    )
+      throw new OrderActionError("Use fulfillment controls to record or correct carrier and tracking details.");
+    if (
+      editPolicy.addressLocked &&
+      (changed(existing.shippingLine1, input.shippingLine1) ||
+        changed(existing.shippingLine2, input.shippingLine2) ||
+        changed(existing.shippingCity, input.shippingCity) ||
+        changed(existing.shippingState, input.shippingState) ||
+        changed(existing.shippingPostalCode, input.shippingPostalCode))
+    )
+      throw new OrderActionError("The shipping address is protected because fulfillment has started.");
+    if (
+      editPolicy.deliveryDateLocked &&
+      (existing.estimatedDelivery ? format(existing.estimatedDelivery, "yyyy-MM-dd") : null) !==
+        (input.estimatedDelivery ? format(input.estimatedDelivery, "yyyy-MM-dd") : null)
+    )
+      throw new OrderActionError("Estimated delivery is protected after fulfillment is complete.");
+    if (balance.paid - balance.refunded > cents(financialChanged ? totals.total : existing.total))
       throw new OrderActionError("Refund the excess payment before reducing the order total.");
     // Preserve legacy rounded amounts on metadata-only edits as well.
     const savedTotals = financialChanged
@@ -456,15 +524,36 @@ export async function updateOrderWithInventoryAdjustments(orderId: string, rawIn
           actorUserId: authorization.principal.user.id,
         });
     }
-    const customerId = await resolveCustomerId(tx, workspaceId, input);
+    const customerId = editPolicy.financialLocked
+      ? existing.customerId
+      : await resolveCustomerId(tx, workspaceId, input);
     const order = await tx.order.update({
       where: { id: orderId },
       data: {
         ...orderData(workspaceId, customerId, input, savedTotals, existing.orderNumber),
+        ...(!financialChanged ? { taxRate: existing.taxRate } : {}),
+        ...(editPolicy.financialLocked ? { orderDate: existing.orderDate } : {}),
+        ...(editPolicy.deliveryDateLocked ? { estimatedDelivery: existing.estimatedDelivery } : {}),
         version: { increment: 1 },
       },
     });
     await refreshOrderPaymentStatus(tx, workspaceId, orderId);
+    const metadataFields = [
+      "customerEmail",
+      "customerPhone",
+      "customerNotes",
+      "footerMessage",
+      "shippingLine1",
+      "shippingLine2",
+      "shippingCity",
+      "shippingState",
+      "shippingPostalCode",
+    ] as const;
+    const fieldChanges = metadataFields.flatMap((field) =>
+      changed(existing[field], input[field])
+        ? [{ field, before: normalized(existing[field]), after: normalized(input[field]) }]
+        : [],
+    );
     await recordAuthorizationAuditEvent(
       {
         workspaceId,
@@ -474,6 +563,7 @@ export async function updateOrderWithInventoryAdjustments(orderId: string, rawIn
         targetType: "Order",
         targetId: orderId,
         metadata: {
+          ...(fieldChanges.length > 0 ? { fieldChanges } : {}),
           priceOverrides: prepared.flatMap((line, index) =>
             input.items[index].priceOverride
               ? [
@@ -523,12 +613,30 @@ export async function updateOrderStatusesAction(
     await lockOrder(tx, authorization.workspaceId, orderId);
     const order = await tx.order.findFirstOrThrow({
       where: { id: orderId, ownerId: authorization.workspaceId },
-      include: { items: true, returns: true },
+      include: {
+        items: {
+          include: { adjustmentItems: { include: { adjustment: { select: { kind: true } } } }, returnItems: true },
+        },
+        returns: true,
+      },
     });
     requireVersion(order.version, expectedVersion);
     if (order.orderStatus !== "Active" || order.returns.length)
       throw new OrderActionError("Cancelled or returned orders cannot be fulfilled.");
-    const remaining = order.items.filter((item) => item.shippedQuantity < item.quantity);
+    const remaining = order.items
+      .map((item) => ({
+        item,
+        quantity: cancellableQuantity({
+          quantity: item.quantity,
+          shippedQuantity: item.shippedQuantity,
+          cancelledQuantity: (item.adjustmentItems ?? []).reduce(
+            (sum, entry) => sum + (entry.adjustment.kind === "Cancellation" ? entry.quantity : 0),
+            0,
+          ),
+          returnedQuantity: (item.returnItems ?? []).reduce((sum, entry) => sum + entry.returnQuantity, 0),
+        }),
+      }))
+      .filter((entry) => entry.quantity > 0);
     if (remaining.length)
       await tx.orderShipment.create({
         data: {
@@ -538,12 +646,12 @@ export async function updateOrderStatusesAction(
           carrier: order.shippingService,
           trackingNumber: order.trackingNumber,
           items: {
-            create: remaining.map((item) => ({ orderItemId: item.id, quantity: item.quantity - item.shippedQuantity })),
+            create: remaining.map(({ item, quantity }) => ({ orderItemId: item.id, quantity })),
           },
         },
       });
-    for (const item of remaining)
-      await tx.orderItem.update({ where: { id: item.id }, data: { shippedQuantity: item.quantity } });
+    for (const { item, quantity } of remaining)
+      await tx.orderItem.update({ where: { id: item.id }, data: { shippedQuantity: { increment: quantity } } });
     await tx.order.update({
       where: { id: orderId },
       data: { fulfillmentStatus: "Fulfilled", reservationExpiresAt: null, version: { increment: 1 } },
@@ -562,6 +670,14 @@ export async function updateOrderStatusesAction(
   });
   revalidateCommerce(authorization.membership.workspaceSlug, orderId);
   return { success: true, message: "Order fulfilled." };
+}
+
+export async function emailOriginalOrderAction(
+  previousState: EmailOrderState,
+  formData: FormData,
+): Promise<EmailOrderState> {
+  formData.set("originalDocument", "1");
+  return emailOrderAction(previousState, formData);
 }
 
 export async function emailOrderAction(_previousState: EmailOrderState, formData: FormData): Promise<EmailOrderState> {
@@ -602,7 +718,12 @@ export async function emailOrderAction(_previousState: EmailOrderState, formData
     return createEmailOrderState(false, "Order could not be found.");
   }
 
-  const orderTitle = order.paymentStatus === "Paid" ? "Order Receipt" : "Order Confirmation";
+  const originalDocument = formData.get("originalDocument") === "1";
+  const orderTitle = originalDocument
+    ? "Original Order"
+    : order.paymentStatus === "Paid"
+      ? "Order Receipt"
+      : "Order Confirmation";
   const emailRecordBase = {
     ownerId: workspaceId,
     documentType: "order" as const,
@@ -641,7 +762,7 @@ export async function emailOrderAction(_previousState: EmailOrderState, formData
   let subject: string | undefined;
 
   try {
-    const documentData = await getOrderDocumentData(workspaceId, order.id);
+    const documentData = await getOrderDocumentData(workspaceId, order.id, originalDocument);
 
     if (!documentData) {
       return createEmailOrderState(false, "Order could not be found.");

@@ -1,6 +1,7 @@
 import { Document, Image, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
 
 export type OrderPdfLineItem = {
+  cancelledQuantity?: number;
   category: string | null;
   id: string;
   lineTotal: string;
@@ -13,6 +14,19 @@ export type OrderPdfLineItem = {
 };
 
 export type OrderPdfData = {
+  originalDocument?: boolean;
+  adjustmentSummary?: {
+    originalTotal: string;
+    credited: string;
+    effectiveSubtotal: string;
+    effectiveDiscount: string;
+    effectiveTax: string;
+    effectiveShipping: string;
+    effectiveTotal: string;
+    paid: string;
+    refunded: string;
+    creditOwed: string;
+  };
   showShipping?: boolean;
   companyEmail: string | null;
   companyLogoSrc: string;
@@ -244,7 +258,13 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
   const showShipping =
     data.showShipping ??
     [data.shippingAddressLines.length, data.shippingService, data.trackingNumber, data.estimatedDelivery].some(Boolean);
-  const title = data.isPaid ? "Order Receipt" : "Order Confirmation";
+  const title = data.originalDocument
+    ? "Original Order"
+    : data.adjustmentSummary
+      ? "Adjusted Order Receipt"
+      : data.isPaid
+        ? "Order Receipt"
+        : "Order Confirmation";
   const pages = paginatePdfItems(data.items);
 
   return (
@@ -261,7 +281,11 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
               <Image src={data.companyLogoSrc} style={styles.logo} />
               <Text style={styles.title}>{title}</Text>
               <Text style={[styles.small, styles.muted]}>
-                {data.isPaid ? "Thank you for your purchase." : "Thank you for your order."}
+                {data.adjustmentSummary
+                  ? "This reflects cancellations recorded after the original order."
+                  : data.isPaid
+                    ? "Thank you for your purchase."
+                    : "Thank you for your order."}
               </Text>
             </View>
 
@@ -284,8 +308,9 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
                     {[item.sku, item.category].filter(Boolean).join(" · ")}
                   </Text>
                   <Text style={[styles.tiny, styles.muted]}>
-                    {item.quantity}
-                    {item.unit ? ` ${item.unit}` : ""} x {item.unitPrice}
+                    {item.cancelledQuantity
+                      ? `${item.quantity} ordered · ${item.cancelledQuantity} cancelled · ${Math.max(item.quantity - item.cancelledQuantity, 0)} remaining`
+                      : `${item.quantity}${item.unit ? ` ${item.unit}` : ""} x ${item.unitPrice}`}
                   </Text>
                 </View>
                 <Text style={styles.itemTotal}>{item.lineTotal}</Text>
@@ -345,26 +370,64 @@ function OrderPdfDocument({ data }: { data: OrderPdfData }) {
                 <View style={[styles.section, styles.totals]}>
                   <View style={styles.totalRow}>
                     <Text style={[styles.text, styles.muted]}>Subtotal</Text>
-                    <Text style={styles.text}>{data.subtotal}</Text>
+                    <Text style={styles.text}>{data.adjustmentSummary?.effectiveSubtotal ?? data.subtotal}</Text>
                   </View>
                   {showShipping ? (
                     <View style={styles.totalRow}>
                       <Text style={[styles.text, styles.muted]}>Shipping</Text>
-                      <Text style={styles.text}>{data.shippingAmount}</Text>
+                      <Text style={styles.text}>
+                        {data.adjustmentSummary?.effectiveShipping ?? data.shippingAmount}
+                      </Text>
                     </View>
                   ) : null}
                   <View style={styles.totalRow}>
                     <Text style={[styles.text, styles.muted]}>Sales tax</Text>
-                    <Text style={styles.text}>{data.taxAmount}</Text>
+                    <Text style={styles.text}>{data.adjustmentSummary?.effectiveTax ?? data.taxAmount}</Text>
                   </View>
                   <View style={styles.totalRow}>
                     <Text style={[styles.text, styles.muted]}>Discount</Text>
-                    <Text style={[styles.text, styles.discount]}>-{data.discountAmount}</Text>
+                    <Text style={[styles.text, styles.discount]}>
+                      -{data.adjustmentSummary?.effectiveDiscount ?? data.discountAmount}
+                    </Text>
                   </View>
+                  {data.adjustmentSummary ? (
+                    <>
+                      <View style={styles.totalRow}>
+                        <Text style={[styles.text, styles.muted]}>Original total</Text>
+                        <Text style={styles.text}>{data.adjustmentSummary.originalTotal}</Text>
+                      </View>
+                      <View style={styles.totalRow}>
+                        <Text style={[styles.text, styles.muted]}>Cancellation credits</Text>
+                        <Text style={[styles.text, styles.discount]}>-{data.adjustmentSummary.credited}</Text>
+                      </View>
+                    </>
+                  ) : null}
                   <View style={[styles.totalRow, styles.totalFinal]}>
-                    <Text style={styles.totalLabel}>{data.isPaid ? "Total Paid" : "Order Total"}</Text>
-                    <Text style={styles.totalValue}>{data.total}</Text>
+                    <Text style={styles.totalLabel}>
+                      {data.originalDocument
+                        ? "Original total"
+                        : data.adjustmentSummary
+                          ? "Effective total"
+                          : data.isPaid
+                            ? "Total Paid"
+                            : "Order Total"}
+                    </Text>
+                    <Text style={styles.totalValue}>{data.adjustmentSummary?.effectiveTotal ?? data.total}</Text>
                   </View>
+                  {data.adjustmentSummary ? (
+                    <>
+                      <View style={styles.totalRow}>
+                        <Text style={[styles.text, styles.muted]}>Paid / refunded</Text>
+                        <Text style={styles.text}>
+                          {data.adjustmentSummary.paid} / {data.adjustmentSummary.refunded}
+                        </Text>
+                      </View>
+                      <View style={styles.totalRow}>
+                        <Text style={[styles.text, styles.muted]}>Credit owed</Text>
+                        <Text style={styles.text}>{data.adjustmentSummary.creditOwed}</Text>
+                      </View>
+                    </>
+                  ) : null}
                 </View>
 
                 <View style={styles.footer}>

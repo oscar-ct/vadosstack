@@ -2,17 +2,10 @@
 
 import * as React from "react";
 
-import { History, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { StockHistoryEntry, StockHistoryFilter } from "@/lib/commerce/stock-history";
@@ -149,9 +142,14 @@ function HistoryEntry({ entry }: { entry: StockHistoryEntry }) {
   );
 }
 
-export function StockHistory() {
+export function StockHistory({
+  open,
+  onOpenChange: setOpen,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const id = React.useId();
-  const [open, setOpen] = React.useState(false);
   const [draftQuery, setDraftQuery] = React.useState("");
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState<StockHistoryFilter>("activity");
@@ -193,12 +191,6 @@ export function StockHistory() {
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="outline">
-          <History className="size-4" />
-          Stock history
-        </Button>
-      </DialogTrigger>
       <DialogContent
         allowAutoFocus
         className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[85svh] sm:max-h-[900px] sm:w-[calc(100vw-3rem)] sm:max-w-3xl sm:rounded-xl"

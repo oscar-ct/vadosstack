@@ -1,69 +1,8 @@
-import { format } from "date-fns";
-import { Activity } from "lucide-react";
+import { redirect } from "next/navigation";
 
-import { AuthRequiredState } from "@/components/auth-required-state";
-import { getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { getWorkspaceDashboardPath } from "@/lib/workspace-path";
 
-import { CommerceKpiStrip } from "./_components/commerce-kpi-strip";
-import { CommercePulseFilters } from "./_components/commerce-pulse-filters";
-import { InventoryHealthCard } from "./_components/inventory-health-card";
-import { OrderOperationsCard } from "./_components/order-operations-card";
-import { TopProductsCard } from "./_components/top-products-card";
-import { getCommercePulseData, parseCommercePulsePeriod, parseCommercePulseScope } from "./_lib/commerce-pulse-data";
-
-type PageProps = {
-  searchParams?: Promise<{
-    period?: string | string[];
-    scope?: string | string[];
-  }>;
-};
-
-export default async function Page({ searchParams }: PageProps) {
-  const authorization = await getPermittedDashboardAuthorization("commerce.performance.view");
-
-  if (!authorization) {
-    return (
-      <AuthRequiredState
-        title="Sign in to view commerce analytics"
-        description="Order and inventory analytics are private to each signed-in account."
-      />
-    );
-  }
-
-  const params = await searchParams;
-  const period = parseCommercePulsePeriod(params?.period);
-  const scope = parseCommercePulseScope(params?.scope);
-  const data = await getCommercePulseData(authorization.workspaceId, period, scope);
-  const formattedDate = format(new Date(), "EEEE, do MMMM yyyy");
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="grid max-w-2xl gap-2">
-          <h1 className="flex items-center gap-2 font-medium text-xl leading-none">
-            <span>Commerce Overview</span>
-            <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <Activity className="size-4" />
-            </span>
-          </h1>
-          <p className="text-muted-foreground text-sm">{formattedDate}</p>
-        </div>
-
-        <CommercePulseFilters period={period} scope={scope} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <CommerceKpiStrip data={data} />
-        <div className="xl:col-span-4">
-          <TopProductsCard data={data.topProducts} />
-        </div>
-        <div className="xl:col-span-4">
-          <InventoryHealthCard data={data.inventory} />
-        </div>
-        <div className="xl:col-span-4">
-          <OrderOperationsCard data={data} />
-        </div>
-      </div>
-    </div>
-  );
+export default async function Page({ params }: { params: Promise<{ workspaceSlug: string }> }) {
+  const { workspaceSlug } = await params;
+  redirect(getWorkspaceDashboardPath(workspaceSlug, "/dashboard/commerce-analytics"));
 }

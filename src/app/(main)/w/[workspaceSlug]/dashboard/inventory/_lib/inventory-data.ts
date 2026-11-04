@@ -51,7 +51,14 @@ export async function getInventoryItems(
           location: { select: { name: true } },
           orderItems: {
             where: { order: { orderStatus: "Active" } },
-            select: { quantity: true, shippedQuantity: true, returnItems: { select: { returnQuantity: true } } },
+            select: {
+              quantity: true,
+              shippedQuantity: true,
+              returnItems: { select: { returnQuantity: true } },
+              adjustmentItems: {
+                select: { quantity: true, adjustment: { select: { kind: true } } },
+              },
+            },
           },
         },
       })

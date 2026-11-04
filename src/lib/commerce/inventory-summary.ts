@@ -11,7 +11,12 @@ type BalanceRecord = {
   itemStatus: string;
   locationId: string | null;
   location: { name: string } | null;
-  orderItems: { quantity: number; shippedQuantity: number; returnItems: { returnQuantity: number }[] }[];
+  orderItems: {
+    quantity: number;
+    shippedQuantity: number;
+    returnItems: { returnQuantity: number }[];
+    adjustmentItems: { quantity: number; adjustment: { kind: string } }[];
+  }[];
 };
 
 export function summarizeInventoryStock(records: BalanceRecord[]) {
@@ -36,8 +41,12 @@ export function summarizeInventoryStock(records: BalanceRecord[]) {
     }
     const reserved = record.orderItems.reduce((total, line) => {
       const resolved = line.returnItems.reduce((sum, entry) => sum + entry.returnQuantity, 0);
+      const cancelled = line.adjustmentItems.reduce(
+        (sum, entry) => sum + (entry.adjustment.kind === "Cancellation" ? entry.quantity : 0),
+        0,
+      );
       // Returns can resolve shipped or unshipped units; count shipped units first to avoid subtracting them twice.
-      return total + Math.max(0, line.quantity - Math.max(line.shippedQuantity, resolved));
+      return total + Math.max(0, line.quantity - cancelled - Math.max(line.shippedQuantity, resolved));
     }, 0);
     const archived = record.itemStatus === "Inactive" ? record.stock : 0;
     overview.totalAvailable += record.stock;

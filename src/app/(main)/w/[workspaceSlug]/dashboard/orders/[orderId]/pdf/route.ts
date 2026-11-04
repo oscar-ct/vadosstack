@@ -5,7 +5,7 @@ import { getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { getOrderDocumentData, sanitizeOrderPdfFilename } from "../../_lib/order-document";
 import { renderOrderPdfBuffer } from "../../_lib/order-pdf";
 
-async function getAuthorizedOrderPdfMetadata(orderId: string) {
+async function getAuthorizedOrderPdfMetadata(orderId: string, originalDocument = false) {
   const authorization = await getPermittedDashboardAuthorization("orders.view");
 
   if (!authorization) {
@@ -14,7 +14,7 @@ async function getAuthorizedOrderPdfMetadata(orderId: string) {
     };
   }
 
-  const data = await getOrderDocumentData(authorization.workspaceId, orderId);
+  const data = await getOrderDocumentData(authorization.workspaceId, orderId, originalDocument);
 
   if (!data) {
     return {
@@ -24,12 +24,12 @@ async function getAuthorizedOrderPdfMetadata(orderId: string) {
 
   return {
     data,
-    filename: sanitizeOrderPdfFilename(data.orderNumber),
+    filename: sanitizeOrderPdfFilename(originalDocument ? `${data.orderNumber}-original` : data.orderNumber),
   };
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   {
     params,
   }: {
@@ -39,7 +39,10 @@ export async function GET(
   },
 ) {
   const { orderId } = await params;
-  const result = await getAuthorizedOrderPdfMetadata(orderId);
+  const result = await getAuthorizedOrderPdfMetadata(
+    orderId,
+    new URL(request.url).searchParams.get("original") === "1",
+  );
 
   if (result.response) {
     return result.response;
@@ -57,7 +60,7 @@ export async function GET(
 }
 
 export async function HEAD(
-  _request: Request,
+  request: Request,
   {
     params,
   }: {
@@ -67,7 +70,10 @@ export async function HEAD(
   },
 ) {
   const { orderId } = await params;
-  const result = await getAuthorizedOrderPdfMetadata(orderId);
+  const result = await getAuthorizedOrderPdfMetadata(
+    orderId,
+    new URL(request.url).searchParams.get("original") === "1",
+  );
 
   if (result.response) {
     return result.response;

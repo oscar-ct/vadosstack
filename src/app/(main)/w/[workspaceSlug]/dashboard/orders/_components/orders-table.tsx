@@ -3,16 +3,21 @@
 import * as React from "react";
 
 import {
+  Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  CircleAlert,
+  Layers3,
   MoreHorizontal,
   PackageCheck,
   RotateCcw,
   Search,
   SlidersHorizontal,
   X,
+  XCircle,
 } from "lucide-react";
 
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
@@ -35,8 +40,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -45,6 +48,8 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCommerceSearch } from "@/components/use-commerce-search";
 import { useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import type { OrderListSummary } from "@/lib/commerce/order-list-summary";
+import { getOrderDisplayStatuses } from "@/lib/commerce/order-resolution";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import { FulfillmentWizard } from "./fulfillment-wizard";
@@ -53,6 +58,7 @@ export type OrderPaymentStatus = import("../create/_components/data").OrderPayme
 export type OrderFulfillmentStatus = import("../create/_components/data").OrderFulfillmentStatus;
 
 export type OrderTableItem = {
+  summary?: OrderListSummary;
   version: number;
   orderStatus: string;
   customerName: string;
@@ -70,11 +76,15 @@ export type OrderTableItem = {
   originalValue: number;
   discounts: number;
   collected: number;
+  creditOwed: number;
+  nextAction: "Cancelled" | "Refund customer" | "Collect payment" | "Complete refund" | "Fulfill items" | "Complete";
   total: number;
 };
 
-type OrderFilter = "all" | "needs-action" | "returns" | "unfulfilled" | "unpaid";
+type OrderFilter = "all" | "needs-action" | "fulfillment" | "returns" | "completed" | "cancelled";
 type OrderSort =
+  | "customer-asc"
+  | "customer-desc"
   | "collected-asc"
   | "collected-desc"
   | "discounts-asc"
@@ -88,15 +98,76 @@ type OrderSort =
   | "total-asc"
   | "total-desc";
 
-const filterOptions: Array<{ label: string; value: OrderFilter }> = [
-  { value: "all", label: "All" },
-  { value: "needs-action", label: "Needs action" },
-  { value: "unfulfilled", label: "Unfulfilled" },
-  { value: "unpaid", label: "Unpaid" },
-  { value: "returns", label: "Returns" },
-];
+const filterOptions = [
+  {
+    value: "all",
+    label: "All orders",
+    mobileLabel: "All orders",
+    action: "All order activity",
+    icon: Layers3,
+    accent: "bg-primary/10 text-primary",
+    badge: "",
+  },
+  {
+    value: "needs-action",
+    label: "Needs attention",
+    mobileLabel: "Attention",
+    action: "Review next action",
+    icon: CircleAlert,
+    accent: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    badge: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  },
+  {
+    value: "fulfillment",
+    label: "Fulfillment",
+    mobileLabel: "To fulfill",
+    action: "Ready to fulfill",
+    icon: PackageCheck,
+    accent: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    badge: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300",
+  },
+  {
+    value: "returns",
+    label: "Returns & refunds",
+    mobileLabel: "Returns",
+    action: "Review returns & refunds",
+    icon: RotateCcw,
+    accent: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+    badge:
+      "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300",
+  },
+  {
+    value: "completed",
+    label: "Completed",
+    mobileLabel: "Completed",
+    action: "No action outstanding",
+    icon: CheckCircle2,
+    accent: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    badge:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+  },
+  {
+    value: "cancelled",
+    label: "Cancelled",
+    mobileLabel: "Cancelled",
+    action: "Cancelled orders",
+    icon: XCircle,
+    accent: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
+    badge: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300",
+  },
+] as const satisfies ReadonlyArray<{
+  value: OrderFilter;
+  label: string;
+  mobileLabel: string;
+  action: string;
+  icon: typeof Layers3;
+  accent: string;
+  badge: string;
+}>;
 
 const sortOptions: Array<{ label: string; value: OrderSort }> = [
+  { value: "customer-asc", label: "Customer A-Z" },
+  { value: "customer-desc", label: "Customer Z-A" },
   { value: "newest", label: "Newest first" },
   { value: "oldest", label: "Oldest first" },
   { value: "total-asc", label: "Value low-high" },
@@ -124,9 +195,18 @@ const orderExportColumns: CsvColumn<OrderTableItem>[] = [
   { header: "Payment status", value: (order) => order.paymentStatus },
   { header: "Fulfillment status", value: (order) => order.fulfillmentStatus },
   { header: "Items", value: (order) => order.itemCount },
-  { header: "Value", value: (order) => order.originalValue.toFixed(2) },
-  { header: "Discount", value: (order) => order.discounts.toFixed(2) },
-  { header: "Collected", value: (order) => order.collected.toFixed(2) },
+  { header: "Units ordered", value: (order) => order.summary?.orderedUnits ?? "" },
+  { header: "Units fulfilled", value: (order) => order.summary?.fulfilledUnits ?? "" },
+  { header: "Units cancelled", value: (order) => order.summary?.cancelledUnits ?? "" },
+  { header: "Units returned", value: (order) => order.summary?.returnedUnits ?? "" },
+  { header: "Refund due", value: (order) => (order.summary?.refundDue ?? order.creditOwed).toFixed(2) },
+  { header: "Refunded", value: (order) => (order.summary?.refunded ?? 0).toFixed(2) },
+  { header: "Resolution count", value: (order) => order.summary?.resolutionCount ?? "" },
+  { header: "Stock hold expires", value: (order) => order.summary?.reservationExpiresAt ?? "" },
+  { header: "Total", value: (order) => order.originalValue.toFixed(2) },
+  { header: "Balance", value: (order) => order.discounts.toFixed(2) },
+  { header: "Net paid", value: (order) => order.collected.toFixed(2) },
+  { header: "Next action", value: (order) => order.nextAction },
   { header: "Date", value: (order) => formatOrderDate(order.orderedAt) },
 ];
 
@@ -140,29 +220,32 @@ function formatOrderDate(value: string) {
   }).format(date);
 }
 
-function getPaymentStatusClassName(status: OrderPaymentStatus) {
+function getPaymentStatusClassName(status: string) {
+  if (status === "No payment required") return "border-slate-200 bg-slate-50 text-slate-600";
   if (status === "Paid") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "Refunded" || status === "Partially Refunded") return "border-violet-200 bg-violet-50 text-violet-700";
+  if (status === "Partially Paid") return "border-sky-200 bg-sky-50 text-sky-700";
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
-function getFulfillmentStatusClassName(status: OrderFulfillmentStatus) {
+function getFulfillmentStatusClassName(status: string) {
   if (status === "Fulfilled") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  return "border-red-100 bg-red-50 text-red-600";
+  if (status === "Partially Fulfilled") return "border-sky-200 bg-sky-50 text-sky-700";
+  if (status === "Cancelled") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (status === "Resolved") return "border-slate-200 bg-slate-50 text-slate-600";
+  return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
-function getDotClassName(status: OrderPaymentStatus | OrderFulfillmentStatus) {
+function getDotClassName(status: string) {
   if (status === "Paid" || status === "Fulfilled") return "bg-emerald-600";
-  if (status === "Pending") return "bg-amber-600";
-  return "bg-red-600";
+  if (status === "Refunded" || status === "Partially Refunded") return "bg-violet-600";
+  if (status === "Partially Paid" || status === "Partially Fulfilled") return "bg-sky-600";
+  if (status === "Cancelled") return "bg-rose-600";
+  if (status === "Resolved" || status === "No payment required") return "bg-slate-500";
+  return "bg-amber-600";
 }
 
-function OrderStatusBadge({
-  status,
-  type,
-}: {
-  status: OrderFulfillmentStatus | OrderPaymentStatus;
-  type: "fulfillment" | "payment";
-}) {
+function OrderStatusBadge({ status, type }: { status: string; type: "fulfillment" | "payment" }) {
   const className =
     type === "payment"
       ? getPaymentStatusClassName(status as OrderPaymentStatus)
@@ -176,48 +259,113 @@ function OrderStatusBadge({
   );
 }
 
-function getReturnBadgeLabel(order: OrderTableItem) {
-  if (order.orderStatus === "Cancelled") return "Cancelled";
-  if (!order.returnNumber) return null;
-  if (order.returnRefundStatus === "Full Refund") return "Refunded";
-  if (order.returnRefundStatus === "Partial Refund") return "Partial refund";
-  if (order.returnRefundStatus === "No Refund" || order.returnRefundAmount === 0) return "Return on file";
-  return "Return on file";
+function OrderResolutionBadges({ order }: { order: OrderTableItem }) {
+  const summary = order.summary;
+  if (!summary?.hasResolutions && order.orderStatus !== "Cancelled") return null;
+  const notes = summary
+    ? `${summary.resolutionCount > 0 ? `${summary.resolutionCount} saved resolutions · ` : ""}${formatCurrency(summary.credited)} credited · ${formatCurrency(summary.refunded)} refunded`
+    : "Cancelled order";
+  return (
+    <div className="mt-1 flex flex-wrap gap-1" title={notes}>
+      {order.orderStatus !== "Cancelled" && summary && summary.activeUnits > 0 && summary.cancelledUnits > 0 ? (
+        <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+          {summary.cancelledUnits} cancelled
+        </Badge>
+      ) : null}
+      {summary && summary.returnedUnits > 0 ? (
+        <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
+          {summary.returnedUnits} returned
+        </Badge>
+      ) : null}
+      {summary?.hasResolutions && summary.cancelledUnits === 0 && summary.returnedUnits === 0 ? (
+        <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
+          {summary.credited > 0 ? "Credit recorded" : "Resolution recorded"}
+        </Badge>
+      ) : null}
+      {summary && summary.resolutionCount > 1 ? (
+        <span className="self-center text-muted-foreground text-xs">{summary.resolutionCount} resolutions</span>
+      ) : null}
+    </div>
+  );
 }
 
-function ReturnBadge({ order }: { order: OrderTableItem }) {
-  const label = getReturnBadgeLabel(order);
-
-  if (!label) return null;
-
+function OrderStates({ order }: { order: OrderTableItem }) {
+  const summary = order.summary;
+  const { cancellation, payment, fulfillment } = summary
+    ? getOrderDisplayStatuses(summary, order.orderStatus)
+    : {
+        cancellation: order.orderStatus === "Cancelled" ? "Cancelled" : null,
+        payment: order.orderStatus === "Cancelled" && order.collected === 0 ? null : order.paymentStatus,
+        fulfillment: order.orderStatus === "Cancelled" ? null : order.fulfillmentStatus,
+      };
   return (
-    <Badge variant="outline" className="mt-1 max-w-full border-sky-200 bg-sky-50 text-sky-700">
-      <span className="min-w-0 truncate">
-        {label} · {order.returnNumber}
-      </span>
-    </Badge>
+    <div className="grid gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {cancellation ? <OrderStatusBadge status={cancellation} type="fulfillment" /> : null}
+        {payment ? <OrderStatusBadge status={payment} type="payment" /> : null}
+        {fulfillment ? <OrderStatusBadge status={fulfillment} type="fulfillment" /> : null}
+      </div>
+      {summary && summary.fulfilledUnits > 0 && summary.fulfilledUnits < summary.activeUnits ? (
+        <p className="text-muted-foreground text-xs tabular-nums">
+          {summary.fulfilledUnits} of {summary.activeUnits} fulfilled
+        </p>
+      ) : null}
+      {summary?.holdState ? (
+        <p className="w-fit text-amber-700 text-xs" title={`Stock hold deadline: ${summary.reservationExpiresAt}`}>
+          {summary.holdState === "expired" ? "Hold expired" : "Hold expires soon"}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function OrderBalance({ order, mobile = false }: { order: OrderTableItem; mobile?: boolean }) {
+  const refundDue = order.summary?.refundDue ?? order.creditOwed;
+  return (
+    <div className="grid gap-0.5 text-right tabular-nums">
+      {order.discounts > 0 || refundDue === 0 ? (
+        <div className={cn(mobile && "flex items-baseline justify-end gap-2")}>
+          {mobile ? <span className="text-muted-foreground text-xs">Balance</span> : null}
+          <span className={mobile ? "text-sm" : "font-mono"}>{formatCurrency(order.discounts)}</span>
+        </div>
+      ) : null}
+      {refundDue > 0 ? (
+        <div className={cn("text-amber-700", mobile ? "flex items-baseline justify-end gap-2" : "grid gap-0.5")}>
+          <span className="text-xs">Refund due</span>
+          <span className={mobile ? "font-medium text-sm" : "font-mono"}>{formatCurrency(refundDue)}</span>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
 function RefundAmountText({ order }: { order: OrderTableItem }) {
-  if (!order.returnRefundAmount || order.returnRefundAmount <= 0) return null;
-
+  const refunded = order.summary?.refunded ?? 0;
+  if (refunded <= 0) return null;
   return (
-    <div className="font-normal text-destructive text-xs tabular-nums">
-      Refunded {formatCurrency(order.returnRefundAmount)}
-    </div>
+    <div className="font-normal text-muted-foreground text-xs tabular-nums">Refunded {formatCurrency(refunded)}</div>
   );
 }
 
 function matchesFilter(order: OrderTableItem, filter: OrderFilter) {
   if (filter === "all") return true;
+  if (filter === "cancelled") return order.orderStatus === "Cancelled";
+  if (filter === "needs-action")
+    return (
+      (order.summary?.refundDue ?? order.creditOwed) > 0 ||
+      (order.summary?.pendingRefund ?? 0) > 0 ||
+      (order.orderStatus === "Active" && order.nextAction !== "Complete")
+    );
+  if (filter === "returns")
+    return order.summary
+      ? order.summary.hasReturnActivity ||
+          order.summary.refunded > 0 ||
+          order.summary.refundDue > 0 ||
+          order.summary.pendingRefund > 0
+      : Boolean(order.returnNumber) || order.creditOwed > 0.001;
   if (order.orderStatus !== "Active") return false;
-  const unpaid = order.paymentStatus === "Pending" || order.paymentStatus === "Partially Paid";
-  const unfulfilled = order.fulfillmentStatus !== "Fulfilled";
-  if (filter === "needs-action") return unpaid || unfulfilled;
-  if (filter === "returns") return Boolean(order.returnNumber);
-  if (filter === "unfulfilled") return unfulfilled;
-  if (filter === "unpaid") return unpaid;
+  if (filter === "fulfillment") return order.nextAction === "Fulfill items";
+  if (filter === "completed") return order.nextAction === "Complete";
   return true;
 }
 
@@ -260,16 +408,21 @@ function OrderActions({
               !canUpdate ||
               order.orderStatus !== "Active" ||
               order.fulfillmentStatus === "Fulfilled" ||
-              Boolean(order.returnNumber)
+              !order.fulfillmentItems?.length
             }
             onSelect={() => setFulfillmentOpen(true)}
           >
             <PackageCheck className="size-4" />
             Record fulfillment{canUpdate ? "" : " (unavailable)"}
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={!canManageReturns} onSelect={() => router.push(returnHref)}>
+          <DropdownMenuItem
+            disabled={!canManageReturns || (order.orderStatus !== "Active" && !order.summary?.hasResolutions)}
+            onSelect={() =>
+              router.push(order.summary?.hasResolutions ? `/dashboard/orders/${order.id}/edit` : `${returnHref}?new=1`)
+            }
+          >
             <RotateCcw className="size-4" />
-            {order.returnNumber ? "View return/refund" : "Start return/refund"}
+            {order.summary?.hasResolutions ? "View resolutions" : "Resolve items"}
             {canManageReturns ? "" : " (unavailable)"}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -316,32 +469,27 @@ function MobileOrderCard({
           </div>
           <div className="grid shrink-0 gap-0.5 text-right">
             <div className="flex items-baseline justify-end gap-2">
-              <span className="text-muted-foreground text-xs">Value</span>
+              <span className="text-muted-foreground text-xs">Total</span>
               <span className="text-sm tabular-nums">{formatCurrency(order.originalValue)}</span>
             </div>
-            <div className="flex items-baseline justify-end gap-2">
-              <span className="text-muted-foreground text-xs">Discount</span>
-              <span className="text-sm tabular-nums">{formatCurrency(order.discounts)}</span>
-            </div>
+            <OrderBalance order={order} mobile />
             <div className="mt-1 flex items-baseline justify-end gap-2">
-              <span className="text-xs">Collected</span>
+              <span className="text-xs">Net paid</span>
               <span className="font-medium text-sm tabular-nums">{formatCurrency(order.collected)}</span>
             </div>
             <RefundAmountText order={order} />
           </div>
         </div>
-        <ReturnBadge order={order} />
+        <OrderResolutionBadges order={order} />
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-3 text-sm sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:border-l sm:pl-6">
           <div className="min-w-0">
             <div className="text-muted-foreground text-xs">Customer</div>
             <div className="truncate">{order.customerName}</div>
           </div>
           <div className="shrink-0 text-right text-muted-foreground text-xs">{formatOrderDate(order.orderedAt)}</div>
-          <div className="flex min-w-0 flex-wrap gap-2">
-            <OrderStatusBadge status={order.paymentStatus} type="payment" />
-            <OrderStatusBadge status={order.fulfillmentStatus} type="fulfillment" />
+          <div className="col-span-2 flex min-w-0 flex-wrap gap-2">
+            <OrderStates order={order} />
           </div>
-          <div className="self-end text-right text-muted-foreground text-sm">Open order</div>
         </div>
       </button>
       <div className="absolute top-3 right-3">
@@ -374,6 +522,18 @@ export function OrdersTable({
   const [sortValue, setSortValue] = React.useState<OrderSort>("newest");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const workflowCards = React.useMemo(
+    () =>
+      filterOptions.map((option) => {
+        const matching = orders.filter((order) => matchesFilter(order, option.value));
+        return {
+          ...option,
+          count: matching.length,
+          total: matching.reduce((sum, order) => sum + Math.round(order.originalValue * 100), 0) / 100,
+        };
+      }),
+    [orders],
+  );
   const filteredOrders = React.useMemo(() => {
     const visibleOrders = orders.filter((order) => matchesFilter(order, activeFilter));
 
@@ -381,11 +541,23 @@ export function OrdersTable({
       const leftTime = new Date(left.orderedAt).getTime();
       const rightTime = new Date(right.orderedAt).getTime();
 
+      if (sortValue === "customer-asc") return left.customerName.localeCompare(right.customerName);
+      if (sortValue === "customer-desc") return right.customerName.localeCompare(left.customerName);
       if (sortValue === "oldest") return leftTime - rightTime;
       if (sortValue === "total-asc") return left.originalValue - right.originalValue;
       if (sortValue === "total-desc") return right.originalValue - left.originalValue;
-      if (sortValue === "discounts-asc") return left.discounts - right.discounts;
-      if (sortValue === "discounts-desc") return right.discounts - left.discounts;
+      if (sortValue === "discounts-asc")
+        return (
+          left.discounts -
+          (left.summary?.refundDue ?? left.creditOwed) -
+          (right.discounts - (right.summary?.refundDue ?? right.creditOwed))
+        );
+      if (sortValue === "discounts-desc")
+        return (
+          right.discounts -
+          (right.summary?.refundDue ?? right.creditOwed) -
+          (left.discounts - (left.summary?.refundDue ?? left.creditOwed))
+        );
       if (sortValue === "collected-asc") return left.collected - right.collected;
       if (sortValue === "collected-desc") return right.collected - left.collected;
       if (sortValue === "order-asc")
@@ -490,6 +662,70 @@ export function OrdersTable({
     <>
       {exportSlotId && canExport ? <CsvExportSlot id={exportSlotId}>{exportMenu}</CsvExportSlot> : null}
       <div className="grid gap-4">
+        <fieldset
+          className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-2 xl:grid-cols-6"
+          aria-label="Order workflow"
+        >
+          {workflowCards.map((stage) => {
+            const isActive = activeFilter === stage.value;
+            const StageIcon = stage.icon;
+            const exactTotal = formatCurrency(stage.total);
+            return (
+              <button
+                key={stage.value}
+                type="button"
+                aria-pressed={isActive}
+                aria-label={`${stage.label}: ${stage.count} orders, total ${exactTotal}`}
+                title={`${stage.label} · Total ${exactTotal} · ${stage.action}`}
+                className={cn(
+                  "group relative grid min-h-20 min-w-0 content-between gap-1.5 overflow-hidden rounded-lg border bg-card p-2.5 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none sm:min-h-28 sm:gap-2 sm:rounded-xl sm:p-3",
+                  isActive && "border-primary bg-primary/[0.06] shadow-sm ring-1 ring-primary/15",
+                )}
+                onClick={() => updateFilter(stage.value)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span
+                    className={cn(
+                      "hidden size-7 shrink-0 items-center justify-center rounded-lg transition-colors sm:flex",
+                      isActive ? "bg-primary text-primary-foreground" : stage.accent,
+                    )}
+                  >
+                    <StageIcon className="size-3.5" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 font-medium text-xs leading-tight sm:hidden">{stage.mobileLabel}</span>
+                  <Badge
+                    variant={isActive ? "default" : "outline"}
+                    className={cn("shrink-0 gap-1 tabular-nums", !isActive && stage.badge)}
+                  >
+                    {isActive ? <Check className="size-3" aria-hidden="true" /> : null}
+                    {stage.count}
+                  </Badge>
+                </div>
+                <div className="min-w-0">
+                  <span className="hidden font-medium text-sm leading-tight sm:block">{stage.label}</span>
+                  <span className="mt-0.5 block font-medium text-sm tabular-nums tracking-tight sm:mt-1 sm:text-base">
+                    {Math.abs(stage.total) >= 1_000_000
+                      ? new Intl.NumberFormat("en-US", {
+                          style: "currency",
+                          currency: "USD",
+                          notation: "compact",
+                          maximumFractionDigits: 1,
+                        }).format(stage.total)
+                      : exactTotal}
+                  </span>
+                  <span className="mt-1 hidden truncate text-[11px] text-muted-foreground sm:block">
+                    {stage.action}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </fieldset>
+        {orders.length === 50 ? (
+          <p className="text-muted-foreground text-xs">
+            Summary reflects the orders on this page. Workflow groups can overlap.
+          </p>
+        ) : null}
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full lg:w-80">
@@ -561,28 +797,6 @@ export function OrdersTable({
                 </DrawerContent>
               </Drawer>
             </div>
-            <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <PackageCheck />
-                    Status
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup
-                    value={activeFilter}
-                    onValueChange={(value) => updateFilter(value as OrderFilter)}
-                  >
-                    {filterOptions.map((option) => (
-                      <DropdownMenuRadioItem key={option.value} value={option.value}>
-                        {option.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
             {hasFilters && (
               <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
                 <X />
@@ -594,15 +808,16 @@ export function OrdersTable({
         </div>
 
         <div className="hidden w-full min-w-0 max-w-full overflow-x-auto md:block [&_th]:top-0">
-          <Table className="min-w-[58rem] table-fixed">
+          <Table className="min-w-[66rem] table-fixed">
             <colgroup>
-              <col className="w-[4%]" />
-              <col className="w-[20%]" />
+              <col className="w-[3%]" />
+              <col className="w-[18%]" />
               <col className="w-[10%]" />
-              <col className="w-[17%]" />
-              <col className="w-[8%]" />
-              <col className="w-[8%]" />
-              <col className="w-[8%]" />
+              <col className="w-[14%]" />
+              <col className="w-[22%]" />
+              <col className="w-[9%]" />
+              <col className="w-[10%]" />
+              <col className="w-[9%]" />
               <col className="w-[5%]" />
             </colgroup>
             <TableHeader>
@@ -628,6 +843,13 @@ export function OrdersTable({
                     onSort={() => updateSort(sortValue === "oldest" ? "newest" : "oldest")}
                   />
                 </TableHead>
+                <TableHead className="sticky top-12 z-20 border-b bg-card">
+                  <SortableTableHeader
+                    direction={orderSortDirection(sortValue, "customer-asc", "customer-desc")}
+                    label="Customer"
+                    onSort={() => updateSort(sortValue === "customer-asc" ? "customer-desc" : "customer-asc")}
+                  />
+                </TableHead>
                 <TableHead className="sticky top-12 z-20 min-w-[9rem] border-b bg-card">
                   <SortableTableHeader
                     direction={orderSortDirection(sortValue, "status-asc", "status-desc")}
@@ -639,7 +861,7 @@ export function OrdersTable({
                   <SortableTableHeader
                     align="right"
                     direction={orderSortDirection(sortValue, "total-asc", "total-desc")}
-                    label="Value"
+                    label="Total"
                     onSort={() => updateSort(sortValue === "total-asc" ? "total-desc" : "total-asc")}
                   />
                 </TableHead>
@@ -647,7 +869,7 @@ export function OrdersTable({
                   <SortableTableHeader
                     align="right"
                     direction={orderSortDirection(sortValue, "discounts-asc", "discounts-desc")}
-                    label="Discount"
+                    label="Balance"
                     onSort={() => updateSort(sortValue === "discounts-asc" ? "discounts-desc" : "discounts-asc")}
                   />
                 </TableHead>
@@ -655,9 +877,12 @@ export function OrdersTable({
                   <SortableTableHeader
                     align="right"
                     direction={orderSortDirection(sortValue, "collected-asc", "collected-desc")}
-                    label="Collected"
+                    label="Net paid"
                     onSort={() => updateSort(sortValue === "collected-asc" ? "collected-desc" : "collected-asc")}
                   />
+                </TableHead>
+                <TableHead className="border-b bg-card">
+                  <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -699,7 +924,7 @@ export function OrdersTable({
                         {order.primaryProduct ?? "No products"}
                         {order.itemCount > 1 ? ` + ${order.itemCount - 1} more` : null}
                       </div>
-                      <ReturnBadge order={order} />
+                      <OrderResolutionBadges order={order} />
                     </TableCell>
                     <TableCell>
                       <span className="whitespace-nowrap text-muted-foreground">
@@ -707,22 +932,24 @@ export function OrdersTable({
                       </span>
                     </TableCell>
                     <TableCell>
-                      <div className="mb-1 truncate text-muted-foreground text-xs" title={order.customerName}>
+                      <div className="truncate" title={order.customerName}>
                         {order.customerName}
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <OrderStatusBadge status={order.paymentStatus} type="payment" />
-                        <OrderStatusBadge status={order.fulfillmentStatus} type="fulfillment" />
-                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <OrderStates order={order} />
                     </TableCell>
                     <TableCell>
                       <div className="text-right font-mono tabular-nums">{formatCurrency(order.originalValue)}</div>
                     </TableCell>
                     <TableCell>
-                      <div className="text-right font-mono tabular-nums">{formatCurrency(order.discounts)}</div>
+                      <OrderBalance order={order} />
                     </TableCell>
                     <TableCell>
                       <div className="text-right font-mono tabular-nums">{formatCurrency(order.collected)}</div>
+                      <div className="text-right">
+                        <RefundAmountText order={order} />
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <OrderActions canManageReturns={canManageReturns} canUpdate={canUpdate} order={order} />
@@ -731,7 +958,7 @@ export function OrdersTable({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center">
+                  <TableCell colSpan={9} className="h-24 text-center">
                     No orders found.
                   </TableCell>
                 </TableRow>

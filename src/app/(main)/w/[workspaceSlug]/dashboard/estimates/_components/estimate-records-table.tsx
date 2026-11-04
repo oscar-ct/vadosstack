@@ -71,8 +71,8 @@ const desktopColumnWidths: Record<string, string> = {
   select: "3.5%",
   estimateNumber: "10%",
   estimateDate: "10%",
-  customerName: "18%",
-  description: "28%",
+  customerName: "14%",
+  description: "32%",
   estimatedTotal: "10%",
   status: "17%",
   actions: "3.5%",
@@ -368,11 +368,11 @@ export function EstimateRecordsTable({
                   <div className="flex items-start justify-between gap-2">
                     <span
                       className={cn(
-                        "hidden size-8 shrink-0 items-center justify-center rounded-lg transition-colors sm:flex",
+                        "hidden size-7 shrink-0 items-center justify-center rounded-lg transition-colors sm:flex",
                         isActive ? "bg-primary text-primary-foreground" : stage.accent,
                       )}
                     >
-                      <StageIcon className="size-4" />
+                      <StageIcon className="size-3.5" />
                     </span>
                     <span className="min-w-0 font-medium text-xs leading-tight sm:hidden">{stage.mobileLabel}</span>
                     <Badge
@@ -388,7 +388,7 @@ export function EstimateRecordsTable({
                   </div>
                   <div className="min-w-0">
                     <span className="hidden font-medium text-sm leading-tight sm:block">{stage.label}</span>
-                    <span className="mt-0.5 block font-semibold text-sm tabular-nums tracking-tight sm:mt-1 sm:text-base">
+                    <span className="mt-0.5 block font-medium text-sm tabular-nums tracking-tight sm:mt-1 sm:text-base">
                       {formatPipelineMoney(stage.total)}
                     </span>
                     <span className="mt-1 hidden truncate text-[11px] text-muted-foreground sm:block">

@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { resend } from "@/lib/resend";
 
 import { getOrderBalance } from "./ledger";
-import { adjustStock, commerceTransaction, lockOrder } from "./transaction";
+import { createCancellationAdjustment } from "./order-adjustments";
+import { cancellableQuantity } from "./order-cancellation";
+import { commerceTransaction, lockOrder } from "./transaction";
 import { randomUUID } from "node:crypto";
 
 export async function expireUnpaidOrderHolds(limit = 50, deadline = Date.now() + 20000) {
@@ -15,6 +17,7 @@ export async function expireUnpaidOrderHolds(limit = 50, deadline = Date.now() +
     take: limit,
   });
   let expired = 0;
+  let failed = 0;
   for (const candidate of due) {
     if (Date.now() >= deadline) break;
     const didExpire = await commerceTransaction(async (tx) => {
@@ -27,40 +30,52 @@ export async function expireUnpaidOrderHolds(limit = 50, deadline = Date.now() +
         balance.paid > 0
       )
         return false;
-      const items = await tx.orderItem.findMany({ where: { orderId: candidate.id, ownerId: candidate.ownerId } });
-      if (
-        items.some((item) => item.shippedQuantity > 0) ||
-        (await tx.orderReturn.count({ where: { orderId: candidate.id } }))
-      )
-        return false;
-      for (const item of items)
-        if (item.inventoryItemId)
-          await adjustStock(tx, {
-            ownerId: candidate.ownerId,
-            inventoryItemId: item.inventoryItemId,
-            quantityChange: item.quantity,
-            reason: "Unpaid hold expired",
-            orderId: candidate.id,
-            orderItemId: item.id,
-          });
-      await tx.order.update({
-        where: { id: candidate.id },
-        data: {
-          orderStatus: "Cancelled",
-          cancelledAt: new Date(),
-          reservationExpiresAt: null,
-          version: { increment: 1 },
-        },
+      const items = await tx.orderItem.findMany({
+        where: { orderId: candidate.id, ownerId: candidate.ownerId },
+        include: { adjustmentItems: { include: { adjustment: { select: { kind: true } } } }, returnItems: true },
+      });
+      if (items.some((item) => item.shippedQuantity > 0)) return false;
+      const lines = items
+        .map((item) => ({
+          orderItemId: item.id,
+          quantity: cancellableQuantity({
+            quantity: item.quantity,
+            shippedQuantity: item.shippedQuantity,
+            cancelledQuantity: (item.adjustmentItems ?? []).reduce(
+              (sum, entry) => sum + (entry.adjustment.kind === "Cancellation" ? entry.quantity : 0),
+              0,
+            ),
+            returnedQuantity: (item.returnItems ?? []).reduce((sum, entry) => sum + entry.returnQuantity, 0),
+          }),
+        }))
+        .filter((line) => line.quantity > 0);
+      if (!lines.length) return false;
+      const adjustment = await createCancellationAdjustment(tx, {
+        ownerId: candidate.ownerId,
+        orderId: candidate.id,
+        lines,
+        reason: "Unpaid inventory hold expired",
+        idempotencyKey: `hold-expired:${candidate.id}`,
       });
       await recordAuthorizationAuditEvent(
-        { workspaceId: candidate.ownerId, action: "order.hold.expire", targetType: "Order", targetId: candidate.id },
+        {
+          workspaceId: candidate.ownerId,
+          action: "order.hold.expire",
+          targetType: "OrderAdjustment",
+          targetId: adjustment.id,
+          metadata: { orderId: candidate.id },
+        },
         tx,
       );
       return true;
+    }).catch((error) => {
+      failed++;
+      console.error("Order hold expiration failed", { orderId: candidate.id, error });
+      return false;
     });
     if (didExpire) expired++;
   }
-  return { scanned: due.length, expired };
+  return { scanned: due.length, expired, failed };
 }
 
 export async function deliverInventoryStockAlerts(limit = 50, deadline = Date.now() + 20000, ownerId?: string) {

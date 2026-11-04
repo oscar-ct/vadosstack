@@ -1,5 +1,8 @@
+import { adjustmentCredit, cancellableQuantity } from "@/lib/commerce/order-cancellation";
 import { hasOrderShipping, isWalkInOrder } from "@/lib/commerce/order-customer";
 import { orderListWhere } from "@/lib/commerce/order-filter";
+import { getOrderListSummary } from "@/lib/commerce/order-list-summary";
+import { getRecordedPaymentStatus } from "@/lib/commerce/payment-status";
 import { prisma } from "@/lib/prisma";
 
 import type { InventoryItem } from "../../inventory/_components/inventory-table";
@@ -59,8 +62,28 @@ export async function getOrderTableItems(
     take: 50,
     skip: ((options.page ?? 1) - 1) * 50,
     include: {
-      items: { select: { id: true, product: true, quantity: true, shippedQuantity: true } },
+      items: {
+        select: {
+          id: true,
+          product: true,
+          quantity: true,
+          shippedQuantity: true,
+          returnItems: { select: { orderReturnId: true, returnQuantity: true, disposition: true } },
+          physicalReturnItems: { select: { receivedQuantity: true, receipt: { select: { orderReturnId: true } } } },
+          adjustmentItems: { select: { quantity: true, adjustment: { select: { kind: true } } } },
+        },
+      },
       payments: { select: { amount: true } },
+      refunds: { where: { status: "succeeded" }, select: { amount: true, orderReturnId: true } },
+      adjustments: {
+        select: {
+          kind: true,
+          merchandiseAmount: true,
+          discountAmount: true,
+          taxAmount: true,
+          shippingAmount: true,
+        },
+      },
       _count: {
         select: {
           items: true,
@@ -71,12 +94,12 @@ export async function getOrderTableItems(
           createdAt: "desc",
         },
         select: {
+          id: true,
           refundAmount: true,
           refundStatus: true,
           returnNumber: true,
           refundState: true,
         },
-        take: 1,
       },
     },
     orderBy: [{ orderDate: "desc" }, { id: "desc" }],
@@ -84,24 +107,41 @@ export async function getOrderTableItems(
 
   return orders.map((order) => {
     const orderReturn = order.returns[0];
+    const summary = getOrderListSummary(order);
+    const fulfillmentItems = order.items
+      .map((item) => ({
+        id: item.id,
+        product: item.product,
+        remaining: cancellableQuantity({
+          quantity: item.quantity,
+          shippedQuantity: item.shippedQuantity,
+          returnedQuantity: item.returnItems.reduce((sum, entry) => sum + entry.returnQuantity, 0),
+          cancelledQuantity: item.adjustmentItems.reduce(
+            (sum, entry) => sum + (entry.adjustment.kind === "Cancellation" ? entry.quantity : 0),
+            0,
+          ),
+        }),
+      }))
+      .filter((item) => item.remaining > 0);
 
     return {
       id: order.id,
       orderNumber: order.orderNumber,
       customerName: order.customerName ?? "Walk-in Customer",
-      paymentStatus: order.paymentStatus as OrderTableItem["paymentStatus"],
+      paymentStatus: summary.paymentStatus,
       version: order.version,
       orderStatus: order.orderStatus,
       fulfillmentStatus: order.fulfillmentStatus as OrderFormValues["fulfillmentStatus"],
       itemCount: order._count.items,
       primaryProduct: order.items[0]?.product ?? null,
-      fulfillmentItems: order.items
-        .map((item) => ({ id: item.id, product: item.product, remaining: item.quantity - item.shippedQuantity }))
-        .filter((item) => item.remaining > 0),
+      fulfillmentItems,
       total: Number(order.total),
-      originalValue: Number(order.subtotal),
-      discounts: Number(order.discountAmount),
-      collected: order.payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+      summary,
+      originalValue: summary.effectiveTotal,
+      discounts: summary.balance,
+      collected: summary.netPaid,
+      creditOwed: summary.creditOwed,
+      nextAction: summary.nextAction,
       orderedAt: order.orderDate.toISOString(),
       returnNumber: orderReturn?.returnNumber ?? null,
       returnRefundAmount: orderReturn?.refundState === "succeeded" ? Number(orderReturn.refundAmount) : null,
@@ -173,16 +213,58 @@ export async function getOrderFormValues(ownerId: string, orderId: string): Prom
     },
     include: {
       items: {
+        include: {
+          adjustmentItems: { include: { adjustment: { select: { kind: true } } } },
+        },
         orderBy: {
           createdAt: "asc",
         },
       },
+      adjustments: true,
+      payments: { select: { amount: true } },
+      refunds: { where: { status: "succeeded" }, select: { amount: true } },
     },
   });
 
   if (!order) return null;
 
+  const credited = order.adjustments.reduce(
+    (sum, adjustment) =>
+      sum +
+      adjustmentCredit({
+        merchandiseAmount: Number(adjustment.merchandiseAmount),
+        discountAmount: Number(adjustment.discountAmount),
+        taxAmount: Number(adjustment.taxAmount),
+        shippingAmount: Number(adjustment.shippingAmount),
+      }),
+    0,
+  );
+  const creditedMerchandise = order.adjustments.reduce(
+    (sum, adjustment) => sum + Number(adjustment.merchandiseAmount),
+    0,
+  );
+  const creditedDiscount = order.adjustments.reduce((sum, adjustment) => sum + Number(adjustment.discountAmount), 0);
+  const creditedTax = order.adjustments.reduce((sum, adjustment) => sum + Number(adjustment.taxAmount), 0);
+  const creditedShipping = order.adjustments.reduce((sum, adjustment) => sum + Number(adjustment.shippingAmount), 0);
+  const paid = order.payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const refunded = order.refunds.reduce((sum, refund) => sum + Number(refund.amount), 0);
+  const effectiveTotal = Math.max(Number(order.total) - credited, 0);
+
   const values: OrderFormValues = {
+    adjustmentSummary: order.adjustments.length
+      ? {
+          originalTotal: Number(order.total),
+          credited,
+          effectiveSubtotal: Math.max(Number(order.subtotal) - creditedMerchandise, 0),
+          effectiveDiscount: Math.max(Number(order.discountAmount) - creditedDiscount, 0),
+          effectiveTax: Math.max(Number(order.taxAmount) - creditedTax, 0),
+          effectiveShipping: Math.max(Number(order.shippingAmount) - creditedShipping, 0),
+          effectiveTotal,
+          paid,
+          refunded,
+          creditOwed: Math.max(paid - refunded - effectiveTotal, 0),
+        }
+      : undefined,
     customerId: order.customerId,
     customerMode: isWalkInOrder(order) ? "walk_in" : "customer",
     deliveryMethod: hasOrderShipping({ ...order, shippingAmount: Number(order.shippingAmount) })
@@ -205,6 +287,10 @@ export async function getOrderFormValues(ownerId: string, orderId: string): Prom
       description: item.description,
       unit: item.unit,
       id: item.id,
+      cancelledQuantity: item.adjustmentItems.reduce(
+        (sum, entry) => sum + (entry.adjustment.kind === "Cancellation" ? entry.quantity : 0),
+        0,
+      ),
       updatedAt: item.updatedAt.toISOString(),
       inventoryItemId: item.inventoryItemId ?? undefined,
       product: item.product,
@@ -222,7 +308,7 @@ export async function getOrderFormValues(ownerId: string, orderId: string): Prom
     orderNumber: order.orderNumber,
     paymentMethod: order.paymentMethod ?? "",
     paymentReference: order.paymentReference ?? "",
-    paymentStatus: order.paymentStatus as OrderFormValues["paymentStatus"],
+    paymentStatus: getRecordedPaymentStatus({ paid, refunded, due: Math.max(effectiveTotal - paid, 0) }),
     shipping: Number(order.shippingAmount),
     state: order.shippingState ?? "",
     streetAddress: order.shippingLine1 ?? "",

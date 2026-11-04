@@ -41,6 +41,8 @@ const refundExplanationMaxLength = 80;
 const refundStatusOptions: ReturnRefundStatus[] = ["Full Refund", "Partial Refund", "No Refund", "Other"];
 
 type ReturnRefundWorkspaceProps = {
+  canCancelItems: boolean;
+  canReturnItems: boolean;
   company: OrderCompany;
   defaultValues: ReturnRefundFormValues;
   emailAction?: React.ReactNode;
@@ -50,10 +52,20 @@ type ReturnRefundWorkspaceProps = {
 };
 
 function getValidationError(values: ReturnRefundFormValues) {
-  if (!values.returnDate) return "Return date is required.";
-  if (!values.items.some((item) => item.returnQuantity > 0)) return "Choose at least one item to resolve.";
-  if (values.items.some((item) => item.returnQuantity < 0 || item.returnQuantity > item.orderedQuantity)) {
-    return "Returned quantities cannot exceed the original order quantities.";
+  if (!values.returnDate) return "Resolution date is required.";
+  if (!values.items.some((item) => item.returnQuantity > 0 || item.cancelQuantity > 0)) {
+    return "Choose at least one item to cancel or return.";
+  }
+  if (
+    values.items.some(
+      (item) =>
+        item.returnQuantity < 0 ||
+        item.returnQuantity > item.returnableQuantity ||
+        item.cancelQuantity < 0 ||
+        item.cancelQuantity > item.cancellableQuantity,
+    )
+  ) {
+    return "Resolution quantities exceed the units available for cancellation or return.";
   }
   if (values.refundStatus === "Other" && (!Number.isFinite(values.refundAmount) || values.refundAmount < 0)) {
     return "Enter a refund amount or choose No Refund.";
@@ -101,17 +113,53 @@ function useReturnForm() {
   return context;
 }
 
-function ReturnItemsSection({ disabled }: { disabled: boolean }) {
-  const { control, getValues, setValue } = useReturnForm();
+function ReturnItemsSection({
+  canCancelItems,
+  canReturnItems,
+  disabled,
+  refundableAmount,
+}: {
+  canCancelItems: boolean;
+  canReturnItems: boolean;
+  disabled: boolean;
+  refundableAmount: number;
+}) {
+  const { control, getValues, setValue, register } = useReturnForm();
   const items = useWatch({ control, name: "items" }) ?? [];
+
+  function updateQuantity(index: number, name: "cancelQuantity" | "returnQuantity", quantity: number) {
+    const currentValues = getValues();
+    const nextItems = currentValues.items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, [name]: quantity } : item,
+    );
+    const nextValues = { ...currentValues, items: nextItems };
+    const alreadyChoseNoRefund =
+      currentValues.refundStatus === "No Refund" &&
+      currentValues.items.some((item) => item.returnQuantity > 0 || item.cancelQuantity > 0);
+
+    setValue(`items.${index}.${name}`, quantity, { shouldDirty: true });
+    if (name === "returnQuantity") {
+      if (quantity === 0) setValue(`items.${index}.restock`, false, { shouldDirty: true });
+      else if (items[index]?.disposition === "Returned" && items[index]?.inventoryItemId)
+        setValue(`items.${index}.restock`, true, { shouldDirty: true });
+    }
+    if (refundableAmount <= 0) {
+      setValue("refundStatus", "No Refund", { shouldDirty: true });
+      setValue("refundAmount", 0, { shouldDirty: true });
+      return;
+    }
+    if (currentValues.refundStatus === "Other" || alreadyChoseNoRefund) return;
+    setValue("refundStatus", getCalculatedRefundStatus(nextValues, refundableAmount), { shouldDirty: true });
+    setValue("refundAmount", getCalculatedRefundAmount(nextValues, refundableAmount), { shouldDirty: true });
+  }
 
   return (
     <section className="grid gap-4">
       <div>
-        <h2 className="font-medium tracking-tight">Resolved Items</h2>
+        <h2 className="font-medium tracking-tight">Choose items to resolve</h2>
         <p className="text-muted-foreground text-sm">
-          Choose the affected quantities, then mark whether each item was returned, damaged, lost, or not physically
-          received.
+          Cancel units that have not been fulfilled. Return units the customer already received. A partially fulfilled
+          line can use both.
         </p>
       </div>
       <div className="grid gap-3">
@@ -124,131 +172,149 @@ function ReturnItemsSection({ disabled }: { disabled: boolean }) {
                   {[item.sku, item.category].filter(Boolean).join(" · ") || "Order item"}
                 </div>
                 <div className="text-muted-foreground text-xs">
-                  Ordered {item.orderedQuantity} at {formatCurrency(item.unitPrice)}
+                  {item.cancellableQuantity} unfulfilled · {item.returnableQuantity} fulfilled ·{" "}
+                  {formatCurrency(item.unitPrice)} each
                 </div>
               </div>
               <div className="text-right font-medium text-sm tabular-nums">
-                {formatCurrency(item.returnQuantity * item.unitPrice)}
+                {formatCurrency((item.returnQuantity + item.cancelQuantity) * item.unitPrice)}
               </div>
             </div>
 
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 sm:grid-cols-[minmax(0,0.34fr)_minmax(0,1fr)_auto]">
-              <Controller
-                control={control}
-                name={`items.${index}.returnQuantity`}
-                render={({ field }) => (
-                  <Field className="gap-1">
-                    <FieldLabel className="text-xs" htmlFor={`return-quantity-${index}`}>
-                      Qty
-                    </FieldLabel>
-                    <Select
-                      disabled={disabled}
-                      value={String(field.value)}
-                      onValueChange={(value) => {
-                        const quantity = Number(value);
-                        const currentValues = getValues();
-                        const nextItems = currentValues.items.map((currentItem, currentIndex) =>
-                          currentIndex === index ? { ...currentItem, returnQuantity: quantity } : currentItem,
-                        );
-                        const nextValues = {
-                          ...currentValues,
-                          items: nextItems,
-                        };
-                        const wasAutoNoRefund = currentValues.items.every(
-                          (currentItem) => currentItem.returnQuantity <= 0,
-                        );
+            <div className="grid gap-3 sm:grid-cols-2">
+              {item.cancellableQuantity > 0 ? (
+                <Controller
+                  control={control}
+                  name={`items.${index}.cancelQuantity`}
+                  render={({ field }) => (
+                    <Field className="gap-1 rounded-lg border bg-background p-3">
+                      <FieldLabel className="text-xs" htmlFor={`cancel-quantity-${index}`}>
+                        Cancel unfulfilled
+                      </FieldLabel>
+                      <Select
+                        disabled={disabled || !canCancelItems}
+                        value={String(field.value)}
+                        onValueChange={(value) => updateQuantity(index, "cancelQuantity", Number(value))}
+                      >
+                        <SelectTrigger id={`cancel-quantity-${index}`} className="w-full text-base md:text-sm">
+                          <SelectValue placeholder="Qty" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {getQuantityOptions(item.cancellableQuantity).map((quantity) => (
+                              <SelectItem key={`cancel-${quantity}`} value={String(quantity)}>
+                                {quantity}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-muted-foreground text-xs">Releases reserved stock; no physical return.</p>
+                    </Field>
+                  )}
+                />
+              ) : null}
+              {item.returnableQuantity > 0 ? (
+                <div className="grid gap-3 rounded-lg border bg-background p-3">
+                  <Controller
+                    control={control}
+                    name={`items.${index}.returnQuantity`}
+                    render={({ field }) => (
+                      <Field className="gap-1">
+                        <FieldLabel className="text-xs" htmlFor={`return-quantity-${index}`}>
+                          Return fulfilled
+                        </FieldLabel>
+                        <Select
+                          disabled={disabled || !canReturnItems}
+                          value={String(field.value)}
+                          onValueChange={(value) => updateQuantity(index, "returnQuantity", Number(value))}
+                        >
+                          <SelectTrigger id={`return-quantity-${index}`} className="w-full text-base md:text-sm">
+                            <SelectValue placeholder="Qty" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {getQuantityOptions(item.returnableQuantity).map((quantity) => (
+                                <SelectItem key={`return-${quantity}`} value={String(quantity)}>
+                                  {quantity}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                    )}
+                  />
+                  <Controller
+                    control={control}
+                    name={`items.${index}.disposition`}
+                    render={({ field }) => (
+                      <Field className="gap-1">
+                        <FieldLabel className="text-xs" htmlFor={`return-disposition-${index}`}>
+                          Outcome
+                        </FieldLabel>
+                        <Select
+                          disabled={disabled || !canReturnItems || item.returnQuantity === 0}
+                          value={field.value}
+                          onValueChange={(value) => {
+                            const disposition = value as ReturnDisposition;
 
-                        field.onChange(quantity);
-                        if (quantity === 0) {
-                          setValue(`items.${index}.restock`, false, { shouldDirty: true });
-                        } else if (item.disposition === "Returned" && item.inventoryItemId) {
-                          setValue(`items.${index}.restock`, true, { shouldDirty: true });
-                        }
-
-                        if (currentValues.refundStatus === "Other") return;
-
-                        if (currentValues.refundStatus === "No Refund" && !wasAutoNoRefund) {
-                          setValue("refundAmount", 0, { shouldDirty: true });
-                          return;
-                        }
-
-                        setValue("refundStatus", getCalculatedRefundStatus(nextValues), { shouldDirty: true });
-                        setValue("refundAmount", getCalculatedRefundAmount(nextValues), { shouldDirty: true });
-                      }}
-                    >
-                      <SelectTrigger id={`return-quantity-${index}`} className="w-full text-base md:text-sm">
-                        <SelectValue placeholder="Qty" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {getQuantityOptions(item.orderedQuantity).map((quantity) => (
-                            <SelectItem key={`quantity-${quantity}`} value={String(quantity)}>
-                              {quantity}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                )}
-              />
-              <Controller
-                control={control}
-                name={`items.${index}.disposition`}
-                render={({ field }) => (
-                  <Field className="order-3 col-span-2 gap-1 sm:order-2 sm:col-span-1">
-                    <FieldLabel className="text-xs" htmlFor={`return-disposition-${index}`}>
-                      Outcome
-                    </FieldLabel>
-                    <Select
-                      disabled={disabled || item.returnQuantity === 0}
-                      value={field.value}
-                      onValueChange={(value) => {
-                        const disposition = value as ReturnDisposition;
-
-                        field.onChange(disposition);
-                        if (disposition !== "Returned") {
-                          setValue(`items.${index}.restock`, false, { shouldDirty: true });
-                        } else if (item.inventoryItemId) {
-                          setValue(`items.${index}.restock`, true, { shouldDirty: true });
-                        }
-                      }}
-                    >
-                      <SelectTrigger id={`return-disposition-${index}`} className="w-full text-base md:text-sm">
-                        <SelectValue placeholder="Outcome" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {dispositionOptions.map((disposition) => (
-                            <SelectItem key={disposition} value={disposition}>
-                              {getReturnDispositionLabel(disposition)}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                )}
-              />
-              <Controller
-                control={control}
-                name={`items.${index}.restock`}
-                render={({ field }) => (
-                  <div className="order-2 flex h-9 items-center gap-2 rounded-lg border px-3 text-sm sm:order-3">
-                    <Checkbox
-                      checked={field.value}
-                      disabled={
-                        disabled ||
-                        !item.inventoryItemId ||
-                        item.returnQuantity === 0 ||
-                        item.disposition !== "Returned"
-                      }
-                      onCheckedChange={(value) => field.onChange(value === true)}
-                    />
-                    Restock
-                  </div>
-                )}
-              />
+                            field.onChange(disposition);
+                            if (disposition !== "Returned") {
+                              setValue(`items.${index}.restock`, false, { shouldDirty: true });
+                            } else if (item.inventoryItemId) {
+                              setValue(`items.${index}.restock`, true, { shouldDirty: true });
+                            }
+                          }}
+                        >
+                          <SelectTrigger id={`return-disposition-${index}`} className="w-full text-base md:text-sm">
+                            <SelectValue placeholder="Outcome" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {dispositionOptions.map((disposition) => (
+                                <SelectItem key={disposition} value={disposition}>
+                                  {getReturnDispositionLabel(disposition)}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                    )}
+                  />
+                  {item.disposition === "Damaged" ? (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        disabled={disabled || !canReturnItems}
+                        {...register(`items.${index}.physicallyReceived`)}
+                      />
+                      Damaged item physically received
+                    </label>
+                  ) : null}
+                  <Controller
+                    control={control}
+                    name={`items.${index}.restock`}
+                    render={({ field }) => (
+                      <div className="flex h-9 items-center gap-2 rounded-lg border px-3 text-sm">
+                        <Checkbox
+                          checked={field.value}
+                          disabled={
+                            disabled ||
+                            !canReturnItems ||
+                            !item.inventoryItemId ||
+                            item.returnQuantity === 0 ||
+                            item.disposition !== "Returned"
+                          }
+                          onCheckedChange={(value) => field.onChange(value === true)}
+                        />
+                        Restock
+                      </div>
+                    )}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         ))}
@@ -266,10 +332,12 @@ function RefundDetailsSection({
 }) {
   const { control, register, setValue } = useReturnForm();
   const values = useWatch({ control }) as ReturnRefundFormValues;
-  const calculatedRefundAmount = getCalculatedRefundAmount(values);
-  const calculatedRefundStatus = getCalculatedRefundStatus(values);
+  const refundableAmount = payments.reduce((sum, payment) => sum + Math.max(payment.refundableAmount, 0), 0);
+  const calculatedRefundAmount = getCalculatedRefundAmount(values, refundableAmount);
+  const calculatedRefundStatus = getCalculatedRefundStatus(values, refundableAmount);
   const isCustomRefund = values.refundStatus === "Other";
-  const showsRefundExplanation = values.refundStatus === "No Refund" || values.refundStatus === "Other";
+  const showsRefundExplanation =
+    (values.refundStatus === "No Refund" && refundableAmount > 0) || values.refundStatus === "Other";
   const refundExplanationLength = values.refundExplanation.length;
   const refundAmountRegistration = register("refundAmount", { valueAsNumber: true });
 
@@ -280,6 +348,11 @@ function RefundDetailsSection({
       setValue("refundExplanation", "", { shouldDirty: true });
     }
 
+    if (refundableAmount <= 0) {
+      if (values.refundStatus !== "No Refund") setValue("refundStatus", "No Refund", { shouldDirty: true });
+      if (values.refundAmount !== 0) setValue("refundAmount", 0, { shouldDirty: true });
+      return;
+    }
     if (values.refundStatus === "Other") return;
 
     if (values.refundStatus === "No Refund") {
@@ -300,6 +373,7 @@ function RefundDetailsSection({
   }, [
     calculatedRefundAmount,
     calculatedRefundStatus,
+    refundableAmount,
     disabled,
     setValue,
     values.refundAmount,
@@ -311,9 +385,10 @@ function RefundDetailsSection({
   return (
     <section className="grid gap-4">
       <div>
-        <h2 className="font-medium tracking-tight">Refund Details</h2>
+        <h2 className="font-medium tracking-tight">Credit & refund</h2>
         <p className="text-muted-foreground text-sm">
-          Record the completed refund. Saving the return also adds it to the order's payment history.
+          The credit combines every cancellation and return selected on the Items tab. Record a completed refund only
+          when money is being returned.
         </p>
       </div>
       <FieldGroup>
@@ -326,12 +401,27 @@ function RefundDetailsSection({
                 <FieldLabel className="text-xs" htmlFor="refund-payment">
                   Refund From
                 </FieldLabel>
-                <Select disabled={disabled || payments.length === 0} value={field.value} onValueChange={field.onChange}>
+                <Select
+                  disabled={disabled || payments.length === 0}
+                  value={field.value}
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    if (value === "all")
+                      setValue("refundMethod", [...new Set(payments.map((payment) => payment.method))].join(", "), {
+                        shouldDirty: true,
+                      });
+                  }}
+                >
                   <SelectTrigger id="refund-payment" className="w-full text-base md:text-sm">
-                    <SelectValue placeholder="Select the original payment" />
+                    <SelectValue placeholder="Select the original payment(s)" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
+                      {payments.length > 1 ? (
+                        <SelectItem value="all">
+                          All original payments · {formatCurrency(refundableAmount)} available
+                        </SelectItem>
+                      ) : null}
                       {payments.map((payment) => (
                         <SelectItem key={payment.id} value={payment.id}>
                           {payment.method} ·{" "}
@@ -343,12 +433,24 @@ function RefundDetailsSection({
                     </SelectGroup>
                   </SelectContent>
                 </Select>
+                {field.value === "all" ? (
+                  <p className="text-muted-foreground text-xs">
+                    Records the refund against each original payment, within its remaining balance. Confirm every refund
+                    has completed.
+                  </p>
+                ) : null}
                 {payments.length === 0 ? (
                   <p className="text-destructive text-xs">No refundable payment remains on this order.</p>
                 ) : null}
               </Field>
             )}
           />
+        ) : null}
+        {refundableAmount <= 0 ? (
+          <p role="status" className="rounded-lg bg-muted/40 p-3 text-muted-foreground text-sm">
+            No refund is required because no refundable payment is recorded. The cancellation credit still reduces the
+            amount owed.
+          </p>
         ) : null}
         <div className="grid grid-cols-2 gap-3 sm:gap-5">
           <Controller
@@ -386,7 +488,11 @@ function RefundDetailsSection({
                   <SelectContent>
                     <SelectGroup>
                       {refundStatusOptions.map((status) => (
-                        <SelectItem key={status} value={status}>
+                        <SelectItem
+                          key={status}
+                          value={status}
+                          disabled={refundableAmount <= 0 && status !== "No Refund"}
+                        >
                           {status}
                         </SelectItem>
                       ))}
@@ -442,34 +548,66 @@ function RefundDetailsSection({
           </Field>
         ) : null}
 
-        <div className="grid grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)] gap-3 sm:grid-cols-2 sm:gap-5">
-          <Field className="gap-1">
-            <FieldLabel className="text-xs" htmlFor="refund-method">
-              Refund Method
-            </FieldLabel>
-            <Input
-              id="refund-method"
-              disabled={disabled}
-              placeholder="Card refund"
-              required={values.refundStatus !== "No Refund"}
-              {...register("refundMethod")}
-            />
-          </Field>
-          <Field className="gap-1">
-            <FieldLabel className="text-xs" htmlFor="refund-reference">
-              Ref #
-            </FieldLabel>
-            <Input id="refund-reference" disabled={disabled} placeholder="RFND-1234" {...register("refundReference")} />
-          </Field>
-        </div>
+        {isCustomRefund && (!disabled || values.refundTaxAmount !== undefined) ? (
+          <div className="grid gap-3 rounded-lg border p-3">
+            <p className="text-sm">Break down the actual refund. These amounts must add up to the refund total.</p>
+            {(
+              [
+                ["refundMerchandiseAmount", "Merchandise refund"],
+                ["refundTaxAmount", "Tax refund"],
+                ["refundShippingAmount", "Shipping refund"],
+              ] as const
+            ).map(([name, label]) => (
+              <Field key={name}>
+                <FieldLabel htmlFor={name}>{label} ($)</FieldLabel>
+                <Input
+                  id={name}
+                  type="number"
+                  min="0"
+                  max="1000000"
+                  step="0.01"
+                  disabled={disabled}
+                  {...register(name, { valueAsNumber: true })}
+                />
+              </Field>
+            ))}
+          </div>
+        ) : null}
+        {values.refundStatus !== "No Refund" ? (
+          <div className="grid grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)] gap-3 sm:grid-cols-2 sm:gap-5">
+            <Field className="gap-1">
+              <FieldLabel className="text-xs" htmlFor="refund-method">
+                Refund Method
+              </FieldLabel>
+              <Input
+                id="refund-method"
+                disabled={disabled}
+                placeholder="Card refund"
+                required
+                {...register("refundMethod")}
+              />
+            </Field>
+            <Field className="gap-1">
+              <FieldLabel className="text-xs" htmlFor="refund-reference">
+                Ref #
+              </FieldLabel>
+              <Input
+                id="refund-reference"
+                disabled={disabled}
+                placeholder="RFND-1234"
+                {...register("refundReference")}
+              />
+            </Field>
+          </div>
+        ) : null}
 
         <div className="rounded-lg bg-muted/40 p-3 text-sm">
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Resolved item value</span>
+            <span className="text-muted-foreground">Cancelled + returned value</span>
             <span className="font-medium tabular-nums">{formatCurrency(getReturnedItemsSubtotal(values))}</span>
           </div>
           <div className="mt-1 flex justify-between gap-4">
-            <span className="text-muted-foreground">Refundable tax</span>
+            <span className="text-muted-foreground">Tax credit</span>
             <span className="font-medium tabular-nums">{formatCurrency(getReturnedItemsTax(values))}</span>
           </div>
           {getReturnedItemsDiscount(values) > 0 ? (
@@ -478,8 +616,20 @@ function RefundDetailsSection({
               <span className="font-medium tabular-nums">-{formatCurrency(getReturnedItemsDiscount(values))}</span>
             </div>
           ) : null}
+          {refundableAmount <= 0 &&
+          values.items.some((item) => item.cancelQuantity > 0) &&
+          values.items.every((item) => item.returnQuantity === 0) ? (
+            <div className="mt-2 flex justify-between gap-4 border-t pt-2">
+              <span className="text-muted-foreground">Cancellation credit</span>
+              <span className="font-medium tabular-nums">
+                {formatCurrency(
+                  getReturnedItemsSubtotal(values) + getReturnedItemsTax(values) - getReturnedItemsDiscount(values),
+                )}
+              </span>
+            </div>
+          ) : null}
           <div className="mt-1 flex justify-between gap-4">
-            <span className="text-muted-foreground">Requested refund amount</span>
+            <span className="text-muted-foreground">Refund amount</span>
             <span className="font-medium tabular-nums">{formatCurrency(getDefaultRefundAmount(values))}</span>
           </div>
           {isCustomRefund ? (
@@ -488,7 +638,8 @@ function RefundDetailsSection({
             </p>
           ) : (
             <p className="mt-2 text-muted-foreground text-xs">
-              Calculated from returned item value plus refundable tax. Shipping stays out unless you choose Other.
+              Calculated from cancelled and returned item value plus refundable tax. Shipping stays out unless you
+              choose Other.
             </p>
           )}
         </div>
@@ -503,20 +654,20 @@ function ReceiptDetailsSection({ disabled }: { disabled: boolean }) {
   return (
     <section className="grid gap-4">
       <div>
-        <h2 className="font-medium tracking-tight">Receipt Details</h2>
-        <p className="text-muted-foreground text-sm">Add the reason and customer-facing note for the return receipt.</p>
+        <h2 className="font-medium tracking-tight">Review details</h2>
+        <p className="text-muted-foreground text-sm">Add the reason and customer-facing note for this resolution.</p>
       </div>
       <FieldGroup>
         <div className="grid grid-cols-2 gap-3 sm:gap-5">
           <Field className="gap-1">
             <FieldLabel className="text-xs" htmlFor="return-number">
-              Return Receipt
+              Resolution number
             </FieldLabel>
             <Input id="return-number" disabled {...register("returnNumber")} />
           </Field>
           <Field className="gap-1">
             <FieldLabel className="text-xs" htmlFor="return-date">
-              Return Date
+              Resolution date
             </FieldLabel>
             <Input id="return-date" type="date" disabled={disabled} {...register("returnDate")} />
           </Field>
@@ -576,6 +727,8 @@ function ReceiptDetailsSection({ disabled }: { disabled: boolean }) {
 }
 
 export function ReturnRefundWorkspace({
+  canCancelItems,
+  canReturnItems,
   company,
   defaultValues,
   emailAction,
@@ -615,7 +768,7 @@ export function ReturnRefundWorkspace({
         return;
       }
 
-      toast.success("Return/refund saved.");
+      toast.success("Item resolution saved.");
       setLocked(true);
       router.replace(`/dashboard/orders/${orderId}/return?returnId=${result.id}`);
       router.refresh();
@@ -637,14 +790,14 @@ export function ReturnRefundWorkspace({
               </div>
               <div className="flex flex-col gap-1">
                 <h1 className="flex items-center gap-2 font-medium text-xl leading-none tracking-tight">
-                  Return / Refund {values.orderNumber}
+                  {returnId ? "Resolution" : "Resolve Items"} {values.orderNumber}
                   <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                     <RotateCcw className="size-4" />
                   </span>
                 </h1>
                 <p className="text-muted-foreground text-sm">
-                  Saved returns are final. If a refund is included, saving records the completed refund and updates
-                  inventory in one step.
+                  Cancel unfulfilled units, return fulfilled units, and record the resulting refund in one workflow.
+                  Saved resolutions are final and fully auditable.
                 </p>
               </div>
             </div>
@@ -658,7 +811,7 @@ export function ReturnRefundWorkspace({
                     window.location.href = `?new=1`;
                   }}
                 >
-                  Start another return
+                  Start another resolution
                 </Button>
               ) : (
                 <>
@@ -686,11 +839,7 @@ export function ReturnRefundWorkspace({
                     onClick={saveReturnRefund}
                   >
                     <Save />
-                    {isSaving
-                      ? "Saving..."
-                      : values.refundStatus === "No Refund"
-                        ? "Save return"
-                        : "Save return & refund"}
+                    {isSaving ? "Saving..." : values.refundStatus === "No Refund" ? "Save resolution" : "Save & refund"}
                   </Button>
                 </>
               )}
@@ -699,19 +848,24 @@ export function ReturnRefundWorkspace({
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,0.56fr)_minmax(380px,0.44fr)]">
             <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
-              <Tabs defaultValue="return" className="gap-4">
+              <Tabs defaultValue="items" className="gap-4">
                 <TabsList className="w-full">
-                  <TabsTrigger value="return">Return</TabsTrigger>
-                  <TabsTrigger value="refund">Refund</TabsTrigger>
-                  <TabsTrigger value="receipt">Receipt</TabsTrigger>
+                  <TabsTrigger value="items">Items</TabsTrigger>
+                  <TabsTrigger value="credit">Credit & refund</TabsTrigger>
+                  <TabsTrigger value="review">Review</TabsTrigger>
                 </TabsList>
-                <TabsContent value="return" className="mt-0">
-                  <ReturnItemsSection disabled={locked} />
+                <TabsContent value="items" className="mt-0">
+                  <ReturnItemsSection
+                    refundableAmount={payments.reduce((sum, payment) => sum + Math.max(payment.refundableAmount, 0), 0)}
+                    canCancelItems={canCancelItems}
+                    canReturnItems={canReturnItems}
+                    disabled={locked}
+                  />
                 </TabsContent>
-                <TabsContent value="refund" className="mt-0">
+                <TabsContent value="credit" className="mt-0">
                   <RefundDetailsSection disabled={locked} payments={payments} />
                 </TabsContent>
-                <TabsContent value="receipt" className="mt-0">
+                <TabsContent value="review" className="mt-0">
                   <ReceiptDetailsSection disabled={locked} />
                 </TabsContent>
               </Tabs>

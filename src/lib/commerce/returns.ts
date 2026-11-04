@@ -6,8 +6,11 @@ export type ReturnDisposition = "Damaged" | "Lost" | "No physical return" | "Ret
 export type ReturnStatus = "Draft" | "Returned";
 
 export type ReturnRefundItem = {
+  cancelQuantity: number;
+  cancellableQuantity: number;
   category: string;
   disposition: ReturnDisposition;
+  physicallyReceived?: boolean;
   id: string;
   inventoryItemId?: string;
   orderItemId: string;
@@ -17,6 +20,7 @@ export type ReturnRefundItem = {
   unit?: string | null;
   restock: boolean;
   returnQuantity: number;
+  returnableQuantity: number;
   sku: string;
   taxable: boolean;
   taxRate: number;
@@ -24,6 +28,7 @@ export type ReturnRefundItem = {
   originalDiscountAmount?: number;
   originalTaxAmount?: number;
   originalQuantity?: number;
+  previouslyCancelledQuantity?: number;
   previouslyReturnedQuantity?: number;
 };
 
@@ -46,6 +51,9 @@ export type ReturnRefundFormValues = {
   originalTotal: number;
   paymentId: string;
   reason: string;
+  refundMerchandiseAmount?: number;
+  refundTaxAmount?: number;
+  refundShippingAmount?: number;
   refundAmount: number;
   refundExplanation: string;
   refundMethod: string;
@@ -73,6 +81,7 @@ export type ReturnRefundDocumentData = {
     description?: string | null;
     unit?: string | null;
     returnQuantity: number;
+    cancelQuantity?: number;
     sku: string | null;
     unitPrice: string;
   }>;
@@ -121,7 +130,9 @@ export function getReturnDispositionLabel(disposition: ReturnDisposition) {
 }
 
 function getLineRefund(item: ReturnRefundItem) {
-  const quantity = Number.isFinite(item.returnQuantity) ? item.returnQuantity : 0;
+  const quantity =
+    (Number.isFinite(item.returnQuantity) ? item.returnQuantity : 0) +
+    (Number.isFinite(item.cancelQuantity) ? item.cancelQuantity : 0);
   const unitPrice = Number.isFinite(item.unitPrice) ? item.unitPrice : 0;
 
   return quantity * unitPrice;
@@ -137,8 +148,14 @@ export function getReturnedItemsSubtotal(values: ReturnRefundFormValues) {
 
 function allocatedReturnAmount(item: ReturnRefundItem, value: number) {
   const originalQuantity = item.originalQuantity ?? item.orderedQuantity;
-  const previous = item.previouslyReturnedQuantity ?? 0;
-  const quantity = Math.max(Math.trunc(Number.isFinite(item.returnQuantity) ? item.returnQuantity : 0), 0);
+  const previous = (item.previouslyReturnedQuantity ?? 0) + (item.previouslyCancelledQuantity ?? 0);
+  const quantity = Math.max(
+    Math.trunc(
+      (Number.isFinite(item.returnQuantity) ? item.returnQuantity : 0) +
+        (Number.isFinite(item.cancelQuantity) ? item.cancelQuantity : 0),
+    ),
+    0,
+  );
   return money(
     prorate(cents(value), previous + quantity, originalQuantity) - prorate(cents(value), previous, originalQuantity),
   );
@@ -174,9 +191,18 @@ export function getReturnedItemsDiscount(values: ReturnRefundFormValues) {
   );
 }
 
-export function getCalculatedRefundStatus(values: ReturnRefundFormValues): ReturnRefundStatus {
-  const totalReturnedQuantity = values.items.reduce((total, item) => total + item.returnQuantity, 0);
-  const allItemsReturned = values.items.every((item) => item.returnQuantity >= item.orderedQuantity);
+export function getCalculatedRefundStatus(
+  values: ReturnRefundFormValues,
+  refundableAmount?: number,
+): ReturnRefundStatus {
+  if (refundableAmount !== undefined && refundableAmount <= 0) return "No Refund";
+  const totalReturnedQuantity = values.items.reduce(
+    (total, item) => total + item.returnQuantity + item.cancelQuantity,
+    0,
+  );
+  const allItemsReturned = values.items.every(
+    (item) => item.returnQuantity + item.cancelQuantity >= item.returnableQuantity + item.cancellableQuantity,
+  );
 
   if (totalReturnedQuantity <= 0) return "No Refund";
   if (allItemsReturned) return "Full Refund";
@@ -184,8 +210,8 @@ export function getCalculatedRefundStatus(values: ReturnRefundFormValues): Retur
   return "Partial Refund";
 }
 
-export function getCalculatedRefundAmount(values: ReturnRefundFormValues) {
-  if (getCalculatedRefundStatus(values) === "No Refund") return 0;
+export function getCalculatedRefundAmount(values: ReturnRefundFormValues, refundableAmount?: number) {
+  if (getCalculatedRefundStatus(values, refundableAmount) === "No Refund") return 0;
 
   return roundMoney(
     Math.max(getReturnedItemsSubtotal(values) + getReturnedItemsTax(values) - getReturnedItemsDiscount(values), 0),

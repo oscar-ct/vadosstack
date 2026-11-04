@@ -9,6 +9,7 @@ import {
 } from "@/lib/commerce/validation";
 
 export interface OrderLineItem {
+  cancelledQuantity?: number;
   catalogUnitPrice?: number | null;
   priceOverride?: boolean;
   priceOverrideReason?: string | null;
@@ -57,6 +58,18 @@ export type OrderPaymentStatus = (typeof paymentStatuses)[number];
 export type OrderFulfillmentStatus = (typeof fulfillmentStatuses)[number];
 
 export interface OrderFormValues {
+  adjustmentSummary?: {
+    originalTotal: number;
+    credited: number;
+    effectiveSubtotal: number;
+    effectiveDiscount: number;
+    effectiveTax: number;
+    effectiveShipping: number;
+    effectiveTotal: number;
+    paid: number;
+    refunded: number;
+    creditOwed: number;
+  };
   customerId?: string | null;
   customerMode?: OrderCustomerMode;
   customerSelection?: string;

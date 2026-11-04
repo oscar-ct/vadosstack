@@ -116,21 +116,21 @@ const styles = StyleSheet.create({
 
 function ReturnReceiptPdf({ data }: { data: ReturnRefundDocumentData }) {
   return (
-    <Document title={`Return Receipt ${data.returnNumber}`}>
+    <Document title={`Resolution Receipt ${data.returnNumber}`}>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <Image src={data.company.logoSrc} style={styles.logo} />
-          <Text style={styles.title}>Return Receipt</Text>
+          <Text style={styles.title}>Resolution Receipt</Text>
           <Text style={styles.muted}>{data.company.name}</Text>
         </View>
 
         <View style={styles.metaGrid}>
           <View style={styles.metaCell}>
-            <Text style={styles.label}>Return Receipt</Text>
+            <Text style={styles.label}>Resolution</Text>
             <Text style={styles.value}>{data.returnNumber}</Text>
           </View>
           <View style={styles.metaCell}>
-            <Text style={styles.label}>Return Date</Text>
+            <Text style={styles.label}>Resolution date</Text>
             <Text style={styles.value}>{data.returnDate}</Text>
           </View>
           <View style={[styles.metaCell, { marginTop: 10 }]}>
@@ -151,7 +151,11 @@ function ReturnReceiptPdf({ data }: { data: ReturnRefundDocumentData }) {
                 {item.description ? <Text style={styles.muted}>{item.description.slice(0, 120)}</Text> : null}
                 <Text style={styles.muted}>{[item.sku, item.category].filter(Boolean).join(" · ")}</Text>
                 <Text style={styles.muted}>
-                  Qty {item.returnQuantity} · {getReturnDispositionLabel(item.disposition)} · {item.unitPrice}
+                  {(item.cancelQuantity ?? 0) > 0 ? `${item.cancelQuantity} cancelled · ` : ""}
+                  {item.returnQuantity > 0
+                    ? `${item.returnQuantity} ${getReturnDispositionLabel(item.disposition).toLowerCase()} · `
+                    : ""}
+                  {item.unitPrice}
                 </Text>
               </View>
               <Text style={styles.itemTotal}>{item.lineRefund}</Text>

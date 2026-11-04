@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { useWorkspacePath } from "@/components/workspace-path-provider";
+import { resolutionStatusLabel } from "@/lib/commerce/order-resolution";
 import {
   getDefaultRefundAmount,
   getEffectiveRefundStatus,
@@ -62,17 +63,18 @@ function ReceiptSection({ children, className }: { children: React.ReactNode; cl
 }
 
 function getLineRefund(item: ReturnRefundFormValues["items"][number]) {
-  return item.returnQuantity * item.unitPrice;
+  return (item.returnQuantity + item.cancelQuantity) * item.unitPrice;
 }
 
 function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values: ReturnRefundFormValues }) {
-  const returnedItems = values.items.filter((item) => item.returnQuantity > 0);
+  const returnedItems = values.items.filter((item) => item.returnQuantity > 0 || item.cancelQuantity > 0);
+  const includesCancellation = returnedItems.some((item) => item.cancelQuantity > 0);
   const returnedSubtotal = getReturnedItemsSubtotal(values);
   const returnedTax = getReturnedItemsTax(values);
   const returnedDiscount = getReturnedItemsDiscount(values);
   const refundAmount = getDefaultRefundAmount(values);
   const refundStatus = getEffectiveRefundStatus(values);
-  const addressLines = values.shippingAddressLines.length ? values.shippingAddressLines : ["Customer address pending"];
+  const addressLines = values.shippingAddressLines;
 
   return (
     <article
@@ -92,18 +94,30 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
           />
         </div>
         <div className="mt-1.5 grid justify-items-center gap-0.5">
-          <h3 className="font-medium text-base">Return Receipt</h3>
-          <span className="text-neutral-500 text-xs">Return confirmation and refund request</span>
+          <h3 className="font-medium text-base">
+            {includesCancellation || values.returnId ? "Resolution Receipt" : "Return Receipt"}
+          </h3>
+          <span className="text-neutral-500 text-xs">
+            {includesCancellation
+              ? "Cancellation, return, and refund details"
+              : values.returnId
+                ? "Recorded return and refund details"
+                : "Return confirmation and refund request"}
+          </span>
         </div>
       </header>
 
       <ReceiptSection className="grid grid-cols-2 gap-4 py-3">
         <div className="grid gap-1">
-          <span className="font-medium text-[11px] text-neutral-500">Return Receipt</span>
+          <span className="font-medium text-[11px] text-neutral-500">
+            {includesCancellation || values.returnId ? "Resolution" : "Return Receipt"}
+          </span>
           <span className="font-medium text-sm">{values.returnNumber || "RET-0000"}</span>
         </div>
         <div className="grid gap-1 text-right">
-          <span className="font-medium text-[11px] text-neutral-500">Return Date</span>
+          <span className="font-medium text-[11px] text-neutral-500">
+            {includesCancellation || values.returnId ? "Resolution date" : "Return Date"}
+          </span>
           <span className="font-medium text-sm">{formatReturnDate(values.returnDate)}</span>
         </div>
         <div className="grid gap-1">
@@ -135,7 +149,13 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
                   {[item.sku, item.category || "Category"].filter(Boolean).join(" · ")}
                 </div>
                 <div className="truncate text-[11px] text-neutral-500">
-                  Qty {item.returnQuantity} of {item.orderedQuantity} · {getReturnDispositionLabel(item.disposition)}
+                  {item.cancelQuantity > 0 ? `${item.cancelQuantity} cancelled` : null}
+                  {item.cancelQuantity > 0 && item.returnQuantity > 0 ? " · " : null}
+                  {item.returnQuantity > 0
+                    ? item.disposition === "Returned"
+                      ? `${item.returnQuantity} returned`
+                      : `${item.returnQuantity} resolved · ${getReturnDispositionLabel(item.disposition)}`
+                    : null}
                 </div>
               </div>
               <div className="font-medium text-sm tabular-nums">{formatCurrency(getLineRefund(item))}</div>
@@ -156,16 +176,18 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
                 {line}
               </div>
             ))}
-            <div className="text-[11px] text-neutral-500">{formatPhoneNumber(values.customerPhone) || "Phone"}</div>
+            {values.customerPhone ? (
+              <div className="text-[11px] text-neutral-500">{formatPhoneNumber(values.customerPhone)}</div>
+            ) : null}
           </div>
         </div>
         <div className="text-right">
           <div className="font-medium text-[11px] text-neutral-500">Refund</div>
           <div className="mt-1.5 grid gap-0.5">
-            <span className="font-medium text-sm">
-              {refundStatus} · {values.refundState ?? "draft"}
-            </span>
-            <span className="text-[11px] text-neutral-500">{values.refundMethod || "Refund method pending"}</span>
+            <span className="font-medium text-sm">{resolutionStatusLabel(values.refundState ?? "draft")}</span>
+            {refundStatus !== "No Refund" ? (
+              <span className="text-[11px] text-neutral-500">{values.refundMethod || "Refund method pending"}</span>
+            ) : null}
             {values.refundReference ? (
               <span className="break-all text-[11px] text-neutral-500">Ref # {values.refundReference}</span>
             ) : null}
@@ -179,7 +201,7 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
           <span className="tabular-nums">{formatCurrency(returnedSubtotal)}</span>
         </div>
         <div className="flex items-center justify-between gap-4 text-xs">
-          <span className="text-neutral-500">Refundable tax</span>
+          <span className="text-neutral-500">Tax credit</span>
           <span className="tabular-nums">{formatCurrency(returnedTax)}</span>
         </div>
         {returnedDiscount > 0 ? (
@@ -193,7 +215,13 @@ function ReturnReceiptPaper({ company, values }: { company: OrderCompany; values
           <span className="tabular-nums">{formatCurrency(values.originalTotal)}</span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-4 border-neutral-200 border-t pt-2">
-          <span className="font-medium">Requested Refund</span>
+          <span className="font-medium">
+            {values.returnStatus === "Returned"
+              ? "Refunded"
+              : refundStatus === "No Refund"
+                ? "Refund"
+                : "Requested Refund"}
+          </span>
           <span className="font-medium text-base tabular-nums">{formatCurrency(refundAmount)}</span>
         </div>
         {(refundStatus === "No Refund" || refundStatus === "Other") && values.refundExplanation ? (
@@ -290,7 +318,7 @@ export function ReturnRefundPreview({
               size="sm"
               variant="outline"
               className="h-7 px-2 text-xs"
-              disabled={actionsDisabled}
+              disabled={actionsDisabled || !values.returnId}
               onClick={() =>
                 downloadReturnReceipt(
                   workspacePath(

@@ -13,7 +13,6 @@ import {
   NotebookText,
   Package,
   PackageCheck,
-  PackageSearch,
   ReceiptText,
   ShieldCheck,
   ShoppingCart,
@@ -145,15 +144,9 @@ export const sidebarItems: NavGroup[] = [
     label: "E-commerce",
     items: [
       {
-        title: "Commerce Overview",
-        url: "/dashboard/commerce-pulse",
+        title: "Analytics",
+        url: "/dashboard/commerce-analytics",
         icon: Activity,
-        isNew: true,
-      },
-      {
-        title: "Inventory Analytics",
-        url: "/dashboard/inventory-analytics",
-        icon: PackageSearch,
         isNew: true,
       },
       {

@@ -19,11 +19,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useWorkspaceRouter } from "@/components/workspace-path-provider";
 import { previewStockAdjustment, type StockAdjustmentKind } from "@/lib/commerce/stock-adjustment";
+import { amountSchema } from "@/lib/commerce/validation";
 import { cn } from "@/lib/utils";
 
 import { adjustInventoryStockAction, getStockTransferLocationsAction } from "../stock-actions";
 import type { InventoryItem } from "./inventory-table";
-import { StockHistory } from "./stock-history";
 
 const actions = {
   Receive: {
@@ -92,7 +92,13 @@ type AdjustmentReview = {
 
 const steps = ["Action", "Details", "Review"] as const;
 
-export function StockOperations({ items }: { items: InventoryItem[] }) {
+export function StockOperations({
+  items,
+  renderTrigger,
+}: {
+  items: InventoryItem[];
+  renderTrigger: (begin: () => void) => React.ReactNode;
+}) {
   const router = useWorkspaceRouter();
   const id = React.useId();
   const [open, setOpen] = React.useState(false);
@@ -101,11 +107,12 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
   const saving = React.useRef(false);
   const [itemId, setItemId] = React.useState("");
   const [kind, setKind] = React.useState<StockAdjustmentKind>("Receive");
+  const [receiptType, setReceiptType] = React.useState<"Purchase" | "Other">("Purchase");
+  const [acquisitionCost, setAcquisitionCost] = React.useState("");
   const [quantity, setQuantity] = React.useState("");
   const [destinationId, setDestinationId] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [error, setError] = React.useState("");
-  const [success, setSuccess] = React.useState("");
   const [review, setReview] = React.useState<AdjustmentReview | null>(null);
   const attempt = React.useRef<{ signature: string; key: string } | null>(null);
   const heading = React.useRef<HTMLHeadingElement>(null);
@@ -125,6 +132,9 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
     item?.updatedAt &&
       preview?.valid &&
       notes.trim() &&
+      (kind !== "Receive" ||
+        receiptType === "Other" ||
+        (acquisitionCost.trim() !== "" && amountSchema.safeParse(Number(acquisitionCost)).success)) &&
       (kind !== "Transfer" ||
         (destination && !destination.ambiguous && !transferLookup.loading && !transferLookup.error)),
   );
@@ -135,6 +145,8 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
   function begin(selectedId = "") {
     if (saving.current) return;
     lookupVersion.current++;
+    setReceiptType("Purchase");
+    setAcquisitionCost(String(items.find((entry) => entry.id === selectedId)?.cost ?? ""));
     setItemId(selectedId);
     setKind("Receive");
     setQuantity("");
@@ -152,6 +164,8 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
       const selectedId = (event as CustomEvent<{ itemId: string }>).detail?.itemId;
       if (!items.some((entry) => entry.id === selectedId) || saving.current) return;
       lookupVersion.current++;
+      setReceiptType("Purchase");
+      setAcquisitionCost(String(items.find((entry) => entry.id === selectedId)?.cost ?? ""));
       setItemId(selectedId);
       setKind("Receive");
       setQuantity("");
@@ -205,6 +219,7 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
   function changeItem(next: string) {
     lookupVersion.current++;
     setItemId(next);
+    setAcquisitionCost(String(items.find((entry) => entry.id === next)?.cost ?? ""));
     setQuantity("");
     setDestinationId("");
     setNotes("");
@@ -222,6 +237,9 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
         kind,
         quantity: Number(quantity),
         ...(kind === "Transfer" ? { destinationLocationId: destinationId } : {}),
+        ...(kind === "Receive"
+          ? { receiptType, ...(receiptType === "Purchase" ? { acquisitionUnitCost: Number(acquisitionCost) } : {}) }
+          : {}),
         notes: notes.trim(),
       },
       product: item.product,
@@ -256,7 +274,6 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
         Transfer: "Stock moved",
       }[review.payload.kind];
       const message = `${resultLabel} for ${review.product}.`;
-      setSuccess(message);
       toast.success(message);
       setOpen(false);
       setReview(null);
@@ -288,24 +305,8 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
     : "Confirm adjustment";
 
   return (
-    <section className="mb-5 grid gap-3" aria-label="Stock adjustments and history">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3">
-        <div className="grid gap-1">
-          <h2 className="font-medium text-sm">Stock activity</h2>
-          <p className="text-muted-foreground text-xs">Adjust inventory or review recorded stock changes.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <StockHistory />
-          <Button type="button" size="sm" onClick={() => begin()} disabled={!items.length}>
-            Adjust stock
-          </Button>
-        </div>
-      </div>
-      {success ? (
-        <p role="status" className="text-emerald-700 text-sm dark:text-emerald-400">
-          {success}
-        </p>
-      ) : null}
+    <>
+      {renderTrigger(() => begin())}
       <Dialog
         open={open}
         onOpenChange={(next) => {
@@ -438,6 +439,43 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
                 ) : null}
                 {step === 1 ? (
                   <>
+                    {kind === "Receive" ? (
+                      <div className="grid gap-3 rounded-lg border p-3">
+                        <Label htmlFor={`${id}-receipt-type`}>Receipt type</Label>
+                        <select
+                          id={`${id}-receipt-type`}
+                          className={selectClass}
+                          value={receiptType}
+                          onChange={(e) => setReceiptType(e.target.value as "Purchase" | "Other")}
+                        >
+                          <option value="Purchase">Purchased stock</option>
+                          <option value="Other">Other receipt — no new spending</option>
+                        </select>
+                        {receiptType === "Purchase" ? (
+                          <>
+                            <Label htmlFor={`${id}-acquisition-cost`}>Acquisition cost per unit ($)</Label>
+                            <Input
+                              id={`${id}-acquisition-cost`}
+                              type="number"
+                              min="0"
+                              max="1000000"
+                              step="0.01"
+                              value={acquisitionCost}
+                              onChange={(e) => setAcquisitionCost(e.target.value)}
+                              required
+                            />
+                            <p className="text-muted-foreground text-xs">
+                              Actual purchase cost, including purchase tax and allocated acquisition costs. Does not
+                              change the item's current Cost field.
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-muted-foreground text-xs">
+                            Adds stock without increasing lifetime investment. Explain the receipt below.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
                     <div className="grid gap-2">
                       <Label htmlFor={`${id}-quantity`}>{config.quantityLabel}</Label>
                       <Input
@@ -541,6 +579,13 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
                 ) : null}
                 {step === 2 && review ? (
                   <>
+                    {review.payload.receiptType === "Purchase" ? (
+                      <p className="rounded-lg border p-3 text-sm">
+                        Investment added: $
+                        {(review.payload.quantity * (review.payload.acquisitionUnitCost ?? 0)).toFixed(2)} ·{" "}
+                        {review.payload.quantity} × ${(review.payload.acquisitionUnitCost ?? 0).toFixed(2)}
+                      </p>
+                    ) : null}
                     <p className="text-muted-foreground text-sm">
                       {actions[review.payload.kind].title} · {review.payload.quantity.toLocaleString()} {unitWord}
                       {review.payload.kind === "Count" ? " available after counting" : ""}
@@ -650,6 +695,6 @@ export function StockOperations({ items }: { items: InventoryItem[] }) {
           </form>
         </DialogContent>
       </Dialog>
-    </section>
+    </>
   );
 }

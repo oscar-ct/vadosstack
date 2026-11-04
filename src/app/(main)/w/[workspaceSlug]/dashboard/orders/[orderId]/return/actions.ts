@@ -5,8 +5,12 @@ import { z } from "zod";
 
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
+import { checkComponents, splitAmount } from "@/lib/commerce/allocations";
 import { getOrderBalance, refreshOrderPaymentStatus, requireVersion } from "@/lib/commerce/ledger";
 import { allocateCents, cents, money, prorate } from "@/lib/commerce/money";
+import { createCancellationAdjustment } from "@/lib/commerce/order-adjustments";
+import { adjustmentCreditCents, cancellableQuantity } from "@/lib/commerce/order-cancellation";
+import { allocateRefundPayments, refundablePaymentComponents } from "@/lib/commerce/refund-allocation";
 import { adjustStock, CommerceError, commerceTransaction, lockOrder } from "@/lib/commerce/transaction";
 import {
   amountSchema,
@@ -106,6 +110,9 @@ const returnInputSchema = z
     originalTaxAmount: amountSchema,
     originalTotal: amountSchema,
     paymentId: z.string().max(200),
+    refundMerchandiseAmount: amountSchema.optional(),
+    refundTaxAmount: amountSchema.optional(),
+    refundShippingAmount: amountSchema.optional(),
     refundAmount: amountSchema,
     refundExplanation: z.string().max(80),
     refundMethod: z.string().max(100),
@@ -129,9 +136,13 @@ const returnInputSchema = z
             description: z.string().max(5000).nullish(),
             unit: z.string().max(40).nullish(),
             sku: z.string(),
+            physicallyReceived: z.boolean().optional(),
             disposition: z.enum(["Returned", "Damaged", "Lost", "No physical return"]),
+            cancelQuantity: z.number().int().min(0).max(1000000),
+            cancellableQuantity: z.number().int().min(0).max(1000000),
             orderedQuantity: z.number().int().min(0),
             returnQuantity: z.number().int().min(0).max(1000000),
+            returnableQuantity: z.number().int().min(0).max(1000000),
             restock: z.boolean(),
             unitPrice: amountSchema,
             taxable: z.boolean(),
@@ -139,6 +150,7 @@ const returnInputSchema = z
             originalDiscountAmount: amountSchema.optional(),
             originalTaxAmount: amountSchema.optional(),
             originalQuantity: z.number().int().positive().optional(),
+            previouslyCancelledQuantity: z.number().int().min(0).optional(),
             previouslyReturnedQuantity: z.number().int().min(0).optional(),
           })
           .strict(),
@@ -152,8 +164,8 @@ export async function saveReturnRefundAction(
   orderId: string,
   rawInput: ReturnRefundFormValues,
 ): Promise<SaveReturnRefundResult> {
-  const authorization = await getPermittedDashboardAuthorization("orders.returns.manage");
-  if (!authorization) return { message: "You do not have permission to manage returns.", success: false };
+  const authorization = await getPermittedDashboardAuthorization("orders.view");
+  if (!authorization) return { message: "You do not have permission to view orders.", success: false };
   const workspaceId = authorization.workspaceId;
   try {
     const input = parseCommerceInput(returnInputSchema, rawInput);
@@ -173,15 +185,45 @@ export async function saveReturnRefundAction(
       const order = await tx.order.findFirstOrThrow({
         where: { id: orderId, ownerId: workspaceId },
         include: {
-          items: true,
+          items: {
+            include: {
+              adjustmentItems: { include: { adjustment: { select: { kind: true } } } },
+            },
+          },
           payments: { include: { refunds: { where: { status: "succeeded" } } } },
           returns: { include: { items: true } },
+          physicalReturns: { include: { items: true } },
         },
       });
       requireVersion(order.version, input.orderVersion);
       if (order.orderStatus !== "Active") throw new ReturnActionError("Cancelled orders cannot be returned.");
       if (new Set(input.items.map((item) => item.orderItemId)).size !== input.items.length)
         throw new ReturnActionError("Each return line must be unique.");
+      const cancellationLines = input.items
+        .filter((item) => item.cancelQuantity > 0)
+        .map((item) => {
+          const original = order.items.find((entry) => entry.id === item.orderItemId);
+          if (!original) throw new ReturnActionError("Resolution item does not belong to this order.");
+          const alreadyCancelled = original.adjustmentItems.reduce(
+            (sum, entry) => sum + (entry.adjustment.kind === "Cancellation" ? entry.quantity : 0),
+            0,
+          );
+          const alreadyReturned = order.returns
+            .flatMap((receipt) => receipt.items)
+            .filter((entry) => entry.orderItemId === original.id)
+            .reduce((sum, entry) => sum + entry.returnQuantity, 0);
+          const available = cancellableQuantity({
+            quantity: original.quantity,
+            shippedQuantity: original.shippedQuantity,
+            cancelledQuantity: alreadyCancelled,
+            returnedQuantity: alreadyReturned,
+          });
+          if (item.cancelQuantity > available)
+            throw new ReturnActionError(`${original.product} only has ${available} unfulfilled units to cancel.`);
+          return { orderItemId: original.id, quantity: item.cancelQuantity };
+        });
+      if (cancellationLines.length && !can(authorization.membership, "orders.update"))
+        throw new ReturnActionError("You do not have permission to cancel order items.");
       const lines = input.items
         .map((item) => {
           const original = order.items.find((entry) => entry.id === item.orderItemId);
@@ -190,23 +232,49 @@ export async function saveReturnRefundAction(
             .flatMap((receipt) => receipt.items)
             .filter((entry) => entry.orderItemId === original.id)
             .reduce((sum, entry) => sum + entry.returnQuantity, 0);
-          if (item.returnQuantity > original.quantity - alreadyReturned)
-            throw new ReturnActionError(`${original.product} exceeds the quantity remaining to return.`);
+          const alreadyCancelled = original.adjustmentItems.reduce(
+            (sum, entry) => sum + (entry.adjustment.kind === "Cancellation" ? entry.quantity : 0),
+            0,
+          );
+          const resolvedBeforeReturn = alreadyReturned + alreadyCancelled + item.cancelQuantity;
+          if (item.returnQuantity > original.shippedQuantity - alreadyReturned)
+            throw new ReturnActionError(
+              `${original.product} exceeds the fulfilled quantity remaining to return. Cancel unfulfilled units from the order instead.`,
+            );
           const quantity = item.returnQuantity;
+          const received =
+            item.disposition === "Returned" || (item.disposition === "Damaged" && item.physicallyReceived === true);
+          const priorReceived = order.physicalReturns
+            .flatMap((r) => r.items)
+            .filter((r) => r.orderItemId === original.id)
+            .reduce((sum, r) => sum + r.receivedQuantity, 0);
+          const legacyReceived = order.returns
+            .filter(
+              (r) =>
+                !order.physicalReturns.some(
+                  (p) => p.orderReturnId === r.id && p.items.some((i) => i.orderItemId === original.id),
+                ),
+            )
+            .flatMap((r) => r.items)
+            .filter((r) => r.orderItemId === original.id && r.disposition === "Returned")
+            .reduce((sum, r) => sum + r.returnQuantity, 0);
+          if (received && quantity > original.shippedQuantity - priorReceived - legacyReceived)
+            throw new ReturnActionError("Physical return quantity exceeds fulfilled units not already received.");
           const discountAmount = money(
-            prorate(cents(original.discountAmount), alreadyReturned + quantity, original.quantity) -
-              prorate(cents(original.discountAmount), alreadyReturned, original.quantity),
+            prorate(cents(original.discountAmount), resolvedBeforeReturn + quantity, original.quantity) -
+              prorate(cents(original.discountAmount), resolvedBeforeReturn, original.quantity),
           );
           const taxAmount = money(
-            prorate(cents(original.taxAmount), alreadyReturned + quantity, original.quantity) -
-              prorate(cents(original.taxAmount), alreadyReturned, original.quantity),
+            prorate(cents(original.taxAmount), resolvedBeforeReturn + quantity, original.quantity) -
+              prorate(cents(original.taxAmount), resolvedBeforeReturn, original.quantity),
           );
           const grossAmount = money(
-            prorate(cents(original.lineTotal), alreadyReturned + quantity, original.quantity) -
-              prorate(cents(original.lineTotal), alreadyReturned, original.quantity),
+            prorate(cents(original.lineTotal), resolvedBeforeReturn + quantity, original.quantity) -
+              prorate(cents(original.lineTotal), resolvedBeforeReturn, original.quantity),
           );
           return {
             original,
+            received,
             quantity,
             disposition: item.disposition,
             restock:
@@ -220,8 +288,44 @@ export async function saveReturnRefundAction(
           };
         })
         .filter((line) => line.quantity > 0);
-      if (!lines.length) throw new ReturnActionError("Choose at least one item to resolve.");
-      const calculatedAmount = lines.reduce((sum, line) => sum + line.calculatedRefund, 0);
+      if (lines.length && !can(authorization.membership, "orders.returns.manage"))
+        throw new ReturnActionError("You do not have permission to return fulfilled items.");
+      if (!lines.length && !cancellationLines.length)
+        throw new ReturnActionError("Choose at least one item to cancel or return.");
+      const cancellationAdjustment = cancellationLines.length
+        ? await createCancellationAdjustment(tx, {
+            ownerId: workspaceId,
+            orderId,
+            lines: cancellationLines,
+            reason: input.reason.trim() || "Item resolution",
+            idempotencyKey: `${input.submissionKey}:cancel`,
+            actorUserId: authorization.principal.user.id,
+          })
+        : null;
+      const cancellationCredit = cancellationAdjustment
+        ? adjustmentCreditCents({
+            merchandiseAmount: cents(cancellationAdjustment.merchandiseAmount),
+            discountAmount: cents(cancellationAdjustment.discountAmount),
+            taxAmount: cents(cancellationAdjustment.taxAmount),
+            shippingAmount: cents(cancellationAdjustment.shippingAmount),
+          })
+        : 0;
+      if (cancellationAdjustment) {
+        await recordAuthorizationAuditEvent(
+          {
+            workspaceId,
+            actorUserId: authorization.principal.user.id,
+            membershipId: authorization.membership.id,
+            action: "order.items.cancel",
+            targetType: "OrderAdjustment",
+            targetId: cancellationAdjustment.id,
+            metadata: { orderId, source: "item_resolution" },
+          },
+          tx,
+        );
+      }
+      const returnCredit = lines.reduce((sum, line) => sum + line.calculatedRefund, 0);
+      const calculatedAmount = cancellationCredit + returnCredit;
       const refundAmount =
         input.refundStatus === "No Refund"
           ? 0
@@ -237,24 +341,61 @@ export async function saveReturnRefundAction(
         throw new ReturnActionError(
           "Requested refund exceeds the paid balance available after previous returns and refunds.",
         );
-      const payment = refundAmount ? order.payments.find((entry) => entry.id === input.paymentId) : undefined;
+      const refundPayments = refundAmount
+        ? order.payments.filter((entry) => input.paymentId === "all" || entry.id === input.paymentId)
+        : [];
       if (refundAmount && !can(authorization.membership, "orders.payments.manage"))
         throw new ReturnActionError("You do not have permission to record the completed refund.");
-      if (refundAmount && !payment) throw new ReturnActionError("Choose the original payment for this refund.");
+      if (refundAmount && !refundPayments.length)
+        throw new ReturnActionError("Choose the original payments for this refund.");
       if (refundAmount && !input.refundMethod.trim()) throw new ReturnActionError("Refund method is required.");
-      const paymentRefunded = payment ? payment.refunds.reduce((sum, refund) => sum + cents(refund.amount), 0) : 0;
-      if (payment && refundAmount > cents(payment.amount) - paymentRefunded)
-        throw new ReturnActionError("Refund exceeds the selected payment's refundable balance.");
       const refundStatus =
         input.refundStatus === "No Refund" || input.refundStatus === "Other"
           ? input.refundStatus
-          : order.items.every((original) =>
-                lines.some((line) => line.original.id === original.id && line.quantity === original.quantity),
+          : input.items.every(
+                (item) =>
+                  item.cancelQuantity + item.returnQuantity >= item.cancellableQuantity + item.returnableQuantity,
               )
             ? "Full Refund"
             : "Partial Refund";
+      const normalTax =
+        lines.reduce((sum, line) => sum + cents(line.taxAmount), 0) +
+        (cancellationAdjustment ? cents(cancellationAdjustment.taxAmount) : 0);
+      const normalShipping = cancellationAdjustment ? cents(cancellationAdjustment.shippingAmount) : 0;
+      const normalMerchandise = Math.max(calculatedAmount - normalTax - normalShipping, 0);
+      const components =
+        input.refundStatus === "Other" && refundAmount > 0
+          ? checkComponents(money(refundAmount), {
+              merchandiseAmount: input.refundMerchandiseAmount ?? -1,
+              taxAmount: input.refundTaxAmount ?? -1,
+              shippingAmount: input.refundShippingAmount ?? -1,
+            })
+          : checkComponents(money(refundAmount), {
+              merchandiseAmount: refundAmount ? money(normalMerchandise) : 0,
+              taxAmount: refundAmount ? money(normalTax) : 0,
+              shippingAmount: refundAmount ? money(normalShipping) : 0,
+            });
+      const refundedMoney = balance.refunds;
+      if (refundedMoney.some((r) => r.taxAmount == null) && input.refundStatus === "Other")
+        throw new ReturnActionError(
+          "A previous refund has an unknown breakdown. Review it before recording a custom component refund.",
+        );
+      const caps = {
+        merchandiseAmount: Number(order.subtotal) - Number(order.discountAmount),
+        taxAmount: Number(order.taxAmount),
+        shippingAmount: Number(order.shippingAmount),
+      };
+      for (const key of ["merchandiseAmount", "taxAmount", "shippingAmount"] as const) {
+        const used = refundedMoney.reduce((sum, r) => sum + (r[key] == null ? 0 : cents(r[key] ?? 0)), 0);
+        if (cents(components[key]) + used > cents(caps[key]))
+          throw new ReturnActionError("Refund exceeds the remaining order component balance.");
+      }
+      const [cancellationRefundAmount = 0, returnRefundAmount = 0] = allocateCents(refundAmount, [
+        cancellationCredit,
+        returnCredit,
+      ]);
       const allocatedRefunds = allocateCents(
-        Math.min(refundAmount, calculatedAmount),
+        returnRefundAmount,
         lines.map((line) => line.calculatedRefund),
       );
       const returnRecord = await tx.orderReturn.create({
@@ -270,15 +411,32 @@ export async function saveReturnRefundAction(
           customerNote: optionalString(input.customerNote),
           internalNotes: optionalString(input.internalNotes),
           reason: optionalString(input.reason),
-          refundAmount: money(refundAmount),
+          refundAmount: money(returnRefundAmount),
           refundStatus,
           refundState: refundAmount ? "succeeded" : "not_required",
           refundExplanation: optionalString(input.refundExplanation),
-          refundMethod: refundAmount ? input.refundMethod.trim() : null,
+          refundMethod: refundAmount
+            ? input.paymentId === "all"
+              ? [...new Set(refundPayments.map((payment) => payment.method))].join(", ")
+              : input.refundMethod.trim()
+            : null,
           refundReference: refundAmount ? optionalString(input.refundReference) : null,
           restockItems: input.restockItems,
         },
       });
+      const physicalReceipt = lines.some((line) => line.received && line.quantity > 0)
+        ? await tx.orderReturnReceipt.create({
+            data: {
+              ownerId: workspaceId,
+              orderId,
+              orderReturnId: returnRecord.id,
+              receivedAt: new Date(`${input.returnDate}T12:00:00Z`),
+              actorUserId: authorization.principal.user.id,
+              idempotencyKey: input.submissionKey ?? returnRecord.id,
+              notes: optionalString(input.reason),
+            },
+          })
+        : null;
       for (const [index, line] of lines.entries()) {
         const original = line.original;
         await tx.orderReturnItem.create({
@@ -314,37 +472,123 @@ export async function saveReturnRefundAction(
             orderItemId: original.id,
             actorUserId: authorization.principal.user.id,
           });
+        if (physicalReceipt && line.received) {
+          const stockMovement = line.restock
+            ? await tx.inventoryStockMovement.findFirstOrThrow({
+                where: {
+                  ownerId: workspaceId,
+                  orderItemId: original.id,
+                  reason: "Return",
+                  notes: returnRecord.returnNumber,
+                },
+                orderBy: { createdAt: "desc" },
+              })
+            : null;
+          await tx.orderReturnReceiptItem.create({
+            data: {
+              ownerId: workspaceId,
+              receiptId: physicalReceipt.id,
+              orderItemId: original.id,
+              inventoryItemId: original.inventoryItemId,
+              stockMovementId: stockMovement?.id,
+              receivedQuantity: line.quantity,
+              restockedQuantity: line.restock ? line.quantity : 0,
+              condition: line.disposition === "Damaged" ? "Damaged" : "Sellable",
+              unitCost: original.unitCost,
+              retailUnitPrice: original.unitPrice,
+              evidence: { product: original.product, sku: original.sku },
+            },
+          });
+        }
       }
-      if (payment && refundAmount) {
-        const refund = await tx.orderRefund.create({
-          data: {
-            ownerId: workspaceId,
-            orderId,
-            paymentId: payment.id,
-            orderReturnId: returnRecord.id,
-            amount: money(refundAmount),
-            method: input.refundMethod.trim(),
-            reference: optionalString(input.refundReference),
-            idempotencyKey: input.submissionKey,
-            actorUserId: authorization.principal.user.id,
-          },
-        });
-        await recordAuthorizationAuditEvent(
+      if (refundPayments.length && refundAmount) {
+        const limits = refundPayments.map((payment) => ({
+          ...refundablePaymentComponents(order, payment, balance.refunds),
+          payment,
+        }));
+        const originalParts = { ...components };
+        const cancellationParts =
+          input.refundStatus === "Other"
+            ? splitAmount(money(cancellationRefundAmount), originalParts)
+            : {
+                merchandiseAmount: money(
+                  cancellationCredit -
+                    (cancellationAdjustment
+                      ? cents(cancellationAdjustment.taxAmount) + cents(cancellationAdjustment.shippingAmount)
+                      : 0),
+                ),
+                taxAmount: cancellationAdjustment ? Number(cancellationAdjustment.taxAmount) : 0,
+                shippingAmount: cancellationAdjustment ? Number(cancellationAdjustment.shippingAmount) : 0,
+              };
+        const returnParts = {
+          merchandiseAmount: money(cents(components.merchandiseAmount) - cents(cancellationParts.merchandiseAmount)),
+          taxAmount: money(cents(components.taxAmount) - cents(cancellationParts.taxAmount)),
+          shippingAmount: money(cents(components.shippingAmount) - cents(cancellationParts.shippingAmount)),
+        };
+        const sources = [
           {
-            workspaceId,
-            actorUserId: authorization.principal.user.id,
-            membershipId: authorization.membership.id,
-            action: "order.refund.record",
-            targetType: "OrderRefund",
-            targetId: refund.id,
-            metadata: { orderId, amount: money(refundAmount), orderReturnId: returnRecord.id },
+            amount: cancellationRefundAmount,
+            parts: cancellationParts,
+            adjustmentId: cancellationAdjustment?.id,
+            returnId: undefined,
+            suffix: "cancel",
           },
-          tx,
-        );
+          {
+            amount: returnRefundAmount,
+            parts: returnParts,
+            adjustmentId: undefined,
+            returnId: returnRecord.id,
+            suffix: "return",
+          },
+        ];
+        for (const source of sources) {
+          if (!source.amount) continue;
+          const allocated = allocateRefundPayments(source.parts, limits);
+          for (const row of allocated) {
+            const payment = refundPayments.find((entry) => entry.id === row.paymentId);
+            const refund = await tx.orderRefund.create({
+              data: {
+                ownerId: workspaceId,
+                orderId,
+                paymentId: row.paymentId,
+                adjustmentId: source.adjustmentId,
+                orderReturnId: source.returnId,
+                amount: row.amount,
+                merchandiseAmount: row.merchandiseAmount,
+                taxAmount: row.taxAmount,
+                shippingAmount: row.shippingAmount,
+                allocationSource: row.estimated ? "estimated" : "explicit",
+                method:
+                  input.paymentId === "all"
+                    ? (payment?.method ?? input.refundMethod.trim())
+                    : input.refundMethod.trim(),
+                reference: optionalString(input.refundReference),
+                idempotencyKey: `${input.submissionKey}:${source.suffix}:${row.paymentId}`,
+                actorUserId: authorization.principal.user.id,
+              },
+            });
+            const remaining = limits.find((entry) => entry.id === row.paymentId);
+            if (remaining)
+              for (const key of ["merchandiseAmount", "taxAmount", "shippingAmount"] as const)
+                remaining.limits[key] = money(cents(remaining.limits[key]) - cents(row[key]));
+            await recordAuthorizationAuditEvent(
+              {
+                workspaceId,
+                actorUserId: authorization.principal.user.id,
+                membershipId: authorization.membership.id,
+                action: "order.refund.record",
+                targetType: "OrderRefund",
+                targetId: refund.id,
+                metadata: { orderId, amount: row.amount, orderReturnId: source.returnId },
+              },
+              tx,
+            );
+          }
+        }
       }
       await tx.order.update({
         where: { id: orderId },
-        data: { version: { increment: 1 }, reservationExpiresAt: null },
+        data: { version: { increment: 1 }, ...(balance.paid > 0 ? { reservationExpiresAt: null } : {}) },
       });
       await refreshOrderPaymentStatus(tx, workspaceId, orderId);
       await recordAuthorizationAuditEvent(
@@ -362,10 +606,9 @@ export async function saveReturnRefundAction(
       return returnRecord;
     });
     for (const path of [
+      "/dashboard/commerce-analytics",
       "/dashboard/orders",
       "/dashboard/inventory",
-      "/dashboard/inventory-analytics",
-      "/dashboard/commerce-pulse",
       `/dashboard/orders/${orderId}/edit`,
       `/dashboard/orders/${orderId}/return`,
     ])

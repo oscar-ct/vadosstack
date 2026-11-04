@@ -4,9 +4,10 @@ import { z } from "zod";
 
 import { getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
+import { recordInventoryPurchase } from "@/lib/commerce/investment";
 import { isMatchingTransferDestination, previewStockAdjustment } from "@/lib/commerce/stock-adjustment";
 import { adjustStock, CommerceError, commerceTransaction } from "@/lib/commerce/transaction";
-import { parseCommerceInput, submissionKeySchema } from "@/lib/commerce/validation";
+import { amountSchema, parseCommerceInput, submissionKeySchema } from "@/lib/commerce/validation";
 import { prisma } from "@/lib/prisma";
 import { revalidateWorkspacePath } from "@/lib/workspace-revalidation";
 
@@ -18,6 +19,8 @@ const adjustmentSchema = z
     expectedUpdatedAt: z.iso.datetime(),
     submissionKey: submissionKeySchema,
     kind: z.enum(["Receive", "Damage", "Lost", "Stolen", "Count", "Transfer"]),
+    receiptType: z.enum(["Purchase", "Other"]).optional(),
+    acquisitionUnitCost: amountSchema.optional(),
     quantity: z.number().int().min(0).max(1000000),
     destinationItemId: z.string().min(1).optional(),
     destinationLocationId: z.string().min(1).optional(),
@@ -45,6 +48,13 @@ export async function adjustInventoryStockAction(raw: z.infer<typeof adjustmentS
       throw new CommerceError("Stock changed since you opened this form. Refresh before adjusting it.");
     if (input.kind !== "Transfer" && (input.destinationItemId || input.destinationLocationId))
       throw new CommerceError("A destination is only used when moving stock.");
+    if (
+      input.kind === "Receive" &&
+      (!input.receiptType || (input.receiptType === "Purchase" && input.acquisitionUnitCost === undefined))
+    )
+      throw new CommerceError("Choose Purchase or Other receipt and enter the acquisition cost for purchases.");
+    if (input.kind !== "Receive" && (input.receiptType || input.acquisitionUnitCost !== undefined))
+      throw new CommerceError("Purchase details apply only to received stock.");
     const preview = previewStockAdjustment(input.kind, item.stock, input.quantity);
     if (!preview.valid) throw new CommerceError(preview.error);
     if (input.destinationItemId && input.destinationLocationId)
@@ -131,6 +141,22 @@ export async function adjustInventoryStockAction(raw: z.infer<typeof adjustmentS
     if (quantityChange === 0) {
       await tx.inventoryStockMovement.create({ data: { ...metadata, quantityChange: 0, balanceAfter: item.stock } });
     } else await adjustStock(tx, { ...metadata, quantityChange });
+    if (input.kind === "Receive" && input.receiptType === "Purchase") {
+      const movement = await tx.inventoryStockMovement.findUniqueOrThrow({
+        where: { ownerId_idempotencyKey: { ownerId: auth.workspaceId, idempotencyKey: input.submissionKey } },
+      });
+      await recordInventoryPurchase(tx, {
+        ownerId: auth.workspaceId,
+        inventoryItemId: item.id,
+        stockMovementId: movement.id,
+        quantity: input.quantity,
+        unitCost: input.acquisitionUnitCost ?? 0,
+        actorUserId: auth.principal.user.id,
+        idempotencyKey: input.submissionKey,
+        submissionHash: signature,
+        notes: input.notes,
+      });
+    }
     if (input.kind === "Transfer") {
       if (!destinationId || destinationId === item.id)
         throw new CommerceError("Choose a different destination inventory record.");
@@ -172,12 +198,7 @@ export async function adjustInventoryStockAction(raw: z.infer<typeof adjustmentS
     );
     return { id: item.id };
   });
-  for (const path of [
-    "/dashboard/inventory",
-    "/dashboard/inventory-analytics",
-    "/dashboard/orders",
-    "/dashboard/commerce-pulse",
-  ])
+  for (const path of ["/dashboard/commerce-analytics", "/dashboard/inventory", "/dashboard/orders"])
     revalidateWorkspacePath(auth.membership.workspaceSlug, path);
   return result;
 }

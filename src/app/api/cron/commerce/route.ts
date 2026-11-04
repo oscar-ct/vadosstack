@@ -11,7 +11,10 @@ export async function GET(request: NextRequest) {
   try {
     const holds = await expireUnpaidOrderHolds();
     const alerts = await deliverInventoryStockAlerts();
-    return NextResponse.json({ holds, alerts, success: alerts.failed === 0 }, { status: alerts.failed ? 503 : 200 });
+    return NextResponse.json(
+      { holds, alerts, success: alerts.failed === 0 && holds.failed === 0 },
+      { status: alerts.failed || holds.failed ? 503 : 200 },
+    );
   } catch (error) {
     console.error("Commerce maintenance failed.", error);
     return NextResponse.json({ success: false, message: "Commerce maintenance failed." }, { status: 503 });

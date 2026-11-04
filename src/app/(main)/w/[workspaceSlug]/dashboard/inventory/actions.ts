@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
+import { recordInventoryPurchase } from "@/lib/commerce/investment";
 import { CommerceError, commerceTransaction } from "@/lib/commerce/transaction";
 import { amountSchema, CommerceInputError, parseCommerceInput } from "@/lib/commerce/validation";
 import { prisma } from "@/lib/prisma";
@@ -171,8 +172,8 @@ export async function saveInventoryItemAction(
               locationId: location?.id ?? null,
             },
           });
-      if (!existing || existing.locationId !== saved.locationId)
-        await tx.inventoryStockMovement.create({
+      if (!existing || existing.locationId !== saved.locationId) {
+        const movement = await tx.inventoryStockMovement.create({
           data: {
             ownerId: workspaceId,
             inventoryItemId: saved.id,
@@ -185,6 +186,19 @@ export async function saveInventoryItemAction(
             actorUserId: authorization.principal.user.id,
           },
         });
+        if (!existing && stock > 0)
+          await recordInventoryPurchase(tx, {
+            ownerId: workspaceId,
+            inventoryItemId: saved.id,
+            stockMovementId: movement.id,
+            quantity: stock,
+            unitCost: data.cost,
+            actorUserId: authorization.principal.user.id,
+            idempotencyKey: `initial:${saved.id}`,
+            submissionHash: `initial:${saved.id}`,
+            notes: "Initial stock acquisition at recorded item cost",
+          });
+      }
       await recordAuthorizationAuditEvent(
         {
           workspaceId,
@@ -198,8 +212,8 @@ export async function saveInventoryItemAction(
       );
     });
 
+    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/commerce-analytics");
     revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
-    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory-analytics");
 
     return {
       success: true,
@@ -254,8 +268,8 @@ export async function archiveInventoryItemAction(itemId: string): Promise<Invent
       );
       return true;
     });
+    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/commerce-analytics");
     revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
-    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory-analytics");
 
     return {
       success: true,
@@ -321,8 +335,8 @@ export async function saveInventoryStockRulesAction(
       create: { ownerId: workspaceId, ...rules },
     });
 
+    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/commerce-analytics");
     revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory");
-    revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/inventory-analytics");
 
     return {
       success: true,

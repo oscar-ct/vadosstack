@@ -56,6 +56,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { UsStateSelect } from "@/components/us-state-select";
 import { isWalkInOrder, type OrderDeliveryMethod, WALK_IN_CUSTOMER_NAME } from "@/lib/commerce/order-customer";
+import type { OrderEditPolicy } from "@/lib/commerce/order-edit-policy";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
@@ -117,6 +118,7 @@ function formatMoneyInputOnBlur(event: React.FocusEvent<HTMLInputElement>) {
 export function OrderForm({
   customers,
   disabled = false,
+  editPolicy,
   creating = false,
   canRecordPayment = false,
   canOverridePrices = false,
@@ -127,9 +129,11 @@ export function OrderForm({
   validationError,
   validationAttempt = 0,
   footer,
+  toolbar,
 }: {
   customers: OrderCustomer[];
   disabled?: boolean;
+  editPolicy?: OrderEditPolicy;
   creating?: boolean;
   canRecordPayment?: boolean;
   canOverridePrices?: boolean;
@@ -140,6 +144,7 @@ export function OrderForm({
   validationError?: string | null;
   validationAttempt?: number;
   footer?: React.ReactNode;
+  toolbar?: React.ReactNode;
 }) {
   const { control } = useFormContext<OrderFormValues>();
   const order = useWatch({ control }) as OrderFormValues;
@@ -164,21 +169,40 @@ export function OrderForm({
   const review = (
     <>
       {creating ? <OrderReviewSummary order={order} /> : null}
-      <OrderDetails disabled={disabled} creating={creating} canRecordPayment={canRecordPayment} />
+      <OrderDetails
+        editPolicy={editPolicy}
+        disabled={disabled}
+        creating={creating}
+        canRecordPayment={canRecordPayment}
+      />
       <Separator />
-      <OrderAdjustments disabled={disabled} />
+      <OrderAdjustments disabled={disabled === true || editPolicy?.financialLocked === true} />
       <Separator />
       <OrderFooterMessage disabled={disabled} />
     </>
   );
-  const customer = <CustomerDetails customers={customers} disabled={disabled} />;
+  const customer = <CustomerDetails editPolicy={editPolicy} customers={customers} disabled={disabled} />;
   const items = (
-    <OrderItems disabled={disabled} inventoryItems={inventoryItems} canOverridePrices={canOverridePrices} />
+    <OrderItems
+      disabled={disabled === true || editPolicy?.financialLocked === true}
+      inventoryItems={inventoryItems}
+      canOverridePrices={canOverridePrices}
+    />
   );
   const stepIndex = orderSteps.findIndex((step) => step.id === activeStep);
   const step = orderSteps[stepIndex];
   return (
     <div ref={formRef} className="flex min-w-0 scroll-mt-20 flex-col gap-5 rounded-xl border bg-card p-4">
+      {toolbar}
+      {editPolicy?.financialLocked ? (
+        <div className="rounded-lg border bg-muted/40 p-3 text-sm" role="note">
+          <p className="font-medium">Financial details are protected</p>
+          <p className="mt-1 text-muted-foreground text-xs">
+            {editPolicy.reason} Items, prices, tax, discounts, shipping charges, customer identity, and order date stay
+            unchanged. Use Resolve items for cancellations and returns, or create a new order for additional items.
+          </p>
+        </div>
+      ) : null}
       {creating ? (
         <>
           <nav aria-label="Order creation steps">
@@ -257,7 +281,7 @@ export function OrderForm({
           {footer ? <div className="border-t pt-4">{footer}</div> : null}
         </>
       ) : (
-        <Tabs defaultValue="customer" className="gap-4">
+        <Tabs value={activeStep} onValueChange={(value) => onStepChange?.(value as OrderStep)} className="gap-4">
           <TabsList className="w-full">
             <TabsTrigger value="customer">Customer</TabsTrigger>
             <TabsTrigger value="items">Items</TabsTrigger>
@@ -359,12 +383,14 @@ function OrderReviewSummary({ order }: { order: OrderFormValues }) {
 }
 
 function OrderDetails({
+  editPolicy,
   disabled,
   creating,
   canRecordPayment,
 }: {
   disabled: boolean;
   creating: boolean;
+  editPolicy?: OrderEditPolicy;
   canRecordPayment: boolean;
 }) {
   const { control, register, setValue } = useFormContext<OrderFormValues>();
@@ -390,7 +416,9 @@ function OrderDetails({
           <div className="grid gap-1 sm:col-span-2">
             <h3 className="font-semibold text-sm">Date &amp; payment</h3>
             <p className="text-muted-foreground text-xs">
-              Set the order date and payment information before continuing.
+              {creating
+                ? "Set the order date and payment information before continuing."
+                : "Payment details come from payment history. Use the payment controls to record payments."}
             </p>
           </div>
           <Controller
@@ -401,7 +429,12 @@ function OrderDetails({
                 <FieldLabel className="font-medium text-xs" htmlFor="order-date">
                   Order Date
                 </FieldLabel>
-                <DatePicker disabled={disabled} id="order-date" value={field.value} onChange={field.onChange} />
+                <DatePicker
+                  disabled={disabled === true || editPolicy?.financialLocked === true}
+                  id="order-date"
+                  value={field.value}
+                  onChange={field.onChange}
+                />
               </Field>
             )}
           />
@@ -411,7 +444,7 @@ function OrderDetails({
             </FieldLabel>
             <Input
               id="payment-method"
-              disabled={disabled}
+              disabled={disabled || !creating}
               placeholder="Visa ending in 4242"
               {...register("paymentMethod")}
             />
@@ -422,7 +455,7 @@ function OrderDetails({
             </FieldLabel>
             <Input
               id="payment-reference"
-              disabled={disabled}
+              disabled={disabled || !creating}
               placeholder="AUTH-8427"
               {...register("paymentReference")}
             />
@@ -433,7 +466,11 @@ function OrderDetails({
           <section className="grid gap-4 rounded-lg border border-primary/20 bg-primary/[0.025] p-3 sm:grid-cols-2">
             <div className="grid gap-1 sm:col-span-2">
               <h3 className="font-semibold text-sm">Delivery details</h3>
-              <p className="text-muted-foreground text-xs">Add the expected delivery date and shipping details.</p>
+              <p className="text-muted-foreground text-xs">
+                {creating
+                  ? "Add the expected delivery date and shipping details."
+                  : "Carrier and tracking details are managed through fulfillment controls."}
+              </p>
             </div>
             <Controller
               control={control}
@@ -443,7 +480,12 @@ function OrderDetails({
                   <FieldLabel className="font-medium text-xs" htmlFor="delivery-range">
                     Estimated Delivery
                   </FieldLabel>
-                  <DatePicker disabled={disabled} id="delivery-range" value={field.value} onChange={field.onChange} />
+                  <DatePicker
+                    disabled={disabled || Boolean(editPolicy?.deliveryDateLocked)}
+                    id="delivery-range"
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
                 </Field>
               )}
             />
@@ -453,7 +495,7 @@ function OrderDetails({
               </FieldLabel>
               <Input
                 id="delivery-company"
-                disabled={disabled}
+                disabled={disabled || !creating}
                 placeholder="USPS Priority Mail"
                 {...register("deliveryCompany")}
               />
@@ -464,7 +506,7 @@ function OrderDetails({
               </FieldLabel>
               <Input
                 id="tracking-number"
-                disabled={disabled}
+                disabled={disabled || !creating}
                 placeholder="1Z999AA..."
                 {...register("trackingNumber")}
               />
@@ -472,128 +514,130 @@ function OrderDetails({
           </section>
         ) : null}
 
-        <section className="grid gap-4 rounded-xl border-2 border-primary/25 bg-primary/[0.025] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="grid gap-1">
-              <h3 className="font-semibold text-base">Confirm order status</h3>
-              <p className="text-muted-foreground text-xs">
-                Choose what has actually happened. These selections create payment and fulfillment records.
-              </p>
-            </div>
-            <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary text-xs">
-              Review carefully
-            </span>
-          </div>
-
-          <div className={cn("grid gap-4", !creating && "sm:grid-cols-2")}>
-            <Controller
-              control={control}
-              name="paymentStatus"
-              render={({ field }) => {
-                const options = creating
-                  ? paymentStatusOptions.filter((status) => status === "Paid" || status === "Pending")
-                  : [field.value];
-                return (
-                  <Field className="gap-2">
-                    <FieldLabel className="font-semibold text-sm" id="payment-status-label">
-                      1. Has payment been received?
-                    </FieldLabel>
-                    <div
-                      aria-labelledby="payment-status-label"
-                      className={cn("grid gap-2", creating && "sm:grid-cols-2")}
-                      role="radiogroup"
-                    >
-                      {options.map((status) => (
-                        <StatusChoice
-                          key={status}
-                          checked={field.value === status}
-                          description={paymentStatusDescription(status)}
-                          disabled={disabled || !creating || !canRecordPayment}
-                          icon={status === "Paid" ? <CircleDollarSign /> : <Clock3 />}
-                          label={status}
-                          name="payment-status"
-                          onClick={() => {
-                            if (field.value !== status)
-                              setValue("externalPaymentConfirmed", false, { shouldDirty: true });
-                            field.onChange(status);
-                          }}
-                          tone={status === "Paid" ? "success" : "warning"}
-                        />
-                      ))}
-                    </div>
-                    {creating && !canRecordPayment ? (
-                      <p className="text-muted-foreground text-xs">
-                        You can create this order as Pending. An authorized user can record payment afterward.
-                      </p>
-                    ) : null}
-                  </Field>
-                );
-              }}
-            />
-            <Controller
-              control={control}
-              name="fulfillmentStatus"
-              render={({ field }) => {
-                const options = creating
-                  ? fulfillmentStatusOptions.filter((status) => status !== "Partially Fulfilled")
-                  : [field.value];
-                return (
-                  <Field className="gap-2">
-                    <FieldLabel className="font-semibold text-sm" id="fulfillment-status-label">
-                      2. Have the items left your possession?
-                    </FieldLabel>
-                    <div
-                      aria-labelledby="fulfillment-status-label"
-                      className={cn("grid gap-2", creating && "sm:grid-cols-2")}
-                      role="radiogroup"
-                    >
-                      {options.map((status) => (
-                        <StatusChoice
-                          key={status}
-                          checked={field.value === status}
-                          description={fulfillmentStatusDescription(status)}
-                          disabled={disabled || !creating}
-                          icon={status === "Fulfilled" ? <PackageCheck /> : <PackageX />}
-                          label={status}
-                          name="fulfillment-status"
-                          onClick={() => field.onChange(status)}
-                          tone={status === "Fulfilled" ? "success" : "warning"}
-                        />
-                      ))}
-                    </div>
-                  </Field>
-                );
-              }}
-            />
-          </div>
-
-          {creating && canRecordPayment && watchedOrder.paymentStatus === "Paid" ? (
-            <label className="flex items-start gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/40">
-              <input
-                className="mt-0.5 size-4 shrink-0 accent-emerald-600"
-                type="checkbox"
-                disabled={disabled}
-                {...register("externalPaymentConfirmed")}
-              />
-              <span className="grid gap-0.5">
-                <strong>Required payment confirmation</strong>
-                <span>
-                  I confirm the full order amount has already been received externally. VadosStack will record it but
-                  will not charge a card.
-                </span>
+        {creating ? (
+          <section className="grid gap-4 rounded-xl border-2 border-primary/25 bg-primary/[0.025] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="grid gap-1">
+                <h3 className="font-semibold text-base">Confirm order status</h3>
+                <p className="text-muted-foreground text-xs">
+                  Choose what has actually happened. These selections create payment and fulfillment records.
+                </p>
+              </div>
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary text-xs">
+                Review carefully
               </span>
-            </label>
-          ) : null}
+            </div>
 
-          <p className="rounded-md bg-background/80 px-3 py-2 font-medium text-sm" aria-live="polite">
-            This order will be recorded as <strong>{watchedOrder.paymentStatus}</strong> and{" "}
-            <strong>{watchedOrder.fulfillmentStatus}</strong>.
-          </p>
-          <p className="text-muted-foreground text-xs">
-            Unpaid, unshipped orders hold stock for seven days. Backorders are not accepted. After creation, use Order
-            operations to record payments, fulfillment, corrections, and returns.
-          </p>
-        </section>
+            <div className={cn("grid gap-4", !creating && "sm:grid-cols-2")}>
+              <Controller
+                control={control}
+                name="paymentStatus"
+                render={({ field }) => {
+                  const options = creating
+                    ? paymentStatusOptions.filter((status) => status === "Paid" || status === "Pending")
+                    : [field.value];
+                  return (
+                    <Field className="gap-2">
+                      <FieldLabel className="font-semibold text-sm" id="payment-status-label">
+                        1. Has payment been received?
+                      </FieldLabel>
+                      <div
+                        aria-labelledby="payment-status-label"
+                        className={cn("grid gap-2", creating && "sm:grid-cols-2")}
+                        role="radiogroup"
+                      >
+                        {options.map((status) => (
+                          <StatusChoice
+                            key={status}
+                            checked={field.value === status}
+                            description={paymentStatusDescription(status)}
+                            disabled={disabled || !creating || !canRecordPayment}
+                            icon={status === "Paid" ? <CircleDollarSign /> : <Clock3 />}
+                            label={status}
+                            name="payment-status"
+                            onClick={() => {
+                              if (field.value !== status)
+                                setValue("externalPaymentConfirmed", false, { shouldDirty: true });
+                              field.onChange(status);
+                            }}
+                            tone={status === "Paid" ? "success" : "warning"}
+                          />
+                        ))}
+                      </div>
+                      {creating && !canRecordPayment ? (
+                        <p className="text-muted-foreground text-xs">
+                          You can create this order as Pending. An authorized user can record payment afterward.
+                        </p>
+                      ) : null}
+                    </Field>
+                  );
+                }}
+              />
+              <Controller
+                control={control}
+                name="fulfillmentStatus"
+                render={({ field }) => {
+                  const options = creating
+                    ? fulfillmentStatusOptions.filter((status) => status !== "Partially Fulfilled")
+                    : [field.value];
+                  return (
+                    <Field className="gap-2">
+                      <FieldLabel className="font-semibold text-sm" id="fulfillment-status-label">
+                        2. Have the items left your possession?
+                      </FieldLabel>
+                      <div
+                        aria-labelledby="fulfillment-status-label"
+                        className={cn("grid gap-2", creating && "sm:grid-cols-2")}
+                        role="radiogroup"
+                      >
+                        {options.map((status) => (
+                          <StatusChoice
+                            key={status}
+                            checked={field.value === status}
+                            description={fulfillmentStatusDescription(status)}
+                            disabled={disabled || !creating}
+                            icon={status === "Fulfilled" ? <PackageCheck /> : <PackageX />}
+                            label={status}
+                            name="fulfillment-status"
+                            onClick={() => field.onChange(status)}
+                            tone={status === "Fulfilled" ? "success" : "warning"}
+                          />
+                        ))}
+                      </div>
+                    </Field>
+                  );
+                }}
+              />
+            </div>
+
+            {creating && canRecordPayment && watchedOrder.paymentStatus === "Paid" ? (
+              <label className="flex items-start gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/40">
+                <input
+                  className="mt-0.5 size-4 shrink-0 accent-emerald-600"
+                  type="checkbox"
+                  disabled={disabled}
+                  {...register("externalPaymentConfirmed")}
+                />
+                <span className="grid gap-0.5">
+                  <strong>Required payment confirmation</strong>
+                  <span>
+                    I confirm the full order amount has already been received externally. VadosStack will record it but
+                    will not charge a card.
+                  </span>
+                </span>
+              </label>
+            ) : null}
+
+            <p className="rounded-md bg-background/80 px-3 py-2 font-medium text-sm" aria-live="polite">
+              This order will be recorded as <strong>{watchedOrder.paymentStatus}</strong> and{" "}
+              <strong>{watchedOrder.fulfillmentStatus}</strong>.
+            </p>
+            <p className="text-muted-foreground text-xs">
+              Unpaid, unshipped orders hold stock for seven days. Backorders are not accepted. After creation, use Order
+              operations to record payments, fulfillment, corrections, and returns.
+            </p>
+          </section>
+        ) : null}
       </FieldGroup>
     </section>
   );
@@ -700,7 +744,15 @@ function formatAddressOption(address: OrderCustomerAddress) {
   return [address.streetAddress, address.apartment, cityLine].filter(Boolean).join(", ");
 }
 
-function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; disabled: boolean }) {
+function CustomerDetails({
+  customers,
+  disabled,
+  editPolicy,
+}: {
+  customers: OrderCustomer[];
+  disabled: boolean;
+  editPolicy?: OrderEditPolicy;
+}) {
   const { control, register, setValue } = useFormContext<OrderFormValues>();
   const [customerPickerOpen, setCustomerPickerOpen] = React.useState(false);
   const order = useWatch({ control }) as OrderFormValues;
@@ -822,7 +874,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                 name="customer-type"
                 value={choice.value}
                 checked={choice.value === "walk_in" ? isWalkIn : !isWalkIn}
-                disabled={disabled}
+                disabled={disabled === true || editPolicy?.financialLocked === true}
                 onChange={() => (choice.value === "walk_in" ? selectWalkIn() : selectCustomerMode())}
                 className="mt-1"
               />
@@ -847,7 +899,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                 variant="outline"
                 role="combobox"
                 aria-expanded={customerPickerOpen}
-                disabled={disabled}
+                disabled={disabled === true || editPolicy?.financialLocked === true}
                 className="h-8 w-full justify-between bg-background font-normal text-base md:text-sm"
               >
                 <span className="truncate">{selectedCustomerLabel}</span>
@@ -894,7 +946,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
           How will the customer receive the order?
         </FieldLabel>
         <Select
-          disabled={disabled}
+          disabled={disabled === true || editPolicy?.financialLocked === true}
           value={needsDelivery ? "delivery" : "pickup"}
           onValueChange={(value) => selectDelivery(value as OrderDeliveryMethod)}
         >
@@ -914,7 +966,12 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
               <FieldLabel className="text-xs" htmlFor="customer-name">
                 Name
               </FieldLabel>
-              <Input id="customer-name" disabled={disabled} placeholder="Jane Smith" {...register("customerName")} />
+              <Input
+                id="customer-name"
+                disabled={disabled === true || editPolicy?.financialLocked === true}
+                placeholder="Jane Smith"
+                {...register("customerName")}
+              />
             </Field>
           ) : null}
 
@@ -959,13 +1016,22 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
           {needsDelivery ? (
             <>
               <h2 className="font-medium tracking-tight">Shipping To</h2>
+              {editPolicy?.addressLocked ? (
+                <p className="text-muted-foreground text-xs">
+                  The shipping address is protected because fulfillment has started.
+                </p>
+              ) : null}
 
               {selectedCustomer && addressOptions.length > 1 ? (
                 <Field className="gap-1">
                   <FieldLabel className="text-xs" htmlFor="shipping-address-select">
                     Saved Address
                   </FieldLabel>
-                  <Select disabled={disabled} value={selectedAddressId} onValueChange={selectAddress}>
+                  <Select
+                    disabled={disabled || Boolean(editPolicy?.addressLocked)}
+                    value={selectedAddressId}
+                    onValueChange={selectAddress}
+                  >
                     <SelectTrigger
                       id="shipping-address-select"
                       className="w-full min-w-0 overflow-hidden text-base md:text-sm"
@@ -997,7 +1063,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                   </FieldLabel>
                   <Input
                     id="shipping-street"
-                    disabled={disabled}
+                    disabled={disabled || Boolean(editPolicy?.addressLocked)}
                     placeholder="123 Main St"
                     autoComplete="shipping address-line1"
                     {...register("streetAddress")}
@@ -1009,7 +1075,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                   </FieldLabel>
                   <Input
                     id="shipping-apartment"
-                    disabled={disabled}
+                    disabled={disabled || Boolean(editPolicy?.addressLocked)}
                     placeholder="Apartment, suite, or unit"
                     autoComplete="shipping address-line2"
                     {...register("apartment")}
@@ -1021,7 +1087,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                   </FieldLabel>
                   <Input
                     id="shipping-city"
-                    disabled={disabled}
+                    disabled={disabled || Boolean(editPolicy?.addressLocked)}
                     placeholder="Houston"
                     autoComplete="shipping address-level2"
                     {...register("city")}
@@ -1037,7 +1103,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                       </FieldLabel>
                       <UsStateSelect
                         id="shipping-state"
-                        disabled={disabled}
+                        disabled={disabled || Boolean(editPolicy?.addressLocked)}
                         value={field.value}
                         onChange={(event) => field.onChange(event.target.value)}
                       />
@@ -1051,7 +1117,7 @@ function CustomerDetails({ customers, disabled }: { customers: OrderCustomer[]; 
                   <Input
                     id="shipping-zip"
                     inputMode="numeric"
-                    disabled={disabled}
+                    disabled={disabled || Boolean(editPolicy?.addressLocked)}
                     placeholder="77001"
                     autoComplete="shipping postal-code"
                     {...register("zip")}

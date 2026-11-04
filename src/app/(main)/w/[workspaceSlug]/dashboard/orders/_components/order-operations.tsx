@@ -2,10 +2,9 @@
 
 import * as React from "react";
 
-import { Banknote, MoreHorizontal, PackageCheck, RotateCcw, Undo2, XCircle } from "lucide-react";
+import { Banknote, PackageCheck, RotateCcw, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -16,32 +15,72 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { WorkspaceLink as Link, useWorkspaceRouter } from "@/components/workspace-path-provider";
-import { formatCurrency } from "@/lib/utils";
+import { adjustmentCredit, cancellableQuantity } from "@/lib/commerce/order-cancellation";
+import type { OrderListSummary } from "@/lib/commerce/order-list-summary";
+import { getOrderStatusCards, resolutionStatusLabel } from "@/lib/commerce/order-resolution";
+import { cn, formatCurrency } from "@/lib/utils";
 
+import { ShippingExpenseRecorder } from "../../commerce-analytics/_components/shipping-expense-recorder";
 import {
-  cancelOrderAction,
+  recordOrderCreditRefundAction,
   recordOrderPaymentAction,
   recordOrderRefundAction,
   reverseLatestOrderShipmentAction,
 } from "../operations-actions";
 import { FulfillmentWizard } from "./fulfillment-wizard";
+import { OrderHistoryButton } from "./order-history-button";
+import { ShippingExpenseHistory, type ShippingExpenseHistoryEntry } from "./shipping-expense-history";
 
 export type OrderOperationsData = {
+  summary: OrderListSummary;
   id: string;
+  deliveryMethod: "delivery" | "pickup";
   orderNumber: string;
   version: number;
   total: number;
   orderStatus: string;
   reservationExpiresAt: string | null;
-  items: Array<{ id: string; product: string; quantity: number; shippedQuantity: number }>;
+  items: Array<{
+    id: string;
+    product: string;
+    quantity: number;
+    shippedQuantity: number;
+    returnedQuantity: number;
+    cancelledQuantity: number;
+    lineTotal: number;
+    discountAmount: number;
+    taxAmount: number;
+  }>;
+  shippingAmount: number;
+  adjustments: Array<{
+    id: string;
+    kind: string;
+    merchandiseAmount: number;
+    discountAmount: number;
+    taxAmount: number;
+    shippingAmount: number;
+    reason: string;
+    effectiveAt: string;
+    items: Array<{
+      id: string;
+      product: string;
+      quantity: number;
+      grossAmount: number;
+      discountAmount: number;
+      taxAmount: number;
+    }>;
+  }>;
+  shippingExpenses: ShippingExpenseHistoryEntry[];
   payments: Array<{ id: string; amount: number; method: string; reference: string | null; source: string }>;
   refunds: Array<{
     id: string;
     paymentId: string;
     orderReturnId: string | null;
+    adjustmentId: string | null;
     amount: number;
     method: string;
     reference: string | null;
+    batchKey: string;
   }>;
   returns: Array<{ id: string; returnNumber: string; refundAmount: number; refundState: string }>;
   shipments: Array<{
@@ -60,41 +99,116 @@ export function OrderOperations({
   canManageMoney,
   canShip,
   canManageReturns,
+  resolutionBrowser = false,
 }: {
   order: OrderOperationsData;
   canManageMoney: boolean;
   canShip: boolean;
   canManageReturns: boolean;
+  resolutionBrowser?: boolean;
 }) {
   const router = useWorkspaceRouter();
   const [busy, setBusy] = React.useState(false);
   const [refundOpen, setRefundOpen] = React.useState(false);
   const [paymentOpen, setPaymentOpen] = React.useState(false);
   const [paymentHistoryOpen, setPaymentHistoryOpen] = React.useState(false);
+  const [adjustmentHistoryOpen, setAdjustmentHistoryOpen] = React.useState(false);
   const [fulfillmentHistoryOpen, setFulfillmentHistoryOpen] = React.useState(false);
-  const [cancelOpen, setCancelOpen] = React.useState(false);
   const [undoFulfillmentOpen, setUndoFulfillmentOpen] = React.useState(false);
   const [fulfillmentOpen, setFulfillmentOpen] = React.useState(false);
+  const [creditRefundAmount, setCreditRefundAmount] = React.useState<string | null>(null);
   const attempts = React.useRef(new Map<string, { signature: string; key: string }>());
   const paid = order.payments.reduce((sum, entry) => sum + entry.amount, 0);
   const refunded = order.refunds.reduce((sum, entry) => sum + entry.amount, 0);
-  const unlinkedRefunds = order.refunds
-    .filter((entry) => !entry.orderReturnId)
-    .reduce((sum, entry) => sum + entry.amount, 0);
-  const due = Math.max(order.total - paid + unlinkedRefunds, 0);
+  const refundGroups = [
+    ...order.refunds
+      .reduce((groups, refund) => {
+        const current = groups.get(refund.batchKey) ?? {
+          batchKey: refund.batchKey,
+          amount: 0,
+          method: refund.method,
+          reference: refund.reference,
+          entries: 0,
+        };
+        current.amount += refund.amount;
+        current.entries += 1;
+        groups.set(refund.batchKey, current);
+        return groups;
+      }, new Map<
+        string,
+        { batchKey: string; amount: number; method: string; reference: string | null; entries: number }
+      >())
+      .values(),
+  ];
+  const credited = order.adjustments.reduce((sum, entry) => sum + adjustmentCredit(entry), 0);
+  const effectiveTotal = Math.max(order.total - credited, 0);
+  const due = Math.max(effectiveTotal - paid, 0);
+  const creditOwed = Math.max(paid - refunded - effectiveTotal, 0);
+  const availableAdjustments = order.adjustments
+    .map((adjustment) => ({
+      ...adjustment,
+      available: Math.max(
+        adjustmentCredit(adjustment) -
+          order.refunds
+            .filter((refund) => refund.adjustmentId === adjustment.id)
+            .reduce((sum, refund) => sum + refund.amount, 0),
+        0,
+      ),
+    }))
+    .filter((adjustment) => adjustment.available > 0.001);
+  const availableCreditTotal = availableAdjustments.reduce((sum, adjustment) => sum + adjustment.available, 0);
+  const maxCreditRefund = Math.min(paid - refunded, creditOwed, availableCreditTotal);
+  const requestedCreditRefund = creditRefundAmount === null ? maxCreditRefund : Number(creditRefundAmount || 0);
+  let allocationRemaining = Math.max(Math.round(requestedCreditRefund * 100), 0);
+  const creditAllocations = availableAdjustments
+    .map((adjustment) => {
+      const amount = Math.min(allocationRemaining, Math.round(adjustment.available * 100));
+      allocationRemaining -= amount;
+      return { ...adjustment, refundAmount: amount / 100 };
+    })
+    .filter((adjustment) => adjustment.refundAmount > 0);
   const active = order.orderStatus === "Active";
-  const unshipped = order.items.filter((item) => item.quantity > item.shippedQuantity);
+  const unshipped = order.items
+    .map((item) => ({
+      ...item,
+      remaining: cancellableQuantity(item),
+    }))
+    .filter((item) => item.remaining > 0);
   const pendingReturns = order.returns.filter(
     (receipt) => receipt.refundState === "requested" || receipt.refundState === "partially_refunded",
   );
-  const canCompletePendingRefund = canManageMoney && paid - refunded > 0.001 && pendingReturns.length > 0;
+  const canRecordRefund =
+    canManageMoney && paid - refunded > 0.001 && (pendingReturns.length > 0 || creditOwed > 0.001);
   const canRecordPayment = canManageMoney && active && due > 0.001;
-  const canRecordFulfillment = active && canShip && !order.returns.length && unshipped.length > 0;
+  const canRecordFulfillment = active && canShip && unshipped.length > 0;
   const activeShipments = order.shipments.filter((shipment) => !shipment.reversal);
   const latestActiveShipment = activeShipments.at(-1);
   const canUndoFulfillment = active && canShip && !order.returns.length && Boolean(latestActiveShipment);
-  const canCancel =
-    active && canShip && !order.returns.length && order.items.every((item) => item.shippedQuantity === 0);
+  const canCancel = active && canShip && unshipped.length > 0;
+  const hasReturnableItems = order.items.some((item) => item.shippedQuantity > item.returnedQuantity);
+  const fulfilledUnits = order.summary.fulfilledUnits;
+  const cards = getOrderStatusCards(order.summary, order.orderStatus);
+  const fulfillmentState = cards.fulfillment;
+  const fulfillmentPercent = cards.fulfillment.percent;
+  const paymentState = cards.payment;
+  const shippingCost = order.shippingExpenses.reduce((sum, entry) => sum + entry.amount, 0);
+  const requiresShipping = order.deliveryMethod !== "pickup";
+  const shippingStarted = fulfilledUnits > 0 || order.shipments.length > 0;
+  const shippingState = !requiresShipping
+    ? { detail: "Customer pickup does not require carrier cost", label: "Not required", tone: "success" as const }
+    : order.shippingExpenses.length
+      ? {
+          detail: `Customer charged ${formatCurrency(order.shippingAmount)} · ${order.shippingExpenses.length} expense ${order.shippingExpenses.length === 1 ? "entry" : "entries"}`,
+          label: "Cost recorded",
+          tone: "success" as const,
+        }
+      : shippingStarted
+        ? { detail: "Fulfillment has started without a carrier cost", label: "Cost missing", tone: "warning" as const }
+        : {
+            detail: "Record the carrier cost when fulfillment begins",
+            label: "Not recorded yet",
+            tone: "neutral" as const,
+          };
 
   function submission(operation: string, payload: unknown) {
     const signature = JSON.stringify(payload);
@@ -115,7 +229,6 @@ export function OrderOperations({
       setPaymentOpen(false);
       setRefundOpen(false);
       setUndoFulfillmentOpen(false);
-      setCancelOpen(false);
       toast.success("Order updated.");
       router.refresh();
     } catch (error) {
@@ -137,97 +250,119 @@ export function OrderOperations({
 
   return (
     <section className="grid gap-3" aria-label="Order actions and summary">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-muted-foreground text-sm">
-        <Badge
-          variant="outline"
-          className={
-            active
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
-              : undefined
-          }
+      <div className="grid gap-3 lg:grid-cols-3">
+        <StatusCard
+          detail={fulfillmentState.detail}
+          history={<OrderHistoryButton label="Fulfillment history" onClick={() => setFulfillmentHistoryOpen(true)} />}
+          label="Fulfillment"
+          status={fulfillmentState.label}
+          tone={fulfillmentState.tone}
+          value={fulfillmentState.value}
         >
-          {order.orderStatus}
-        </Badge>
-        <span>Received {formatCurrency(paid)}</span>
-        <span>Refunded {formatCurrency(refunded)}</span>
-        <span className={due > 0.001 ? "font-medium text-foreground" : undefined}>
-          Balance due {formatCurrency(due)}
-        </span>
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          className="h-auto p-0"
-          onClick={() => setPaymentHistoryOpen(true)}
+          <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
+            <div
+              className={cn(
+                "h-full rounded-full transition-[width]",
+                fulfillmentState.tone === "success"
+                  ? "bg-emerald-600"
+                  : fulfillmentState.tone === "progress"
+                    ? "bg-blue-600"
+                    : "bg-amber-500",
+              )}
+              style={{ width: `${fulfillmentPercent}%` }}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1 empty:hidden">
+            {canRecordFulfillment ? (
+              <Button type="button" size="sm" onClick={() => setFulfillmentOpen(true)}>
+                <PackageCheck /> Record fulfillment
+              </Button>
+            ) : null}
+            {active && (canCancel || (canManageReturns && hasReturnableItems)) ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/dashboard/orders/${order.id}/return?new=1`}>
+                  <RotateCcw /> Resolve items
+                </Link>
+              </Button>
+            ) : null}
+            {!resolutionBrowser && canManageReturns && order.returns.length ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="sm">
+                    <RotateCcw /> Resolutions
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {order.returns.map((receipt) => (
+                    <DropdownMenuItem key={receipt.id} asChild>
+                      <Link href={`/dashboard/orders/${order.id}/return?returnId=${receipt.id}`}>
+                        {receipt.returnNumber} · {resolutionStatusLabel(receipt.refundState)}
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          detail={paymentState.detail}
+          history={<OrderHistoryButton label="Payment history" onClick={() => setPaymentHistoryOpen(true)} />}
+          label="Payment & refunds"
+          status={paymentState.label}
+          tone={paymentState.tone}
+          value={paymentState.value}
         >
-          Payment history
-        </Button>
+          <dl className="grid grid-cols-2 gap-3 text-xs tabular-nums">
+            <div className="grid gap-1">
+              <dt className="opacity-70">Collected</dt>
+              <dd className="font-medium">{formatCurrency(paid)}</dd>
+            </div>
+            <div className="grid gap-1">
+              <dt className="opacity-70">Refunded</dt>
+              <dd className="font-medium">{formatCurrency(refunded)}</dd>
+            </div>
+          </dl>
+          <div className="flex flex-wrap gap-2 pt-1 empty:hidden">
+            {canRecordPayment ? (
+              <Button type="button" size="sm" onClick={() => setPaymentOpen(true)}>
+                <Banknote /> Record payment
+              </Button>
+            ) : null}
+            {canRecordRefund ? (
+              <Button type="button" size="sm" onClick={() => setRefundOpen(true)}>
+                <RotateCcw />
+                {creditOwed > 0.001 ? `Refund ${formatCurrency(creditOwed)}` : "Complete refund"}
+              </Button>
+            ) : null}
+            {credited > 0 ? (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAdjustmentHistoryOpen(true)}>
+                {order.adjustments.length} credit adjustment{order.adjustments.length === 1 ? "" : "s"}
+              </Button>
+            ) : null}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          detail={shippingState.detail}
+          history={<ShippingExpenseHistory orderNumber={order.orderNumber} entries={order.shippingExpenses} />}
+          label="Shipping cost"
+          status={shippingState.label}
+          tone={shippingState.tone}
+          value={requiresShipping ? formatCurrency(shippingCost) : "Pickup"}
+        >
+          <p className="text-xs">Customer shipping charge {formatCurrency(order.shippingAmount)}</p>
+          <div className="flex flex-wrap gap-2 pt-1 empty:hidden">
+            {canManageMoney && requiresShipping ? <ShippingExpenseRecorder orderId={order.id} /> : null}
+          </div>
+        </StatusCard>
       </div>
       {order.reservationExpiresAt ? (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-800 text-xs dark:bg-amber-950 dark:text-amber-300">
           Unpaid stock is held until {new Date(order.reservationExpiresAt).toLocaleDateString()}.
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        {canRecordFulfillment ? (
-          <Button type="button" size="sm" onClick={() => setFulfillmentOpen(true)}>
-            <PackageCheck /> Record fulfillment
-          </Button>
-        ) : null}
-        {canRecordPayment ? (
-          <Button type="button" size="sm" variant="outline" onClick={() => setPaymentOpen(true)}>
-            <Banknote /> Record payment
-          </Button>
-        ) : null}
-        {canManageReturns && active ? (
-          <Button asChild size="sm" variant="outline">
-            <Link href={`/dashboard/orders/${order.id}/return?new=1`}>
-              <RotateCcw /> Start return
-            </Link>
-          </Button>
-        ) : null}
-        {canCompletePendingRefund ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => setRefundOpen(true)}>
-            <RotateCcw />
-            Complete pending refund
-          </Button>
-        ) : null}
-        {canUndoFulfillment || canCancel || order.shipments.length || (canManageReturns && order.returns.length) ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="sm">
-                <MoreHorizontal /> More actions
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {order.shipments.length ? (
-                <DropdownMenuItem onSelect={() => setFulfillmentHistoryOpen(true)}>
-                  Fulfillment history
-                </DropdownMenuItem>
-              ) : null}
-              {canManageReturns
-                ? order.returns.map((receipt) => (
-                    <DropdownMenuItem key={receipt.id} asChild>
-                      <Link href={`/dashboard/orders/${order.id}/return?returnId=${receipt.id}`}>
-                        {receipt.returnNumber} · {receipt.refundState.replaceAll("_", " ")}
-                      </Link>
-                    </DropdownMenuItem>
-                  ))
-                : null}
-              {canUndoFulfillment ? (
-                <DropdownMenuItem onSelect={() => setUndoFulfillmentOpen(true)}>
-                  <Undo2 /> Undo fulfillment
-                </DropdownMenuItem>
-              ) : null}
-              {canCancel ? (
-                <DropdownMenuItem variant="destructive" onSelect={() => setCancelOpen(true)}>
-                  <XCircle /> Cancel order
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-      </div>
       <FulfillmentWizard
         orderId={order.id}
         open={fulfillmentOpen}
@@ -239,7 +374,7 @@ export function OrderOperations({
           items: unshipped.map((item) => ({
             id: item.id,
             product: item.product,
-            remaining: item.quantity - item.shippedQuantity,
+            remaining: item.remaining,
           })),
         }}
       />
@@ -316,10 +451,14 @@ export function OrderOperations({
       >
         <DialogContent allowAutoFocus disableOutsideClose={busy} className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Complete pending refund</DialogTitle>
-            <DialogDescription>Complete a refund created by the previous return workflow.</DialogDescription>
+            <DialogTitle>{creditOwed > 0.001 ? "Record customer refund" : "Complete pending refund"}</DialogTitle>
+            <DialogDescription>
+              {creditOwed > 0.001
+                ? "Record money already returned to the customer against this order credit."
+                : "Complete a refund created by the return workflow."}
+            </DialogDescription>
           </DialogHeader>
-          {canCompletePendingRefund && refundOpen ? (
+          {canRecordRefund && refundOpen ? (
             <form
               className="grid content-start gap-4"
               onSubmit={(event) => {
@@ -330,7 +469,14 @@ export function OrderOperations({
                   paymentId: String(data.get("paymentId")),
                   returnId: String(data.get("returnId") ?? "") || undefined,
                 };
-                void run("refund", () => recordOrderRefundAction({ ...submission("refund", fields), ...fields }));
+                if (fields.returnId)
+                  void run("return-refund", () =>
+                    recordOrderRefundAction({ ...submission("return-refund", fields), ...fields }),
+                  );
+                else
+                  void run("credit-refund", () =>
+                    recordOrderCreditRefundAction({ ...submission("credit-refund", fields), ...fields }),
+                  );
               }}
             >
               <div className="grid gap-3 sm:grid-cols-2">
@@ -359,32 +505,72 @@ export function OrderOperations({
                       ))}
                   </select>
                 </OperationField>
-                <OperationField label="Pending return" htmlFor="operation-refund-return">
-                  <select
-                    id="operation-refund-return"
-                    aria-label="Pending return for refund"
-                    className={selectClass}
-                    name="returnId"
-                  >
-                    {pendingReturns.map((receipt) => (
-                      <option key={receipt.id} value={receipt.id}>
-                        {receipt.returnNumber} · requested {formatCurrency(receipt.refundAmount)}
-                      </option>
-                    ))}
-                  </select>
-                </OperationField>
+                {pendingReturns.length ? (
+                  <OperationField label="Pending return" htmlFor="operation-refund-return">
+                    <select
+                      id="operation-refund-return"
+                      aria-label="Pending return for refund"
+                      className={selectClass}
+                      name="returnId"
+                    >
+                      {pendingReturns.map((receipt) => (
+                        <option key={receipt.id} value={receipt.id}>
+                          {receipt.returnNumber} · requested {formatCurrency(receipt.refundAmount)}
+                        </option>
+                      ))}
+                    </select>
+                  </OperationField>
+                ) : null}
                 <OperationField label="Amount" htmlFor="operation-refund-amount">
-                  <Input
-                    id="operation-refund-amount"
-                    aria-label="Refund amount"
-                    name="amount"
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    max={(paid - refunded).toFixed(2)}
-                    required
-                  />
+                  {pendingReturns.length ? (
+                    <Input
+                      id="operation-refund-amount"
+                      aria-label="Refund amount"
+                      name="amount"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      max={(paid - refunded).toFixed(2)}
+                      required
+                    />
+                  ) : (
+                    <Input
+                      id="operation-refund-amount"
+                      aria-label="Refund amount"
+                      name="amount"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      max={maxCreditRefund.toFixed(2)}
+                      value={creditRefundAmount ?? maxCreditRefund.toFixed(2)}
+                      onChange={(event) => setCreditRefundAmount(event.target.value)}
+                      required
+                    />
+                  )}
                 </OperationField>
+                {!pendingReturns.length ? (
+                  <div className="grid gap-2 rounded-md bg-muted/50 p-3 sm:col-span-2">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-medium">Applied automatically</span>
+                      <span className="text-muted-foreground">
+                        {creditAllocations.length} credit source{creditAllocations.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div className="divide-y">
+                      {creditAllocations.map((adjustment) => (
+                        <div key={adjustment.id} className="flex items-center justify-between gap-4 py-1.5 text-xs">
+                          <span className="min-w-0 truncate text-muted-foreground">{adjustment.reason}</span>
+                          <span className="shrink-0 font-medium tabular-nums">
+                            {formatCurrency(adjustment.refundAmount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-muted-foreground text-xs">
+                      Credits are applied oldest first. Enter a smaller amount to record a partial refund.
+                    </p>
+                  </div>
+                ) : null}
                 <OperationField label="Method" htmlFor="operation-refund-method">
                   <Input
                     id="operation-refund-method"
@@ -425,9 +611,10 @@ export function OrderOperations({
       >
         <DialogContent allowAutoFocus disableOutsideClose={busy} className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Undo latest fulfillment</DialogTitle>
+            <DialogTitle>Correct latest fulfillment</DialogTitle>
             <DialogDescription>
-              Restore the latest fulfillment to unfulfilled. Inventory will not be changed.
+              Use this only to correct an incorrectly recorded fulfillment. The latest fulfillment will return to
+              unfulfilled without changing inventory or customer finances.
             </DialogDescription>
           </DialogHeader>
           {canUndoFulfillment && undoFulfillmentOpen && latestActiveShipment ? (
@@ -451,7 +638,7 @@ export function OrderOperations({
                 <Input
                   id="operation-fulfillment-reversal-reason"
                   name="reason"
-                  placeholder="Why is this fulfillment being undone?"
+                  placeholder="What was recorded incorrectly?"
                   maxLength={500}
                   required
                 />
@@ -462,7 +649,7 @@ export function OrderOperations({
               </p>
               <Button size="sm" variant="outline" className="justify-self-end" disabled={busy}>
                 <Undo2 />
-                Undo fulfillment
+                Correct fulfillment record
               </Button>
             </form>
           ) : null}
@@ -483,16 +670,64 @@ export function OrderOperations({
                   {entry.source === "legacy" ? " · migrated opening balance" : ""}
                 </p>
               ))}
-              {order.refunds.map((entry) => (
-                <p key={entry.id} className="text-muted-foreground">
+              {refundGroups.map((entry) => (
+                <p key={entry.batchKey} className="text-muted-foreground">
                   <span className="font-medium text-foreground">{formatCurrency(entry.amount)}</span> refunded ·{" "}
                   {entry.method} · {entry.reference ?? "No reference"}
+                  {entry.entries > 1 ? ` · allocated across ${entry.entries} credits` : ""}
                 </p>
               ))}
             </div>
           ) : (
             <p className="text-muted-foreground text-sm">No payments recorded.</p>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={adjustmentHistoryOpen} onOpenChange={setAdjustmentHistoryOpen}>
+        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Cancellation and credit history</DialogTitle>
+            <DialogDescription>
+              Append-only changes to the original order. The original quantities and prices remain preserved.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            {[...order.adjustments].reverse().map((adjustment) => {
+              const credit = adjustmentCredit(adjustment);
+              return (
+                <article key={adjustment.id} className="grid gap-3 rounded-lg border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">
+                        {adjustment.kind === "Cancellation" ? "Items cancelled" : adjustment.kind}
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        {new Date(adjustment.effectiveAt).toLocaleString()} · {adjustment.reason}
+                      </p>
+                    </div>
+                    <p className="font-semibold tabular-nums">-{formatCurrency(credit)}</p>
+                  </div>
+                  <div className="divide-y rounded-md bg-muted/40 px-3">
+                    {adjustment.items.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between gap-4 py-2 text-sm">
+                        <span className="min-w-0 truncate">{item.product}</span>
+                        <span className="shrink-0 text-muted-foreground">
+                          {item.quantity} cancelled · -
+                          {formatCurrency(item.grossAmount - item.discountAmount + item.taxAmount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+                    <HistoryAmount label="Merchandise" value={adjustment.merchandiseAmount} />
+                    <HistoryAmount label="Discount restored" value={adjustment.discountAmount} />
+                    <HistoryAmount label="Tax" value={adjustment.taxAmount} />
+                    <HistoryAmount label="Shipping" value={adjustment.shippingAmount} />
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </DialogContent>
       </Dialog>
       <Dialog open={fulfillmentHistoryOpen} onOpenChange={setFulfillmentHistoryOpen}>
@@ -510,52 +745,98 @@ export function OrderOperations({
                       {new Date(entry.shippedAt).toLocaleDateString()}
                     </span>{" "}
                     · {entry.carrier || "Pickup"} · {entry.trackingNumber || "No tracking number"}
-                    {entry.reversal ? " · Undone" : ""}
+                    {entry.reversal ? " · Corrected" : ""}
                   </p>
                   {entry.reversal ? (
                     <p className="text-xs">
-                      Undone {new Date(entry.reversal.reversedAt).toLocaleDateString()} · {entry.reversal.reason}
+                      Corrected {new Date(entry.reversal.reversedAt).toLocaleDateString()} · {entry.reversal.reason}
                     </p>
                   ) : null}
                 </div>
               ))}
             </div>
+          ) : (
+            <p className="py-4 text-muted-foreground text-sm">No fulfillment recorded for this order.</p>
+          )}
+          {canUndoFulfillment && latestActiveShipment ? (
+            <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-sm">Was the latest fulfillment recorded incorrectly?</p>
+                <p className="text-muted-foreground text-xs">
+                  Correct the record without creating a cancellation, return, credit, or inventory movement.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => {
+                  setFulfillmentHistoryOpen(false);
+                  setUndoFulfillmentOpen(true);
+                }}
+              >
+                <Undo2 /> Correct latest fulfillment
+              </Button>
+            </div>
           ) : null}
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={cancelOpen}
-        onOpenChange={(open) => {
-          if (!busy) setCancelOpen(open);
-        }}
-      >
-        <DialogContent disableOutsideClose={busy}>
-          <DialogHeader>
-            <DialogTitle>Cancel this order?</DialogTitle>
-            <DialogDescription>
-              {paid - refunded > 0.001
-                ? "Refund the remaining payment before cancelling this order."
-                : "This cancels the order and returns its items to inventory. This action cannot be undone."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" disabled={busy} onClick={() => setCancelOpen(false)}>
-              Keep order
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={busy || paid - refunded > 0.001}
-              onClick={() =>
-                void run("cancel", () => cancelOrderAction(submission("cancel", { version: order.version })))
-              }
-            >
-              {busy ? "Cancelling…" : "Cancel order"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </section>
+  );
+}
+
+function StatusCard({
+  children,
+  detail,
+  history,
+  label,
+  status,
+  tone,
+  value,
+}: {
+  children: React.ReactNode;
+  detail: string;
+  history: React.ReactNode;
+  label: string;
+  status: string;
+  tone: "neutral" | "progress" | "success" | "warning";
+  value: string;
+}) {
+  const toneClasses = {
+    neutral:
+      "border-slate-200 bg-slate-50/80 text-slate-950 dark:border-slate-800 dark:bg-slate-950/45 dark:text-slate-50",
+    progress: "border-blue-200 bg-blue-50/80 text-blue-950 dark:border-blue-900 dark:bg-blue-950/45 dark:text-blue-50",
+    success:
+      "border-emerald-200 bg-emerald-50/80 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/45 dark:text-emerald-50",
+    warning:
+      "border-amber-200 bg-amber-50/80 text-amber-950 dark:border-amber-900 dark:bg-amber-950/45 dark:text-amber-50",
+  } satisfies Record<typeof tone, string>;
+
+  return (
+    <article className={cn("flex min-h-44 flex-col gap-3 rounded-xl border p-3.5 sm:min-h-48", toneClasses[tone])}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="font-medium text-xs uppercase tracking-wide opacity-70">{label}</p>
+          <p className="mt-1 font-semibold text-base">{status}</p>
+        </div>
+        {history}
+      </div>
+      <div>
+        <p className="font-semibold text-xl tabular-nums tracking-tight">{value}</p>
+        <p className="mt-1 text-xs opacity-70">{detail}</p>
+      </div>
+      <div className="mt-auto grid gap-2">{children}</div>
+    </article>
+  );
+}
+
+function HistoryAmount({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <p className="text-muted-foreground">{label}</p>
+      <p className="font-medium tabular-nums">{formatCurrency(value)}</p>
+    </div>
   );
 }
 

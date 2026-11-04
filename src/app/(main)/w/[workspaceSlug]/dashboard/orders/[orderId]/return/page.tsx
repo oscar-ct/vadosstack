@@ -17,13 +17,13 @@ type PageProps = {
 };
 
 export default async function Page({ params, searchParams }: PageProps) {
-  const authorization = await getPermittedDashboardAuthorization("orders.returns.manage");
+  const authorization = await getPermittedDashboardAuthorization("orders.view");
 
   if (!authorization) {
     return (
       <AuthRequiredState
-        title="Returns access required"
-        description="You do not have permission to manage returns and refunds in this workplace."
+        title="Orders access required"
+        description="You do not have permission to view orders in this workplace."
       />
     );
   }
@@ -31,6 +31,16 @@ export default async function Page({ params, searchParams }: PageProps) {
   const { orderId } = await params;
   const query = await searchParams;
   const workspaceId = authorization.workspaceId;
+  const canCancelItems = can(authorization.membership, "orders.update");
+  const canReturnItems = can(authorization.membership, "orders.returns.manage");
+  if ((query.new === "1" && !canCancelItems && !canReturnItems) || (query.new !== "1" && !canReturnItems)) {
+    return (
+      <AuthRequiredState
+        title="Item resolution access required"
+        description="You do not have permission to cancel or return order items in this workplace."
+      />
+    );
+  }
   const canSendEmail = can(authorization.membership, "email.send");
   const canManageGmailAccount = can(authorization.membership, "email.account.manage");
   const [workspaceData, googleMailAccount] = await Promise.all([
@@ -94,6 +104,8 @@ export default async function Page({ params, searchParams }: PageProps) {
     <ReturnRefundWorkspace
       key={workspaceData.returnId ?? `new-${workspaceData.values.orderVersion}`}
       company={workspaceData.company}
+      canCancelItems={canCancelItems}
+      canReturnItems={canReturnItems}
       defaultValues={workspaceData.values}
       emailAction={
         workspaceData.returnId && canSendEmail ? (

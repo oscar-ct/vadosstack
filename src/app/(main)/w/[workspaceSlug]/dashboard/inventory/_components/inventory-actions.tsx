@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Boxes, MapPin, MoreHorizontal, Plus, Settings, Tags, Trash2 } from "lucide-react";
+import { Boxes, MapPin, MoreHorizontal, Plus, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -93,6 +93,9 @@ type InventorySettingsMenuProps = {
   categories: InventoryOptionSummary[];
   locations: InventoryOptionSummary[];
   stockRules: InventoryStockRules;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialTab: "categories" | "locations" | "stock-rules";
 };
 
 export function InventoryRecordMenu({
@@ -424,7 +427,7 @@ export function InventoryItemForm({
                     />
                   </div>
                   <div className="grid min-w-0 gap-2" data-inventory-field="cost">
-                    <Label htmlFor={`inventory-${mode}-cost`}>Cost</Label>
+                    <Label htmlFor={`inventory-${mode}-cost`}>Current unit cost</Label>
                     <Input
                       id={`inventory-${mode}-cost`}
                       name="cost"
@@ -494,6 +497,10 @@ export function InventoryItemForm({
                       step="1"
                       defaultValue={0}
                     />
+                    <p className="text-muted-foreground text-xs">
+                      Starting stock is recorded as an acquisition at the Cost above. For donated or other non-purchased
+                      stock, start at 0 and use Add stock → Other receipt.
+                    </p>
                   </div>
                 ) : null}
                 <div className="grid min-w-0 gap-2" data-inventory-field="itemStatus">
@@ -750,24 +757,23 @@ function InventoryStockRulesPanel({ open, stockRules }: { open: boolean; stockRu
   );
 }
 
-export function InventorySettingsMenu({ categories, locations, stockRules }: InventorySettingsMenuProps) {
-  const [open, setOpen] = React.useState(false);
-
+export function InventorySettingsMenu({
+  categories,
+  locations,
+  stockRules,
+  open,
+  onOpenChange: setOpen,
+  initialTab,
+}: InventorySettingsMenuProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" aria-label="Manage inventory settings">
-          <Settings />
-          Manage
-        </Button>
-      </DialogTrigger>
       <DialogContent className="flex h-[min(37rem,calc(100svh-2rem))] w-[calc(100vw-1rem)] flex-col overflow-hidden sm:max-w-2xl">
         <DialogHeader className="shrink-0">
-          <DialogTitle>Manage inventory</DialogTitle>
+          <DialogTitle>Inventory settings</DialogTitle>
           <DialogDescription>Update categories, locations, and stock rules from one place.</DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="categories" className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+        <Tabs key={initialTab} defaultValue={initialTab} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
           <TabsList className="grid h-auto w-full shrink-0 grid-cols-3">
             <TabsTrigger value="categories">
               <Tags className="size-4" />
