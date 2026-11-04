@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import {
-  Check,
+  ArrowDownUp,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -15,7 +15,6 @@ import {
   PackageCheck,
   RotateCcw,
   Search,
-  SlidersHorizontal,
   X,
   XCircle,
 } from "lucide-react";
@@ -102,67 +101,51 @@ const filterOptions = [
   {
     value: "all",
     label: "All orders",
-    mobileLabel: "All orders",
     action: "All order activity",
     icon: Layers3,
     accent: "bg-primary/10 text-primary",
-    badge: "",
   },
   {
     value: "needs-action",
     label: "Needs attention",
-    mobileLabel: "Attention",
-    action: "Review next action",
+    action: "Action outstanding",
     icon: CircleAlert,
     accent: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    badge: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
   },
   {
     value: "fulfillment",
-    label: "Fulfillment",
-    mobileLabel: "To fulfill",
-    action: "Ready to fulfill",
+    label: "Awaiting fulfillment",
+    action: "Items still to fulfill",
     icon: PackageCheck,
     accent: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    badge: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300",
   },
   {
     value: "returns",
     label: "Returns & refunds",
-    mobileLabel: "Returns",
-    action: "Review returns & refunds",
+    action: "Orders with resolutions",
     icon: RotateCcw,
     accent: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
-    badge:
-      "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300",
   },
   {
     value: "completed",
     label: "Completed",
-    mobileLabel: "Completed",
-    action: "No action outstanding",
+    action: "Nothing outstanding",
     icon: CheckCircle2,
     accent: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    badge:
-      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
   },
   {
     value: "cancelled",
     label: "Cancelled",
-    mobileLabel: "Cancelled",
-    action: "Cancelled orders",
+    action: "Fully cancelled orders",
     icon: XCircle,
     accent: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
-    badge: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300",
   },
 ] as const satisfies ReadonlyArray<{
   value: OrderFilter;
   label: string;
-  mobileLabel: string;
   action: string;
   icon: typeof Layers3;
   accent: string;
-  badge: string;
 }>;
 
 const sortOptions: Array<{ label: string; value: OrderSort }> = [
@@ -529,7 +512,6 @@ export function OrdersTable({
         return {
           ...option,
           count: matching.length,
-          total: matching.reduce((sum, order) => sum + Math.round(order.originalValue * 100), 0) / 100,
         };
       }),
     [orders],
@@ -669,54 +651,32 @@ export function OrdersTable({
           {workflowCards.map((stage) => {
             const isActive = activeFilter === stage.value;
             const StageIcon = stage.icon;
-            const exactTotal = formatCurrency(stage.total);
             return (
               <button
                 key={stage.value}
                 type="button"
                 aria-pressed={isActive}
-                aria-label={`${stage.label}: ${stage.count} orders, total ${exactTotal}`}
-                title={`${stage.label} · Total ${exactTotal} · ${stage.action}`}
+                aria-label={`${stage.label}: ${stage.count} orders`}
+                title={`${stage.label} · ${stage.action}`}
                 className={cn(
-                  "group relative grid min-h-20 min-w-0 content-between gap-1.5 overflow-hidden rounded-lg border bg-card p-2.5 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none sm:min-h-28 sm:gap-2 sm:rounded-xl sm:p-3",
+                  "group relative grid min-w-0 content-start gap-2 overflow-hidden rounded-lg border bg-card p-2.5 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none sm:rounded-xl sm:p-3",
                   isActive && "border-primary bg-primary/[0.06] shadow-sm ring-1 ring-primary/15",
                 )}
                 onClick={() => updateFilter(stage.value)}
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex min-h-8 items-center gap-2">
                   <span
                     className={cn(
-                      "hidden size-7 shrink-0 items-center justify-center rounded-lg transition-colors sm:flex",
+                      "flex size-6 shrink-0 items-center justify-center rounded-md",
                       isActive ? "bg-primary text-primary-foreground" : stage.accent,
                     )}
                   >
-                    <StageIcon className="size-3.5" aria-hidden="true" />
+                    <StageIcon className="size-3" aria-hidden="true" />
                   </span>
-                  <span className="min-w-0 font-medium text-xs leading-tight sm:hidden">{stage.mobileLabel}</span>
-                  <Badge
-                    variant={isActive ? "default" : "outline"}
-                    className={cn("shrink-0 gap-1 tabular-nums", !isActive && stage.badge)}
-                  >
-                    {isActive ? <Check className="size-3" aria-hidden="true" /> : null}
-                    {stage.count}
-                  </Badge>
+                  <span className="min-w-0 font-medium text-xs leading-tight">{stage.label}</span>
                 </div>
-                <div className="min-w-0">
-                  <span className="hidden font-medium text-sm leading-tight sm:block">{stage.label}</span>
-                  <span className="mt-0.5 block font-medium text-sm tabular-nums tracking-tight sm:mt-1 sm:text-base">
-                    {Math.abs(stage.total) >= 1_000_000
-                      ? new Intl.NumberFormat("en-US", {
-                          style: "currency",
-                          currency: "USD",
-                          notation: "compact",
-                          maximumFractionDigits: 1,
-                        }).format(stage.total)
-                      : exactTotal}
-                  </span>
-                  <span className="mt-1 hidden truncate text-[11px] text-muted-foreground sm:block">
-                    {stage.action}
-                  </span>
-                </div>
+                <span className="block text-2xl tabular-nums leading-none">{stage.count}</span>
+                <span className="hidden text-[11px] text-muted-foreground leading-snug sm:block">{stage.action}</span>
               </button>
             );
           })}
@@ -742,35 +702,18 @@ export function OrdersTable({
               <Drawer>
                 <DrawerTrigger asChild>
                   <Button variant="outline" size="sm" className="md:hidden">
-                    <SlidersHorizontal />
-                    Filters
+                    <ArrowDownUp />
+                    Sort
                   </Button>
                 </DrawerTrigger>
                 <DrawerContent>
                   <DrawerHeader className="landscape:py-2">
-                    <DrawerTitle>Order filters</DrawerTitle>
+                    <DrawerTitle>Sort orders</DrawerTitle>
                     <DrawerDescription className="landscape:hidden">
-                      Filter and sort the orders list on mobile.
+                      Choose how orders are arranged in the list.
                     </DrawerDescription>
                   </DrawerHeader>
-                  <DrawerBody className="grid gap-4 px-4 pb-1 landscape:gap-3">
-                    <div className="grid gap-2">
-                      <Label htmlFor="orders-mobile-status">Status</Label>
-                      <Select value={activeFilter} onValueChange={(value) => updateFilter(value as OrderFilter)}>
-                        <SelectTrigger id="orders-mobile-status" className="w-full">
-                          <SelectValue placeholder="Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {filterOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <DrawerBody className="grid gap-4 px-4 pb-4 landscape:gap-3 landscape:pb-3">
                     <div className="grid gap-2">
                       <Label htmlFor="orders-mobile-sort">Sort</Label>
                       <Select value={sortValue} onValueChange={(value) => updateSort(value as OrderSort)}>
