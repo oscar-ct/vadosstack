@@ -43,6 +43,7 @@ import {
   useWatch,
 } from "react-hook-form";
 
+import { InventoryPicker } from "@/components/inventory-picker";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -1726,7 +1727,6 @@ function InventoryProductPicker({
   const selectedInventoryItem = item?.inventoryItemId
     ? inventoryItems.find((inventoryItem) => inventoryItem.id === item.inventoryItemId)
     : undefined;
-  const buttonLabel = item?.product || "Select product";
   if (item?.inventoryItemId && item.savedUnitPrice !== undefined) {
     return (
       <p id={`order-item-product-${index}`} className="min-h-9 break-words py-2 text-sm">
@@ -1797,86 +1797,22 @@ function InventoryProductPicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={`order-item-product-${index}`}
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className="h-8 min-w-0 max-w-full justify-between overflow-hidden bg-background px-2.5 font-normal text-base md:text-sm"
-        >
-          <span className="min-w-0 truncate text-left">
-            <span className={cn(!item?.product && "text-muted-foreground")}>{buttonLabel}</span>
-          </span>
-          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
-        <Command>
-          <CommandInput className="text-base md:text-sm" placeholder="Search SKU or product..." />
-          <CommandList>
-            <CommandEmpty>No inventory items found.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem value="Custom item" onSelect={selectCustomItem}>
-                <PackageSearch className="size-4 text-muted-foreground" />
-                <div className="grid min-w-0 flex-1 gap-0.5">
-                  <div className="truncate font-medium">Custom item</div>
-                  <div className="truncate text-muted-foreground text-xs">
-                    Use a one-off product not saved in inventory
-                  </div>
-                </div>
-              </CommandItem>
-              {inventoryItems.map((inventoryItem) => {
-                const isOutOfStock = inventoryItem.stock <= 0;
-                const isAlreadyAdded = orderItems.some(
-                  (orderItem, orderItemIndex) =>
-                    orderItemIndex !== index && orderItem.inventoryItemId === inventoryItem.id,
-                );
-                const isUnavailable = isOutOfStock || isAlreadyAdded;
-
-                return (
-                  <CommandItem
-                    key={inventoryItem.id}
-                    value={`${inventoryItem.sku} ${inventoryItem.product}`}
-                    disabled={isUnavailable}
-                    onSelect={() => {
-                      if (isUnavailable) return;
-                      selectInventoryItem(inventoryItem);
-                    }}
-                  >
-                    <PackageSearch className="size-4 text-muted-foreground" />
-                    <div className="grid min-w-0 flex-1 gap-0.5">
-                      <div className={cn("truncate font-medium", isUnavailable && "text-muted-foreground")}>
-                        {inventoryItem.product}
-                      </div>
-                      <div className="truncate text-muted-foreground text-xs">
-                        {inventoryItem.sku} · {inventoryItem.category} ·{" "}
-                        {isAlreadyAdded
-                          ? "Already added"
-                          : isOutOfStock
-                            ? "Out of stock"
-                            : `${inventoryItem.stock} in stock`}
-                      </div>
-                    </div>
-                    <span className="font-medium text-xs tabular-nums">
-                      {formatOrderCurrency(inventoryItem.unitPrice)}
-                    </span>
-                    <Check
-                      className={cn(
-                        "size-4",
-                        selectedInventoryItem?.id === inventoryItem.id ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <InventoryPicker
+      id={`order-item-product-${index}`}
+      items={inventoryItems}
+      selected={selectedInventoryItem}
+      disabled={disabled}
+      open={open}
+      onOpenChange={setOpen}
+      onSelect={selectInventoryItem}
+      onCustomItem={selectCustomItem}
+      unavailableReason={(entry) =>
+        orderItems.some((line, lineIndex) => lineIndex !== index && line.inventoryItemId === entry.id)
+          ? "Already added"
+          : entry.stock <= 0
+            ? "Out of stock"
+            : undefined
+      }
+    />
   );
 }

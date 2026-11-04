@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { InventoryPicker } from "@/components/inventory-picker";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ import { previewStockAdjustment, type StockAdjustmentKind } from "@/lib/commerce
 import { amountSchema } from "@/lib/commerce/validation";
 import { cn } from "@/lib/utils";
 
+import { searchStockInventoryAction } from "../picker-actions";
 import { adjustInventoryStockAction, getStockTransferLocationsAction } from "../stock-actions";
 import type { InventoryItem } from "./inventory-table";
 
@@ -116,7 +118,13 @@ export function StockOperations({
   const [review, setReview] = React.useState<AdjustmentReview | null>(null);
   const attempt = React.useRef<{ signature: string; key: string } | null>(null);
   const heading = React.useRef<HTMLHeadingElement>(null);
-  const item = items.find((entry) => entry.id === itemId);
+  type StockItem = Pick<
+    InventoryItem,
+    "id" | "product" | "sku" | "category" | "location" | "stock" | "unitPrice" | "cost" | "updatedAt" | "itemStatus"
+  >;
+  const [pickedItem, setPickedItem] = React.useState<StockItem>();
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const item = pickedItem?.id === itemId ? pickedItem : items.find((entry) => entry.id === itemId);
   const config = actions[kind];
   const [transferLookup, setTransferLookup] = React.useState<{
     itemId: string;
@@ -147,6 +155,7 @@ export function StockOperations({
     lookupVersion.current++;
     setReceiptType("Purchase");
     setAcquisitionCost(String(items.find((entry) => entry.id === selectedId)?.cost ?? ""));
+    setPickedItem(undefined);
     setItemId(selectedId);
     setKind("Receive");
     setQuantity("");
@@ -166,6 +175,7 @@ export function StockOperations({
       lookupVersion.current++;
       setReceiptType("Purchase");
       setAcquisitionCost(String(items.find((entry) => entry.id === selectedId)?.cost ?? ""));
+      setPickedItem(undefined);
       setItemId(selectedId);
       setKind("Receive");
       setQuantity("");
@@ -216,10 +226,12 @@ export function StockOperations({
     if (next === "Transfer" && itemId) void loadDestinations(itemId);
   }
 
-  function changeItem(next: string) {
+  function changeItem(selected: StockItem) {
+    const next = selected.id;
+    setPickedItem(selected);
     lookupVersion.current++;
     setItemId(next);
-    setAcquisitionCost(String(items.find((entry) => entry.id === next)?.cost ?? ""));
+    setAcquisitionCost(String(selected.cost));
     setQuantity("");
     setDestinationId("");
     setNotes("");
@@ -382,26 +394,20 @@ export function StockOperations({
                   <>
                     <div className="grid min-w-0 gap-2">
                       <Label htmlFor={`${id}-product`}>Product and current location</Label>
-                      <select
+                      <InventoryPicker
                         id={`${id}-product`}
-                        name="itemId"
-                        className={selectClass}
-                        value={itemId}
-                        onChange={(event) => changeItem(event.target.value)}
-                        required
-                      >
-                        <option value="">Choose a product…</option>
-                        {items.map((entry) => (
-                          <option key={entry.id} value={entry.id}>
-                            {entry.product} · {entry.sku || "No SKU"} · {entry.location}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-muted-foreground text-xs">
-                        {item
-                          ? `${item.stock} available${item.itemStatus === "Inactive" ? " · Archived record" : ""}`
-                          : "Products shown are from the current inventory page."}
-                      </p>
+                        items={items}
+                        selected={item}
+                        open={pickerOpen}
+                        onOpenChange={setPickerOpen}
+                        onSelect={changeItem}
+                        showPrice={false}
+                        loadItems={searchStockInventoryAction}
+                        disabled={busy}
+                      />
+                      {item?.itemStatus === "Inactive" ? (
+                        <p className="text-muted-foreground text-xs">Archived record</p>
+                      ) : null}
                     </div>
                     <fieldset className="grid gap-2">
                       <legend className="mb-2 font-medium text-sm">Action</legend>
