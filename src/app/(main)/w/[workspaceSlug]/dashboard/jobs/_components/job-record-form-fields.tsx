@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 
 import { CustomerPhoneMatchWarning } from "@/components/customer-phone-match-warning";
+import { PricingListDescription } from "@/components/pricing-list-description";
+import { PricingLineDragHandle, SortablePricingLine, SortablePricingLines } from "@/components/sortable-pricing-lines";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -38,6 +40,7 @@ import { UsStateSelect } from "@/components/us-state-select";
 import { useDiscardLocalDraftListener } from "@/lib/drafts.client";
 import { calculateJobPricing, DEFAULT_OTHER_FEES_RATE } from "@/lib/job-pricing";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
+import { insertPricingList } from "@/lib/pricing-list-paste";
 import { formatServiceAddress, hasStructuredServiceAddress, type ServiceAddressFields } from "@/lib/service-address";
 import { cn } from "@/lib/utils";
 
@@ -126,7 +129,7 @@ function createMaterialLineItem(item?: Partial<JobMaterial>): MaterialLineItem {
     vendor: item?.vendor ?? "",
     purchaseDate: item?.purchaseDate ?? "",
     quantity: item?.quantity ?? "1",
-    unit: item?.unit ?? "",
+    unit: item?.unit ?? "each",
     unitPrice: item?.unitPrice ?? item?.price ?? "",
     price: item?.price ?? "",
   };
@@ -584,13 +587,10 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
     const pendingFocusId = pendingFocusIdRef.current;
     if (!pendingFocusId || typeof window === "undefined") return;
 
-    if (!window.matchMedia("(min-width: 768px)").matches) {
-      pendingFocusIdRef.current = undefined;
-      return;
-    }
-
     const frame = window.requestAnimationFrame(() => {
-      descriptionRefs.current.get(pendingFocusId)?.focus();
+      const field = descriptionRefs.current.get(pendingFocusId);
+      field?.focus({ preventScroll: true });
+      field?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       pendingFocusIdRef.current = undefined;
     });
 
@@ -600,7 +600,7 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
   function addLaborItem() {
     const item = createLineItem();
     pendingFocusIdRef.current = item.id;
-    onChange([item, ...items]);
+    onChange([...items, item]);
   }
 
   return (
@@ -615,25 +615,22 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
           </Label>
           <p className="text-muted-foreground text-xs">Add optional labor line items for this job.</p>
         </div>
-
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Button type="button" variant="outline" onClick={addLaborItem}>
-            <Plus />
-            Add labor
-          </Button>
-        </div>
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-lg border bg-background">
+      <SortablePricingLines items={items} onChange={onChange} className="min-w-0 rounded-lg border bg-background">
         {items.map((item, index) => (
-          <div
+          <SortablePricingLine
             key={item.id}
+            id={item.id}
             className="grid min-w-0 grid-cols-2 gap-3 border-t p-3 first:border-t-0 odd:bg-emerald-50/50 sm:grid-cols-4 lg:grid-cols-[36px_minmax(0,1fr)] lg:gap-x-3 xl:grid-cols-[36px_minmax(0,1fr)_72px_100px_88px_100px_36px] xl:items-end xl:gap-2 dark:odd:bg-emerald-900"
           >
             <div className="col-span-2 flex items-center justify-between sm:col-span-4 lg:col-span-1 lg:block lg:pt-7 xl:self-end xl:pt-0 xl:pb-1">
-              <span className="inline-flex size-7 items-center justify-center rounded-md border border-emerald-600 bg-background font-medium text-emerald-600 text-xs">
-                L{index + 1}
-              </span>
+              <div className="flex items-center gap-1 lg:w-8 lg:flex-col lg:gap-0.5">
+                <PricingLineDragHandle label={`Reorder labor ${index + 1}`} />
+                <span className="inline-flex size-7 items-center justify-center rounded-md border border-emerald-600 bg-background font-medium text-emerald-600 text-xs">
+                  L{index + 1}
+                </span>
+              </div>
               <Button
                 type="button"
                 variant="outline"
@@ -650,7 +647,16 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
             <div className="col-span-2 grid min-w-0 gap-3 sm:col-span-4 lg:col-span-1 xl:contents">
               <div className="grid min-w-0 gap-2 xl:col-span-1">
                 <Label>Description</Label>
-                <Textarea
+                <PricingListDescription
+                  kind="labor"
+                  onPasteText={(text) =>
+                    onChange(items.map((entry) => (entry.id === item.id ? { ...entry, description: text } : entry)))
+                  }
+                  onSplit={(descriptions) =>
+                    onChange(
+                      insertPricingList(items, item.id, descriptions, (description) => createLineItem({ description })),
+                    )
+                  }
                   ref={(element) => {
                     if (element) {
                       descriptionRefs.current.set(item.id, element);
@@ -819,8 +825,14 @@ function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (it
                 </div>
               </div>
             </div>
-          </div>
+          </SortablePricingLine>
         ))}
+      </SortablePricingLines>
+      <div className="flex flex-wrap gap-2 sm:justify-end">
+        <Button type="button" variant="outline" onClick={addLaborItem}>
+          <Plus />
+          Add labor
+        </Button>
       </div>
     </div>
   );
@@ -1407,13 +1419,10 @@ function MaterialItemsEditor({
     const pendingFocusId = pendingFocusIdRef.current;
     if (!pendingFocusId || typeof window === "undefined") return;
 
-    if (!window.matchMedia("(min-width: 768px)").matches) {
-      pendingFocusIdRef.current = undefined;
-      return;
-    }
-
     const frame = window.requestAnimationFrame(() => {
-      descriptionRefs.current.get(pendingFocusId)?.focus();
+      const field = descriptionRefs.current.get(pendingFocusId);
+      field?.focus({ preventScroll: true });
+      field?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       pendingFocusIdRef.current = undefined;
     });
 
@@ -1423,7 +1432,7 @@ function MaterialItemsEditor({
   function addMaterialItem() {
     const item = createMaterialLineItem();
     pendingFocusIdRef.current = item.id;
-    onChange([item, ...items]);
+    onChange([...items, item]);
   }
 
   return (
@@ -1438,26 +1447,23 @@ function MaterialItemsEditor({
           </Label>
           <p className="text-muted-foreground text-xs">Add optional material quantities and unit prices.</p>
         </div>
-
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Button type="button" variant="outline" onClick={addMaterialItem}>
-            <Plus />
-            Add material
-          </Button>
-        </div>
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-lg border bg-background">
+      <SortablePricingLines items={items} onChange={onChange} className="min-w-0 rounded-lg border bg-background">
         {items.map((item, index) => {
           return (
-            <div
+            <SortablePricingLine
               key={item.id}
+              id={item.id}
               className="grid min-w-0 grid-cols-2 gap-3 border-t p-3 first:border-t-0 odd:bg-amber-50/50 lg:grid-cols-[36px_minmax(0,1fr)] lg:gap-x-3 dark:odd:bg-amber-900"
             >
               <div className="col-span-2 flex items-center justify-between lg:col-span-1 lg:block lg:pt-7">
-                <span className="inline-flex size-7 items-center justify-center rounded-md border border-amber-600 bg-background font-medium text-amber-600 text-xs">
-                  M{index + 1}
-                </span>
+                <div className="flex items-center gap-1 lg:w-8 lg:flex-col lg:gap-0.5">
+                  <PricingLineDragHandle label={`Reorder material ${index + 1}`} />
+                  <span className="inline-flex size-7 items-center justify-center rounded-md border border-amber-600 bg-background font-medium text-amber-600 text-xs">
+                    M{index + 1}
+                  </span>
+                </div>
 
                 <Button
                   type="button"
@@ -1477,7 +1483,18 @@ function MaterialItemsEditor({
               <div className="col-span-2 grid min-w-0 gap-3 lg:col-span-1 xl:grid-cols-[120px_minmax(0,1fr)_150px_72px_100px_100px_110px] xl:items-end xl:gap-2">
                 <div className="grid min-w-0 gap-2 xl:col-span-5 xl:col-start-2 xl:row-start-1">
                   <Label>Description</Label>
-                  <Textarea
+                  <PricingListDescription
+                    kind="material"
+                    onPasteText={(text) =>
+                      onChange(items.map((entry) => (entry.id === item.id ? { ...entry, description: text } : entry)))
+                    }
+                    onSplit={(descriptions) =>
+                      onChange(
+                        insertPricingList(items, item.id, descriptions, (description) =>
+                          createMaterialLineItem({ description }),
+                        ),
+                      )
+                    }
                     ref={(element) => {
                       if (element) {
                         descriptionRefs.current.set(item.id, element);
@@ -1694,9 +1711,15 @@ function MaterialItemsEditor({
                   </div>
                 </div>
               </div>
-            </div>
+            </SortablePricingLine>
           );
         })}
+      </SortablePricingLines>
+      <div className="flex flex-wrap gap-2 sm:justify-end">
+        <Button type="button" variant="outline" onClick={addMaterialItem}>
+          <Plus />
+          Add material
+        </Button>
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import { calculateJobPricing, DEFAULT_OTHER_FEES_RATE } from "@/lib/job-pricing"
 import { getNetPaymentMinorUnits, minorUnitsToDecimalMoney } from "@/lib/payments/domain";
 import { expireStripeCheckoutSessionsAfterManualPayment } from "@/lib/payments/stripe-checkout-sessions";
 import { normalizePhoneNumber } from "@/lib/phone";
+import { stringifyInvoiceLines } from "@/lib/pricing-document-snapshot";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress, getServiceAddressPayload, type ServiceAddressFields } from "@/lib/service-address";
 import { revalidateWorkspacePath } from "@/lib/workspace-revalidation";
@@ -729,7 +730,7 @@ async function syncExistingInvoiceSnapshotFromJob(jobId: string, ownerId: string
       dateEnd: job.dateEnd,
       laborCost: laborCost.toFixed(2),
       materialTaxRate: materialTaxRate.toFixed(2),
-      materials: JSON.stringify(materials),
+      materials: stringifyInvoiceLines(parsePricingItems(job.laborItems), materials),
       materialsSubtotal: materialsSubtotal.toFixed(2),
       materialTaxAmount: materialTaxAmount.toFixed(2),
       otherFeesEnabled: job.otherFeesEnabled,

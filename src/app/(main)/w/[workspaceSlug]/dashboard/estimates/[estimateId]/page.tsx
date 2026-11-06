@@ -23,8 +23,6 @@ import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
 import { scopeWorkspacePath } from "@/lib/workspace-path";
 
-import { parseMaterials as parseJobMaterials } from "../../jobs/_components/materials";
-import { parsePricingItems } from "../../jobs/_components/pricing-items";
 import { EstimateActions } from "../_components/estimate-actions";
 import { deleteEstimateAction, emailEstimateAction } from "../actions";
 
@@ -197,12 +195,8 @@ export default async function Page({
     },
   });
   const materials = parseMaterials(estimate.materials);
-  const laborItems = estimate.estimateRecord
-    ? parsePricingItems(estimate.estimateRecord.laborItems).map((item) => ({ ...item, type: "labor" as const }))
-    : materials.filter((item) => item.type === "labor");
-  const materialItems = estimate.estimateRecord
-    ? parseJobMaterials(estimate.estimateRecord.materials).map((item) => ({ ...item, type: "material" as const }))
-    : materials.filter((item) => item.type !== "labor");
+  const laborItems = materials.filter((item) => item.type === "labor");
+  const materialItems = materials.filter((item) => item.type !== "labor");
   const laborKeyCounts = new Map<string, number>();
   const keyedLaborItems = laborItems.map((item) => ({
     ...item,

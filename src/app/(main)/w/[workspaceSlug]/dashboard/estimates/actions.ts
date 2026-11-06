@@ -23,8 +23,6 @@ import { formatServiceAddress } from "@/lib/service-address";
 import { scopeWorkspacePath } from "@/lib/workspace-path";
 import { revalidateWorkspacePath } from "@/lib/workspace-revalidation";
 
-import { parseMaterials as parseJobMaterials } from "../jobs/_components/materials";
-import { parsePricingItems } from "../jobs/_components/pricing-items";
 import { renderEstimatePdfBuffer } from "./_lib/estimate-pdf";
 import type { EstimateMutationState } from "./types";
 
@@ -280,18 +278,8 @@ export async function emailEstimateAction(
   try {
     const validThrough = addDays(estimate.issuedAt, workspace.estimateValidDays);
     const snapshotMaterials = parseEstimateMaterials(estimate.materials);
-    const laborItems = estimate.estimateRecord
-      ? parsePricingItems(estimate.estimateRecord.laborItems)
-      : snapshotMaterials.filter((item) => item.type === "labor");
-    const materialItems = estimate.estimateRecord
-      ? parseJobMaterials(estimate.estimateRecord.materials).map((item) => ({
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          unitPrice: item.unitPrice,
-          price: item.price,
-        }))
-      : snapshotMaterials.filter((item) => item.type !== "labor");
+    const laborItems = snapshotMaterials.filter((item) => item.type === "labor");
+    const materialItems = snapshotMaterials.filter((item) => item.type !== "labor");
     const companyLogoSrc = await getCompanyLogoSrc(workspaceId);
     const taxableItemsLabel = estimate.estimateRecord?.jobType === "Commercial" ? "labor + materials" : "materials";
     const emailContent = createEstimateAttachmentEmailContent({

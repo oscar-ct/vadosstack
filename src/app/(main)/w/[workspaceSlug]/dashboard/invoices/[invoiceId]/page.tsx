@@ -26,10 +26,10 @@ import {
   getPaymentDisplayReference,
 } from "@/lib/payments/presentation";
 import { formatPhoneNumber } from "@/lib/phone";
+import { invoiceLaborRows, invoiceMaterialRows } from "@/lib/pricing-document-snapshot";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
 
-import { parsePricingItems } from "../../jobs/_components/pricing-items";
 import { createJobPaymentAction, deleteJobPaymentAction } from "../../jobs/actions";
 import { InvoiceActions, ManageInvoiceDialogButton } from "../_components/invoice-actions";
 import type { InvoiceTableItem } from "../_components/invoices-table";
@@ -49,7 +49,7 @@ type InvoiceMaterial = {
 
 function parseMaterials(value: string): InvoiceMaterial[] {
   try {
-    const parsed = JSON.parse(value);
+    const parsed = invoiceMaterialRows(value) as Array<Record<string, unknown>>;
 
     if (!Array.isArray(parsed)) {
       return [];
@@ -241,7 +241,7 @@ export default async function Page({
       },
     },
   });
-  const laborItems = parsePricingItems(invoice.job.laborItems);
+  const laborItems = invoiceLaborRows(invoice.materials, invoice.job.laborItems);
   const laborKeyCounts = new Map<string, number>();
   const keyedLaborItems = laborItems.map((item) => ({
     ...item,

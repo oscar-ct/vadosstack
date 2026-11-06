@@ -15,9 +15,9 @@ import { getInvoicePaymentLinkUnavailableReason, resolveInvoicePaymentLink } fro
 import { getPaymentDisplayMethod, getPaymentDisplayReference } from "@/lib/payments/presentation";
 import { synchronizeStripeCheckoutReturn } from "@/lib/payments/stripe-checkout-sessions";
 import { formatPhoneNumber } from "@/lib/phone";
+import { invoiceLaborRows, invoiceMaterialRows } from "@/lib/pricing-document-snapshot";
 import { formatServiceAddress } from "@/lib/service-address";
 
-import { parsePricingItems } from "../../(main)/w/[workspaceSlug]/dashboard/jobs/_components/pricing-items";
 import { PrintInvoiceButton } from "./invoice-controls";
 import { InvoicePreview } from "./invoice-preview";
 import { PayWithStripeButton } from "./pay-button";
@@ -33,7 +33,7 @@ function money(value: { toString(): string } | string | number) {
 
 function parsePublicMaterials(value: string) {
   try {
-    const parsed = JSON.parse(value);
+    const parsed = invoiceMaterialRows(value) as Array<Record<string, unknown>>;
     if (!Array.isArray(parsed)) return [];
     return parsed
       .map((material) => {
@@ -99,7 +99,7 @@ export default async function PayInvoicePage({
   const companyEmail = company.companyEmail ?? company.legacyOwner?.email ?? null;
   const rawCompanyLogoSrc = await getCompanyLogoSrc(invoice.ownerId);
   const companyLogoSrc = rawCompanyLogoSrc.startsWith("/dashboard/") ? null : rawCompanyLogoSrc;
-  const laborItems = parsePricingItems(invoice.job.laborItems).map((item) => ({
+  const laborItems = invoiceLaborRows(invoice.materials, invoice.job.laborItems).map((item) => ({
     amount: money(item.price || 0),
     description: item.description,
     quantity: item.quantity,

@@ -17,6 +17,7 @@ import {
   getStripeCheckoutPaymentMethodTypes,
   resolveStripeCheckoutPaymentMethod,
 } from "@/lib/payments/stripe-payment-methods";
+import { invoiceMaterialRows } from "@/lib/pricing-document-snapshot";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
 
@@ -30,7 +31,7 @@ type ResolvedPaymentInvoice = NonNullable<Awaited<ReturnType<typeof resolveInvoi
 
 function countJsonItems(value: string) {
   try {
-    const parsed = JSON.parse(value);
+    const parsed = invoiceMaterialRows(value) as Array<Record<string, unknown>>;
     return Array.isArray(parsed) ? parsed.filter((item) => item?.description || item?.price).length : 0;
   } catch {
     return 0;

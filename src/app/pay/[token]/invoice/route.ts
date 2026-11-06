@@ -6,17 +6,17 @@ import {
   type InvoicePdfMaterial,
   renderInvoicePdfBuffer,
 } from "@/app/(main)/w/[workspaceSlug]/dashboard/invoices/_lib/invoice-pdf";
-import { parsePricingItems } from "@/app/(main)/w/[workspaceSlug]/dashboard/jobs/_components/pricing-items";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { normalizeDocumentMessageAlign, renderDocumentMessage } from "@/lib/document-messages";
 import { resolveInvoicePaymentLink } from "@/lib/payments/payment-links";
 import { getPaymentDisplayMethod, getPaymentDisplayReference } from "@/lib/payments/presentation";
 import { formatPhoneNumber } from "@/lib/phone";
+import { invoiceLaborRows, invoiceMaterialRows } from "@/lib/pricing-document-snapshot";
 import { formatServiceAddress } from "@/lib/service-address";
 
 function parsePublicMaterials(value: string): InvoicePdfMaterial[] {
   try {
-    const parsed = JSON.parse(value);
+    const parsed = invoiceMaterialRows(value) as Array<Record<string, unknown>>;
     if (!Array.isArray(parsed)) return [];
 
     return parsed
@@ -97,7 +97,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     jobDescription: invoice.jobDescription,
     jobTitle: invoice.jobTitle,
     laborCost: invoice.laborCost,
-    laborItems: parsePricingItems(invoice.job.laborItems),
+    laborItems: invoiceLaborRows(invoice.materials, invoice.job.laborItems),
     materialTaxAmount: invoice.materialTaxAmount,
     materialTaxRate: invoice.materialTaxRate,
     otherFeesEnabled: invoice.otherFeesEnabled,

@@ -31,6 +31,7 @@ import {
   revokeInvoicePaymentLink,
 } from "@/lib/payments/payment-links";
 import { formatPhoneNumber } from "@/lib/phone";
+import { invoiceLaborRows, invoiceMaterialRows, stringifyInvoiceLines } from "@/lib/pricing-document-snapshot";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
 import { scopeWorkspacePath } from "@/lib/workspace-path";
@@ -169,7 +170,7 @@ type InvoiceMaterial = {
 
 function parseInvoiceMaterials(value: string): InvoiceMaterial[] {
   try {
-    const parsed = JSON.parse(value);
+    const parsed = invoiceMaterialRows(value) as Array<Record<string, unknown>>;
 
     if (!Array.isArray(parsed)) {
       return [];
@@ -417,7 +418,7 @@ export async function createInvoiceAction(
           dateEnd: job.dateEnd,
           laborCost: toMoney(job.laborCost),
           materialTaxRate: toMoney(job.materialTaxRate),
-          materials: JSON.stringify(materials),
+          materials: stringifyInvoiceLines(parsePricingItems(job.laborItems), materials),
           materialsSubtotal: materialsSubtotal.toFixed(2),
           materialTaxAmount: materialTaxAmount.toFixed(2),
           otherFeesEnabled: job.otherFeesEnabled,
@@ -575,7 +576,7 @@ export async function emailInvoiceAction(
 
   try {
     const dueDate = addDays(invoice.issuedAt, workspace.invoiceDueDays);
-    const laborItems = parsePricingItems(invoice.job.laborItems);
+    const laborItems = invoiceLaborRows(invoice.materials, invoice.job.laborItems);
     const materials = parseInvoiceMaterials(invoice.materials);
     const companyLogoSrc = await getCompanyLogoSrc(workspaceId);
     const taxableItemsLabel = invoice.job.jobType === "Commercial" ? "labor + materials" : "materials";

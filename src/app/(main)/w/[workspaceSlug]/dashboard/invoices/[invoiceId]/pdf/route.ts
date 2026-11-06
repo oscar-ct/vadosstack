@@ -8,15 +8,15 @@ import { normalizeDocumentMessageAlign, renderDocumentMessage } from "@/lib/docu
 import { formatDocumentNumber } from "@/lib/document-number";
 import { getPaymentDisplayMethod, getPaymentDisplayReference } from "@/lib/payments/presentation";
 import { formatPhoneNumber } from "@/lib/phone";
+import { invoiceLaborRows, invoiceMaterialRows } from "@/lib/pricing-document-snapshot";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
 
-import { parsePricingItems } from "../../../jobs/_components/pricing-items";
 import { type InvoicePdfMaterial, renderInvoicePdfBuffer } from "../../_lib/invoice-pdf";
 
 function parseInvoiceMaterials(value: string): InvoicePdfMaterial[] {
   try {
-    const parsed = JSON.parse(value);
+    const parsed = invoiceMaterialRows(value) as Array<Record<string, unknown>>;
 
     if (!Array.isArray(parsed)) {
       return [];
@@ -143,7 +143,7 @@ export async function GET(
     jobDescription: invoice.jobDescription,
     jobTitle: invoice.jobTitle,
     laborCost: invoice.laborCost,
-    laborItems: parsePricingItems(invoice.job.laborItems),
+    laborItems: invoiceLaborRows(invoice.materials, invoice.job.laborItems),
     materialTaxAmount: invoice.materialTaxAmount,
     materialTaxRate: invoice.materialTaxRate,
     otherFeesEnabled: invoice.otherFeesEnabled,

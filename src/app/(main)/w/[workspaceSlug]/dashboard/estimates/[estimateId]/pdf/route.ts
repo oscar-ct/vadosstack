@@ -10,8 +10,6 @@ import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
 
-import { parseMaterials as parseJobMaterials } from "../../../jobs/_components/materials";
-import { parsePricingItems } from "../../../jobs/_components/pricing-items";
 import { type EstimatePdfLineItem, renderEstimatePdfBuffer } from "../../_lib/estimate-pdf";
 
 function parseEstimateMaterials(value: string): EstimatePdfLineItem[] {
@@ -111,18 +109,8 @@ export async function GET(
       })
     : "";
   const snapshotMaterials = parseEstimateMaterials(estimate.materials);
-  const laborItems = estimate.estimateRecord
-    ? parsePricingItems(estimate.estimateRecord.laborItems)
-    : snapshotMaterials.filter((item) => item.type === "labor");
-  const materialItems = estimate.estimateRecord
-    ? parseJobMaterials(estimate.estimateRecord.materials).map((item) => ({
-        description: item.description,
-        quantity: item.quantity,
-        unit: item.unit,
-        unitPrice: item.unitPrice,
-        price: item.price,
-      }))
-    : snapshotMaterials.filter((item) => item.type !== "labor");
+  const laborItems = snapshotMaterials.filter((item) => item.type === "labor");
+  const materialItems = snapshotMaterials.filter((item) => item.type !== "labor");
   const taxableItemsLabel = estimate.estimateRecord?.jobType === "Commercial" ? "labor + materials" : "materials";
   const pdfBuffer = await renderEstimatePdfBuffer({
     companyEmail: workspace.companyEmail ?? workspace.legacyOwner?.email ?? authorization.principal.user.email,
