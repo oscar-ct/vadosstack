@@ -1,10 +1,10 @@
-import { format } from "date-fns";
 import { ArrowRight, BriefcaseBusiness, CalendarPlus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
+import { formatCalendarDate } from "@/lib/business-time";
 
 export type UpcomingJob = {
   id: string;
@@ -54,10 +54,10 @@ export function UpcomingJobs({ jobs }: { jobs: UpcomingJob[] }) {
               >
                 <div className="size-11 shrink-0 overflow-hidden rounded-md border border-border bg-background">
                   <div className="grid h-1/3 place-items-center border-b bg-muted font-medium text-[10px] text-muted-foreground uppercase leading-none">
-                    {format(jobDate, "MMM")}
+                    {formatCalendarDate(jobDate, "MMM")}
                   </div>
                   <div className="grid h-2/3 place-items-center font-medium text-lg leading-none">
-                    {format(jobDate, "d")}
+                    {formatCalendarDate(jobDate, "d")}
                   </div>
                 </div>
 
@@ -67,7 +67,7 @@ export function UpcomingJobs({ jobs }: { jobs: UpcomingJob[] }) {
                 </div>
 
                 <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:justify-end sm:self-center">
-                  <span className="text-[11px] text-muted-foreground">{format(jobDate, "EEE")}</span>
+                  <span className="text-[11px] text-muted-foreground">{formatCalendarDate(jobDate, "EEE")}</span>
                   <Badge
                     variant="outline"
                     className={`rounded-md px-2 py-0.5 font-medium text-[10px] ${

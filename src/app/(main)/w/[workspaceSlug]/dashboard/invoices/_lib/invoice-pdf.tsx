@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
 import { Document, Font, Image, Page, Path, renderToBuffer, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
-import { format } from "date-fns";
 
+import { formatBusinessDate, formatCalendarDate } from "@/lib/business-time";
 import { type DocumentMessageAlign, getDocumentMessageLineItems } from "@/lib/document-messages";
 
 import type { PricingLineItem } from "../../jobs/_components/pricing-items";
@@ -45,6 +45,7 @@ export type InvoicePdfData = {
   documentMessageAlign?: DocumentMessageAlign;
   documentMessage?: string | null;
   dueDate: Date;
+  timeZone?: string;
   finalCost: { toString: () => string };
   invoiceNumber: string;
   issuedAt: Date;
@@ -409,11 +410,11 @@ function negativeOptionalMoney(value?: string) {
 }
 
 function shortDate(value: Date) {
-  return format(value, "MM/dd/yy");
+  return formatCalendarDate(value, "MM/dd/yy");
 }
 
 function maybeDate(value: Date | null) {
-  return value ? format(value, "MMM d, yyyy") : "Not scheduled";
+  return value ? formatCalendarDate(value, "MMM d, yyyy") : "Not scheduled";
 }
 
 function materialDate(value: string) {
@@ -766,14 +767,14 @@ function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
             <Text style={styles.documentTitle}>Invoice</Text>
             <View style={styles.invoiceMeta}>
               <Text>Invoice #{data.invoiceNumber}</Text>
-              <Text>Issued {format(data.issuedAt, "MMM d, yyyy")}</Text>
+              <Text>Issued {formatBusinessDate(data.issuedAt, "MMM d, yyyy", data.timeZone)}</Text>
             </View>
           </View>
 
           <View style={styles.balancePanel}>
             <Text style={styles.balanceLabel}>Balance due</Text>
             <Text style={balanceAmountStyle}>{balanceDueText}</Text>
-            <Text style={styles.balanceDue}>by {format(data.dueDate, "MMM d, yyyy")}</Text>
+            <Text style={styles.balanceDue}>by {formatCalendarDate(data.dueDate, "MMM d, yyyy")}</Text>
           </View>
         </View>
 

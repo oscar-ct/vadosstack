@@ -2,11 +2,11 @@
 
 import { redirect } from "next/navigation";
 
-import { addDays, format } from "date-fns";
 import { z } from "zod";
 
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
+import { formatCalendarDate, invoiceDueDate } from "@/lib/business-time";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { calculateOutstandingBalance } from "@/lib/customer-billing";
 import { formatDocumentNumber, parseTrackedDocumentNumber } from "@/lib/document-number";
@@ -24,6 +24,8 @@ import {
   refreshGoogleAccessToken,
   sendGmailMessage,
 } from "@/lib/google-mail";
+import { invoiceSnapshotAudit } from "@/lib/invoice-snapshot-audit";
+import { calculateJobPricing } from "@/lib/job-pricing";
 import { createPaymentLinkUrl } from "@/lib/payments/payment-link-token";
 import {
   createInvoicePaymentLink,
@@ -31,7 +33,12 @@ import {
   revokeInvoicePaymentLink,
 } from "@/lib/payments/payment-links";
 import { formatPhoneNumber } from "@/lib/phone";
-import { invoiceLaborRows, invoiceMaterialRows, stringifyInvoiceLines } from "@/lib/pricing-document-snapshot";
+import {
+  createInvoiceLineSnapshot,
+  InvoiceSnapshotError,
+  invoiceLaborRows,
+  invoiceMaterialRows,
+} from "@/lib/pricing-document-snapshot";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
 import { scopeWorkspacePath } from "@/lib/workspace-path";
@@ -242,7 +249,7 @@ function createInvoiceEmailContent({
     "",
     `Your invoice ${invoiceNumber} from ${companyName} is attached as a PDF.`,
     `Balance due: ${balanceDue}`,
-    `Due: ${format(dueDate, "MMM d, yyyy")}`,
+    `Due: ${formatCalendarDate(dueDate, "MMM d, yyyy")}`,
     "",
     "Please review the attached invoice at your convenience.",
     "",
@@ -265,7 +272,7 @@ function createInvoiceEmailContent({
           </tr>
           <tr>
             <td style="padding:8px 0;color:#594431;border-top:1px solid #eee7dd;">Due</td>
-            <td style="padding:8px 0;text-align:right;font-weight:700;border-top:1px solid #eee7dd;">${format(dueDate, "MMM d, yyyy")}</td>
+            <td style="padding:8px 0;text-align:right;font-weight:700;border-top:1px solid #eee7dd;">${formatCalendarDate(dueDate, "MMM d, yyyy")}</td>
           </tr>
         </table>
         <p style="margin:0;color:#594431;font-size:13px;line-height:1.6;">
@@ -330,6 +337,7 @@ export async function createInvoiceAction(
           },
         },
         invoice: true,
+        owner: { select: { invoiceDueDays: true, timeZone: true } },
       },
     });
 
@@ -375,13 +383,43 @@ export async function createInvoiceAction(
     );
     const laborCost = Number(job.laborCost ?? 0);
     const materialTaxRate = Number(job.materialTaxRate ?? 0);
-    const taxableSubtotal = materialsSubtotal + (job.jobType === "Commercial" ? laborCost : 0);
-    const materialTaxAmount = taxableSubtotal * (materialTaxRate / 100);
-    const balanceDue = calculateOutstandingBalance(job.status, job.finalCost?.toString(), job.amountPaid?.toString());
+    const pricing = calculateJobPricing({
+      jobType: job.jobType === "Commercial" ? "Commercial" : "Residential",
+      laborSubtotal: laborCost,
+      materialsSubtotal,
+      otherFeesEnabled: job.otherFeesEnabled,
+      otherFeesRate: Number(job.otherFeesRate),
+      taxRate: materialTaxRate,
+    });
+    if (Math.round(Number(job.finalCost) * 100) !== Math.round(pricing.total * 100)) {
+      return {
+        success: false,
+        message:
+          "This job's saved total does not match its labor, materials, tax, and fees. Review and save the job pricing before creating an invoice.",
+      };
+    }
+    const lineSnapshot = createInvoiceLineSnapshot(parsePricingItems(job.laborItems), materials, job.laborCost ?? 0);
+    const balanceDue = calculateOutstandingBalance(job.status, pricing.total, job.amountPaid?.toString());
     const depositPaid = job.depositPaid?.toString() ?? "0";
     const invoiceJobStatus = parsed.data.markComplete ? "Completed" : job.status;
 
     const invoice = await prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM jobs WHERE id = ${job.id} AND "ownerId" = ${workspaceId} FOR UPDATE
+      `;
+      if (!locked.length) throw new InvoiceActionError("Job could not be found.");
+      const currentJob = await tx.job.findUnique({
+        where: { id_ownerId: { id: job.id, ownerId: workspaceId } },
+        select: { updatedAt: true, invoice: { select: { id: true } } },
+      });
+      if (!currentJob) throw new InvoiceActionError("Job could not be found.");
+      if (currentJob.invoice)
+        throw new InvoiceActionError("This job already has an invoice. Open the existing invoice instead.");
+      if (currentJob.updatedAt.getTime() !== job.updatedAt.getTime()) {
+        throw new InvoiceActionError(
+          "This job changed while the invoice was being created. Review its current pricing and try again.",
+        );
+      }
       if (parsed.data.markComplete && job.status !== "Completed") {
         await tx.job.update({
           where: {
@@ -396,10 +434,14 @@ export async function createInvoiceAction(
         });
       }
 
+      const issuedAt = new Date();
+      const dueAt = invoiceDueDate(issuedAt, job.owner.invoiceDueDays, job.owner.timeZone);
       const invoiceNumberAssignment = await allocateDocumentNumber(tx, workspaceId, "invoice");
       const createdInvoice = await tx.invoice.create({
         data: {
           ownerId: workspaceId,
+          issuedAt,
+          dueAt,
           invoiceNumber: invoiceNumberAssignment.documentNumber,
           jobId: job.id,
           customerId: job.customerId,
@@ -418,13 +460,13 @@ export async function createInvoiceAction(
           dateEnd: job.dateEnd,
           laborCost: toMoney(job.laborCost),
           materialTaxRate: toMoney(job.materialTaxRate),
-          materials: stringifyInvoiceLines(parsePricingItems(job.laborItems), materials),
+          materials: lineSnapshot,
           materialsSubtotal: materialsSubtotal.toFixed(2),
-          materialTaxAmount: materialTaxAmount.toFixed(2),
+          materialTaxAmount: pricing.tax.toFixed(2),
           otherFeesEnabled: job.otherFeesEnabled,
           otherFeesRate: job.otherFeesRate,
-          otherFeesAmount: job.otherFeesAmount,
-          finalCost: toMoney(job.finalCost),
+          otherFeesAmount: pricing.otherFees.toFixed(2),
+          finalCost: pricing.total.toFixed(2),
           depositPaid,
           amountPaid: toMoney(job.amountPaid),
           balanceDue: balanceDue.toFixed(2),
@@ -441,7 +483,7 @@ export async function createInvoiceAction(
           action: "invoice.create",
           targetType: "Invoice",
           targetId: createdInvoice.id,
-          metadata: { jobId: job.id },
+          metadata: { jobId: job.id, snapshot: invoiceSnapshotAudit(createdInvoice) },
         },
         tx,
       );
@@ -452,7 +494,10 @@ export async function createInvoiceAction(
     console.error("Invoice creation failed.", error);
     return {
       success: false,
-      message: error instanceof InvoiceActionError ? error.message : "Invoice could not be created. Please try again.",
+      message:
+        error instanceof InvoiceActionError || error instanceof InvoiceSnapshotError
+          ? error.message
+          : "Invoice could not be created. Please try again.",
     };
   }
 
@@ -575,8 +620,8 @@ export async function emailInvoiceAction(
   let subject: string | undefined;
 
   try {
-    const dueDate = addDays(invoice.issuedAt, workspace.invoiceDueDays);
-    const laborItems = invoiceLaborRows(invoice.materials, invoice.job.laborItems);
+    const dueDate = invoice.dueAt;
+    const laborItems = invoiceLaborRows(invoice.materials, invoice.laborCost);
     const materials = parseInvoiceMaterials(invoice.materials);
     const companyLogoSrc = await getCompanyLogoSrc(workspaceId);
     const taxableItemsLabel = invoice.job.jobType === "Commercial" ? "labor + materials" : "materials";
@@ -627,6 +672,7 @@ export async function emailInvoiceAction(
       dateEnd: invoice.dateEnd,
       depositPaid: invoice.depositPaid,
       dueDate,
+      timeZone: workspace.timeZone,
       finalCost: invoice.finalCost,
       invoiceNumber,
       issuedAt: invoice.issuedAt,

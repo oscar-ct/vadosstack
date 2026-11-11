@@ -1,5 +1,4 @@
 "use client";
-
 import * as React from "react";
 
 import {
@@ -34,6 +33,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { EventCalendarViews } from "@/components/calendar/event-calendar-views";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
 import {
@@ -1021,7 +1021,13 @@ function CalendarEventDialog({
                   </dt>
                   <dd className="mt-1.5 text-emerald-800/75 text-xs dark:text-emerald-100/65">
                     {event.completedBy ? `By ${event.completedBy}` : "Completion recorded"}
-                    {event.completedAt ? ` · ${format(parseISO(event.completedAt), "MMM d, yyyy 'at' h:mm a")}` : null}
+                    {event.completedAt ? (
+                      <>
+                        {" · "}
+                        {<BusinessDateTime value={parseISO(event.completedAt)} pattern={"MMM d, yyyy 'at' h:mm a"} />}
+                        {""}
+                      </>
+                    ) : null}
                   </dd>
                 </div>
               ) : null}

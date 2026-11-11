@@ -3,13 +3,13 @@ import { Fragment } from "react";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 
-import { addDays, format } from "date-fns";
 import { BriefcaseBusiness, CalendarDays, Mail, MapPin, Phone, ReceiptText, UserRound } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { BackButton } from "@/components/back-button";
 import { Separator } from "@/components/ui/separator";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { formatBusinessDate, formatCalendarDate } from "@/lib/business-time";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import {
   getDocumentMessageAlignClass,
@@ -100,7 +100,7 @@ function formatLineMeta(item: { quantity?: string; unit?: string; unitPrice?: st
 }
 
 function formatShortDate(value: Date) {
-  return format(value, "MM/dd/yy");
+  return formatCalendarDate(value, "MM/dd/yy");
 }
 
 function formatMaybeDate(value: Date | null) {
@@ -241,7 +241,7 @@ export default async function Page({
       },
     },
   });
-  const laborItems = invoiceLaborRows(invoice.materials, invoice.job.laborItems);
+  const laborItems = invoiceLaborRows(invoice.materials, invoice.laborCost);
   const laborKeyCounts = new Map<string, number>();
   const keyedLaborItems = laborItems.map((item) => ({
     ...item,
@@ -295,13 +295,13 @@ export default async function Page({
   const serviceLocation = formatServiceAddress(invoice);
   const companyAddress = workspace.companyAddress?.trim();
   const companyEmail = workspace.companyEmail ?? workspace.legacyOwner?.email ?? authorization.principal.user.email;
-  const dueDate = addDays(invoice.issuedAt, workspace.invoiceDueDays);
+  const dueDate = invoice.dueAt;
   const invoiceMessageContext = {
     amountPaid: formatMoney(invoice.amountPaid),
     balanceDue: formatMoney(invoice.balanceDue),
     companyName: workspace.name,
     customerName: invoice.customerName,
-    dueDate: format(dueDate, "MMM d, yyyy"),
+    dueDate: formatCalendarDate(dueDate, "MMM d, yyyy"),
     finalCost: formatMoney(invoice.finalCost),
     invoiceNumber,
     jobTitle: invoice.jobTitle,
@@ -371,7 +371,7 @@ export default async function Page({
           customerEmail: invoice.customerEmail,
           customerName: invoice.customerName,
           customerPhone: invoice.customerPhone ? formatPhoneNumber(invoice.customerPhone) : undefined,
-          dueDate: format(dueDate, "MMM d, yyyy"),
+          dueDate: formatCalendarDate(dueDate, "MMM d, yyyy"),
           invoiceNumber,
           jobTitle: invoice.jobTitle,
           serviceLocation,
@@ -401,7 +401,7 @@ export default async function Page({
                 companyName: workspace.name,
                 customerEmail: invoice.customerEmail,
                 customerName: invoice.customerName,
-                dueDate: format(dueDate, "MMM d, yyyy"),
+                dueDate: formatCalendarDate(dueDate, "MMM d, yyyy"),
                 gmailConnected: Boolean(googleMailAccount),
                 gmailSenderEmail: googleMailAccount?.email ?? null,
                 invoiceNumber,
@@ -442,12 +442,12 @@ export default async function Page({
             deleteSnapshot={{
               balanceDue: formatMoney(invoice.balanceDue),
               customerName: invoice.customerName,
-              dueDate: format(dueDate, "MMM d, yyyy"),
+              dueDate: formatCalendarDate(dueDate, "MMM d, yyyy"),
               invoiceNumber,
               jobTitle: invoice.jobTitle,
               serviceLocation,
             }}
-            dueDate={format(dueDate, "MMM d, yyyy")}
+            dueDate={formatCalendarDate(dueDate, "MMM d, yyyy")}
             gmailConnected={Boolean(googleMailAccount)}
             gmailSenderEmail={googleMailAccount?.email ?? null}
             invoiceId={invoice.id}
@@ -508,7 +508,7 @@ export default async function Page({
               </div>
               <div className={"grid gap-0.5 text-muted-foreground text-xs"}>
                 <span>Invoice #{invoiceNumber}</span>
-                <span>Issued {formatShortDate(invoice.issuedAt)}</span>
+                <span>Issued {formatBusinessDate(invoice.issuedAt, "MM/dd/yy", workspace.timeZone)}</span>
               </div>
             </div>
             <div className="grid gap-1 rounded-md border bg-muted/20 p-3 text-left md:text-right print:border-neutral-300 print:bg-neutral-50 print:p-2">

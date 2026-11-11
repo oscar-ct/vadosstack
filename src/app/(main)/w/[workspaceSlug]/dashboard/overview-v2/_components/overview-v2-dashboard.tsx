@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState, useTransition } from "react";
 
 import { differenceInCalendarDays, format } from "date-fns";
@@ -17,8 +16,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useBusinessTimeZone } from "@/components/business-time";
 import { Button } from "@/components/ui/button";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { formatCalendarDate } from "@/lib/business-time";
 import { cn } from "@/lib/utils";
 
 import type { ManagerActionQueueItem } from "../../_lib/manager-action-queue";
@@ -75,7 +76,7 @@ type DueTask = {
 type Lens = "jobs" | "money" | "now";
 type TaskAction = (state: CalendarTaskMutationState, formData: FormData) => Promise<CalendarTaskMutationState>;
 
-const BRIEFING_TIME_ZONE = "America/Chicago";
+const _BRIEFING_TIME_ZONE = "America/Chicago";
 
 const severityDotClassNames: Record<ManagerActionQueueItem["severity"], string> = {
   amber: "bg-amber-500",
@@ -113,20 +114,20 @@ function formatQueueValue(value: ManagerActionQueueItem["value"]) {
   return typeof value === "number" ? formatCompactCurrency(value) : value;
 }
 
-function getLiveBriefingTime(date: Date) {
+function getLiveBriefingTime(date: Date, timeZone: string) {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: BRIEFING_TIME_ZONE,
+    timeZone,
   }).format(date);
 }
 
-function getLiveGreeting(date: Date) {
+function getLiveGreeting(date: Date, timeZone: string) {
   const hour = Number(
     new Intl.DateTimeFormat("en-US", {
       hour: "numeric",
       hour12: false,
-      timeZone: BRIEFING_TIME_ZONE,
+      timeZone,
     }).format(date),
   );
 
@@ -324,6 +325,7 @@ export function OverviewV2Dashboard({
   unscheduledCount: number;
   waitingJobs: WaitingJob[];
 }) {
+  const timeZone = useBusinessTimeZone();
   const [lens, setLens] = useState<Lens>("now");
   const [actionLimit, setActionLimit] = useState(5);
   const [liveGreeting, setLiveGreeting] = useState(greeting);
@@ -339,15 +341,15 @@ export function OverviewV2Dashboard({
   useEffect(() => {
     function updateClock() {
       const now = new Date();
-      setLiveTime(getLiveBriefingTime(now));
-      setLiveGreeting(getLiveGreeting(now));
+      setLiveTime(getLiveBriefingTime(now, timeZone));
+      setLiveGreeting(getLiveGreeting(now, timeZone));
     }
 
     updateClock();
     const interval = window.setInterval(updateClock, 60_000);
 
     return () => window.clearInterval(interval);
-  }, []);
+  }, [timeZone]);
 
   return (
     <div className="w-full max-w-none overflow-hidden bg-[#17181d] md:mx-auto md:max-w-[1500px] md:rounded-xl md:border md:border-border md:bg-card md:shadow-sm">
@@ -455,7 +457,7 @@ export function OverviewV2Dashboard({
                               </span>
                             </span>
                             <span className="shrink-0 text-right font-medium text-[10px] text-white/80">
-                              {format(new Date(job.dateBegin), "EEE, MMM d")}
+                              {formatCalendarDate(job.dateBegin, "EEE, MMM d")}
                             </span>
                           </Link>
                         ))}

@@ -59,6 +59,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { formatCalendarDate } from "@/lib/business-time";
 
 import type { InvoiceMutationState } from "../../../invoices/types";
 import { getJobBillingState } from "../job-billing-state";
@@ -114,7 +115,7 @@ function shouldIgnoreRowClick(target: EventTarget | null, row: HTMLElement) {
 }
 
 function formatExportDate(value?: string) {
-  return value ? new Date(value).toLocaleDateString() : "";
+  return value ? formatCalendarDate(value) : "";
 }
 
 const jobExportColumns: CsvColumn<JobRow>[] = [
@@ -493,15 +494,13 @@ export function JobsTable({
                       <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">Start Date</span>
                         <span className="min-w-0 text-right">
-                          {row.original.dateBegin
-                            ? new Date(row.original.dateBegin).toLocaleDateString()
-                            : "Not scheduled"}
+                          {row.original.dateBegin ? formatCalendarDate(row.original.dateBegin) : "Not scheduled"}
                         </span>
                       </div>
                       <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">End Date</span>
                         <span className="min-w-0 text-right">
-                          {row.original.dateEnd ? new Date(row.original.dateEnd).toLocaleDateString() : "Not scheduled"}
+                          {row.original.dateEnd ? formatCalendarDate(row.original.dateEnd) : "Not scheduled"}
                         </span>
                       </div>
                       {/*<div className="flex items-center justify-between gap-3">*/}

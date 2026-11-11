@@ -13,6 +13,7 @@ import {
   UserRound,
 } from "lucide-react";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
 import { Badge } from "@/components/ui/badge";
 import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
@@ -60,7 +61,7 @@ function getInitials(name: string) {
     .join("");
 }
 
-function DetailItem({ label, value }: { label: string; value?: string }) {
+function DetailItem({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
     <div className="grid min-w-0 gap-1">
       <dt className="text-muted-foreground text-xs">{label}</dt>
@@ -275,8 +276,14 @@ export function EmployeeProfile({
             <section className="grid gap-4 border-b p-4 md:p-6">
               <SectionHeading icon={CalendarDays} title="Record details" description="Employee record history." />
               <dl className="grid gap-4">
-                <DetailItem label="Created" value={format(parseISO(employee.createdAt), "MMM d, yyyy")} />
-                <DetailItem label="Last updated" value={format(parseISO(employee.updatedAt), "MMM d, yyyy")} />
+                <DetailItem
+                  label="Created"
+                  value={<BusinessDateTime value={employee.createdAt} pattern={"MMM d, yyyy"} />}
+                />
+                <DetailItem
+                  label="Last updated"
+                  value={<BusinessDateTime value={employee.updatedAt} pattern={"MMM d, yyyy"} />}
+                />
               </dl>
             </section>
 

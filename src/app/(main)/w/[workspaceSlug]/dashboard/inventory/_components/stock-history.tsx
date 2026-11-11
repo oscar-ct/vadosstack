@@ -1,15 +1,16 @@
 "use client";
-
 import * as React from "react";
 
-import { format, isToday, isYesterday } from "date-fns";
+import { format } from "date-fns";
 import { ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Search, SlidersHorizontal } from "lucide-react";
 
+import { BusinessDateTime, useBusinessTimeZone } from "@/components/business-time";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WorkspaceLink } from "@/components/workspace-path-provider";
+import { addCalendarDays, businessDateKey, businessDayStart, formatBusinessDate } from "@/lib/business-time";
 import { type StockHistoryEntry, type StockHistoryFilter, stockHistoryChangeTone } from "@/lib/commerce/stock-history";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +47,7 @@ const filterOptions: Array<[StockHistoryFilter, string]> = [
   ["Migration reconciliation", "Starting balances"],
 ];
 function HistoryEntry({ entry }: { entry: StockHistoryEntry }) {
+  const timeZone = useBusinessTimeZone();
   const imported = entry.reason === "Migration reconciliation";
   const tone = stockHistoryChangeTone(entry.reason, entry.quantityChange);
   const change =
@@ -67,8 +69,8 @@ function HistoryEntry({ entry }: { entry: StockHistoryEntry }) {
             <h4 className="break-words font-medium text-sm leading-5">{entry.product}</h4>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs leading-5">
               <span className="font-medium text-foreground/80">{reasonLabels[entry.reason] ?? entry.reason}</span>
-              <time dateTime={entry.createdAt} title={format(new Date(entry.createdAt), "PPP p")}>
-                {format(new Date(entry.createdAt), "p")}
+              <time dateTime={entry.createdAt} title={formatBusinessDate(entry.createdAt, "PPP p", timeZone)}>
+                {<BusinessDateTime value={new Date(entry.createdAt)} pattern={"p"} />}
               </time>
               <span className="break-words">{location}</span>
               {entry.order ? (
@@ -127,7 +129,7 @@ function HistoryEntry({ entry }: { entry: StockHistoryEntry }) {
             </div>
             <div>
               <dt className="text-muted-foreground">Recorded at</dt>
-              <dd className="mt-0.5">{format(new Date(entry.createdAt), "PPP p")}</dd>
+              <dd className="mt-0.5">{<BusinessDateTime value={new Date(entry.createdAt)} pattern={"PPP p"} />}</dd>
             </div>
             {entry.sku ? (
               <div>
@@ -185,23 +187,17 @@ function HistoryEntry({ entry }: { entry: StockHistoryEntry }) {
 }
 
 type DateRange = "all" | "today" | "7" | "30" | "custom";
-function dateBounds(range: DateRange, from: string, to: string) {
+function dateBounds(range: DateRange, from: string, to: string, timeZone: string) {
   if (range === "all") return {};
-  let start: Date | undefined;
-  let end: Date | undefined;
-  if (range === "custom") {
-    start = from ? new Date(`${from}T00:00:00`) : undefined;
-    end = to ? new Date(`${to}T00:00:00`) : undefined;
-  } else {
-    start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - (range === "today" ? 0 : Number(range) - 1));
-    end = new Date();
-    end.setHours(0, 0, 0, 0);
-  }
-  if (end) end.setDate(end.getDate() + 1);
-  return { from: start?.toISOString(), until: end?.toISOString() };
+  const today = businessDateKey(new Date(), timeZone);
+  const first = range === "custom" ? from : addCalendarDays(today, range === "today" ? 0 : 1 - Number(range));
+  const last = range === "custom" ? to : today;
+  return {
+    from: first ? businessDayStart(first, timeZone).toISOString() : undefined,
+    until: last ? businessDayStart(addCalendarDays(last, 1), timeZone).toISOString() : undefined,
+  };
 }
+
 const selectClass = "h-9 min-w-0 w-full rounded-lg border bg-background px-2.5 text-sm";
 export function StockHistory({
   open,
@@ -210,6 +206,7 @@ export function StockHistory({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const timeZone = useBusinessTimeZone();
   const id = React.useId();
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [draftQuery, setDraftQuery] = React.useState("");
@@ -234,7 +231,14 @@ export function StockHistory({
     setError("");
     setData(null);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    getInventoryStockHistoryAction({ page, pageSize, query, filter, locationId, ...dateBounds(range, from, to) })
+    getInventoryStockHistoryAction({
+      page,
+      pageSize,
+      query,
+      filter,
+      locationId,
+      ...dateBounds(range, from, to, timeZone),
+    })
       .then((result) => {
         if (active) {
           setData(result);
@@ -250,17 +254,17 @@ export function StockHistory({
     return () => {
       active = false;
     };
-  }, [open, page, pageSize, query, filter, locationId, range, from, to, reload]);
+  }, [open, page, pageSize, query, filter, locationId, range, from, to, reload, timeZone]);
   const groups = React.useMemo(() => {
     const days = new Map<string, StockHistoryEntry[]>();
     for (const entry of data?.entries ?? []) {
-      const day = format(new Date(entry.createdAt), "yyyy-MM-dd");
+      const day = businessDateKey(new Date(entry.createdAt), timeZone);
       const items = days.get(day) ?? [];
       items.push(entry);
       days.set(day, items);
     }
     return [...days.entries()];
-  }, [data]);
+  }, [data, timeZone]);
   const filtered = query !== "" || filter !== "activity" || locationId !== "" || range !== "all";
   function reset() {
     setDraftQuery("");
@@ -455,7 +459,11 @@ export function StockHistory({
                 return (
                   <section key={day} aria-label={format(date, "PPP")}>
                     <h3 className="px-3 pt-3 pb-1 font-medium text-muted-foreground text-xs">
-                      {isToday(date) ? "Today" : isYesterday(date) ? "Yesterday" : format(date, "EEE, MMM d, yyyy")}
+                      {day === businessDateKey(new Date(), timeZone)
+                        ? "Today"
+                        : day === addCalendarDays(businessDateKey(new Date(), timeZone), -1)
+                          ? "Yesterday"
+                          : format(date, "EEE, MMM d, yyyy")}
                     </h3>
                     <ul>
                       {entries.map((entry) => (

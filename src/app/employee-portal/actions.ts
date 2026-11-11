@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { z } from "zod";
 
+import { getWorkspaceTimeZone } from "@/lib/business-time-server";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit, getRateLimitIp } from "@/lib/rate-limit";
@@ -13,6 +14,7 @@ import { getSafeTimeEntryErrorMessage, TimeEntryUserError } from "@/lib/time-ent
 import {
   calculateShift,
   employeeWorkDateSchema,
+  employeeWorkDateSchemaFor,
   parseWorkDate,
   timeEntryFieldsSchema,
   timeEntryIdSchema,
@@ -269,15 +271,17 @@ export async function employeeCreateTimeEntryAction(
     };
   }
 
-  const parsed = timeEntrySchema.safeParse({
-    jobId: formString(formData.get("jobId")),
-    workedOn: formData.get("workedOn"),
-    startTime: formData.get("startTime"),
-    endTime: formData.get("endTime"),
-    deductLunch: formData.get("deductLunch"),
-    lunchMinutes: formData.get("lunchMinutes") ?? "0",
-    notes: formString(formData.get("notes")),
-  });
+  const parsed = timeEntrySchema
+    .extend({ workedOn: employeeWorkDateSchemaFor(await getWorkspaceTimeZone(employee.ownerId)) })
+    .safeParse({
+      jobId: formString(formData.get("jobId")),
+      workedOn: formData.get("workedOn"),
+      startTime: formData.get("startTime"),
+      endTime: formData.get("endTime"),
+      deductLunch: formData.get("deductLunch"),
+      lunchMinutes: formData.get("lunchMinutes") ?? "0",
+      notes: formString(formData.get("notes")),
+    });
 
   if (!parsed.success) {
     return {

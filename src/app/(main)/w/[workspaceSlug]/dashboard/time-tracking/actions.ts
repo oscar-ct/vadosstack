@@ -1,9 +1,9 @@
 "use server";
 
-import { startOfWeek } from "date-fns";
 import { z } from "zod";
 
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { getWorkspaceTimeZone } from "@/lib/business-time-server";
 import { noWorkDayReasonValues } from "@/lib/no-work-days";
 import { isValidOptionalPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -11,10 +11,12 @@ import { getSafeTimeEntryErrorMessage, TimeEntryUserError } from "@/lib/time-ent
 import {
   calculateShift,
   managerWorkDateSchema,
+  managerWorkDateSchemaFor,
   parseWorkDate,
   timeEntryFieldsSchema,
   timeEntryIdSchema,
   workDateSchema,
+  workWeekStart,
 } from "@/lib/time-entry-rules";
 import {
   assertTimeEntryAvailable,
@@ -335,17 +337,22 @@ export async function createTimeEntryAction(
   const workspaceId = authorization.workspaceId;
   const actorId = authorization.principal.user.id;
   const canViewJobs = can(authorization.membership, "jobs.view");
+  if (emptyToNull(formString(formData.get("jobId"))) && !canViewJobs) {
+    return { success: false, message: "You do not have permission to assign hours to a job." };
+  }
 
-  const parsed = createTimeEntrySchema.safeParse({
-    employeeId: formData.get("employeeId"),
-    jobId: formString(formData.get("jobId")),
-    workedOn: formData.get("workedOn"),
-    startTime: formData.get("startTime"),
-    endTime: formData.get("endTime"),
-    deductLunch: formData.get("deductLunch"),
-    lunchMinutes: formData.get("lunchMinutes") ?? "0",
-    notes: formString(formData.get("notes")),
-  });
+  const parsed = createTimeEntrySchema
+    .extend({ workedOn: managerWorkDateSchemaFor(await getWorkspaceTimeZone(workspaceId)) })
+    .safeParse({
+      employeeId: formData.get("employeeId"),
+      jobId: formString(formData.get("jobId")),
+      workedOn: formData.get("workedOn"),
+      startTime: formData.get("startTime"),
+      endTime: formData.get("endTime"),
+      deductLunch: formData.get("deductLunch"),
+      lunchMinutes: formData.get("lunchMinutes") ?? "0",
+      notes: formString(formData.get("notes")),
+    });
 
   if (!parsed.success) {
     return {
@@ -459,13 +466,15 @@ export async function createNoWorkDayAction(
   const workspaceId = authorization.workspaceId;
   const actorId = authorization.principal.user.id;
   const canViewJobs = can(authorization.membership, "jobs.view");
-  const parsed = createNoWorkDaySchema.safeParse({
-    employeeId: formData.get("employeeId"),
-    jobId: formString(formData.get("jobId")),
-    notes: formString(formData.get("notes")),
-    reason: formData.get("reason"),
-    workedOn: formData.get("workedOn"),
-  });
+  const parsed = createNoWorkDaySchema
+    .extend({ workedOn: managerWorkDateSchemaFor(await getWorkspaceTimeZone(workspaceId)) })
+    .safeParse({
+      employeeId: formData.get("employeeId"),
+      jobId: formString(formData.get("jobId")),
+      notes: formString(formData.get("notes")),
+      reason: formData.get("reason"),
+      workedOn: formData.get("workedOn"),
+    });
 
   if (!parsed.success) {
     return { success: false, message: parsed.error.issues[0]?.message ?? "Check the no-work day details." };
@@ -615,14 +624,16 @@ export async function updateNoWorkDayAction(
     return { success: false, message: "You do not have permission to update no-work days." };
   }
 
-  const parsed = updateNoWorkDaySchema.safeParse({
-    employeeId: formData.get("employeeId"),
-    jobId: formString(formData.get("jobId")),
-    notes: formString(formData.get("notes")),
-    noWorkDayId: formData.get("noWorkDayId"),
-    reason: formData.get("reason"),
-    workedOn: formData.get("workedOn"),
-  });
+  const parsed = updateNoWorkDaySchema
+    .extend({ workedOn: managerWorkDateSchemaFor(await getWorkspaceTimeZone(authorization.workspaceId)) })
+    .safeParse({
+      employeeId: formData.get("employeeId"),
+      jobId: formString(formData.get("jobId")),
+      notes: formString(formData.get("notes")),
+      noWorkDayId: formData.get("noWorkDayId"),
+      reason: formData.get("reason"),
+      workedOn: formData.get("workedOn"),
+    });
   if (!parsed.success) {
     return { success: false, message: parsed.error.issues[0]?.message ?? "Check the no-work day details." };
   }
@@ -1213,7 +1224,7 @@ export async function lockTimesheetWeekAction(
   const actorId = authorization.principal.user.id;
   const parsed = lockWeekSchema.safeParse({ weekStart: formData.get("weekStart") });
   if (!parsed.success) return { success: false, message: "Select a valid week." };
-  const requestedWeek = startOfWeek(parseWorkDate(parsed.data.weekStart), { weekStartsOn: 1 });
+  const requestedWeek = workWeekStart(parseWorkDate(parsed.data.weekStart));
   try {
     await prisma.$transaction(async (transaction) => {
       const weekStart = await lockTimesheetWeek(transaction, workspaceId, requestedWeek);
@@ -1242,7 +1253,7 @@ export async function unlockTimesheetWeekAction(
   const workspaceId = authorization.workspaceId;
   const parsed = lockWeekSchema.safeParse({ weekStart: formData.get("weekStart") });
   if (!parsed.success) return { success: false, message: "Select a valid week." };
-  const requestedWeek = startOfWeek(parseWorkDate(parsed.data.weekStart), { weekStartsOn: 1 });
+  const requestedWeek = workWeekStart(parseWorkDate(parsed.data.weekStart));
   let unlocked = 0;
   try {
     unlocked = await prisma.$transaction(async (transaction) => {

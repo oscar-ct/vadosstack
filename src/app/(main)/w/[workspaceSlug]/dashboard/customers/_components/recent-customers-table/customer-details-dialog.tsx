@@ -14,12 +14,14 @@ import {
   UserRound,
 } from "lucide-react";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
+import { formatCalendarDate } from "@/lib/business-time";
 
 import { getCustomerBillingDisplay } from "./columns";
 import type { RecentCustomerRow } from "./schema";
@@ -251,8 +253,8 @@ export function CustomerDetailsDialog({
                             </div>
                             <span className="flex items-center gap-1 text-muted-foreground text-xs">
                               <CalendarDays className="size-3" />
-                              Issued {format(parseISO(invoice.issuedAt), "MMM d, yyyy")}
-                              {invoice.dueAt ? ` · Due ${format(parseISO(invoice.dueAt), "MMM d, yyyy")}` : ""}
+                              Issued {<BusinessDateTime value={parseISO(invoice.issuedAt)} pattern={"MMM d, yyyy"} />}
+                              {invoice.dueAt ? ` · Due ${formatCalendarDate(invoice.dueAt, "MMM d, yyyy")}` : ""}
                             </span>
                           </div>
                           <span className="font-medium text-sm">{invoice.total}</span>

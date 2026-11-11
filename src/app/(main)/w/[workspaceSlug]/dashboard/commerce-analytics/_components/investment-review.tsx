@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { CheckCircle2 } from "lucide-react";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -31,8 +32,7 @@ const date = (value: string) =>
   new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(
     new Date(value),
   );
-const timestamp = (value: string) =>
-  `${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(value))} UTC`;
+const timestamp = (value: string) => <BusinessDateTime value={value} />;
 const changeLabel = (value: number) => `${value < 0 ? "Decrease" : "Increase"} of ${currency(Math.abs(value))}`;
 
 export function InvestmentReview({ entries, canManage }: { entries: Entry[]; canManage: boolean }) {
@@ -192,9 +192,11 @@ export function InvestmentReview({ entries, canManage }: { entries: Entry[]; can
                   </p>
                   {opening ? (
                     <p className="text-muted-foreground text-xs">
-                      {latest
-                        ? `Last updated ${timestamp(latest.date)}`
-                        : "Saved starting estimate · calculated from existing records"}
+                      {latest ? (
+                        <>Last updated {timestamp(latest.date)}</>
+                      ) : (
+                        "Saved starting estimate · calculated from existing records"
+                      )}
                     </p>
                   ) : null}
                 </div>

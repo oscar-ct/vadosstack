@@ -8,6 +8,7 @@ import { endOfToday, startOfToday } from "date-fns";
 import { DashboardRouteAccessGate } from "@/app/(main)/w/[workspaceSlug]/dashboard/_components/dashboard-route-access-gate";
 import { AccountSwitcher } from "@/app/(main)/w/[workspaceSlug]/dashboard/_components/sidebar/account-switcher";
 import { AppSidebar } from "@/app/(main)/w/[workspaceSlug]/dashboard/_components/sidebar/app-sidebar";
+import { BusinessTimeProvider } from "@/components/business-time";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { WorkspacePathProvider } from "@/components/workspace-path-provider";
 import {
@@ -301,95 +302,57 @@ export default async function Layout({
     workspaceLogoSrcById.set(activeWorkspace.id, companyLogoSrc);
   }
   return (
-    <SidebarProvider
-      defaultOpen={defaultOpen}
-      style={
-        {
-          "--sidebar-width": "calc(var(--spacing) * 68)",
-        } as React.CSSProperties
-      }
-    >
-      <DashboardNavigationLoaderProvider>
-        <WorkspacePathProvider workspaceSlug={workspaceSlug ?? requestedWorkspaceSlug}>
-          <SessionKeepalive authorizationVersion={principal.authorizationVersion} />
-          {currentUser && workspaceSlug ? (
-            <WorkspaceModeGuard mode={activeWorkspaceMode} workspaceSlug={workspaceSlug} />
-          ) : null}
-          <AppSidebar
-            className="print:hidden"
-            variant={variant}
-            collapsible={collapsible}
-            dueTodayTaskCount={dueTodayTaskCount}
-            pendingTimeReviewCount={pendingTimeReviewCount}
-            currentUser={
-              currentUser && activeWorkspace && activeMembership && principal
-                ? {
-                    name: currentUser.name ?? currentUser.email,
-                    authProviders: currentUser.authProviders,
-                    companyName: activeWorkspace.name,
-                    companyAddress: activeWorkspace.companyAddress,
-                    companyEmail: activeWorkspace.companyEmail,
-                    companyPhone: activeWorkspace.companyPhone,
-                    estimateValidDays: activeWorkspace.estimateValidDays,
-                    email: currentUser.email,
-                    companyLogoSrc,
-                    invoiceDueDays: activeWorkspace.invoiceDueDays,
-                    defaultOrderTaxRate: Number(activeWorkspace.defaultOrderTaxRate),
-                    workspaceMode: activeWorkspaceMode,
-                    workspaceSlug: workspaceSlug ?? "",
-                    admin: currentUser.admin,
-                    gmailConnected: Boolean(googleMailAccount),
-                    gmailSenderEmail: googleMailAccount?.email ?? null,
-                    emailTemplates,
-                    emailRecipients,
-                    permissionKeys: [...activeMembership.permissions],
-                    canManageSettings,
-                    canManageBranding,
-                    canManageEmailAccount,
-                    canSendEmail,
-                    canCreateBusiness,
-                    currentWorkspaceId: activeMembership.workspaceId,
-                    workspaces: principal.memberships.map((membership) => ({
-                      id: membership.workspaceId,
-                      logoSrc:
-                        workspaceLogoSrcById.get(membership.workspaceId) ??
-                        `${getWorkspaceDashboardPath(membership.workspaceSlug, "/dashboard/company-logo")}?fallback=1`,
-                      name: membership.workspaceName,
-                      roleName: membership.roleName,
-                      status: membership.membershipStatus === "Suspended" ? "Suspended" : membership.workspaceStatus,
-                      url: getWorkspaceDashboardPath(membership.workspaceSlug, getMembershipLandingPath(membership)),
-                    })),
-                  }
-                : null
-            }
-          />
-          <SidebarInset
-            className={cn(
-              "[html[data-content-layout=centered]_&>*]:mx-auto",
-              "[html[data-content-layout=centered]_&>*]:w-full",
-              "[html[data-content-layout=centered]_&>*]:max-w-screen-2xl",
-              "md:peer-data-[variant=inset]:border print:border-0",
-            )}
-          >
-            <header
-              className={cn(
-                "flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 print:hidden",
-                // Handle sticky navbar style with conditional classes so blur, background, z-index, and rounded corners remain consistent across all SidebarVariant layouts.
-                "[html[data-navbar-style=sticky]_&]:sticky [html[data-navbar-style=sticky]_&]:top-0 [html[data-navbar-style=sticky]_&]:z-40 [html[data-navbar-style=sticky]_&]:overflow-hidden [html[data-navbar-style=sticky]_&]:rounded-t-[inherit] [html[data-navbar-style=sticky]_&]:bg-background/50 [html[data-navbar-style=sticky]_&]:backdrop-blur-md",
-              )}
-            >
-              <div className="flex w-full items-center justify-between px-4 lg:px-6">
-                <div className="flex items-center gap-1 lg:gap-2">
-                  <SidebarTrigger className="-ml-1" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <LayoutControls />
-                  <ThemeSwitcher />
-                  <AccountSwitcher
-                    canCreateBusiness={canCreateBusiness}
-                    currentWorkspaceId={activeMembership?.workspaceId ?? null}
-                    workspaces={
-                      principal?.memberships.map((membership) => ({
+    <BusinessTimeProvider timeZone={activeWorkspace?.timeZone ?? "America/Chicago"}>
+      <SidebarProvider
+        defaultOpen={defaultOpen}
+        style={
+          {
+            "--sidebar-width": "calc(var(--spacing) * 68)",
+          } as React.CSSProperties
+        }
+      >
+        <DashboardNavigationLoaderProvider>
+          <WorkspacePathProvider workspaceSlug={workspaceSlug ?? requestedWorkspaceSlug}>
+            <SessionKeepalive authorizationVersion={principal.authorizationVersion} />
+            {currentUser && workspaceSlug ? (
+              <WorkspaceModeGuard mode={activeWorkspaceMode} workspaceSlug={workspaceSlug} />
+            ) : null}
+            <AppSidebar
+              className="print:hidden"
+              variant={variant}
+              collapsible={collapsible}
+              dueTodayTaskCount={dueTodayTaskCount}
+              pendingTimeReviewCount={pendingTimeReviewCount}
+              currentUser={
+                currentUser && activeWorkspace && activeMembership && principal
+                  ? {
+                      name: currentUser.name ?? currentUser.email,
+                      authProviders: currentUser.authProviders,
+                      companyName: activeWorkspace.name,
+                      companyAddress: activeWorkspace.companyAddress,
+                      companyEmail: activeWorkspace.companyEmail,
+                      companyPhone: activeWorkspace.companyPhone,
+                      estimateValidDays: activeWorkspace.estimateValidDays,
+                      email: currentUser.email,
+                      companyLogoSrc,
+                      invoiceDueDays: activeWorkspace.invoiceDueDays,
+                      timeZone: activeWorkspace.timeZone,
+                      defaultOrderTaxRate: Number(activeWorkspace.defaultOrderTaxRate),
+                      workspaceMode: activeWorkspaceMode,
+                      workspaceSlug: workspaceSlug ?? "",
+                      admin: currentUser.admin,
+                      gmailConnected: Boolean(googleMailAccount),
+                      gmailSenderEmail: googleMailAccount?.email ?? null,
+                      emailTemplates,
+                      emailRecipients,
+                      permissionKeys: [...activeMembership.permissions],
+                      canManageSettings,
+                      canManageBranding,
+                      canManageEmailAccount,
+                      canSendEmail,
+                      canCreateBusiness,
+                      currentWorkspaceId: activeMembership.workspaceId,
+                      workspaces: principal.memberships.map((membership) => ({
                         id: membership.workspaceId,
                         logoSrc:
                           workspaceLogoSrcById.get(membership.workspaceId) ??
@@ -398,35 +361,80 @@ export default async function Layout({
                         roleName: membership.roleName,
                         status: membership.membershipStatus === "Suspended" ? "Suspended" : membership.workspaceStatus,
                         url: getWorkspaceDashboardPath(membership.workspaceSlug, getMembershipLandingPath(membership)),
-                      })) ?? []
+                      })),
                     }
-                    user={
-                      currentUser
-                        ? {
-                            id: currentUser.id,
-                            name: currentUser.name ?? currentUser.email,
-                            email: currentUser.email,
-                            role: currentUser.admin,
-                            avatar: "",
-                          }
-                        : null
-                    }
-                  />
-                </div>
-              </div>
-            </header>
-            <DashboardNavigationContent>
-              <DashboardRouteAccessGate
-                backHref={permittedLandingHref}
-                backLabel={`Return to ${permittedLandingLabel}`}
-                permissionKeys={activeMembership ? [...activeMembership.permissions] : []}
+                  : null
+              }
+            />
+            <SidebarInset
+              className={cn(
+                "[html[data-content-layout=centered]_&>*]:mx-auto",
+                "[html[data-content-layout=centered]_&>*]:w-full",
+                "[html[data-content-layout=centered]_&>*]:max-w-screen-2xl",
+                "md:peer-data-[variant=inset]:border print:border-0",
+              )}
+            >
+              <header
+                className={cn(
+                  "flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 print:hidden",
+                  // Handle sticky navbar style with conditional classes so blur, background, z-index, and rounded corners remain consistent across all SidebarVariant layouts.
+                  "[html[data-navbar-style=sticky]_&]:sticky [html[data-navbar-style=sticky]_&]:top-0 [html[data-navbar-style=sticky]_&]:z-40 [html[data-navbar-style=sticky]_&]:overflow-hidden [html[data-navbar-style=sticky]_&]:rounded-t-[inherit] [html[data-navbar-style=sticky]_&]:bg-background/50 [html[data-navbar-style=sticky]_&]:backdrop-blur-md",
+                )}
               >
-                {children}
-              </DashboardRouteAccessGate>
-            </DashboardNavigationContent>
-          </SidebarInset>
-        </WorkspacePathProvider>
-      </DashboardNavigationLoaderProvider>
-    </SidebarProvider>
+                <div className="flex w-full items-center justify-between px-4 lg:px-6">
+                  <div className="flex items-center gap-1 lg:gap-2">
+                    <SidebarTrigger className="-ml-1" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <LayoutControls />
+                    <ThemeSwitcher />
+                    <AccountSwitcher
+                      canCreateBusiness={canCreateBusiness}
+                      currentWorkspaceId={activeMembership?.workspaceId ?? null}
+                      workspaces={
+                        principal?.memberships.map((membership) => ({
+                          id: membership.workspaceId,
+                          logoSrc:
+                            workspaceLogoSrcById.get(membership.workspaceId) ??
+                            `${getWorkspaceDashboardPath(membership.workspaceSlug, "/dashboard/company-logo")}?fallback=1`,
+                          name: membership.workspaceName,
+                          roleName: membership.roleName,
+                          status:
+                            membership.membershipStatus === "Suspended" ? "Suspended" : membership.workspaceStatus,
+                          url: getWorkspaceDashboardPath(
+                            membership.workspaceSlug,
+                            getMembershipLandingPath(membership),
+                          ),
+                        })) ?? []
+                      }
+                      user={
+                        currentUser
+                          ? {
+                              id: currentUser.id,
+                              name: currentUser.name ?? currentUser.email,
+                              email: currentUser.email,
+                              role: currentUser.admin,
+                              avatar: "",
+                            }
+                          : null
+                      }
+                    />
+                  </div>
+                </div>
+              </header>
+              <DashboardNavigationContent>
+                <DashboardRouteAccessGate
+                  backHref={permittedLandingHref}
+                  backLabel={`Return to ${permittedLandingLabel}`}
+                  permissionKeys={activeMembership ? [...activeMembership.permissions] : []}
+                >
+                  {children}
+                </DashboardRouteAccessGate>
+              </DashboardNavigationContent>
+            </SidebarInset>
+          </WorkspacePathProvider>
+        </DashboardNavigationLoaderProvider>
+      </SidebarProvider>
+    </BusinessTimeProvider>
   );
 }

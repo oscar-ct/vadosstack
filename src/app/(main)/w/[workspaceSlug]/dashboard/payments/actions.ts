@@ -2,7 +2,6 @@
 
 import { redirect } from "next/navigation";
 
-import { addDays } from "date-fns";
 import { z } from "zod";
 
 import { getPermittedDashboardAuthorization } from "@/lib/authorization";
@@ -58,14 +57,6 @@ function mapPreviousPayment(payment: {
   };
 }
 
-async function invoiceDueDays(workspaceId: string) {
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { invoiceDueDays: true },
-  });
-  return workspace?.invoiceDueDays ?? 15;
-}
-
 export async function searchPaymentTargetsAction(input: unknown): Promise<PaymentTargetSearchResult> {
   const authorization = await getPermittedDashboardAuthorization("invoices.record_payment");
   if (!authorization) {
@@ -110,33 +101,31 @@ export async function searchPaymentTargetsAction(input: unknown): Promise<Paymen
     const total = await prisma.invoice.count({ where });
     const totalPages = Math.max(1, Math.ceil(total / paymentTargetPageSize));
     const page = Math.min(parsed.data.page, totalPages);
-    const [dueDays, invoices] = await Promise.all([
-      invoiceDueDays(authorization.workspaceId),
-      prisma.invoice.findMany({
-        where,
-        orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
-        skip: (page - 1) * paymentTargetPageSize,
-        take: paymentTargetPageSize,
-        select: {
-          amountPaid: true,
-          balanceDue: true,
-          customerName: true,
-          finalCost: true,
-          id: true,
-          invoiceNumber: true,
-          issuedAt: true,
-          jobId: true,
-          jobTitle: true,
-        },
-      }),
-    ]);
+    const invoices = await prisma.invoice.findMany({
+      where,
+      orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
+      skip: (page - 1) * paymentTargetPageSize,
+      take: paymentTargetPageSize,
+      select: {
+        amountPaid: true,
+        balanceDue: true,
+        customerName: true,
+        finalCost: true,
+        id: true,
+        invoiceNumber: true,
+        issuedAt: true,
+        dueAt: true,
+        jobId: true,
+        jobTitle: true,
+      },
+    });
     return {
       invoices: invoices.map(
         (invoice): PaymentInvoiceOption => ({
           amountPaid: invoice.amountPaid.toString(),
           balanceDue: invoice.balanceDue.toString(),
           customerName: invoice.customerName ?? "Customer not recorded",
-          dueAt: addDays(invoice.issuedAt, dueDays).toISOString(),
+          dueAt: invoice.dueAt.toISOString(),
           finalCost: invoice.finalCost.toString(),
           id: invoice.id,
           invoiceNumber: invoice.invoiceNumber ?? `INV-${invoice.id.slice(-6).toUpperCase()}`,
@@ -253,36 +242,34 @@ export async function getPaymentTargetDetailsAction(input: unknown): Promise<Pay
   } as const;
 
   if (parsed.data.kind === "invoice_payment") {
-    const [dueDays, invoice] = await Promise.all([
-      invoiceDueDays(authorization.workspaceId),
-      prisma.invoice.findFirst({
-        where: { id: parsed.data.id, ownerId: authorization.workspaceId, balanceDue: { gt: 0 } },
-        select: {
-          amountPaid: true,
-          balanceDue: true,
-          customerName: true,
-          finalCost: true,
-          id: true,
-          invoiceNumber: true,
-          issuedAt: true,
-          jobId: true,
-          jobTitle: true,
-          job: {
-            select: {
-              _count: { select: { payments: true } },
-              payments: { orderBy: [{ paidOn: "desc" }, { createdAt: "desc" }], select: paymentSelect, take: 20 },
-            },
+    const invoice = await prisma.invoice.findFirst({
+      where: { id: parsed.data.id, ownerId: authorization.workspaceId, balanceDue: { gt: 0 } },
+      select: {
+        amountPaid: true,
+        balanceDue: true,
+        customerName: true,
+        finalCost: true,
+        id: true,
+        invoiceNumber: true,
+        issuedAt: true,
+        dueAt: true,
+        jobId: true,
+        jobTitle: true,
+        job: {
+          select: {
+            _count: { select: { payments: true } },
+            payments: { orderBy: [{ paidOn: "desc" }, { createdAt: "desc" }], select: paymentSelect, take: 20 },
           },
         },
-      }),
-    ]);
+      },
+    });
     if (!invoice) return { invoice: null, job: null, message: "That invoice is no longer available.", success: false };
     return {
       invoice: {
         amountPaid: invoice.amountPaid.toString(),
         balanceDue: invoice.balanceDue.toString(),
         customerName: invoice.customerName ?? "Customer not recorded",
-        dueAt: addDays(invoice.issuedAt, dueDays).toISOString(),
+        dueAt: invoice.dueAt.toISOString(),
         finalCost: invoice.finalCost.toString(),
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber ?? `INV-${invoice.id.slice(-6).toUpperCase()}`,

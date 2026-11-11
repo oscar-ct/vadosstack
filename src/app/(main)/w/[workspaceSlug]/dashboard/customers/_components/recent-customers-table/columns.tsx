@@ -1,5 +1,8 @@
 "use client";
-"use no memo";
+
+import { formatCalendarDate } from "@/lib/business-time";
+
+("use no memo");
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { differenceInCalendarDays, endOfToday, format, parseISO } from "date-fns";
@@ -277,7 +280,7 @@ export function getRecentCustomersColumns({
 
         return (
           <div className="grid gap-0.5">
-            <span className="text-sm">{format(scheduledAt, "MMM d, yyyy")}</span>
+            <span className="text-sm">{formatCalendarDate(scheduledAt, "MMM d, yyyy")}</span>
           </div>
         );
       },

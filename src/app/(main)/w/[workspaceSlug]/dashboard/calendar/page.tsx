@@ -1,7 +1,6 @@
-import { addDays, endOfYear, startOfYear } from "date-fns";
-
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { businessDateKey, calendarDateKey } from "@/lib/business-time";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress } from "@/lib/service-address";
 
@@ -37,12 +36,13 @@ export default async function Page() {
   const canManageCalendar = can(membership, "calendar.manage");
   const workspace = await prisma.workspace.findUniqueOrThrow({
     where: { id: workspaceId },
-    select: { invoiceDueDays: true },
+    select: { timeZone: true },
   });
 
   const today = new Date();
-  const windowStart = startOfYear(today);
-  const windowEnd = endOfYear(addDays(today, 365));
+  const year = Number(businessDateKey(today, workspace.timeZone).slice(0, 4));
+  const windowStart = new Date(Date.UTC(year, 0, 1));
+  const windowEnd = new Date(Date.UTC(year + 2, 0, 1) - 1);
 
   const [jobs, tasks, invoices, customers, leads] = await Promise.all([
     can(membership, "jobs.view")
@@ -99,8 +99,8 @@ export default async function Page() {
       ? prisma.invoice.findMany({
           where: {
             ownerId: workspaceId,
-            issuedAt: {
-              gte: addDays(windowStart, -workspace.invoiceDueDays),
+            dueAt: {
+              gte: windowStart,
               lte: windowEnd,
             },
           },
@@ -205,8 +205,8 @@ export default async function Page() {
       type: "job" as const,
       title: job.description,
       customerName: job.customer?.name ?? "Customer not assigned",
-      date: job.dateBegin?.toISOString() ?? job.createdAt.toISOString(),
-      endDate: job.dateEnd?.toISOString(),
+      date: job.dateBegin ? calendarDateKey(job.dateBegin) : businessDateKey(job.createdAt, workspace.timeZone),
+      endDate: job.dateEnd ? calendarDateKey(job.dateEnd) : undefined,
       status: job.status,
       amount: formatMoney(job.finalCost) ?? formatMoney(job.estimatedCost),
       location: formatServiceAddress(job) ?? undefined,
@@ -222,7 +222,7 @@ export default async function Page() {
         title: task.title,
         customerName: task.customer?.name ?? task.lead?.name ?? "Task",
         customerId: task.customerId ?? undefined,
-        date: task.scheduledFor.toISOString(),
+        date: calendarDateKey(task.scheduledFor),
         leadId: task.leadId ?? undefined,
         notes: task.notes ?? undefined,
         status: task.priority,
@@ -238,7 +238,7 @@ export default async function Page() {
       type: "invoice" as const,
       title: invoice.jobTitle,
       customerName: invoice.customerName ?? "Customer not assigned",
-      date: addDays(invoice.issuedAt, workspace.invoiceDueDays).toISOString(),
+      date: calendarDateKey(invoice.dueAt),
       status: invoice.paymentStatus,
       amount: invoice.balanceDue.toString(),
       location: formatServiceAddress(invoice) ?? undefined,

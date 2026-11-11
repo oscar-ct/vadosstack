@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
+import { parseDateInput } from "@/lib/date-only";
 import { plainTextToEmailHtml, sanitizeEmailHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
 import {
@@ -44,7 +45,7 @@ const optionalDate = z
   .string()
   .trim()
   .optional()
-  .transform((value) => (value ? new Date(`${value}T12:00:00`) : undefined))
+  .transform((value) => (value ? parseDateInput(value) : undefined))
   .refine((value) => !value || !Number.isNaN(value.getTime()), "Enter a valid follow-up date.");
 
 const leadDetailsSchema = z.object({

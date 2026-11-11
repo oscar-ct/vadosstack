@@ -1,9 +1,9 @@
 "use server";
 
 import { Prisma } from "@prisma/client";
-import { addDays, format } from "date-fns";
 import type Stripe from "stripe";
 
+import { formatCalendarDate } from "@/lib/business-time";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { decimalMoneyToMinorUnits } from "@/lib/payments/domain";
 import {
@@ -68,9 +68,7 @@ function buildCheckoutLineItems(input: {
     laborMinor > 0
       ? {
           amount: laborMinor,
-          description: input.invoice.job.laborItems
-            ? `${input.invoice.jobTitle} · Labor and professional services`
-            : input.invoice.jobTitle,
+          description: `${input.invoice.jobTitle} · Labor and professional services`,
           name: `Invoice ${invoiceNumber} · Labor`,
         }
       : null,
@@ -112,13 +110,13 @@ function buildCheckoutLineItems(input: {
     })) satisfies Stripe.Checkout.SessionCreateParams.LineItem[];
   }
 
-  const dueDate = addDays(input.invoice.issuedAt, input.invoice.owner.invoiceDueDays);
+  const dueDate = input.invoice.dueAt;
   const paidMinor = decimalMoneyToMinorUnits(input.invoice.amountPaid.toString());
   const details = [
     input.invoice.jobTitle,
     `Original invoice: $${Number(input.invoice.finalCost).toFixed(2)}`,
     paidMinor > 0 ? `Payments received: $${(paidMinor / 100).toFixed(2)}` : null,
-    `Due ${format(dueDate, "MMM d, yyyy")}`,
+    `Due ${formatCalendarDate(dueDate, "MMM d, yyyy")}`,
   ]
     .filter(Boolean)
     .join(" · ");

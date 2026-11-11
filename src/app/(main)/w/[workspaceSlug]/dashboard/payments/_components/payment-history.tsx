@@ -4,7 +4,6 @@ import * as React from "react";
 
 import { useSearchParams } from "next/navigation";
 
-import { format } from "date-fns";
 import {
   CalendarDays,
   ChevronLeft,
@@ -24,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -133,7 +133,7 @@ function formatPaymentType(type: string) {
 }
 
 function formatDateTime(value: string) {
-  return format(new Date(value), "MMM d, yyyy 'at' h:mm a");
+  return <BusinessDateTime value={value} />;
 }
 
 function recordedBy(payment: PaymentHistoryItem) {

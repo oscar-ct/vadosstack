@@ -8,6 +8,7 @@ import { z } from "zod";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
 import { deriveCustomerBillingStatus } from "@/lib/customer-billing";
+import { parseDateInput } from "@/lib/date-only";
 import { allocateDocumentNumber, attachDocumentNumber } from "@/lib/document-numbering";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -61,7 +62,7 @@ const optionalDate = z
   .string()
   .trim()
   .optional()
-  .transform((value) => (value ? new Date(value) : undefined))
+  .transform((value) => (value ? parseDateInput(value) : undefined))
   .refine((value) => !value || !Number.isNaN(value.getTime()), "Enter a valid date.");
 
 const optionalMoney = z

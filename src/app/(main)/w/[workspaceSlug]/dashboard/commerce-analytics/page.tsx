@@ -2,6 +2,7 @@ import { Activity } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { getWorkspaceTimeZone } from "@/lib/business-time-server";
 import { cn } from "@/lib/utils";
 
 import { InvestmentReview } from "./_components/investment-review";
@@ -184,7 +185,12 @@ export default async function Page({ searchParams }: { searchParams?: Promise<{ 
     requestedPeriod === "lifetime" || analyticsPeriods.includes(requestedPeriod as AnalyticsPeriod)
       ? (requestedPeriod as SalesView)
       : "30";
-  const data = await getCommerceAnalytics(auth.workspaceId, salesView === "lifetime" ? "30" : salesView, salesView);
+  const data = await getCommerceAnalytics(
+    auth.workspaceId,
+    salesView === "lifetime" ? "30" : salesView,
+    salesView,
+    await getWorkspaceTimeZone(auth.workspaceId),
+  );
   const selectedSales = salesView === "lifetime" ? data.lifetime : data.recent;
   const selectedSalesLabel = salesViews.find((view) => view.value === salesView)?.label ?? "30 days";
   const investmentPosition = Math.round(data.investmentPosition * 100) / 100;

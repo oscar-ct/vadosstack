@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { addDays, format } from "date-fns";
-
 import { getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { formatCalendarDate } from "@/lib/business-time";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { normalizeDocumentMessageAlign, renderDocumentMessage } from "@/lib/document-messages";
 import { formatDocumentNumber } from "@/lib/document-number";
@@ -102,7 +101,7 @@ export async function GET(
   ]);
   if (!workspace) return new NextResponse("Workspace not found", { status: 404 });
   const invoiceNumber = invoice.invoiceNumber ?? formatDocumentNumber("INV", invoiceSequence);
-  const dueDate = addDays(invoice.issuedAt, workspace.invoiceDueDays);
+  const dueDate = invoice.dueAt;
   const companyLogoSrc = await getCompanyLogoSrc(workspaceId);
   const taxableItemsLabel = invoice.job.jobType === "Commercial" ? "labor + materials" : "materials";
   const serviceLocation = formatServiceAddress(invoice);
@@ -113,7 +112,7 @@ export async function GET(
         balanceDue: money(invoice.balanceDue),
         companyName: workspace.name,
         customerName: invoice.customerName,
-        dueDate: format(dueDate, "MMM d, yyyy"),
+        dueDate: formatCalendarDate(dueDate, "MMM d, yyyy"),
         finalCost: money(invoice.finalCost),
         invoiceNumber,
         jobTitle: invoice.jobTitle,
@@ -137,13 +136,14 @@ export async function GET(
     documentMessageAlign,
     documentMessage,
     dueDate,
+    timeZone: workspace.timeZone,
     finalCost: invoice.finalCost,
     invoiceNumber,
     issuedAt: invoice.issuedAt,
     jobDescription: invoice.jobDescription,
     jobTitle: invoice.jobTitle,
     laborCost: invoice.laborCost,
-    laborItems: invoiceLaborRows(invoice.materials, invoice.job.laborItems),
+    laborItems: invoiceLaborRows(invoice.materials, invoice.laborCost),
     materialTaxAmount: invoice.materialTaxAmount,
     materialTaxRate: invoice.materialTaxRate,
     otherFeesEnabled: invoice.otherFeesEnabled,

@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { useWorkspacePath } from "@/components/workspace-path-provider";
+import { formatCalendarDate } from "@/lib/business-time";
 import { formatPhoneNumber } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
@@ -38,15 +39,7 @@ function formatOrderCurrency(value: number, options?: { cents?: boolean }) {
 }
 
 function formatOrderDate(value: string) {
-  const date = new Date(`${value}T00:00:00`);
-
-  if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  return formatCalendarDate(value);
 }
 
 function downloadOrderPdf(href: string) {

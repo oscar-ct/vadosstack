@@ -2,7 +2,6 @@ import type * as React from "react";
 
 import { notFound } from "next/navigation";
 
-import { format, parseISO } from "date-fns";
 import {
   BadgeDollarSign,
   Building2,
@@ -26,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { formatCalendarDate } from "@/lib/business-time";
 import { cn } from "@/lib/utils";
 
 import { createInvoiceAction } from "../../invoices/actions";
@@ -233,7 +233,7 @@ function LineItems({
                     ) : null}
                     {hasPurchaseDate ? (
                       <span className="inline-flex items-center gap-1 text-muted-foreground">
-                        {format(parseISO(item.purchaseDate ?? ""), "MMM d, yyyy")}
+                        {formatCalendarDate(item.purchaseDate ?? "", "MMM d, yyyy")}
                       </span>
                     ) : null}
                   </div>
@@ -288,8 +288,8 @@ export default async function Page({
   const tax = taxableSubtotal * (taxRate / 100);
   const measurementTotal = job.measurementRooms.reduce((total, room) => total + roomArea(room), 0);
   const measuredAreas = job.measurementRooms.filter((room) => roomArea(room) > 0);
-  const startDate = job.dateBegin ? format(parseISO(job.dateBegin), "MMM d, yyyy") : "Unscheduled";
-  const endDate = job.dateEnd ? format(parseISO(job.dateEnd), "MMM d, yyyy") : undefined;
+  const startDate = job.dateBegin ? formatCalendarDate(job.dateBegin, "MMM d, yyyy") : "Unscheduled";
+  const endDate = job.dateEnd ? formatCalendarDate(job.dateEnd, "MMM d, yyyy") : undefined;
   const taxableItemsLabel = job.jobType === "Commercial" ? "labor + materials" : "materials";
   const canViewPayments = can(authorization.membership, "invoices.view");
   const canManagePayments = can(authorization.membership, "invoices.record_payment");
@@ -495,7 +495,7 @@ export default async function Page({
                             {payment.description || "Deposit"}
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-muted-foreground text-xs leading-snug">
-                            <span>{format(parseISO(payment.paidOn), "MMM d, yyyy")}</span>
+                            <span>{formatCalendarDate(payment.paidOn, "MMM d, yyyy")}</span>
 
                             {payment.method ? (
                               <>

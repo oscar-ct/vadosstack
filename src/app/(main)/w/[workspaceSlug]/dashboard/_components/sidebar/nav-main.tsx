@@ -51,6 +51,16 @@ import { useDashboardNavigationLoader } from "../dashboard-navigation-loader";
 import { type CompanySettingsState, updateCompanySettingsAction } from "./actions";
 import { EmailComposerDialog } from "./email-composer-dialog";
 
+const businessTimeZones = [
+  { value: "America/New_York", label: "Eastern Time" },
+  { value: "America/Chicago", label: "Central Time" },
+  { value: "America/Denver", label: "Mountain Time" },
+  { value: "America/Phoenix", label: "Arizona (no daylight saving)" },
+  { value: "America/Los_Angeles", label: "Pacific Time" },
+  { value: "America/Anchorage", label: "Alaska Time" },
+  { value: "Pacific/Honolulu", label: "Hawaii Time" },
+];
+
 interface NavMainProps {
   readonly items: readonly NavGroup[];
   readonly companyName: string;
@@ -59,6 +69,7 @@ interface NavMainProps {
   readonly companyPhone: string | null;
   readonly estimateValidDays: number;
   readonly invoiceDueDays: number;
+  readonly timeZone: string;
   readonly defaultOrderTaxRate: number;
   readonly workspaceMode: WorkspaceMode;
   readonly gmailConnected: boolean;
@@ -316,6 +327,7 @@ function CompanySettingsDialog({
   companyPhone,
   estimateValidDays,
   invoiceDueDays,
+  timeZone,
   defaultOrderTaxRate,
   workspaceMode,
   logoSrc,
@@ -328,6 +340,7 @@ function CompanySettingsDialog({
   readonly companyPhone: string | null;
   readonly estimateValidDays: number;
   readonly invoiceDueDays: number;
+  readonly timeZone: string;
   readonly defaultOrderTaxRate: number;
   readonly workspaceMode: WorkspaceMode;
   readonly logoSrc: string;
@@ -514,6 +527,27 @@ function CompanySettingsDialog({
               existing taxes.
             </p>
           </div>
+          <div className="grid gap-2 rounded-lg border bg-muted/20 p-3">
+            <Label htmlFor="business-time-zone">Business timezone</Label>
+            <select
+              id="business-time-zone"
+              name="timeZone"
+              defaultValue={timeZone}
+              className="h-9 rounded-md border bg-background px-3 text-sm"
+            >
+              {!businessTimeZones.some((zone) => zone.value === timeZone) && (
+                <option value={timeZone}>{timeZone.replaceAll("_", " ")} (current)</option>
+              )}
+              {businessTimeZones.map((zone) => (
+                <option key={zone.value} value={zone.value}>
+                  {zone.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-muted-foreground text-xs">
+              Used for record times and reporting, including daylight-saving changes.
+            </p>
+          </div>
           {selectedWorkspaceMode === "commerce" ? (
             <>
               <input type="hidden" name="estimateValidDays" value={estimateValidDays} />
@@ -547,7 +581,9 @@ function CompanySettingsDialog({
                   defaultValue={invoiceDueDays}
                   required
                 />
-                <p className="text-muted-foreground text-xs">Used for invoice due-by dates.</p>
+                <p className="text-muted-foreground text-xs">
+                  Used for new invoices. Existing invoices keep their saved due dates.
+                </p>
               </div>
             </div>
           )}
@@ -666,6 +702,7 @@ export function NavMain({
   emailRecipients,
   dueTodayTaskCount,
   invoiceDueDays,
+  timeZone,
   defaultOrderTaxRate,
   workspaceMode,
   logoSrc,
@@ -710,6 +747,7 @@ export function NavMain({
                   companyPhone={companyPhone}
                   estimateValidDays={estimateValidDays}
                   invoiceDueDays={invoiceDueDays}
+                  timeZone={timeZone}
                   defaultOrderTaxRate={defaultOrderTaxRate}
                   workspaceMode={workspaceMode}
                   logoSrc={logoSrc}

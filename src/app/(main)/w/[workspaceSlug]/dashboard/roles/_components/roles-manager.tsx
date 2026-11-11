@@ -1,10 +1,8 @@
 "use client";
-
 import * as React from "react";
 
 import { useRouter } from "next/navigation";
 
-import { format, parseISO } from "date-fns";
 import {
   ChevronDown,
   ChevronLeft,
@@ -27,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -875,7 +874,7 @@ export function RolesManager({
                             </div>
                           </TableCell>
                           <TableCell className="border-r text-center text-xs">
-                            {format(parseISO(role.updatedAt), "MMM d, yyyy")}
+                            {<BusinessDateTime value={role.updatedAt} pattern={"MMM d, yyyy"} />}
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge variant={role.isProtected ? "secondary" : "outline"} className="font-normal">
@@ -949,7 +948,9 @@ export function RolesManager({
                             </span>
                             <span>
                               <span className="block text-muted-foreground text-xs">Last updated</span>
-                              <span className="mt-0.5 block">{format(parseISO(role.updatedAt), "MMM d, yyyy")}</span>
+                              <span className="mt-0.5 block">
+                                {<BusinessDateTime value={role.updatedAt} pattern={"MMM d, yyyy"} />}
+                              </span>
                             </span>
                           </span>
                           <span className="min-w-0">
@@ -1030,7 +1031,7 @@ export function RolesManager({
                 <div className="min-w-0">
                   <p className="truncate font-medium text-sm">{member.user.name || member.user.email}</p>
                   <p className="truncate text-muted-foreground text-xs">
-                    {member.user.email} · Joined {format(parseISO(member.joinedAt), "MMM d, yyyy")}
+                    {member.user.email} · Joined {<BusinessDateTime value={member.joinedAt} pattern={"MMM d, yyyy"} />}
                   </p>
                 </div>
                 <div className="grid w-full min-w-0 gap-2 sm:flex sm:w-auto sm:items-center">
@@ -1069,7 +1070,8 @@ export function RolesManager({
                         <Badge variant="outline">Suspended</Badge>
                       </div>
                       <p className="truncate text-muted-foreground text-xs">
-                        {member.user.email} · Suspended {format(parseISO(member.changedAt), "MMM d, yyyy")}
+                        {member.user.email} · Suspended{" "}
+                        {<BusinessDateTime value={member.changedAt} pattern={"MMM d, yyyy"} />}
                       </p>
                     </div>
                     <div className="grid w-full min-w-0 gap-2 sm:flex sm:w-auto sm:items-center">
@@ -1108,7 +1110,8 @@ export function RolesManager({
                         <Badge variant="outline">Removed</Badge>
                       </div>
                       <p className="truncate text-muted-foreground text-xs">
-                        {member.user.email} · Removed {format(parseISO(member.removedAt), "MMM d, yyyy")}
+                        {member.user.email} · Removed{" "}
+                        {<BusinessDateTime value={member.removedAt} pattern={"MMM d, yyyy"} />}
                       </p>
                     </div>
                     <div className="grid w-full min-w-0 gap-2 sm:flex sm:w-auto sm:items-center">
@@ -1142,7 +1145,8 @@ export function RolesManager({
                   <div className="min-w-0">
                     <p className="truncate font-medium text-sm">{invitation.email}</p>
                     <p className="text-muted-foreground text-xs">
-                      {invitation.role.name} · Expires {format(parseISO(invitation.expiresAt), "MMM d, yyyy")}
+                      {invitation.role.name} · Expires{" "}
+                      {<BusinessDateTime value={invitation.expiresAt} pattern={"MMM d, yyyy"} />}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1194,7 +1198,7 @@ export function RolesManager({
                       <div className="min-w-0">
                         <p className="font-medium text-sm">{actionLabel}</p>
                         <p className="mt-1 text-muted-foreground text-xs">
-                          {actor} · {format(parseISO(event.createdAt), "MMM d, yyyy 'at' h:mm a")}
+                          {actor} · {<BusinessDateTime value={event.createdAt} pattern={"MMM d, yyyy 'at' h:mm a"} />}
                         </p>
                       </div>
                       <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />

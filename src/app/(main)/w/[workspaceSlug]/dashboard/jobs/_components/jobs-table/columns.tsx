@@ -1,5 +1,8 @@
 "use client";
-"use no memo";
+
+import { formatCalendarDate } from "@/lib/business-time";
+
+("use no memo");
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { endOfDay, format, isBefore, parseISO, startOfDay } from "date-fns";
@@ -55,7 +58,7 @@ export function getJobOverdueDate(job: Pick<JobRow, "dateEnd" | "status">) {
   }
 
   const endDate = endOfDay(parseISO(job.dateEnd));
-  return isBefore(endDate, new Date()) ? format(parseISO(job.dateEnd), "MMM d, yyyy") : undefined;
+  return isBefore(endDate, new Date()) ? formatCalendarDate(job.dateEnd, "MMM d, yyyy") : undefined;
 }
 
 // function formatMoney(value?: string) {

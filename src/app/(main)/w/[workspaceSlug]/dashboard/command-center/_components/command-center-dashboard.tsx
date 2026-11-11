@@ -1,48 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 
-import { format } from "date-fns";
-import { ArrowRight, Banknote, BriefcaseBusiness, CircleDollarSign, ReceiptText } from "lucide-react";
+import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
+import { Activity, ArrowRight } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getEmployeeAccent } from "@/lib/employee-colors";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import { DashboardNavigationLink } from "../../_components/dashboard-navigation-loader";
+import { MetricBreakdown } from "../../commerce-analytics/_components/metric-breakdown";
 
 export type CommandCenterData = {
   companyName: string;
   generatedAt: string;
-  totals: {
-    openJobs: number;
-    openWorkValue: number;
-    waitingEstimateCount: number;
-    waitingEstimateValue: number;
-    invoices: number;
-    receivablesTotal: number;
-    collectionRate: number;
-  };
-  monthlyFlow: Array<{
-    month: string;
-    billed: number;
-    collected: number;
-    receivable: number;
-    hours: number;
-  }>;
-  jobStatus: Array<{
-    status: string;
-    value: number;
-    amount: number;
-  }>;
+  permissions: { invoices: boolean; jobs: boolean; time: boolean; estimates: boolean };
   reportingPeriods: Record<
-    6 | 12,
+    string,
     {
+      label: string;
+      range: string;
+      monthlyFlow: Array<{ month: string; billed: number; collected: number; receivable: number; hours: number }>;
+      jobStatus: Array<{ status: string; value: number; amount: number }>;
+      outstanding: number;
+      overdue: number;
+      overdueInvoices: number;
+      taxBilled: number;
+      feesBilled: number;
+      labor: number;
+      materials: number;
+      taxCollected: number;
+      uninvoicedPayments: number;
+      invoices: number;
+      jobs: number;
+      completedJobs: number;
+      residentialJobs: number;
+      commercialJobs: number;
+      unscheduledJobs: number;
+      hours: number;
       billed: number;
       collected: number;
       payments: number;
@@ -146,55 +148,40 @@ function EmptyState({ label }: { label: string }) {
   );
 }
 
+const currency = (value: number) => formatCurrency(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function KpiCard({
-  icon: Icon,
   label,
   value,
   detail,
-  href,
-  linkLabel,
-  tone,
+  valueClassName,
+  valueDetail,
+  children,
+  info,
 }: {
-  icon: typeof CircleDollarSign;
   label: string;
   value: string;
   detail: string;
-  href?: string;
-  linkLabel?: string;
-  tone: "cyan" | "emerald" | "amber" | "rose";
+  valueClassName?: string;
+  valueDetail?: string;
+  children?: ReactNode;
+  info?: ReactNode;
 }) {
-  const toneClassNames = {
-    amber: "bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-300",
-    cyan: "bg-cyan-500/10 text-cyan-700 ring-cyan-500/20 dark:text-cyan-300",
-    emerald: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-300",
-    rose: "bg-rose-500/10 text-rose-700 ring-rose-500/20 dark:text-rose-300",
-  }[tone];
-
   return (
-    <Card className="min-w-0 gap-3 shadow-xs" size="sm">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardDescription>{label}</CardDescription>
-            <CardTitle className="mt-2 text-xl tabular-nums tracking-normal sm:text-2xl">{value}</CardTitle>
-          </div>
-          <div className={cn("hidden size-9 place-items-center rounded-lg ring-1 sm:grid", toneClassNames)}>
-            <Icon className="size-4.5" />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-2">
-        <p className="text-muted-foreground text-xs">{detail}</p>
-        {href && linkLabel && (
-          <Button asChild variant="link" size="sm" className="h-auto w-fit p-0 text-xs">
-            <DashboardNavigationLink href={href} prefetch={false}>
-              {linkLabel}
-              <ArrowRight className="size-3.5" />
-            </DashboardNavigationLink>
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+    <div className="min-w-0 rounded-xl border bg-card p-3 sm:p-4">
+      <div className="flex min-h-8 items-start justify-between gap-1 sm:min-h-0 sm:items-center">
+        <p className="text-muted-foreground text-xs sm:text-sm">{label}</p>
+        {info}
+      </div>
+      <p className={cn("mt-2 break-words font-medium text-xl tabular-nums tracking-tight sm:text-2xl", valueClassName)}>
+        {value}
+        {valueDetail ? (
+          <span className="ml-2 inline-block text-muted-foreground text-xs tracking-normal">{valueDetail}</span>
+        ) : null}
+      </p>
+      <p className="mt-2 text-muted-foreground text-xs">{detail}</p>
+      {children}
+    </div>
   );
 }
 
@@ -215,96 +202,267 @@ function ShareBar({ color, label, value }: { color: string; label: string; value
   );
 }
 
-export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
-  const [reportingMonths, setReportingMonths] = useState<6 | 12>(6);
-  const reportingPeriod = data.reportingPeriods[reportingMonths];
-  const cashFlowData = data.monthlyFlow.slice(-reportingMonths);
-  const laborTrendData = data.monthlyFlow.slice(-reportingMonths);
+export function CommandCenterDashboard({
+  data,
+  initialPeriod = "ytd",
+}: {
+  data: CommandCenterData;
+  initialPeriod?: string;
+}) {
+  const [period, setPeriod] = useState(data.reportingPeriods[initialPeriod] ? initialPeriod : "ytd");
+  const groupId = useId();
+  const reduceMotion = useReducedMotion();
+  const reportingPeriod = data.reportingPeriods[period];
+  const billedAdjustments =
+    Math.round(
+      (reportingPeriod.billed -
+        reportingPeriod.labor -
+        reportingPeriod.materials -
+        reportingPeriod.taxBilled -
+        reportingPeriod.feesBilled) *
+        100,
+    ) / 100;
+  const topEmployees = reportingPeriod.employeeHours.slice(0, 5);
+  const otherEmployees = reportingPeriod.employeeHours.slice(5);
+  const employeeHourRows: Array<[string, string, string?]> = topEmployees.map((employee) => [
+    employee.name + (employee.active ? "" : " (inactive)"),
+    `${employee.hours.toLocaleString(undefined, { maximumFractionDigits: 2 })} h`,
+    employee.id,
+  ]);
+  if (otherEmployees.length)
+    employeeHourRows.push([
+      `Others (${otherEmployees.length})`,
+      `${otherEmployees.reduce((sum, employee) => sum + employee.hours, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} h`,
+      "others",
+    ]);
+  employeeHourRows.push([
+    "Total",
+    `${reportingPeriod.hours.toLocaleString(undefined, { maximumFractionDigits: 2 })} h`,
+    "total",
+  ]);
+  const cashFlowData = reportingPeriod.monthlyFlow;
+  const laborTrendData = reportingPeriod.monthlyFlow;
+  const years = Object.keys(data.reportingPeriods)
+    .filter((key) => /^\d{4}$/.test(key))
+    .sort()
+    .reverse();
+  function changePeriod(value: string) {
+    setPeriod(value);
+    const url = new URL(window.location.href);
+    url.searchParams.set("period", value);
+    window.history.replaceState(null, "", url.toString());
+  }
   const hasRevenueData = cashFlowData.some((point) => point.billed || point.collected || point.receivable);
-  const generatedAt = format(new Date(data.generatedAt), "MMM d, h:mm a");
+  const generatedAt = <BusinessDateTime value={data.generatedAt} pattern="MMM d, h:mm a" />;
 
   return (
-    <div className="mx-auto grid w-full max-w-7xl gap-6">
-      <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
-        <div className="grid gap-6 p-5 md:p-6">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <div className="min-w-0">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="max-w-full truncate rounded-md">
-                  Business Performance
-                </Badge>
-                <span className="text-muted-foreground text-xs">Updated {generatedAt}</span>
-              </div>
-              <h1 className="text-balance font-medium text-2xl leading-tight tracking-normal">{data.companyName}</h1>
-              <p className="mt-3 max-w-3xl text-muted-foreground text-sm leading-6">
-                Financial performance, estimate outcomes, customer concentration, and workforce activity.
-              </p>
-            </div>
-            <div className="grid gap-1.5 lg:justify-items-end">
-              <span className="font-medium text-muted-foreground text-xs">Reporting period</span>
-              <fieldset className="inline-flex w-fit rounded-md border bg-background p-0.5">
-                <legend className="sr-only">Reporting period</legend>
-                {([6, 12] as const).map((months) => (
-                  <Button
-                    key={months}
+    <div className="mx-auto grid w-full max-w-7xl gap-6 p-4 md:p-0">
+      <section className="grid gap-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="font-medium text-xl">Performance</h1>
+            <span className="grid size-8 place-items-center rounded-lg bg-muted">
+              <Activity className="size-4 text-muted-foreground" />
+            </span>
+          </div>
+          <p className="mt-1 text-muted-foreground text-sm">Invoices, collections, jobs, and employee hours.</p>
+        </div>
+        <div className="grid gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <LayoutGroup id={groupId}>
+              <fieldset
+                aria-label="Reporting period"
+                className="isolate grid w-full max-w-lg grid-cols-4 gap-1 rounded-xl bg-muted p-1 sm:w-auto sm:min-w-96"
+              >
+                {[
+                  ["ytd", "YTD"],
+                  ["6", "6 months"],
+                  ["12", "12 months"],
+                  ["all", "All time"],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
                     type="button"
-                    variant={reportingMonths === months ? "secondary" : "ghost"}
-                    size="sm"
-                    className="h-7 px-3 text-xs"
-                    aria-label={`Show the last ${months} months`}
-                    aria-pressed={reportingMonths === months}
-                    onClick={() => setReportingMonths(months)}
+                    aria-pressed={period === key}
+                    onClick={() => changePeriod(key)}
+                    className={cn(
+                      "relative min-h-9 rounded-lg px-2 py-2 font-medium text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm",
+                      period === key ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                    )}
                   >
-                    {months}M
-                  </Button>
+                    {period === key && (
+                      <motion.span
+                        initial={false}
+                        layoutId={reduceMotion ? undefined : "performance-period"}
+                        transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 36 }}
+                        className="pointer-events-none absolute inset-0 -z-10 rounded-lg bg-primary shadow-sm"
+                      />
+                    )}
+                    {label}
+                  </button>
                 ))}
               </fieldset>
-            </div>
+            </LayoutGroup>
+            <Select value={/^\d{4}$/.test(period) ? period : ""} onValueChange={changePeriod}>
+              <SelectTrigger aria-label="Calendar year" className="h-9 min-w-32">
+                <SelectValue placeholder="Calendar year" />
+              </SelectTrigger>
+              <SelectContent>
+                {years.map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-
-          <div className="grid grid-cols-2 gap-2 sm:gap-3 min-[1200px]:grid-cols-4">
-            <KpiCard
-              icon={CircleDollarSign}
-              label={`Collected · ${reportingMonths} months`}
-              value={formatCompactCurrency(reportingPeriod.collected)}
-              detail={`${reportingPeriod.payments} ${reportingPeriod.payments === 1 ? "payment" : "payments"} · ${formatCompactCurrency(reportingPeriod.billed)} billed`}
-              tone="emerald"
-            />
-            <KpiCard
-              icon={ReceiptText}
-              label="Current open receivables"
-              value={formatCompactCurrency(data.totals.receivablesTotal)}
-              detail={`${data.totals.invoices} invoices total · ${data.totals.collectionRate}% collected all time`}
-              href="/dashboard/invoices"
-              linkLabel="Review invoices"
-              tone="rose"
-            />
-            <KpiCard
-              icon={Banknote}
-              label="Current waiting estimates"
-              value={formatCompactCurrency(data.totals.waitingEstimateValue)}
-              detail={`${data.totals.waitingEstimateCount} awaiting a customer decision`}
-              href="/dashboard/estimates"
-              linkLabel="Review estimates"
-              tone="cyan"
-            />
-            <KpiCard
-              icon={BriefcaseBusiness}
-              label="Current open work value"
-              value={formatCompactCurrency(data.totals.openWorkValue)}
-              detail={`${data.totals.openJobs} ${data.totals.openJobs === 1 ? "open job" : "open jobs"} · excludes completed and cancelled`}
-              href="/dashboard/jobs"
-              linkLabel="View jobs"
-              tone="amber"
-            />
-          </div>
+          <p aria-live="polite" className="text-center text-muted-foreground text-xs">
+            {reportingPeriod.label} · {reportingPeriod.range}
+          </p>
         </div>
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-3">
+          {data.permissions.invoices && (
+            <>
+              <KpiCard
+                label="Total billed"
+                value={currency(reportingPeriod.billed)}
+                detail="Invoices issued in this period; includes tax and fees."
+                info={
+                  <MetricBreakdown
+                    label="Total billed breakdown"
+                    title="Total billed"
+                    rows={[
+                      ["Labor", currency(reportingPeriod.labor)],
+                      ["Materials", currency(reportingPeriod.materials)],
+                      ["Sales tax billed", currency(reportingPeriod.taxBilled)],
+                      ["Other fees", currency(reportingPeriod.feesBilled)],
+                      ...(billedAdjustments
+                        ? [["Unreconciled difference", currency(billedAdjustments)] as [string, string]]
+                        : []),
+                      ["Total billed", currency(reportingPeriod.billed)],
+                    ]}
+                    description="Invoices issued in this period, including unpaid invoices. Tax billed differs from tax collected. An unreconciled difference means saved invoice totals do not match their recorded components."
+                  />
+                }
+              />
+              <KpiCard
+                label="Collected"
+                value={currency(reportingPeriod.collected)}
+                detail="Invoice payments received in this period."
+                valueClassName={reportingPeriod.collected > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined}
+                info={
+                  <MetricBreakdown
+                    label="Collection details"
+                    title="Payments received"
+                    rows={[
+                      ["Invoice payments", String(reportingPeriod.payments)],
+                      ["Sales tax collected", currency(reportingPeriod.taxCollected)],
+                      ["Uninvoiced deposits", currency(reportingPeriod.uninvoicedPayments)],
+                    ]}
+                    description="Includes applied deposits using their original payment date; excludes uninvoiced deposits. Sales tax is allocated proportionally using the current invoice total and tax. Invoice edits can update tax allocations in earlier periods. Processing fees do not reduce collections."
+                  />
+                }
+              >
+                <p className="mt-2 text-muted-foreground text-xs">
+                  Includes <span className="font-medium text-foreground">{currency(reportingPeriod.taxCollected)}</span>{" "}
+                  sales tax.
+                </p>
+              </KpiCard>
+              <KpiCard
+                label="Outstanding"
+                value={currency(reportingPeriod.outstanding)}
+                detail="Balance today on invoices issued in this period."
+                valueClassName={reportingPeriod.outstanding > 0 ? "text-red-600 dark:text-red-400" : undefined}
+              />
+              <KpiCard
+                label="Invoices"
+                value={reportingPeriod.invoices.toLocaleString()}
+                detail="Issued during this period."
+                info={
+                  <MetricBreakdown
+                    label="Invoice details"
+                    title="Invoices"
+                    rows={[
+                      ["Issued", reportingPeriod.invoices.toLocaleString()],
+                      ["Overdue", reportingPeriod.overdueInvoices.toLocaleString()],
+                      ["Overdue balance", currency(reportingPeriod.overdue)],
+                      [
+                        "Average invoice",
+                        currency(reportingPeriod.invoices ? reportingPeriod.billed / reportingPeriod.invoices : 0),
+                      ],
+                    ]}
+                    description="Overdue is the past-due portion of Outstanding, using each invoice's saved due date. Due today is not overdue. Average invoice includes tax and fees."
+                  />
+                }
+              >
+                <p
+                  className={cn(
+                    "mt-2 text-xs",
+                    reportingPeriod.overdueInvoices > 0
+                      ? "text-amber-700 dark:text-amber-400"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {reportingPeriod.overdueInvoices.toLocaleString()} overdue
+                </p>
+              </KpiCard>
+            </>
+          )}
+          {data.permissions.jobs && (
+            <KpiCard
+              label="Jobs"
+              value={reportingPeriod.jobs.toLocaleString()}
+              valueDetail={`${reportingPeriod.completedJobs.toLocaleString()} completed`}
+              detail="By scheduled start date."
+              info={
+                <MetricBreakdown
+                  label="Job count details"
+                  title="Job dates and types"
+                  rows={[
+                    ["Completed", String(reportingPeriod.completedJobs)],
+                    ["Residential", String(reportingPeriod.residentialJobs)],
+                    ["Commercial", String(reportingPeriod.commercialJobs)],
+                    [
+                      period === "all" ? "Unscheduled included" : "Unscheduled excluded",
+                      String(reportingPeriod.unscheduledJobs),
+                    ],
+                  ]}
+                  description="Each job is counted once by scheduled start date, including cancelled jobs. Completed counts jobs in this group whose current status is Completed, regardless of when they were finished. Unscheduled jobs appear only in All time."
+                />
+              }
+            >
+              <p className="mt-3 text-muted-foreground text-xs">
+                {reportingPeriod.residentialJobs} residential · {reportingPeriod.commercialJobs} commercial
+              </p>
+            </KpiCard>
+          )}
+          {data.permissions.time && (
+            <KpiCard
+              label="Employee hours"
+              value={`${reportingPeriod.hours.toLocaleString(undefined, { maximumFractionDigits: 2 })} h`}
+              detail="Logged hours by date worked."
+              info={
+                <MetricBreakdown
+                  label="Employee hours breakdown"
+                  title="Employee hours"
+                  rows={employeeHourRows}
+                  description={
+                    reportingPeriod.employeeHours.length
+                      ? "Top five employees by hours in this reporting period. Additional employees are grouped under Others. Includes inactive employees; the full list is available below."
+                      : "No employee hours were logged during this reporting period."
+                  }
+                />
+              }
+            />
+          )}
+        </div>
+        <p className="text-right text-muted-foreground text-xs">Updated {generatedAt}</p>
       </section>
 
       <Card className="shadow-xs">
         <CardHeader>
           <CardTitle>Cash flow</CardTitle>
-          <CardDescription>Last {reportingMonths} months by invoice issue date and payment date.</CardDescription>
+          <CardDescription>Invoice issue dates and payment dates within the selected period.</CardDescription>
         </CardHeader>
         <CardContent>
           {hasRevenueData ? (
@@ -385,7 +543,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
           <CardHeader className="max-sm:has-data-[slot=card-action]:grid-cols-1">
             <CardTitle>Estimate decisions</CardTitle>
             <CardDescription>
-              Current waiting pipeline plus decisions recorded during the last {reportingMonths} months.
+              Current waiting pipeline plus decisions recorded during the selected period.
             </CardDescription>
             <CardAction className="flex items-center gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:mt-2 max-sm:justify-self-start">
               <Badge variant="outline" className="rounded-md">
@@ -394,7 +552,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
             </CardAction>
           </CardHeader>
           <CardContent className="grid min-w-0 gap-4">
-            {reportingPeriod.estimateOutcomes.length ? (
+            {reportingPeriod.estimateOutcomes.some((item) => item.count > 0) ? (
               <>
                 <ChartContainer config={estimateOutcomeConfig} className="mx-auto aspect-square h-52 max-w-52">
                   <PieChart>
@@ -466,7 +624,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
         <Card className="shadow-xs min-[1200px]:col-span-4">
           <CardHeader>
             <CardTitle>Customer concentration</CardTitle>
-            <CardDescription>Top accounts by invoiced value over the last {reportingMonths} months.</CardDescription>
+            <CardDescription>Top accounts by invoiced value during the selected period.</CardDescription>
           </CardHeader>
           <CardContent>
             {reportingPeriod.topCustomers.length ? (
@@ -507,7 +665,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
                 ))}
               </div>
             ) : (
-              <EmptyState label={`Invoices will populate this view for the last ${reportingMonths} months.`} />
+              <EmptyState label={"No invoices issued during this period."} />
             )}
           </CardContent>
         </Card>
@@ -515,13 +673,17 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
         <Card className="shadow-xs min-[1200px]:col-span-3">
           <CardHeader>
             <CardTitle>Job status mix</CardTitle>
-            <CardDescription>Current distribution across your job board.</CardDescription>
+            <CardDescription>
+              {period === "all"
+                ? "Current statuses of all jobs, including unscheduled jobs."
+                : "Current statuses of jobs starting in the selected period."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            {data.jobStatus.length ? (
+            {reportingPeriod.jobStatus.some((item) => item.value > 0) ? (
               <div className="grid gap-3">
-                {data.jobStatus.map((item) => {
-                  const totalJobs = data.jobStatus.reduce((total, status) => total + status.value, 0);
+                {reportingPeriod.jobStatus.map((item) => {
+                  const totalJobs = reportingPeriod.jobStatus.reduce((total, status) => total + status.value, 0);
                   const share = totalJobs ? Math.round((item.value / totalJobs) * 100) : 0;
                   const color = jobStatusColors[item.status] ?? "oklch(0.58 0.03 250)";
 
@@ -550,7 +712,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
           <CardHeader>
             <CardTitle>Employee hours</CardTitle>
             <CardDescription>
-              Share of logged hours over the last {reportingMonths} months, including inactive employees.
+              Share of logged hours during the selected period, including inactive employees.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -602,7 +764,7 @@ export function CommandCenterDashboard({ data }: { data: CommandCenterData }) {
         <Card className="shadow-xs min-[1200px]:col-span-5">
           <CardHeader>
             <CardTitle>Labor trend</CardTitle>
-            <CardDescription>Approved and entered hours over the last {reportingMonths} months.</CardDescription>
+            <CardDescription>Approved and entered hours during the selected period.</CardDescription>
           </CardHeader>
           <CardContent>
             {laborTrendData.some((point) => point.hours) ? (

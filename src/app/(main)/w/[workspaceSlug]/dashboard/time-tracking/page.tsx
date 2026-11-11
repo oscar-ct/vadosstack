@@ -1,7 +1,7 @@
-import { addDays, format } from "date-fns";
-
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { addCalendarDate, formatCalendarDate } from "@/lib/business-time";
+import { getWorkspaceTimeZone } from "@/lib/business-time-server";
 import { prisma } from "@/lib/prisma";
 import { getTimeTrackingRange, mapEmployeeSummary, mapTimeEntry, toHours } from "@/lib/time-tracking";
 
@@ -61,8 +61,12 @@ export default async function Page({ searchParams }: PageProps) {
   const canExport = can(authorization.membership, "reports.export");
   const canViewJobs = can(authorization.membership, "jobs.view");
 
+  const timeZone = await getWorkspaceTimeZone(workspaceId);
   const params = await searchParams;
-  const { monthLabel, nextWeek, periodLabel, previousWeek, weekEnd, weekStart } = getTimeTrackingRange(params?.week);
+  const { monthLabel, nextWeek, periodLabel, previousWeek, weekEnd, weekStart } = getTimeTrackingRange(
+    params?.week,
+    timeZone,
+  );
   const [employees, entries, noWorkDays, pendingRequests, jobs, timesheetLock, auditEvents] = await Promise.all([
     prisma.employee.findMany({
       where: {
@@ -91,7 +95,7 @@ export default async function Page({ searchParams }: PageProps) {
       where: {
         ownerId: workspaceId,
         workedOn: {
-          gte: addDays(weekStart, -1),
+          gte: addCalendarDate(weekStart, -1),
           lt: weekEnd,
         },
       },
@@ -196,14 +200,14 @@ export default async function Page({ searchParams }: PageProps) {
   const entryRows = entries.map((entry) =>
     mapTimeEntry({ ...entry, job: getVisibleJobDetails(entry.job, canViewJobs) }),
   );
-  const weekStartKey = format(weekStart, "yyyy-MM-dd");
+  const weekStartKey = formatCalendarDate(weekStart, "yyyy-MM-dd");
   const carryInEntries = entryRows.filter(
     (entry) => entry.workedOn < weekStartKey && entry.startTime && entry.endTime && entry.endTime < entry.startTime,
   );
   const weekEntryRows = entryRows.filter((entry) => entry.workedOn >= weekStartKey);
   const dayGroups = Array.from({ length: 7 }, (_, index) => {
-    const date = addDays(weekStart, index);
-    const dateKey = format(date, "yyyy-MM-dd");
+    const date = addCalendarDate(weekStart, index);
+    const dateKey = formatCalendarDate(date, "yyyy-MM-dd");
     const dayEntries = weekEntryRows.filter((entry) => entry.workedOn === dateKey);
 
     return {
@@ -225,7 +229,7 @@ export default async function Page({ searchParams }: PageProps) {
       jobTitle: job?.description,
       notes: record.notes ?? undefined,
       reason: record.reason,
-      workedOn: format(record.workedOn, "yyyy-MM-dd"),
+      workedOn: formatCalendarDate(record.workedOn, "yyyy-MM-dd"),
     };
   });
   const pendingRequestRows: TimeEntryRequestRow[] = pendingRequests.map((request) => {
@@ -248,7 +252,7 @@ export default async function Page({ searchParams }: PageProps) {
             notes: currentEntry.notes ?? undefined,
             startTime: currentEntry.startTime ?? undefined,
             updatedAt: currentEntry.updatedAt.toISOString(),
-            workedOn: format(currentEntry.workedOn, "yyyy-MM-dd"),
+            workedOn: formatCalendarDate(currentEntry.workedOn, "yyyy-MM-dd"),
           }
         : undefined,
       deductLunch: request.deductLunch,
@@ -271,7 +275,7 @@ export default async function Page({ searchParams }: PageProps) {
       reviewReason: request.reviewReason ?? undefined,
       startTime: request.startTime ?? undefined,
       status: request.status,
-      workedOn: request.workedOn ? format(request.workedOn, "yyyy-MM-dd") : undefined,
+      workedOn: request.workedOn ? formatCalendarDate(request.workedOn, "yyyy-MM-dd") : undefined,
     };
   });
 
@@ -316,7 +320,7 @@ export default async function Page({ searchParams }: PageProps) {
       unlockTimesheetWeekAction={canLockTime ? unlockTimesheetWeekAction : undefined}
       updateNoWorkDayAction={canManageTime ? updateNoWorkDayAction : undefined}
       updateTimeEntryAction={updateTimeEntryAction}
-      weekStart={format(weekStart, "yyyy-MM-dd")}
+      weekStart={formatCalendarDate(weekStart, "yyyy-MM-dd")}
     />
   );
 }

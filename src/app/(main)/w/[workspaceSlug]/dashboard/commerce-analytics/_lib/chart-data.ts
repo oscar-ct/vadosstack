@@ -1,8 +1,15 @@
 import type { Prisma } from "@prisma/client";
 
+import { businessDateKey, DEFAULT_BUSINESS_TIME_ZONE } from "@/lib/business-time";
 import { buildSalesTrend } from "@/lib/commerce/analytics-charts";
 
-export async function getSalesChartData(tx: Prisma.TransactionClient, ownerId: string, start: Date | null, end: Date) {
+export async function getSalesChartData(
+  tx: Prisma.TransactionClient,
+  ownerId: string,
+  start: Date | null,
+  end: Date,
+  timeZone = DEFAULT_BUSINESS_TIME_ZONE,
+) {
   const since = start ?? new Date(0);
   const [days, products] = await Promise.all([
     tx.$queryRaw<Array<{ date: string; gross: Prisma.Decimal; discounts: Prisma.Decimal; refunds: Prisma.Decimal }>>`
@@ -10,13 +17,13 @@ export async function getSalesChartData(tx: Prisma.TransactionClient, ownerId: s
  SELECT "orderId",SUM("merchandiseAmount"-"discountAmount"+"shippingAmount") AS net,SUM("merchandiseAmount"+"shippingAmount") AS gross,SUM("discountAmount") AS discounts
  FROM order_adjustments WHERE "ownerId"=${ownerId} AND kind='Cancellation' GROUP BY "orderId"
 ), events AS (
-        SELECT o."orderDate" AS date, o.subtotal+o."shippingAmount"-COALESCE(c.gross,0) AS gross, o."discountAmount"-COALESCE(c.discounts,0) AS discounts, 0::numeric AS refunds
-        FROM orders o LEFT JOIN cancellations c ON c."orderId"=o.id WHERE o."ownerId"=${ownerId} AND o."orderStatus"='Active' AND o."orderDate">=${since} AND o."orderDate"<${end}
+        SELECT ((o."orderDate"::date AT TIME ZONE ${timeZone}) AT TIME ZONE 'UTC') AS date, o.subtotal+o."shippingAmount"-COALESCE(c.gross,0) AS gross, o."discountAmount"-COALESCE(c.discounts,0) AS discounts, 0::numeric AS refunds
+        FROM orders o LEFT JOIN cancellations c ON c."orderId"=o.id WHERE o."ownerId"=${ownerId} AND o."orderStatus"='Active' AND ((o."orderDate"::date AT TIME ZONE ${timeZone}) AT TIME ZONE 'UTC')>=${since} AND ((o."orderDate"::date AT TIME ZONE ${timeZone}) AT TIME ZONE 'UTC')<${end}
         UNION ALL
         SELECT r."refundedAt",0,0,COALESCE(r."merchandiseAmount",r.amount*(o.subtotal-o."discountAmount")/NULLIF(o.total,0),0)+COALESCE(r."shippingAmount",r.amount*o."shippingAmount"/NULLIF(o.total,0),0)
         FROM order_refunds r JOIN orders o ON o.id=r."orderId" AND o."ownerId"=${ownerId} LEFT JOIN order_adjustments ca ON ca.id=r."adjustmentId"
         WHERE COALESCE(ca.kind,'')<>'Cancellation' AND r."ownerId"=${ownerId} AND o."orderStatus"='Active' AND r.status='succeeded' AND r."refundedAt">=${since} AND r."refundedAt"<${end}
-      ) SELECT to_char(date,'YYYY-MM-DD') AS date,SUM(gross) AS gross,SUM(discounts) AS discounts,SUM(refunds) AS refunds FROM events GROUP BY 1 ORDER BY 1`,
+      ) SELECT to_char((date AT TIME ZONE 'UTC') AT TIME ZONE ${timeZone},'YYYY-MM-DD') AS date,SUM(gross) AS gross,SUM(discounts) AS discounts,SUM(refunds) AS refunds FROM events GROUP BY 1 ORDER BY 1`,
     tx.$queryRaw<Array<{ key: string; product: string; sold: bigint; returned: bigint; net: Prisma.Decimal }>>`
       WITH cancellations AS (
  SELECT ai."orderItemId",SUM(ai.quantity) AS qty,SUM(ai."grossAmount"-ai."discountAmount") AS net
@@ -43,7 +50,7 @@ export async function getSalesChartData(tx: Prisma.TransactionClient, ownerId: s
       ), allocations AS (
         SELECT *,SUM(weight) OVER(PARTITION BY id) AS total_weight,COUNT(*) OVER(PARTITION BY id) AS line_count FROM weights
       ), activity AS (
-        SELECT id AS line_id,quantity::bigint AS sold,0::bigint AS returned,revenue AS net FROM lines WHERE "orderDate">=${since} AND "orderDate"<${end}
+        SELECT id AS line_id,quantity::bigint AS sold,0::bigint AS returned,revenue AS net FROM lines WHERE (("orderDate"::date AT TIME ZONE ${timeZone}) AT TIME ZONE 'UTC')>=${since} AND (("orderDate"::date AT TIME ZONE ${timeZone}) AT TIME ZONE 'UTC')<${end}
         UNION ALL
         SELECT line_id,0,0,-amount*CASE WHEN total_weight>0 THEN weight/total_weight ELSE 1.0/line_count END FROM allocations
         UNION ALL
@@ -66,8 +73,8 @@ export async function getSalesChartData(tx: Prisma.TransactionClient, ownerId: s
         discounts: Number(row.discounts),
         refunds: Number(row.refunds),
       })),
-      start,
-      end,
+      start ? new Date(`${businessDateKey(start, timeZone)}T00:00:00Z`) : null,
+      new Date(`${businessDateKey(end, timeZone)}T00:00:00Z`),
     ),
     products: products.map((row) => ({
       ...row,

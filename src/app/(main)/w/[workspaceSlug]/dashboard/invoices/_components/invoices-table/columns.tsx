@@ -1,8 +1,11 @@
 "use client";
-"use no memo";
+
+import { calendarDaysUntil, formatBusinessDate, formatCalendarDate } from "@/lib/business-time";
+
+("use no memo");
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { differenceInCalendarDays, endOfDay, format, parseISO, startOfDay } from "date-fns";
+import { endOfDay, parseISO, startOfDay } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
 import { CustomerLink } from "@/components/customer-link";
@@ -42,7 +45,7 @@ function getDueState(invoice: InvoiceTableItem) {
     };
   }
 
-  const daysUntilDue = differenceInCalendarDays(parseISO(invoice.dueAt), new Date());
+  const daysUntilDue = calendarDaysUntil(invoice.dueAt, new Date(), invoice.timeZone);
 
   if (daysUntilDue < 0) {
     const daysPastDue = Math.abs(daysUntilDue);
@@ -72,7 +75,7 @@ function getDueState(invoice: InvoiceTableItem) {
 function getDueFilterBucket(invoice: InvoiceTableItem) {
   if (Number(invoice.balanceDue) <= 0) return "paid";
 
-  const daysUntilDue = differenceInCalendarDays(parseISO(invoice.dueAt), new Date());
+  const daysUntilDue = calendarDaysUntil(invoice.dueAt, new Date(), invoice.timeZone);
 
   if (daysUntilDue < 0) return "overdue";
   if (daysUntilDue === 0) return "due-today";
@@ -145,7 +148,9 @@ export function getInvoicesColumns(): ColumnDef<InvoiceTableItem>[] {
         />
       ),
       cell: ({ row }) => (
-        <span className="whitespace-nowrap">{format(parseISO(row.original.issuedAt), "MMM d, yyyy")}</span>
+        <span className="whitespace-nowrap">
+          {formatBusinessDate(row.original.issuedAt, "MMM d, yyyy", row.original.timeZone)}
+        </span>
       ),
       filterFn: (row, _columnId, filterValue: DateRange | undefined) => {
         if (!filterValue?.from && !filterValue?.to) return true;
@@ -169,7 +174,7 @@ export function getInvoicesColumns(): ColumnDef<InvoiceTableItem>[] {
 
         return (
           <div className="grid min-w-32 gap-1">
-            <span className="whitespace-nowrap text-sm">{format(parseISO(row.original.dueAt), "MMM d, yyyy")}</span>
+            <span className="whitespace-nowrap text-sm">{formatCalendarDate(row.original.dueAt, "MMM d, yyyy")}</span>
             <Badge variant="outline" className={`w-fit ${dueState.className}`}>
               {dueState.label}
             </Badge>
@@ -245,8 +250,8 @@ export function getInvoicesColumns(): ColumnDef<InvoiceTableItem>[] {
           row.balanceDue,
           row.paymentStatus,
           getInvoiceStatus(row),
-          format(parseISO(row.issuedAt), "MMM d, yyyy"),
-          format(parseISO(row.dueAt), "MMM d, yyyy"),
+          formatBusinessDate(row.issuedAt, "MMM d, yyyy", row.timeZone),
+          formatCalendarDate(row.dueAt, "MMM d, yyyy"),
           getDueState(row).label,
         ].join(" "),
       filterFn: "includesString",

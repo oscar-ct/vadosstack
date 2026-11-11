@@ -19,6 +19,7 @@ import {
 type TransactionClient = Prisma.TransactionClient;
 
 async function recalculateJobPaymentSummary(transaction: TransactionClient, workspaceId: string, jobId: string) {
+  await transaction.$queryRaw`SELECT id FROM jobs WHERE id = ${jobId} AND "ownerId" = ${workspaceId} FOR UPDATE`;
   const job = await transaction.job.findUnique({
     where: { id_ownerId: { id: jobId, ownerId: workspaceId } },
     select: {

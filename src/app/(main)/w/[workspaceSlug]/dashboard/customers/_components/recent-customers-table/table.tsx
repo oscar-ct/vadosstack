@@ -53,6 +53,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { formatCalendarDate } from "@/lib/business-time";
 
 import { CustomerDueJobsPopover, getCustomerBillingDisplay, getRecentCustomersColumns } from "./columns";
 import type { RecentCustomerRow } from "./schema";
@@ -114,7 +115,7 @@ function shouldIgnoreRowClick(target: EventTarget | null) {
 }
 
 function formatExportDate(value?: string) {
-  return value ? new Date(value).toLocaleDateString() : "";
+  return value ? formatCalendarDate(value) : "";
 }
 
 function formatCustomerAddress(customer: RecentCustomerRow) {
@@ -508,7 +509,7 @@ export function RecentCustomersTable({
                             <span className="text-muted-foreground text-xs">Last order</span>
                             <span className="min-w-0 text-right">
                               {row.original.lastOrderDate
-                                ? new Date(row.original.lastOrderDate).toLocaleDateString()
+                                ? formatCalendarDate(row.original.lastOrderDate)
                                 : "No orders yet"}
                             </span>
                           </div>
@@ -535,7 +536,7 @@ export function RecentCustomersTable({
                             <span className="text-muted-foreground text-xs">Last scheduled</span>
                             <span className="min-w-0 text-right">
                               {row.original.lastScheduledJobDate
-                                ? new Date(row.original.lastScheduledJobDate).toLocaleDateString()
+                                ? formatCalendarDate(row.original.lastScheduledJobDate)
                                 : "No jobs yet"}
                             </span>
                           </div>

@@ -1,6 +1,7 @@
 import { format, parseISO } from "date-fns";
 import { ArrowRight, CheckCircle2, Clock3 } from "lucide-react";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,7 +67,7 @@ export function PendingTimeReviews({ pendingCount, reviews }: { pendingCount: nu
               </div>
               <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:flex-col sm:items-end sm:self-center">
                 <span className="text-[11px] text-muted-foreground">
-                  {format(parseISO(review.requestedAt), "MMM d")}
+                  {<BusinessDateTime value={review.requestedAt} pattern={"MMM d"} />}
                 </span>
                 <Badge variant="outline" className="rounded-md px-2 py-0.5 font-medium text-[10px]">
                   Pending

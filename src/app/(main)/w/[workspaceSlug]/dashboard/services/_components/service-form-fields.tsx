@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Plus, Trash2 } from "lucide-react";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,7 +117,7 @@ function formatDraftSavedAt(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
 
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return <BusinessDateTime value={date} pattern="h:mm a" />;
 }
 
 function parseServiceDraft(value: string): ServiceTemplateDraft | null {

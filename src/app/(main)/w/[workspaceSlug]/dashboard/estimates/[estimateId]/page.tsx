@@ -1,14 +1,16 @@
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 
-import { addDays, format } from "date-fns";
+import { format } from "date-fns";
 import { BriefcaseBusiness, CalendarDays, Mail, MapPin, NotebookText, Phone, UserRound } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { BackButton } from "@/components/back-button";
+import { BusinessDateTime } from "@/components/business-time";
 import { LocationMapCard } from "@/components/location-map-card";
 import { Separator } from "@/components/ui/separator";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { formatCalendarDate, invoiceDueDate } from "@/lib/business-time";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import {
   getDocumentMessageAlignClass,
@@ -220,7 +222,7 @@ export default async function Page({
   const serviceLocation = formatServiceAddress(estimate);
   const companyEmail = workspace.companyEmail ?? workspace.legacyOwner?.email ?? authorization.principal.user.email;
   const companyLogoSrc = await getCompanyLogoSrc(workspaceId);
-  const validThrough = addDays(estimate.issuedAt, workspace.estimateValidDays);
+  const validThrough = invoiceDueDate(estimate.issuedAt, workspace.estimateValidDays, workspace.timeZone);
   const estimateMessageContext = {
     companyName: workspace.name,
     customerName: estimate.customerName,
@@ -229,7 +231,7 @@ export default async function Page({
     estimateTotal: formatMoney(estimate.estimatedTotal),
     jobTitle: estimate.jobTitle,
     serviceLocation,
-    validThrough: format(validThrough, "MMM d, yyyy"),
+    validThrough: formatCalendarDate(validThrough, "MMM d, yyyy"),
   };
   const estimateMessage = workspace.estimateMessageEnabled
     ? renderDocumentMessage(workspace.estimateMessageText, estimateMessageContext)
@@ -269,7 +271,7 @@ export default async function Page({
           estimateNumber,
           jobTitle: estimate.jobTitle,
           serviceLocation,
-          validThrough: format(validThrough, "MMM d, yyyy"),
+          validThrough: formatCalendarDate(validThrough, "MMM d, yyyy"),
         },
       })
     : [];
@@ -295,7 +297,7 @@ export default async function Page({
               estimateNumber,
               jobTitle: estimate.jobTitle,
               serviceLocation,
-              validThrough: format(validThrough, "MMM d, yyyy"),
+              validThrough: formatCalendarDate(validThrough, "MMM d, yyyy"),
             }}
             editHref={canEditEstimate ? editHref : undefined}
             editLabel={editLabel}
@@ -310,7 +312,7 @@ export default async function Page({
             notice={gmailNotice}
             returnTo={currentHref}
             templates={emailTemplates}
-            validThrough={format(validThrough, "MMM d, yyyy")}
+            validThrough={formatCalendarDate(validThrough, "MMM d, yyyy")}
           />
         </div>
       </div>
@@ -353,8 +355,8 @@ export default async function Page({
               </div>
               <div className="grid gap-0.5 text-muted-foreground text-xs">
                 <span>Estimate #{estimateNumber}</span>
-                <span>Issued {format(estimate.issuedAt, "MMM d, yyyy")}</span>
-                <span>Valid through {format(validThrough, "MMM d, yyyy")}</span>
+                <span>Issued {<BusinessDateTime value={estimate.issuedAt} pattern={"MMM d, yyyy"} />}</span>
+                <span>Valid through {formatCalendarDate(validThrough, "MMM d, yyyy")}</span>
               </div>
             </div>
             <div className="grid gap-1 rounded-md border bg-muted/20 p-3 text-left md:text-right print:border-neutral-300 print:bg-neutral-50 print:p-2">
@@ -362,7 +364,9 @@ export default async function Page({
               <span className="font-semibold text-2xl text-sky-700 dark:text-sky-400 print:text-xl">
                 {formatMoney(estimate.estimatedTotal)}
               </span>
-              <span className="text-muted-foreground text-xs">valid through {format(validThrough, "MMM d, yyyy")}</span>
+              <span className="text-muted-foreground text-xs">
+                valid through {formatCalendarDate(validThrough, "MMM d, yyyy")}
+              </span>
             </div>
           </header>
           <section className="overflow-hidden rounded-md border bg-muted/20 text-xs print:border-neutral-300 print:bg-neutral-50">

@@ -1,8 +1,10 @@
 "use client";
-"use no memo";
+
+import { BusinessDateTime } from "@/components/business-time";
+
+("use no memo");
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { format, parseISO } from "date-fns";
 import { MailWarning, Pencil } from "lucide-react";
 
 import { CustomerLink } from "@/components/customer-link";
@@ -97,7 +99,7 @@ export function getEstimateRecordsColumns({
       cell: ({ row }) => (
         <div className="grid gap-1">
           <span className="whitespace-nowrap text-sm">
-            {format(parseISO(row.original.issuedAt ?? row.original.createdAt), "MMM d, yyyy")}
+            {<BusinessDateTime value={row.original.issuedAt ?? row.original.createdAt} pattern={"MMM d, yyyy"} />}
           </span>
           <span className="text-muted-foreground text-xs">{row.original.issuedAt ? "Issued" : "Created"}</span>
         </div>

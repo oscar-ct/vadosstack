@@ -1,10 +1,24 @@
-import { isBefore } from "date-fns";
+import { Temporal } from "temporal-polyfill";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { can, getPermittedDashboardAuthorization, type WorkspaceMembershipSummary } from "@/lib/authorization";
+import {
+  businessDateKey,
+  businessDayStart,
+  calendarDateKey,
+  DEFAULT_BUSINESS_TIME_ZONE,
+  formatCalendarDate,
+} from "@/lib/business-time";
 import { getNetPaymentMinorUnits } from "@/lib/payments/domain";
+import { allocatePaymentSalesTax } from "@/lib/payments/sales-tax";
+import {
+  buildPerformancePeriods,
+  inPerformancePeriod,
+  isPerformanceInvoiceOverdue,
+  type PerformancePeriod,
+  performancePeriodRange,
+} from "@/lib/performance-periods";
 import { prisma } from "@/lib/prisma";
-import { formatUtcMonthShort, getUtcMonthKey, startOfUtcMonth } from "@/lib/reporting-month";
 
 import { CommandCenterDashboard, type CommandCenterData } from "./command-center-dashboard";
 
@@ -32,6 +46,10 @@ function netPaymentMoney(payment: {
   );
 }
 
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 function percent(part: number, total: number) {
   if (!total) {
     return 0;
@@ -44,33 +62,25 @@ export async function getCommandCenterData(
   ownerId: string,
   companyName: string,
   membership?: WorkspaceMembershipSummary,
+  timeZone = DEFAULT_BUSINESS_TIME_ZONE,
 ): Promise<CommandCenterData> {
   const today = new Date();
-  const sixMonthStart = startOfUtcMonth(today, -5);
-  const twelveMonthStart = startOfUtcMonth(today, -11);
   const mayRead = (permission: Parameters<typeof can>[1]) => !membership || can(membership, permission);
   const canViewEstimates = mayRead("estimates.view");
   const canViewInvoices = mayRead("invoices.view");
   const canViewJobs = mayRead("jobs.view");
   const canViewTime = mayRead("time.view");
 
-  const [jobs, estimates, invoiceTotals, recentInvoices, recentPayments, timeEntries] = await Promise.all([
+  const [jobs, estimates, recentInvoices, recentPayments, timeEntries] = await Promise.all([
     canViewJobs
       ? prisma.job.findMany({
           where: { ownerId },
           select: {
-            amountPaid: true,
-            category: true,
-            customerId: true,
+            dateBegin: true,
+            jobType: true,
             estimatedCost: true,
             finalCost: true,
             status: true,
-            customer: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
           },
         })
       : Promise.resolve([]),
@@ -86,25 +96,23 @@ export async function getCommandCenterData(
         })
       : Promise.resolve([]),
     canViewInvoices
-      ? prisma.invoice.aggregate({
-          where: { ownerId },
-          _count: { _all: true },
-          _sum: {
-            amountPaid: true,
-            balanceDue: true,
-            finalCost: true,
-          },
-        })
-      : Promise.resolve({ _count: { _all: 0 }, _sum: { amountPaid: null, balanceDue: null, finalCost: null } }),
-    canViewInvoices
       ? prisma.invoice.findMany({
-          where: { ownerId, issuedAt: { gte: twelveMonthStart } },
+          where: { ownerId },
           select: {
+            id: true,
+            jobId: true,
+            laborCost: true,
+            materialsSubtotal: true,
+            materialTaxAmount: true,
+            otherFeesEnabled: true,
+            otherFeesAmount: true,
+
             balanceDue: true,
             customerId: true,
             customerName: true,
             finalCost: true,
             issuedAt: true,
+            dueAt: true,
           },
         })
       : Promise.resolve([]),
@@ -112,10 +120,12 @@ export async function getCommandCenterData(
       ? prisma.jobPayment.findMany({
           where: {
             ownerId,
-            paidOn: { gte: twelveMonthStart },
             status: { in: ["succeeded", "partially_refunded"] },
           },
           select: {
+            id: true,
+            jobId: true,
+            createdAt: true,
             amount: true,
             paidOn: true,
             refundedAmount: true,
@@ -127,9 +137,6 @@ export async function getCommandCenterData(
       ? prisma.timeEntry.findMany({
           where: {
             ownerId,
-            workedOn: {
-              gte: twelveMonthStart,
-            },
           },
           select: {
             employee: {
@@ -147,54 +154,68 @@ export async function getCommandCenterData(
       : Promise.resolve([]),
   ]);
 
-  const issuedTotal = money(invoiceTotals._sum.finalCost);
-  const receivablesTotal = money(invoiceTotals._sum.balanceDue);
-  const collectedTotal = money(invoiceTotals._sum.amountPaid);
-  const openJobs = jobs.filter((job) => job.status !== "Completed" && job.status !== "Cancelled");
-  const openWorkValue = openJobs.reduce((total, job) => total + money(job.finalCost ?? job.estimatedCost), 0);
   const waitingEstimates = estimates.filter((estimate) => FOLLOW_UP_ESTIMATE_STATUSES.has(estimate.status));
   const waitingEstimateValue = waitingEstimates.reduce((total, estimate) => total + money(estimate.estimatedTotal), 0);
-  const collectionRate = percent(collectedTotal, issuedTotal);
 
-  const monthlyFlow = Array.from({ length: 12 }, (_, index) => {
-    const monthStart = startOfUtcMonth(today, index - 11);
-    const monthKey = getUtcMonthKey(monthStart);
-    const monthInvoices = recentInvoices.filter((invoice) => getUtcMonthKey(invoice.issuedAt) === monthKey);
-    const monthPayments = recentPayments.filter((payment) => getUtcMonthKey(payment.paidOn) === monthKey);
-    const monthEntries = timeEntries.filter((entry) => getUtcMonthKey(entry.workedOn) === monthKey);
-
-    return {
-      month: formatUtcMonthShort(monthStart),
-      billed: Math.round(monthInvoices.reduce((total, invoice) => total + money(invoice.finalCost), 0)),
-      collected: Math.round(monthPayments.reduce((total, payment) => total + netPaymentMoney(payment), 0)),
-      receivable: Math.round(monthInvoices.reduce((total, invoice) => total + money(invoice.balanceDue), 0)),
-      hours: Math.round(monthEntries.reduce((total, entry) => total + money(entry.hours), 0) * 10) / 10,
-    };
-  });
-
-  const jobStatusMap = new Map<string, { status: string; value: number; amount: number }>(
-    JOB_STATUSES.map((status) => [status, { status, value: 0, amount: 0 }]),
+  const taxAllocations = allocatePaymentSalesTax(recentPayments, recentInvoices);
+  const invoicedJobs = new Set(recentInvoices.map((invoice) => invoice.jobId));
+  const periods = buildPerformancePeriods(
+    today,
+    [
+      ...recentInvoices.map((invoice) => invoice.issuedAt),
+      ...recentPayments.map((payment) => businessDayStart(calendarDateKey(payment.paidOn), timeZone)),
+      ...timeEntries.map((entry) => businessDayStart(calendarDateKey(entry.workedOn), timeZone)),
+      ...jobs.flatMap((job) => (job.dateBegin ? [businessDayStart(calendarDateKey(job.dateBegin), timeZone)] : [])),
+      ...estimates.flatMap((estimate) => (estimate.decidedAt ? [estimate.decidedAt] : [])),
+    ],
+    timeZone,
   );
 
-  for (const job of jobs) {
-    const current = jobStatusMap.get(job.status) ?? { status: job.status, value: 0, amount: 0 };
-    current.value += 1;
-    current.amount += money(job.finalCost ?? job.estimatedCost);
-    jobStatusMap.set(job.status, current);
-  }
-
-  const jobStatus = [...jobStatusMap.values()].map((item) => ({
-    ...item,
-    amount: Math.round(item.amount),
-  }));
-
-  function buildReportingPeriod(periodStart: Date) {
-    const periodInvoices = recentInvoices.filter((invoice) => !isBefore(invoice.issuedAt, periodStart));
-    const periodPayments = recentPayments.filter((payment) => !isBefore(payment.paidOn, periodStart));
-    const periodEntries = timeEntries.filter((entry) => !isBefore(entry.workedOn, periodStart));
-    const periodDecisions = estimates.filter(
-      (estimate) => estimate.decidedAt && !isBefore(estimate.decidedAt, periodStart),
+  function buildReportingPeriod(period: PerformancePeriod) {
+    const periodInvoices = recentInvoices.filter((invoice) => inPerformancePeriod(invoice.issuedAt, period));
+    const overdueInvoices = periodInvoices.filter(
+      (invoice) => money(invoice.balanceDue) > 0 && isPerformanceInvoiceOverdue(invoice.dueAt, today, timeZone),
     );
+    const periodPayments = recentPayments.filter((payment) => inPerformancePeriod(payment.paidOn, period, true));
+    const invoicePayments = periodPayments.filter((payment) => invoicedJobs.has(payment.jobId));
+    const periodEntries = timeEntries.filter((entry) => inPerformancePeriod(entry.workedOn, period, true));
+    const periodJobs = jobs.filter(
+      (job) => inPerformancePeriod(job.dateBegin, period, true) || (period.key === "all" && !job.dateBegin),
+    );
+    const periodDecisions = estimates.filter((estimate) => inPerformancePeriod(estimate.decidedAt, period));
+    const months: Date[] = [];
+    for (
+      let month = Temporal.PlainDate.from(businessDateKey(period.start, timeZone)).with({ day: 1 });
+      businessDayStart(month.toString(), timeZone) < period.end;
+      month = month.add({ months: 1 })
+    )
+      months.push(businessDayStart(month.toString(), timeZone));
+    const monthlyFlow = months.map((month) => {
+      const key = businessDateKey(month, timeZone).slice(0, 7);
+      return {
+        month: formatCalendarDate(`${key}-01`, "MMM yy"),
+        billed: roundMoney(
+          periodInvoices
+            .filter((invoice) => businessDateKey(invoice.issuedAt, timeZone).slice(0, 7) === key)
+            .reduce((sum, invoice) => sum + money(invoice.finalCost), 0),
+        ),
+        collected: roundMoney(
+          invoicePayments
+            .filter((payment) => calendarDateKey(payment.paidOn).slice(0, 7) === key)
+            .reduce((sum, payment) => sum + netPaymentMoney(payment), 0),
+        ),
+        receivable: roundMoney(
+          periodInvoices
+            .filter((invoice) => businessDateKey(invoice.issuedAt, timeZone).slice(0, 7) === key)
+            .reduce((sum, invoice) => sum + Math.max(0, money(invoice.balanceDue)), 0),
+        ),
+        hours: roundMoney(
+          periodEntries
+            .filter((entry) => calendarDateKey(entry.workedOn).slice(0, 7) === key)
+            .reduce((sum, entry) => sum + money(entry.hours), 0),
+        ),
+      };
+    });
     const wonEstimates = periodDecisions.filter(
       (estimate) => WON_ESTIMATE_STATUSES.has(estimate.status) || Boolean(estimate.convertedJobId),
     );
@@ -253,8 +274,8 @@ export async function getCommandCenterData(
       .slice(0, 5)
       .map((customer) => ({
         ...customer,
-        revenue: Math.round(customer.revenue),
-        balance: Math.round(customer.balance),
+        revenue: roundMoney(customer.revenue),
+        balance: roundMoney(customer.balance),
         share: percent(customer.revenue, totalCustomerRevenue),
       }));
 
@@ -281,14 +302,53 @@ export async function getCommandCenterData(
       .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name))
       .map((employee) => ({
         ...employee,
-        hours: Math.round(employee.hours * 10) / 10,
+        hours: roundMoney(employee.hours),
         share: percent(employee.hours, totalEmployeeHours),
       }));
 
     return {
-      billed: Math.round(periodInvoices.reduce((total, invoice) => total + money(invoice.finalCost), 0)),
-      collected: Math.round(periodPayments.reduce((total, payment) => total + netPaymentMoney(payment), 0)),
-      payments: periodPayments.length,
+      jobStatus: JOB_STATUSES.map((status) => {
+        const matching = periodJobs.filter((job) => job.status === status);
+        return {
+          status,
+          value: matching.length,
+          amount: roundMoney(matching.reduce((sum, job) => sum + money(job.finalCost ?? job.estimatedCost), 0)),
+        };
+      }),
+      label: period.label,
+      range: performancePeriodRange(period),
+      monthlyFlow,
+      billed: roundMoney(periodInvoices.reduce((total, invoice) => total + money(invoice.finalCost), 0)),
+      collected: roundMoney(invoicePayments.reduce((total, payment) => total + netPaymentMoney(payment), 0)),
+      payments: invoicePayments.length,
+      outstanding: roundMoney(periodInvoices.reduce((sum, invoice) => sum + Math.max(0, money(invoice.balanceDue)), 0)),
+      overdue: roundMoney(overdueInvoices.reduce((sum, invoice) => sum + money(invoice.balanceDue), 0)),
+      overdueInvoices: overdueInvoices.length,
+      taxBilled: roundMoney(periodInvoices.reduce((sum, invoice) => sum + money(invoice.materialTaxAmount), 0)),
+      feesBilled: roundMoney(
+        periodInvoices.reduce(
+          (sum, invoice) => sum + (invoice.otherFeesEnabled ? money(invoice.otherFeesAmount) : 0),
+          0,
+        ),
+      ),
+      labor: roundMoney(periodInvoices.reduce((sum, invoice) => sum + money(invoice.laborCost), 0)),
+      materials: roundMoney(periodInvoices.reduce((sum, invoice) => sum + money(invoice.materialsSubtotal), 0)),
+      taxCollected: invoicePayments.reduce((sum, payment) => sum + (taxAllocations.get(payment.id) ?? 0), 0) / 100,
+      uninvoicedPayments: roundMoney(
+        periodPayments
+          .filter((payment) => !invoicedJobs.has(payment.jobId))
+          .reduce((sum, payment) => sum + netPaymentMoney(payment), 0),
+      ),
+      invoices: periodInvoices.length,
+      jobs: periodJobs.length,
+      completedJobs: periodJobs.filter((job) => job.status === "Completed").length,
+      residentialJobs: periodJobs.filter((job) => job.jobType === "Residential").length,
+      commercialJobs: periodJobs.filter((job) => job.jobType === "Commercial").length,
+      unscheduledJobs:
+        period.key === "all"
+          ? periodJobs.filter((job) => !job.dateBegin).length
+          : jobs.filter((job) => !job.dateBegin).length,
+      hours: roundMoney(totalEmployeeHours),
       estimateWinRate: percent(wonEstimateValue, decidedEstimateValue),
       estimateOutcomes,
       topCustomers,
@@ -296,30 +356,17 @@ export async function getCommandCenterData(
     };
   }
 
-  const reportingPeriods = {
-    6: buildReportingPeriod(sixMonthStart),
-    12: buildReportingPeriod(twelveMonthStart),
-  };
+  const reportingPeriods = Object.fromEntries(periods.map((period) => [period.key, buildReportingPeriod(period)]));
 
   return {
     companyName,
     generatedAt: new Date().toISOString(),
-    totals: {
-      openJobs: openJobs.length,
-      openWorkValue: Math.round(openWorkValue),
-      waitingEstimateCount: waitingEstimates.length,
-      waitingEstimateValue: Math.round(waitingEstimateValue),
-      invoices: invoiceTotals._count._all,
-      receivablesTotal: Math.round(receivablesTotal),
-      collectionRate,
-    },
-    monthlyFlow,
-    jobStatus,
     reportingPeriods,
+    permissions: { invoices: canViewInvoices, jobs: canViewJobs, time: canViewTime, estimates: canViewEstimates },
   };
 }
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams?: Promise<{ period?: string }> }) {
   const authorization = await getPermittedDashboardAuthorization("dashboard.performance.view");
 
   if (!authorization) {
@@ -331,11 +378,17 @@ export default async function Page() {
     );
   }
 
+  const workspace = await prisma.workspace.findUniqueOrThrow({
+    where: { id: authorization.workspaceId },
+    select: { timeZone: true },
+  });
   const data = await getCommandCenterData(
     authorization.workspaceId,
     authorization.membership.workspaceName,
     authorization.membership,
+    workspace.timeZone,
   );
 
-  return <CommandCenterDashboard data={data} />;
+  const params = await searchParams;
+  return <CommandCenterDashboard data={data} initialPeriod={params?.period} />;
 }

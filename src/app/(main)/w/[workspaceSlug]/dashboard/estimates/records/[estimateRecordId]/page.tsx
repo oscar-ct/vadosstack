@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 
-import { addDays, format, parseISO } from "date-fns";
 import type { LucideIcon } from "lucide-react";
 import {
   BadgeDollarSign,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
+import { BusinessDateTime } from "@/components/business-time";
 import { CustomerLink } from "@/components/customer-link";
 import { LocationMapCard } from "@/components/location-map-card";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { formatCalendarDate, invoiceDueDate } from "@/lib/business-time";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import {
   getDocumentMessageAlignClass,
@@ -315,7 +316,7 @@ export default async function Page({
   const tax = taxableSubtotal * (taxRate / 100);
   const measurementTotal = estimate.measurementRooms.reduce((total, room) => total + roomArea(room), 0);
   const measuredAreas = estimate.measurementRooms.filter((room) => roomArea(room) > 0);
-  const scheduledDate = estimate.dateBegin ? format(parseISO(estimate.dateBegin), "MMM d, yyyy") : "Unscheduled";
+  const scheduledDate = estimate.dateBegin ? formatCalendarDate(estimate.dateBegin, "MMM d, yyyy") : "Unscheduled";
   const taxableItemsLabel = estimate.jobType === "Commercial" ? "labor + materials" : "materials";
   const customerName = publishedEstimate?.customerName ?? source.customer?.name ?? source.lead?.name;
   const customerEmail = publishedEstimate?.customerEmail ?? source.customer?.email ?? source.lead?.email;
@@ -334,7 +335,7 @@ export default async function Page({
     ? publishedItems.filter((item) => item.type === "material")
     : estimate.materials;
   const validThroughDate = publishedEstimate
-    ? addDays(publishedEstimate.issuedAt, companyWorkspace.estimateValidDays)
+    ? invoiceDueDate(publishedEstimate.issuedAt, companyWorkspace.estimateValidDays, companyWorkspace.timeZone)
     : null;
   const estimateNumber = publishedEstimate?.estimateNumber ?? "Draft estimate";
   const previewTotal = publishedEstimate?.estimatedTotal.toString() ?? estimate.estimatedTotal ?? "0";
@@ -349,7 +350,7 @@ export default async function Page({
     estimateTotal: formatMoney(previewTotal),
     jobTitle: publishedEstimate?.jobTitle ?? estimate.description,
     serviceLocation,
-    validThrough: validThroughDate ? format(validThroughDate, "MMM d, yyyy") : "Not issued",
+    validThrough: validThroughDate ? formatCalendarDate(validThroughDate, "MMM d, yyyy") : "Not issued",
   };
   const estimateMessage = companyWorkspace.estimateMessageEnabled
     ? renderDocumentMessage(companyWorkspace.estimateMessageText, estimateMessageContext)
@@ -389,7 +390,7 @@ export default async function Page({
             estimateNumber,
             jobTitle: publishedEstimate?.jobTitle ?? estimate.description,
             serviceLocation,
-            validThrough: validThroughDate ? format(validThroughDate, "MMM d, yyyy") : "Not issued",
+            validThrough: validThroughDate ? formatCalendarDate(validThroughDate, "MMM d, yyyy") : "Not issued",
           },
         })
       : [],
@@ -494,7 +495,7 @@ export default async function Page({
               estimateNumber: publishedEstimate?.estimateNumber ?? "Not issued",
               jobTitle: estimate.description,
               serviceLocation: estimate.serviceLocation,
-              validThrough: validThroughDate ? format(validThroughDate, "MMM d, yyyy") : "Not issued",
+              validThrough: validThroughDate ? formatCalendarDate(validThroughDate, "MMM d, yyyy") : "Not issued",
             }}
             editHref={canEditEstimate ? `/dashboard/estimates/records/${estimate.id}/edit` : undefined}
             estimateId={publishedEstimate?.id}
@@ -509,7 +510,7 @@ export default async function Page({
             primaryEmail={estimate.status === "Ready to Send" && Boolean(publishedEstimate)}
             returnTo={returnTo}
             templates={emailTemplates}
-            validThrough={validThroughDate ? format(validThroughDate, "MMM d, yyyy") : "Not issued"}
+            validThrough={validThroughDate ? formatCalendarDate(validThroughDate, "MMM d, yyyy") : "Not issued"}
           />
         </div>
       </div>
@@ -533,9 +534,15 @@ export default async function Page({
                 {estimate.scope || "No scope description on file."}
               </p>
               <p className="mt-3 text-muted-foreground text-xs">
-                {publishedEstimate
-                  ? `Issued ${format(publishedEstimate.issuedAt, "MMM d, yyyy")}`
-                  : "Estimate number not issued"}
+                {publishedEstimate ? (
+                  <>
+                    {"Issued "}
+                    {<BusinessDateTime value={publishedEstimate.issuedAt} pattern={"MMM d, yyyy"} />}
+                    {""}
+                  </>
+                ) : (
+                  "Estimate number not issued"
+                )}
               </p>
             </div>
           </div>

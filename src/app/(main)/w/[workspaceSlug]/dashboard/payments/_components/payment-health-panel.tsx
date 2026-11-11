@@ -5,6 +5,7 @@ import { type ReactNode, useActionState, useEffect } from "react";
 import { AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { StripeWordmark } from "@/components/stripe-wordmark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -113,7 +114,7 @@ export function PaymentHealthPanel({
           <div className="rounded-xl border border-emerald-200/60 bg-white/70 p-3 dark:border-emerald-400/15 dark:bg-white/5">
             <p className="text-muted-foreground text-xs">Last Stripe activity</p>
             <p className="mt-1 truncate font-medium text-sm">
-              {lastProcessedAt ? new Date(lastProcessedAt).toLocaleString() : "No events received yet"}
+              {lastProcessedAt ? <BusinessDateTime value={lastProcessedAt} /> : "No events received yet"}
             </p>
           </div>
         </div>

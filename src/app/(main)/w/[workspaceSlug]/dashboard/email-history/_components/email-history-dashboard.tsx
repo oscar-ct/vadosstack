@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { CustomerLink } from "@/components/customer-link";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { Badge } from "@/components/ui/badge";
@@ -78,14 +79,7 @@ type EmailHistoryDashboardProps = {
 };
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    timeZone: "America/Chicago",
-    year: "numeric",
-  }).format(new Date(value));
+  return <BusinessDateTime value={value} />;
 }
 
 function StatusBadge({ status }: { status: EmailHistoryItem["status"] }) {

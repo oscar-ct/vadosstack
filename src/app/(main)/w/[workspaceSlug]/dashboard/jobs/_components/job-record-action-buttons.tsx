@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useBusinessTimeZone } from "@/components/business-time";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -43,6 +44,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { calendarDateKey } from "@/lib/business-time";
 import { toDateInputValue } from "@/lib/date-only";
 import { cn } from "@/lib/utils";
 
@@ -526,6 +528,8 @@ function DepositDialog({
   open?: boolean;
   payment?: JobPayment;
 }) {
+  const timeZone = useBusinessTimeZone();
+
   const isEditing = Boolean(payment);
   const requiresPaymentChoice = Boolean(job.invoiceId) && !isEditing;
   const paymentFormRef = React.useRef<HTMLFormElement>(null);
@@ -633,7 +637,7 @@ function DepositDialog({
                   id={`job-deposit-date-${payment?.id ?? job.id}`}
                   name="paidOn"
                   type="date"
-                  defaultValue={payment ? toDateInputValue(new Date(payment.paidOn)) : toDateInputValue(new Date())}
+                  defaultValue={payment ? calendarDateKey(payment.paidOn) : toDateInputValue(undefined, timeZone)}
                   required
                 />
               </div>

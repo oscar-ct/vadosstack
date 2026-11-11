@@ -2,11 +2,11 @@
 
 import { redirect } from "next/navigation";
 
-import { addDays, format } from "date-fns";
 import { z } from "zod";
 
 import { getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
+import { formatCalendarDate, invoiceDueDate } from "@/lib/business-time";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { formatDocumentNumber } from "@/lib/document-number";
 import { plainTextToEmailHtml, sanitizeEmailHtml } from "@/lib/email-content";
@@ -130,7 +130,7 @@ function createEstimateAttachmentEmailContent({
     "",
     `Your estimate ${estimateNumber} from ${companyName} is attached as a PDF.`,
     `Estimated total: ${estimatedTotal}`,
-    `Valid through: ${format(validThrough, "MMM d, yyyy")}`,
+    `Valid through: ${formatCalendarDate(validThrough, "MMM d, yyyy")}`,
     "",
     "Please review the attached estimate at your convenience.",
     "",
@@ -153,7 +153,7 @@ function createEstimateAttachmentEmailContent({
           </tr>
           <tr>
             <td style="padding:8px 0;color:#594431;border-top:1px solid #eee7dd;">Valid through</td>
-            <td style="padding:8px 0;text-align:right;font-weight:700;border-top:1px solid #eee7dd;">${format(validThrough, "MMM d, yyyy")}</td>
+            <td style="padding:8px 0;text-align:right;font-weight:700;border-top:1px solid #eee7dd;">${formatCalendarDate(validThrough, "MMM d, yyyy")}</td>
           </tr>
         </table>
         <p style="margin:0;color:#594431;font-size:13px;line-height:1.6;">
@@ -276,7 +276,7 @@ export async function emailEstimateAction(
   let subject: string | undefined;
 
   try {
-    const validThrough = addDays(estimate.issuedAt, workspace.estimateValidDays);
+    const validThrough = invoiceDueDate(estimate.issuedAt, workspace.estimateValidDays, workspace.timeZone);
     const snapshotMaterials = parseEstimateMaterials(estimate.materials);
     const laborItems = snapshotMaterials.filter((item) => item.type === "labor");
     const materialItems = snapshotMaterials.filter((item) => item.type !== "labor");
@@ -304,6 +304,7 @@ export async function emailEstimateAction(
       estimatedTotal: estimate.estimatedTotal,
       estimateNumber,
       issuedAt: estimate.issuedAt,
+      timeZone: workspace.timeZone,
       jobDescription: estimate.jobDescription,
       jobTitle: estimate.jobTitle,
       laborCost: estimate.laborCost,

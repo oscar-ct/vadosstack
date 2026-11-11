@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
+import { Temporal } from "temporal-polyfill";
 
+import { businessDateKey, businessDayStart, DEFAULT_BUSINESS_TIME_ZONE } from "@/lib/business-time";
 import {
   calculateInvestmentPosition,
   calculateNetShipping,
@@ -11,18 +13,17 @@ import { getSalesChartData } from "./chart-data";
 
 export const analyticsPeriods = ["30", "90", "365", "ytd"] as const;
 export type AnalyticsPeriod = (typeof analyticsPeriods)[number];
-export function periodStart(period: AnalyticsPeriod, now = new Date()) {
-  if (period === "ytd") return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-  if (period === "365") {
-    // Keep existing bookmarked URLs; the window is now 12 calendar months ending after today.
-    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-    const year = end.getUTCFullYear() - 1;
-    const month = end.getUTCMonth();
-    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    return new Date(Date.UTC(year, month, Math.min(end.getUTCDate(), lastDay)));
-  }
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - Number(period) + 1));
+export function periodStart(period: AnalyticsPeriod, now = new Date(), timeZone = DEFAULT_BUSINESS_TIME_ZONE) {
+  const day = Temporal.PlainDate.from(businessDateKey(now, timeZone));
+  const start =
+    period === "ytd"
+      ? day.with({ month: 1, day: 1 })
+      : period === "365"
+        ? day.add({ days: 1 }).subtract({ years: 1 })
+        : day.subtract({ days: Number(period) - 1 });
+  return businessDayStart(start.toString(), timeZone);
 }
+
 type Sales = {
   gross: Prisma.Decimal;
   discounts: Prisma.Decimal;
@@ -41,7 +42,13 @@ type Sales = {
   unknownReturns: bigint;
 };
 
-async function sales(tx: Prisma.TransactionClient, ownerId: string, start: Date, end: Date) {
+async function sales(
+  tx: Prisma.TransactionClient,
+  ownerId: string,
+  start: Date,
+  end: Date,
+  timeZone = DEFAULT_BUSINESS_TIME_ZONE,
+) {
   const rows = await tx.$queryRaw<Sales[]>`
  WITH cancellations AS (
  SELECT "orderId",SUM("merchandiseAmount") AS gross,SUM("discountAmount") AS discounts,SUM("shippingAmount") AS shipping
@@ -49,7 +56,7 @@ async function sales(tx: Prisma.TransactionClient, ownerId: string, start: Date,
  ), sale AS (
  SELECT COALESCE(SUM(GREATEST(o.subtotal-COALESCE(c.gross,0),0)),0) AS gross,COALESCE(SUM(GREATEST(o."discountAmount"-COALESCE(c.discounts,0),0)),0) AS discounts, COUNT(*) AS orders,
  COALESCE(SUM(GREATEST(o."shippingAmount"-COALESCE(c.shipping,0),0)),0) AS shipping FROM orders o LEFT JOIN cancellations c ON c."orderId"=o.id
- WHERE o."ownerId"=${ownerId} AND o."orderStatus"='Active' AND o."orderDate">=${start} AND o."orderDate"<${end}
+ WHERE o."ownerId"=${ownerId} AND o."orderStatus"='Active' AND ((o."orderDate"::date AT TIME ZONE ${timeZone}) AT TIME ZONE 'UTC')>=${start} AND ((o."orderDate"::date AT TIME ZONE ${timeZone}) AT TIME ZONE 'UTC')<${end}
  ), refunds AS (
  SELECT COALESCE(SUM(r.amount),0) AS total,
  COALESCE(SUM(CASE WHEN o."orderStatus"='Active' AND COALESCE(a.kind,'')<>'Cancellation' THEN COALESCE(r."merchandiseAmount",r.amount*(o.subtotal-o."discountAmount")/NULLIF(o.total,0),0) ELSE 0 END),0) AS merchandise,
@@ -66,7 +73,7 @@ async function sales(tx: Prisma.TransactionClient, ownerId: string, start: Date,
  ), units AS (
  SELECT COALESCE(SUM(GREATEST(i.quantity-COALESCE(c.qty,0),0)),0)::bigint AS sold FROM order_items i JOIN orders o ON o.id=i."orderId"
  LEFT JOIN (SELECT ai."orderItemId",SUM(ai.quantity) AS qty FROM order_adjustment_items ai JOIN order_adjustments a ON a.id=ai."adjustmentId" WHERE a."ownerId"=${ownerId} AND a.kind='Cancellation' GROUP BY ai."orderItemId") c ON c."orderItemId"=i.id
- WHERE o."ownerId"=${ownerId} AND o."orderStatus"='Active' AND o."orderDate">=${start} AND o."orderDate"<${end}
+ WHERE o."ownerId"=${ownerId} AND o."orderStatus"='Active' AND ((o."orderDate"::date AT TIME ZONE ${timeZone}) AT TIME ZONE 'UTC')>=${start} AND ((o."orderDate"::date AT TIME ZONE ${timeZone}) AT TIME ZONE 'UTC')<${end}
  ), physical AS (
  SELECT COALESCE(SUM(i."receivedQuantity"),0)::bigint AS returned FROM order_return_receipt_items i JOIN order_return_receipts r ON r.id=i."receiptId"
  WHERE r."ownerId"=${ownerId} AND r."receivedAt">=${start} AND r."receivedAt"<${end}
@@ -102,14 +109,18 @@ export async function getCommerceAnalytics(
   ownerId: string,
   period: AnalyticsPeriod,
   chartPeriod: AnalyticsPeriod | "lifetime" = period,
+  timeZone = DEFAULT_BUSINESS_TIME_ZONE,
 ) {
   return prisma.$transaction(
     async (tx) => {
       const now = new Date();
-      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+      const end = businessDayStart(
+        Temporal.PlainDate.from(businessDateKey(now, timeZone)).add({ days: 1 }).toString(),
+        timeZone,
+      );
       const [lifetime, recent, purchases, opening, charts] = await Promise.all([
-        sales(tx, ownerId, new Date(0), end),
-        sales(tx, ownerId, periodStart(period, now), end),
+        sales(tx, ownerId, new Date(0), end, timeZone),
+        sales(tx, ownerId, periodStart(period, now, timeZone), end, timeZone),
         tx.inventoryInvestmentEntry.findMany({
           where: { ownerId, kind: "Purchase" },
           include: { corrections: true },
@@ -117,7 +128,13 @@ export async function getCommerceAnalytics(
           take: 99,
         }),
         tx.inventoryInvestmentEntry.findFirst({ where: { ownerId, kind: "Opening" }, include: { corrections: true } }),
-        getSalesChartData(tx, ownerId, chartPeriod === "lifetime" ? null : periodStart(chartPeriod, now), end),
+        getSalesChartData(
+          tx,
+          ownerId,
+          chartPeriod === "lifetime" ? null : periodStart(chartPeriod, now, timeZone),
+          end,
+          timeZone,
+        ),
       ]);
       const investments = opening ? [opening, ...purchases] : purchases;
       // Aggregate independently of the paginated ledger list.

@@ -1,5 +1,4 @@
 "use client";
-
 import * as React from "react";
 
 import {
@@ -32,6 +31,7 @@ import {
   Trophy,
 } from "lucide-react";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { type CsvColumn, CsvExportMenu, CsvExportSlot } from "@/components/csv-export-menu";
 import { CustomerLink } from "@/components/customer-link";
 import { MobileLocationCard } from "@/components/mobile-location-card";
@@ -61,6 +61,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { formatCalendarDate } from "@/lib/business-time";
 import { cn } from "@/lib/utils";
 
 import { getEstimateRecordsColumns } from "./estimate-records-table/columns";
@@ -141,7 +142,7 @@ const sortOptions = [
 ] as const;
 
 function formatExportDate(value?: string) {
-  return value ? new Date(value).toLocaleDateString() : "";
+  return value ? formatCalendarDate(value) : "";
 }
 
 const estimateExportColumns: CsvColumn<EstimateRecordRow>[] = [
@@ -608,13 +609,15 @@ export function EstimateRecordsTable({
                   <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                     <span className="text-muted-foreground text-xs">Scheduled date</span>
                     <span className="min-w-0 text-right">
-                      {estimate.dateBegin ? new Date(estimate.dateBegin).toLocaleDateString() : "Unscheduled"}
+                      {estimate.dateBegin ? formatCalendarDate(estimate.dateBegin) : "Unscheduled"}
                     </span>
                   </div>
                   <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-3">
                     <span className="text-muted-foreground text-xs leading-6">Date</span>
                     <span className="grid min-w-0 justify-items-end text-right">
-                      <span>{new Date(estimate.issuedAt ?? estimate.createdAt).toLocaleDateString()}</span>
+                      <span>
+                        {<BusinessDateTime value={estimate.issuedAt ?? estimate.createdAt} pattern="MMM d, yyyy" />}
+                      </span>
                       <span className="text-muted-foreground text-xs">{estimate.issuedAt ? "Issued" : "Created"}</span>
                     </span>
                   </div>

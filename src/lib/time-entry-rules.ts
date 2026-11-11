@@ -1,6 +1,7 @@
-import { format, subDays } from "date-fns";
+import { Temporal } from "temporal-polyfill";
 import { z } from "zod";
 
+import { addCalendarDays, businessDateKey, calendarDateKey } from "@/lib/business-time";
 import { TimeEntryUserError } from "@/lib/time-entry-errors";
 
 export const timeEntryIdSchema = z.string().trim().min(1).max(64);
@@ -14,20 +15,27 @@ export const workDateSchema = z
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid work date.")
   .refine((value) => {
-    const date = new Date(`${value}T12:00:00`);
-    return !Number.isNaN(date.getTime()) && format(date, "yyyy-MM-dd") === value;
+    try {
+      return Temporal.PlainDate.from(value).toString() === value;
+    } catch {
+      return false;
+    }
   }, "Enter a valid work date.");
 
-export const managerWorkDateSchema = workDateSchema.refine(
-  (value) => value <= format(new Date(), "yyyy-MM-dd"),
-  "Work date cannot be in the future.",
-);
-
-export const employeeWorkDateSchema = managerWorkDateSchema.refine((value) => {
-  const earliest = format(subDays(new Date(), 90), "yyyy-MM-dd");
-  const latest = format(new Date(), "yyyy-MM-dd");
-  return value >= earliest && value <= latest;
-}, "Work date must be within the last 90 days and cannot be in the future.");
+export function managerWorkDateSchemaFor(timeZone?: string) {
+  return workDateSchema.refine(
+    (value) => value <= businessDateKey(new Date(), timeZone),
+    "Work date cannot be in the future.",
+  );
+}
+export function employeeWorkDateSchemaFor(timeZone?: string) {
+  return managerWorkDateSchemaFor(timeZone).refine(
+    (value) => value >= addCalendarDays(businessDateKey(new Date(), timeZone), -90),
+    "Work date must be within the last 90 days and cannot be in the future.",
+  );
+}
+export const managerWorkDateSchema = managerWorkDateSchemaFor();
+export const employeeWorkDateSchema = employeeWorkDateSchemaFor();
 
 export const checkboxBooleanSchema = z.preprocess((value) => value === "true" || value === true, z.boolean());
 export const lunchMinutesSchema = z.coerce
@@ -47,7 +55,7 @@ export const timeEntryFieldsSchema = z.object({
 });
 
 export function parseWorkDate(value: string) {
-  return new Date(`${value}T12:00:00`);
+  return new Date(`${value}T00:00:00.000Z`);
 }
 
 export function getMinutesFromTime(value: string) {
@@ -92,7 +100,7 @@ export function calculateShift(input: {
 }
 
 export function getShiftInterval(workedOn: Date, startTime: string, endTime: string) {
-  const dayStart = new Date(`${format(workedOn, "yyyy-MM-dd")}T00:00:00`).getTime();
+  const dayStart = new Date(`${calendarDateKey(workedOn)}T00:00:00.000Z`).getTime();
   const startMinutes = getMinutesFromTime(startTime);
   const rawEndMinutes = getMinutesFromTime(endTime);
   const endMinutes = rawEndMinutes + (rawEndMinutes < startMinutes ? 24 * 60 : 0);
@@ -101,4 +109,9 @@ export function getShiftInterval(workedOn: Date, startTime: string, endTime: str
     end: dayStart + endMinutes * 60_000,
     start: dayStart + startMinutes * 60_000,
   };
+}
+
+export function workWeekStart(value: Date) {
+  const day = Temporal.PlainDate.from(calendarDateKey(value));
+  return parseWorkDate(day.subtract({ days: day.dayOfWeek - 1 }).toString());
 }

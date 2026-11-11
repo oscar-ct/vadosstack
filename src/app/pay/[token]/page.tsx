@@ -2,13 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { addDays, format } from "date-fns";
 import { CheckCircle2, Download, LockKeyhole, ReceiptText, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatBusinessDate, formatCalendarDate } from "@/lib/business-time";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { normalizeDocumentMessageAlign, renderDocumentMessage } from "@/lib/document-messages";
 import { getInvoicePaymentLinkUnavailableReason, resolveInvoicePaymentLink } from "@/lib/payments/payment-links";
@@ -53,7 +53,7 @@ function parsePublicMaterials(value: string) {
 }
 
 function displayDate(value: Date | null) {
-  return value ? format(value, "MMM d, yyyy") : "Not scheduled";
+  return value ? formatCalendarDate(value, "MMM d, yyyy") : "Not scheduled";
 }
 
 export default async function PayInvoicePage({
@@ -94,12 +94,12 @@ export default async function PayInvoicePage({
     Number(invoice.balanceDue) > 0;
   const paid = Number(invoice.balanceDue) <= 0;
   const invoiceNumber = invoice.invoiceNumber ?? invoice.id.slice(-6).toUpperCase();
-  const dueDate = addDays(invoice.issuedAt, company.invoiceDueDays);
+  const dueDate = invoice.dueAt;
   const serviceLocation = formatServiceAddress(invoice);
   const companyEmail = company.companyEmail ?? company.legacyOwner?.email ?? null;
   const rawCompanyLogoSrc = await getCompanyLogoSrc(invoice.ownerId);
   const companyLogoSrc = rawCompanyLogoSrc.startsWith("/dashboard/") ? null : rawCompanyLogoSrc;
-  const laborItems = invoiceLaborRows(invoice.materials, invoice.job.laborItems).map((item) => ({
+  const laborItems = invoiceLaborRows(invoice.materials, invoice.laborCost).map((item) => ({
     amount: money(item.price || 0),
     description: item.description,
     quantity: item.quantity,
@@ -114,7 +114,7 @@ export default async function PayInvoicePage({
         balanceDue: money(invoice.balanceDue),
         companyName: company.name,
         customerName: invoice.customerName,
-        dueDate: format(dueDate, "MMM d, yyyy"),
+        dueDate: formatCalendarDate(dueDate, "MMM d, yyyy"),
         finalCost: money(invoice.finalCost),
         invoiceNumber,
         jobTitle: invoice.jobTitle,
@@ -175,10 +175,10 @@ export default async function PayInvoicePage({
               customerPhone={invoice.customerPhone ? formatPhoneNumber(invoice.customerPhone) : null}
               dateBegin={displayDate(invoice.dateBegin)}
               dateEnd={displayDate(invoice.dateEnd)}
-              dueDate={format(dueDate, "MMM d, yyyy")}
+              dueDate={formatCalendarDate(dueDate, "MMM d, yyyy")}
               finalCost={money(invoice.finalCost)}
               invoiceNumber={invoiceNumber}
-              issuedAt={format(invoice.issuedAt, "MMM d, yyyy")}
+              issuedAt={formatBusinessDate(invoice.issuedAt, "MMM d, yyyy", company.timeZone)}
               jobDescription={invoice.jobDescription}
               jobTitle={invoice.jobTitle}
               laborItems={laborItems}
@@ -194,7 +194,7 @@ export default async function PayInvoicePage({
               messageAlign={messageAlignment}
               payments={invoice.job.payments.map((payment) => ({
                 amount: money(payment.amount),
-                date: format(payment.paidOn, "MM/dd/yy"),
+                date: formatCalendarDate(payment.paidOn, "MM/dd/yy"),
                 description: payment.description,
                 id: payment.id,
                 method: getPaymentDisplayMethod(payment),
@@ -218,7 +218,7 @@ export default async function PayInvoicePage({
                 </div>
                 <CardDescription className="pt-3">Balance due</CardDescription>
                 <CardTitle className="text-4xl tabular-nums">{money(invoice.balanceDue)}</CardTitle>
-                <p className="text-muted-foreground text-sm">Due {format(dueDate, "MMMM d, yyyy")}</p>
+                <p className="text-muted-foreground text-sm">Due {formatCalendarDate(dueDate, "MMMM d, yyyy")}</p>
               </CardHeader>
               <CardContent className="grid gap-4">
                 {paid ? (

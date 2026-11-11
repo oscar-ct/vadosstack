@@ -47,6 +47,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCommerceSearch } from "@/components/use-commerce-search";
 import { useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { formatCalendarDate } from "@/lib/business-time";
 import type { OrderListSummary } from "@/lib/commerce/order-list-summary";
 import { getOrderDisplayStatuses } from "@/lib/commerce/order-resolution";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -194,13 +195,7 @@ const orderExportColumns: CsvColumn<OrderTableItem>[] = [
 ];
 
 function formatOrderDate(value: string) {
-  const date = new Date(value);
-
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  return formatCalendarDate(value);
 }
 
 function getPaymentStatusClassName(status: string) {

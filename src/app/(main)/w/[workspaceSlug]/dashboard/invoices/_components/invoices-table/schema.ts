@@ -21,6 +21,7 @@ export const invoiceTableItemSchema = z.object({
   href: z.string(),
   issuedAt: z.string(),
   dueAt: z.string(),
+  timeZone: z.string().optional(),
   jobTitle: z.string(),
   jobDescription: z.string().optional(),
   jobNumber: z.string(),

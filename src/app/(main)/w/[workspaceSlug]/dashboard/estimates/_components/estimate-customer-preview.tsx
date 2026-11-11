@@ -1,9 +1,10 @@
 import Image from "next/image";
 
-import { format } from "date-fns";
 import { BriefcaseBusiness, CalendarDays, Mail, MapPin, NotebookText, Phone, UserRound } from "lucide-react";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { Separator } from "@/components/ui/separator";
+import { formatCalendarDate } from "@/lib/business-time";
 import { formatPhoneNumber } from "@/lib/phone";
 
 export type EstimateCustomerPreviewItem = {
@@ -52,7 +53,7 @@ function formatOptionalMoney(value?: string) {
 }
 
 function formatMaybeDate(value?: Date | null) {
-  return value ? format(value, "MMM d, yyyy") : "Not scheduled";
+  return value ? formatCalendarDate(value, "MMM d, yyyy") : "Not scheduled";
 }
 
 function formatSchedule(dateBegin?: Date | null, dateEnd?: Date | null) {
@@ -203,10 +204,20 @@ export function EstimateCustomerPreview({
               <span>
                 {data.estimateNumber ? `Estimate #${data.estimateNumber}` : "Estimate number assigned when published"}
               </span>
-              <span>{data.issuedAt ? `Issued ${format(data.issuedAt, "MMM d, yyyy")}` : "Not issued"}</span>
+              <span>
+                {data.issuedAt ? (
+                  <>
+                    {"Issued "}
+                    {<BusinessDateTime value={data.issuedAt} pattern={"MMM d, yyyy"} />}
+                    {""}
+                  </>
+                ) : (
+                  "Not issued"
+                )}
+              </span>
               <span>
                 {data.validThrough
-                  ? `Valid through ${format(data.validThrough, "MMM d, yyyy")}`
+                  ? `Valid through ${formatCalendarDate(data.validThrough, "MMM d, yyyy")}`
                   : "Validity begins when published"}
               </span>
             </div>
@@ -217,7 +228,9 @@ export function EstimateCustomerPreview({
               {formatMoney(data.estimatedTotal)}
             </span>
             <span className="text-muted-foreground text-xs">
-              {data.validThrough ? `valid through ${format(data.validThrough, "MMM d, yyyy")}` : "draft customer copy"}
+              {data.validThrough
+                ? `valid through ${formatCalendarDate(data.validThrough, "MMM d, yyyy")}`
+                : "draft customer copy"}
             </span>
           </div>
         </header>

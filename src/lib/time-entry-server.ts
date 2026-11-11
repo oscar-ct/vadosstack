@@ -1,8 +1,8 @@
 import { Prisma } from "@prisma/client";
-import { addDays, format, startOfWeek } from "date-fns";
 
+import { addCalendarDate } from "@/lib/business-time";
 import { TimeEntryUserError } from "@/lib/time-entry-errors";
-import { getShiftInterval } from "@/lib/time-entry-rules";
+import { getShiftInterval, workWeekStart } from "@/lib/time-entry-rules";
 
 type TimeEntryGuardClient = Pick<Prisma.TransactionClient, "$executeRaw" | "noWorkDay" | "timeEntry" | "timesheetLock">;
 
@@ -11,8 +11,8 @@ export async function lockEmployeeTimeEntries(client: TimeEntryGuardClient, owne
 }
 
 export async function lockTimesheetWeek(client: TimeEntryGuardClient, ownerId: string, workedOn: Date) {
-  const weekStart = startOfWeek(workedOn, { weekStartsOn: 1 });
-  const weekKey = format(weekStart, "yyyy-MM-dd");
+  const weekStart = workWeekStart(workedOn);
+  const weekKey = weekStart.toISOString().slice(0, 10);
   await client.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`week:${ownerId}:${weekKey}`}))`);
   return weekStart;
 }
@@ -66,8 +66,8 @@ export async function assertTimeEntryAvailable(
       employeeId: input.employeeId,
       ownerId: input.ownerId,
       workedOn: {
-        gte: addDays(input.workedOn, -1),
-        lt: addDays(input.workedOn, 2),
+        gte: addCalendarDate(input.workedOn, -1),
+        lt: addCalendarDate(input.workedOn, 2),
       },
       ...(input.excludeEntryId ? { NOT: { id: input.excludeEntryId } } : {}),
     },

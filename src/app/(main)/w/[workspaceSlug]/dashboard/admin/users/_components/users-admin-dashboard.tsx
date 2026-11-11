@@ -1,5 +1,4 @@
 "use client";
-
 import * as React from "react";
 
 import { useRouter } from "next/navigation";
@@ -9,6 +8,7 @@ import type { LucideIcon } from "lucide-react";
 import { Building2, CalendarDays, KeyRound, Search, ShieldAlert, UserRoundCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 
+import { BusinessDateTime } from "@/components/business-time";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -206,7 +206,7 @@ function UserDetails({
           <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-3">
             <div>
               <p className="text-muted-foreground text-xs">Account created</p>
-              <p className="mt-1 text-sm">{new Date(user.createdAt).toLocaleDateString()}</p>
+              <p className="mt-1 text-sm">{<BusinessDateTime value={user.createdAt} pattern="MMM d, yyyy" />}</p>
             </div>
             <div>
               <p className="text-muted-foreground text-xs">Last sign-in</p>
@@ -238,7 +238,7 @@ function UserDetails({
                     </div>
                     <p className="mt-1 text-muted-foreground text-xs">
                       {workspace.memberCount} {workspace.memberCount === 1 ? "member" : "members"} · Joined{" "}
-                      {new Date(workspace.joinedAt).toLocaleDateString()}
+                      {<BusinessDateTime value={workspace.joinedAt} pattern="MMM d, yyyy" />}
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {[
@@ -278,11 +278,11 @@ function UserDetails({
                       </div>
                       <div>
                         <dt className="text-muted-foreground text-xs">Workspace created</dt>
-                        <dd>{new Date(workspace.createdAt).toLocaleDateString()}</dd>
+                        <dd>{<BusinessDateTime value={workspace.createdAt} pattern="MMM d, yyyy" />}</dd>
                       </div>
                       <div>
                         <dt className="text-muted-foreground text-xs">Last updated</dt>
-                        <dd>{new Date(workspace.updatedAt).toLocaleDateString()}</dd>
+                        <dd>{<BusinessDateTime value={workspace.updatedAt} pattern="MMM d, yyyy" />}</dd>
                       </div>
                     </dl>
                     {workspace.status === "Suspended" ? (

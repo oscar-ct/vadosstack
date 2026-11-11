@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { CustomerPhoneMatchWarning } from "@/components/customer-phone-match-warning";
 import { PricingListDescription } from "@/components/pricing-list-description";
 import { PricingLineDragHandle, SortablePricingLine, SortablePricingLines } from "@/components/sortable-pricing-lines";
@@ -38,6 +39,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { UsStateSelect } from "@/components/us-state-select";
+import { calendarDateKey } from "@/lib/business-time";
 import { useDiscardLocalDraftListener } from "@/lib/drafts.client";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { insertPricingList } from "@/lib/pricing-list-paste";
@@ -215,13 +217,14 @@ function parseEstimateDate(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
 
-  return date;
+  const [year, month, day] = calendarDateKey(date).split("-").map(Number);
+  return new Date(year, month - 1, day, 12);
 }
 
 function toDateValue(date?: Date) {
   if (!date) return "";
 
-  return date.toISOString();
+  return format(date, "yyyy-MM-dd");
 }
 
 function parseDraftDate(value?: string) {
@@ -259,7 +262,7 @@ function formatDraftSavedAt(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
 
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return <BusinessDateTime value={date} pattern="h:mm a" />;
 }
 
 function calculateRoomArea(room: Pick<MeasurementRoom, "length" | "width">) {

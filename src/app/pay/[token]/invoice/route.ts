@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { addDays, format } from "date-fns";
-
 import {
   type InvoicePdfMaterial,
   renderInvoicePdfBuffer,
 } from "@/app/(main)/w/[workspaceSlug]/dashboard/invoices/_lib/invoice-pdf";
+import { formatCalendarDate } from "@/lib/business-time";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { normalizeDocumentMessageAlign, renderDocumentMessage } from "@/lib/document-messages";
 import { resolveInvoicePaymentLink } from "@/lib/payments/payment-links";
@@ -55,7 +54,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   const invoice = link.invoice;
   const company = invoice.owner;
   const invoiceNumber = invoice.invoiceNumber ?? invoice.id.slice(-6).toUpperCase();
-  const dueDate = addDays(invoice.issuedAt, company.invoiceDueDays);
+  const dueDate = invoice.dueAt;
   const serviceLocation = formatServiceAddress(invoice);
   const companyEmail = company.companyEmail ?? company.legacyOwner?.email ?? "";
   const rawCompanyLogoSrc = await getCompanyLogoSrc(invoice.ownerId);
@@ -66,7 +65,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
         balanceDue: money(invoice.balanceDue),
         companyName: company.name,
         customerName: invoice.customerName,
-        dueDate: format(dueDate, "MMM d, yyyy"),
+        dueDate: formatCalendarDate(dueDate, "MMM d, yyyy"),
         finalCost: money(invoice.finalCost),
         invoiceNumber,
         jobTitle: invoice.jobTitle,
@@ -91,13 +90,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     documentMessage,
     documentMessageAlign: normalizeDocumentMessageAlign(company.invoiceMessageAlign),
     dueDate,
+    timeZone: company.timeZone,
     finalCost: invoice.finalCost,
     invoiceNumber,
     issuedAt: invoice.issuedAt,
     jobDescription: invoice.jobDescription,
     jobTitle: invoice.jobTitle,
     laborCost: invoice.laborCost,
-    laborItems: invoiceLaborRows(invoice.materials, invoice.job.laborItems),
+    laborItems: invoiceLaborRows(invoice.materials, invoice.laborCost),
     materialTaxAmount: invoice.materialTaxAmount,
     materialTaxRate: invoice.materialTaxRate,
     otherFeesEnabled: invoice.otherFeesEnabled,

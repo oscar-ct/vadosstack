@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { notFound } from "next/navigation";
 
-import { addDays, format, formatDistanceToNowStrict, parseISO } from "date-fns";
+import { formatDistanceToNowStrict } from "date-fns";
 import {
   ArrowRight,
   BadgeDollarSign,
@@ -22,10 +22,12 @@ import {
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { BackButton } from "@/components/back-button";
+import { BusinessDateTime } from "@/components/business-time";
 import { LocationMapCard } from "@/components/location-map-card";
 import { Badge } from "@/components/ui/badge";
 import { WorkspaceLink as Link } from "@/components/workspace-path-provider";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { formatBusinessDate, formatCalendarDate } from "@/lib/business-time";
 import { formatPhoneNumber } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -137,7 +139,7 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
   const resolvedSearchParams = await searchParams;
   const workspace = await prisma.workspace.findUniqueOrThrow({
     where: { id: workspaceId },
-    select: { invoiceDueDays: true, workspaceMode: true },
+    select: { timeZone: true, workspaceMode: true },
   });
   const workspaceMode = parseWorkspaceMode(workspace.workspaceMode);
   const customerView = getCustomerView(workspaceMode, resolvedSearchParams?.view);
@@ -316,7 +318,7 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
         id: invoice.id,
         title: invoice.invoiceNumber ?? "Invoice",
         status: invoice.paymentStatus,
-        dueAt: addDays(invoice.issuedAt, workspace.invoiceDueDays).toISOString(),
+        dueAt: invoice.dueAt.toISOString(),
         balance: formatMoney(invoice.balanceDue) ?? "$0.00",
         paymentStatus: invoice.paymentStatus,
         linkedInvoiceId: invoice.id,
@@ -326,7 +328,7 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
       invoiceNumber: invoice.invoiceNumber ?? undefined,
       status: invoice.paymentStatus,
       issuedAt: invoice.issuedAt.toISOString(),
-      dueAt: addDays(invoice.issuedAt, workspace.invoiceDueDays).toISOString(),
+      dueAt: invoice.dueAt.toISOString(),
       total: formatMoney(invoice.finalCost) ?? "$0.00",
       balance: formatMoney(invoice.balanceDue),
     })),
@@ -491,7 +493,8 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
               <div className="min-w-0">
                 <h1 className="truncate font-semibold text-2xl">{customer.name}</h1>
                 <p className="mt-1 truncate text-muted-foreground text-sm">
-                  {customer.email || "No email on file"} - customer since {format(customer.joinedAt, "MMM d, yyyy")}
+                  {customer.email || "No email on file"} - customer since{" "}
+                  {<BusinessDateTime value={customer.joinedAt} pattern={"MMM d, yyyy"} />}
                 </p>
               </div>
             </div>
@@ -526,7 +529,7 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
                   <DetailItem
                     label="Last order"
                     value={
-                      orderHistory[0] ? format(parseISO(orderHistory[0].orderedAt), "MMM d, yyyy") : "No orders yet"
+                      orderHistory[0] ? formatCalendarDate(orderHistory[0].orderedAt, "MMM d, yyyy") : "No orders yet"
                     }
                   />
                 </>
@@ -623,7 +626,7 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
                 items={orderHistory.map((order) => ({
                   amount: order.total,
                   href: `/dashboard/orders/${order.id}/edit`,
-                  meta: `${order.paymentStatus} - ${order.fulfillmentStatus} - ${format(parseISO(order.orderedAt), "MMM d, yyyy")}`,
+                  meta: `${order.paymentStatus} - ${order.fulfillmentStatus} - ${formatCalendarDate(order.orderedAt, "MMM d, yyyy")}`,
                   title: order.returnNumber
                     ? `${order.orderNumber} - ${order.refundAmount ?? "$0.00"} refunded`
                     : order.orderNumber,
@@ -648,7 +651,7 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
                     href: estimate.printableEstimate
                       ? `/dashboard/estimates/${estimate.printableEstimate.id}`
                       : `/dashboard/estimates/records/${estimate.id}`,
-                    meta: `${estimate.status} - ${format(estimate.createdAt, "MMM d, yyyy")}`,
+                    meta: `${estimate.status} - ${formatBusinessDate(estimate.createdAt, "MMM d, yyyy", workspace.timeZone)}`,
                     title: estimate.description,
                   }))}
                   title="Estimates"
@@ -659,7 +662,7 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
                   items={invoices.map((invoice) => ({
                     amount: formatMoney(invoice.finalCost),
                     href: `/dashboard/invoices/${invoice.id}`,
-                    meta: `${invoice.paymentStatus} - ${format(invoice.issuedAt, "MMM d, yyyy")}`,
+                    meta: `${invoice.paymentStatus} - ${formatBusinessDate(invoice.issuedAt, "MMM d, yyyy", workspace.timeZone)}`,
                     title: invoice.jobTitle,
                   }))}
                   title="Invoices"
@@ -747,7 +750,9 @@ function ActivityRow({ item }: { item: ActivityItem }) {
           <Badge variant="outline" className={activityToneClassName(item.tone)}>
             {item.type}
           </Badge>
-          <span className="text-muted-foreground text-xs">{format(item.occurredAt, "MMM d, yyyy h:mm a")}</span>
+          <span className="text-muted-foreground text-xs">
+            {<BusinessDateTime value={item.occurredAt} pattern="MMM d, yyyy h:mm a" />}
+          </span>
         </div>
         <div className="mt-1 truncate font-medium text-sm">{item.title}</div>
         <p className="mt-0.5 line-clamp-2 text-muted-foreground text-xs">{item.description}</p>

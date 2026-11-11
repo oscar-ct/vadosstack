@@ -11,11 +11,12 @@ import {
   deriveJobPaymentStatus,
 } from "@/lib/customer-billing";
 import { parseDateInput } from "@/lib/date-only";
+import { invoiceSnapshotAudit } from "@/lib/invoice-snapshot-audit";
 import { calculateJobPricing, DEFAULT_OTHER_FEES_RATE } from "@/lib/job-pricing";
 import { getNetPaymentMinorUnits, minorUnitsToDecimalMoney } from "@/lib/payments/domain";
 import { expireStripeCheckoutSessionsAfterManualPayment } from "@/lib/payments/stripe-checkout-sessions";
 import { normalizePhoneNumber } from "@/lib/phone";
-import { stringifyInvoiceLines } from "@/lib/pricing-document-snapshot";
+import { createInvoiceLineSnapshot, InvoiceSnapshotError } from "@/lib/pricing-document-snapshot";
 import { prisma } from "@/lib/prisma";
 import { formatServiceAddress, getServiceAddressPayload, type ServiceAddressFields } from "@/lib/service-address";
 import { revalidateWorkspacePath } from "@/lib/workspace-revalidation";
@@ -128,7 +129,7 @@ const optionalDate = z
   .string()
   .trim()
   .optional()
-  .transform((value) => (value ? new Date(value) : undefined))
+  .transform((value) => (value ? parseDateInput(value) : undefined))
   .refine((value) => !value || !Number.isNaN(value.getTime()), "Enter a valid job date.");
 
 const optionalMoney = z
@@ -516,7 +517,10 @@ function normalizeJobStatus(status: (typeof jobStatuses)[number], dateBegin?: Da
   return status;
 }
 
-type PaymentSummaryDatabase = Pick<Prisma.TransactionClient, "customer" | "invoice" | "job" | "jobPayment">;
+type PaymentSummaryDatabase = Pick<
+  Prisma.TransactionClient,
+  "customer" | "invoice" | "job" | "jobPayment" | "$queryRaw"
+>;
 
 async function syncCustomerBillingStatus(
   customerId: string | null | undefined,
@@ -606,7 +610,18 @@ async function getJobDepositTotal(jobId: string, database: PaymentSummaryDatabas
   );
 }
 
-async function syncJobPaymentSummary(jobId: string, ownerId: string, database: PaymentSummaryDatabase = prisma) {
+async function syncJobPaymentSummary(
+  jobId: string,
+  ownerId: string,
+  database: PaymentSummaryDatabase = prisma,
+): Promise<void> {
+  if (database === prisma) {
+    await prisma.$transaction(async (transaction) => {
+      await syncJobPaymentSummary(jobId, ownerId, transaction);
+    });
+    return;
+  }
+  await database.$queryRaw`SELECT id FROM jobs WHERE id = ${jobId} AND "ownerId" = ${ownerId} FOR UPDATE`;
   const job = await database.job.findUnique({
     where: {
       id_ownerId: {
@@ -670,8 +685,12 @@ async function syncJobPaymentSummary(jobId: string, ownerId: string, database: P
   await syncCustomerBillingStatus(job.customerId, ownerId, database);
 }
 
-async function syncExistingInvoiceSnapshotFromJob(jobId: string, ownerId: string) {
-  const job = await prisma.job.findUnique({
+async function syncExistingInvoiceSnapshotFromJob(
+  jobId: string,
+  ownerId: string,
+  database: PaymentSummaryDatabase = prisma,
+) {
+  const job = await database.job.findUnique({
     where: {
       id_ownerId: {
         id: jobId,
@@ -699,14 +718,21 @@ async function syncExistingInvoiceSnapshotFromJob(jobId: string, ownerId: string
   );
   const laborCost = Number(job.laborCost ?? 0);
   const materialTaxRate = Number(job.materialTaxRate ?? 0);
-  const taxableSubtotal = materialsSubtotal + (job.jobType === "Commercial" ? laborCost : 0);
-  const materialTaxAmount = taxableSubtotal * (materialTaxRate / 100);
-  const amountPaid = await getJobPaidTotal(job.id);
-  const depositPaid = await getJobDepositTotal(job.id);
-  const paymentStatus = deriveJobPaymentStatus(job.status, job.finalCost?.toString(), amountPaid);
-  const balanceDue = calculateOutstandingBalance(job.status, job.finalCost?.toString(), amountPaid);
+  const pricing = calculateJobPricing({
+    jobType: job.jobType === "Commercial" ? "Commercial" : "Residential",
+    laborSubtotal: laborCost,
+    materialsSubtotal,
+    otherFeesEnabled: job.otherFeesEnabled,
+    otherFeesRate: Number(job.otherFeesRate),
+    taxRate: materialTaxRate,
+  });
+  const invoiceTotal = pricing.total.toFixed(2);
+  const amountPaid = await getJobPaidTotal(job.id, database);
+  const depositPaid = await getJobDepositTotal(job.id, database);
+  const paymentStatus = deriveJobPaymentStatus(job.status, invoiceTotal, amountPaid);
+  const balanceDue = calculateOutstandingBalance(job.status, invoiceTotal, amountPaid);
 
-  await prisma.invoice.update({
+  const updatedInvoice = await database.invoice.update({
     where: {
       id_ownerId: {
         id: job.invoice.id,
@@ -730,13 +756,13 @@ async function syncExistingInvoiceSnapshotFromJob(jobId: string, ownerId: string
       dateEnd: job.dateEnd,
       laborCost: laborCost.toFixed(2),
       materialTaxRate: materialTaxRate.toFixed(2),
-      materials: stringifyInvoiceLines(parsePricingItems(job.laborItems), materials),
+      materials: createInvoiceLineSnapshot(parsePricingItems(job.laborItems), materials, job.laborCost ?? 0),
       materialsSubtotal: materialsSubtotal.toFixed(2),
-      materialTaxAmount: materialTaxAmount.toFixed(2),
+      materialTaxAmount: pricing.tax.toFixed(2),
       otherFeesEnabled: job.otherFeesEnabled,
       otherFeesRate: job.otherFeesRate,
-      otherFeesAmount: job.otherFeesAmount,
-      finalCost: (Number(job.finalCost ?? 0) || 0).toFixed(2),
+      otherFeesAmount: pricing.otherFees.toFixed(2),
+      finalCost: invoiceTotal,
       depositPaid,
       amountPaid,
       balanceDue: balanceDue.toFixed(2),
@@ -744,6 +770,7 @@ async function syncExistingInvoiceSnapshotFromJob(jobId: string, ownerId: string
       jobStatus: job.status,
     },
   });
+  return { id: job.invoice.id, before: invoiceSnapshotAudit(job.invoice), after: invoiceSnapshotAudit(updatedInvoice) };
 }
 
 export async function createJobAction(_previousState: JobMutationState, formData: FormData): Promise<JobMutationState> {
@@ -900,6 +927,8 @@ export async function createJobAction(_previousState: JobMutationState, formData
   }
 }
 
+class JobUpdateError extends Error {}
+
 export async function updateJobAction(_previousState: JobMutationState, formData: FormData): Promise<JobMutationState> {
   const authorization = await getPermittedDashboardAuthorization("jobs.update");
   const syncExistingInvoice = formData.get("syncExistingInvoice") === "true";
@@ -1024,69 +1053,106 @@ export async function updateJobAction(_previousState: JobMutationState, formData
       }
     }
 
-    const updatedJob = await prisma.job.update({
-      where: {
-        id_ownerId: {
-          id,
-          ownerId: workspaceId,
+    syncedInvoiceId = await prisma.$transaction(async (transaction) => {
+      // Serialize linked invoice mutations on this job before reading its current state.
+      const locked = await transaction.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM jobs WHERE id = ${id} AND "ownerId" = ${workspaceId} FOR UPDATE
+      `;
+      if (!locked.length) throw new JobUpdateError("Job could not be found.");
+      const currentJob = await transaction.job.findUnique({
+        where: { id_ownerId: { id, ownerId: workspaceId } },
+        select: { id: true, customerId: true, invoice: { select: { id: true } } },
+      });
+      if (!currentJob) throw new JobUpdateError("Job could not be found.");
+      if (currentJob.invoice && !syncExistingInvoice) {
+        throw new JobUpdateError(
+          "This job now has an invoice. Confirm that you want to update the existing invoice before saving.",
+        );
+      }
+      const updatedJob = await transaction.job.update({
+        where: {
+          id_ownerId: {
+            id,
+            ownerId: workspaceId,
+          },
         },
-      },
-      data: {
-        ...job,
-        customerId: customerId || null,
-        dateBegin: job.dateBegin ?? null,
-        dateEnd: job.dateEnd ?? null,
-        serviceLocation: formatServiceAddress(job) ?? null,
-        serviceAddressLine1: job.serviceAddressLine1 || null,
-        serviceAddressLine2: job.serviceAddressLine2 || null,
-        serviceCity: job.serviceCity || null,
-        serviceState: job.serviceState || null,
-        servicePostalCode: job.servicePostalCode || null,
-        estimatedCost: "0",
-        laborCost,
-        laborItems: JSON.stringify(laborItems),
-        jobType: job.jobType,
-        measurementRooms: JSON.stringify(measurementRooms),
-        materialTaxRate: job.materialTaxRate ?? "0",
-        materials: JSON.stringify(materials),
-        otherFeesEnabled: job.otherFeesEnabled,
-        otherFeesRate: job.otherFeesRate ?? DEFAULT_OTHER_FEES_RATE.toString(),
-        otherFeesAmount: otherFeesAmount.toFixed(2),
-        paymentStatus: deriveJobPaymentStatus(normalizedStatus, calculatedFinalCost, await getJobPaidTotal(id)),
-        finalCost: calculatedFinalCost,
-        status: normalizedStatus,
-        scope: job.scope || null,
-        notes: job.notes || null,
-      },
+        data: {
+          ...job,
+          customerId: customerId || null,
+          dateBegin: job.dateBegin ?? null,
+          dateEnd: job.dateEnd ?? null,
+          serviceLocation: formatServiceAddress(job) ?? null,
+          serviceAddressLine1: job.serviceAddressLine1 || null,
+          serviceAddressLine2: job.serviceAddressLine2 || null,
+          serviceCity: job.serviceCity || null,
+          serviceState: job.serviceState || null,
+          servicePostalCode: job.servicePostalCode || null,
+          estimatedCost: "0",
+          laborCost,
+          laborItems: JSON.stringify(laborItems),
+          jobType: job.jobType,
+          measurementRooms: JSON.stringify(measurementRooms),
+          materialTaxRate: job.materialTaxRate ?? "0",
+          materials: JSON.stringify(materials),
+          otherFeesEnabled: job.otherFeesEnabled,
+          otherFeesRate: job.otherFeesRate ?? DEFAULT_OTHER_FEES_RATE.toString(),
+          otherFeesAmount: otherFeesAmount.toFixed(2),
+          paymentStatus: deriveJobPaymentStatus(
+            normalizedStatus,
+            calculatedFinalCost,
+            await getJobPaidTotal(id, transaction),
+          ),
+          finalCost: calculatedFinalCost,
+          status: normalizedStatus,
+          scope: job.scope || null,
+          notes: job.notes || null,
+        },
+      });
+
+      await syncJobPaymentSummary(updatedJob.id, workspaceId, transaction);
+      if (currentJob.invoice) {
+        const revision = await syncExistingInvoiceSnapshotFromJob(updatedJob.id, workspaceId, transaction);
+        if (revision) {
+          await recordAuthorizationAuditEvent(
+            {
+              workspaceId,
+              actorUserId: authorization.principal.user.id,
+              membershipId: authorization.membership.id,
+              action: "invoice.update",
+              targetType: "Invoice",
+              targetId: revision.id,
+              metadata: { source: "confirmed_job_update", jobId: id, before: revision.before, after: revision.after },
+            },
+            transaction,
+          );
+        }
+      }
+      if (updatedJob.customerId !== currentJob.customerId) {
+        await syncCustomerBillingStatus(currentJob.customerId, workspaceId, transaction);
+      }
+      await recordAuthorizationAuditEvent(
+        {
+          workspaceId,
+          actorUserId: authorization.principal.user.id,
+          membershipId: authorization.membership.id,
+          action: "job.update",
+          targetType: "Job",
+          targetId: id,
+          metadata: { syncedInvoice: Boolean(currentJob.invoice) },
+        },
+        transaction,
+      );
+      return currentJob.invoice?.id;
     });
-
-    await syncJobPaymentSummary(updatedJob.id, workspaceId);
-    if (existingJob?.invoice && syncExistingInvoice) {
-      await syncExistingInvoiceSnapshotFromJob(updatedJob.id, workspaceId);
-      syncedInvoiceId = existingJob.invoice.id;
-    }
-
-    await syncCustomerBillingStatus(existingJob?.customerId, workspaceId);
-    if (updatedJob.customerId !== existingJob?.customerId) {
-      await syncCustomerBillingStatus(updatedJob.customerId, workspaceId);
-    }
   } catch (error) {
+    if (error instanceof JobUpdateError || error instanceof InvoiceSnapshotError)
+      return { success: false, message: error.message };
     console.error("Job update failed.", error);
     return {
       success: false,
       message: "Job could not be updated. Please try again.",
     };
   }
-
-  await recordAuthorizationAuditEvent({
-    workspaceId,
-    actorUserId: authorization.principal.user.id,
-    membershipId: authorization.membership.id,
-    action: "job.update",
-    targetType: "Job",
-    targetId: id,
-    metadata: { syncedInvoice: Boolean(syncExistingInvoice) },
-  }).catch((error) => console.error("Job update audit could not be saved.", error));
 
   revalidateWorkspacePath(authorization.membership.workspaceSlug, "/dashboard/jobs");
   revalidateWorkspacePath(authorization.membership.workspaceSlug, `/dashboard/jobs/${id}`);
@@ -1098,7 +1164,7 @@ export async function updateJobAction(_previousState: JobMutationState, formData
 
   return {
     success: true,
-    message: syncExistingInvoice ? "Job and invoice updated." : "Job updated.",
+    message: syncedInvoiceId ? "Job and invoice updated." : "Job updated.",
     redirectTo: `/dashboard/jobs/${id}`,
   };
 }
@@ -1188,6 +1254,7 @@ export async function createJobPaymentAction(
   let createdPaymentId: string | undefined;
   try {
     createdPaymentId = await prisma.$transaction(async (transaction) => {
+      await transaction.$queryRaw`SELECT id FROM jobs WHERE id = ${parsed.data.jobId} AND "ownerId" = ${workspaceId} FOR UPDATE`;
       const job = await transaction.job.findUnique({
         where: {
           id_ownerId: {

@@ -307,6 +307,7 @@ model Workspace {
   estimateMessageAlign       String                      @default("left")
   estimateMessageText        String
   invoiceDueDays             Int                         @default(15)
+  timeZone                   String                      @default("America/Chicago")
   invoiceMessageEnabled      Boolean                     @default(false)
   invoiceMessageAlign        String                      @default("left")
   invoiceMessageText         String
@@ -662,6 +663,7 @@ model Invoice {
   balanceDue          Decimal              @default(0)
   paymentStatus       String
   jobStatus           String
+  dueAt               DateTime             @db.Date
   issuedAt            DateTime             @default(now())
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -676,6 +678,7 @@ model Invoice {
   @@index([jobId])
   @@index([customerId])
   @@index([issuedAt])
+  @@index([ownerId, dueAt])
   @@map("invoices")
 }
 
@@ -1319,7 +1322,7 @@ model TimeEntry {
   ownerId      String
   employeeId   String
   jobId        String?
-  workedOn     DateTime
+  workedOn     DateTime @db.Date
   startTime    String?
   endTime      String?
   hours        Decimal
@@ -1347,7 +1350,7 @@ model NoWorkDay {
   ownerId    String
   employeeId String
   jobId      String?
-  workedOn   DateTime
+  workedOn   DateTime @db.Date
   reason     String
   notes      String?
   createdAt  DateTime  @default(now())
@@ -1372,7 +1375,7 @@ model TimeEntryRequest {
   jobId              String?
   action             String
   status             String    @default("Pending")
-  workedOn           DateTime?
+  workedOn           DateTime? @db.Date
   startTime          String?
   endTime            String?
   hours              Decimal?
@@ -1425,7 +1428,7 @@ model TimeEntryAudit {
 model TimesheetLock {
   id         String    @id @default(cuid())
   ownerId    String
-  weekStart  DateTime
+  weekStart  DateTime @db.Date
   lockedById String
   lockedAt   DateTime  @default(now())
   owner      Workspace @relation(fields: [ownerId], references: [id], onDelete: Cascade)

@@ -8,6 +8,7 @@ import { clearCurrentSession } from "@/lib/auth";
 import { getCurrentPrincipal, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { recordAuthorizationAuditEvent } from "@/lib/authorization/audit";
 import { updateWorkspaceNameAndSlug } from "@/lib/authorization/workspace-slug";
+import { isValidTimeZone } from "@/lib/business-time";
 import { taxRateSchema } from "@/lib/commerce/validation";
 import { escapeHtml } from "@/lib/email-content";
 import { logEmailRecord } from "@/lib/email-records";
@@ -92,6 +93,7 @@ const generalEmailSchema = z.object({
 });
 
 const companySettingsSchema = z.object({
+  timeZone: z.string().trim().refine(isValidTimeZone, "Choose a valid business timezone."),
   defaultOrderTaxRate: z.preprocess(
     (value) => (typeof value === "string" && value.trim() ? Number(value) : value),
     taxRateSchema,
@@ -488,6 +490,7 @@ export async function updateCompanySettingsAction(
     companyPhone: formData.get("companyPhone"),
     estimateValidDays: formData.get("estimateValidDays"),
     invoiceDueDays: formData.get("invoiceDueDays"),
+    timeZone: formData.get("timeZone") ?? "America/Chicago",
     defaultOrderTaxRate: formData.get("defaultOrderTaxRate"),
     workspaceMode: formData.get("workspaceMode"),
     deleteLogo: formData.get("deleteLogo"),
@@ -571,6 +574,7 @@ export async function updateCompanySettingsAction(
         },
         data: {
           ...sharedSettingsData,
+          timeZone: parsed.data.timeZone,
         },
       });
       await recordAuthorizationAuditEvent(

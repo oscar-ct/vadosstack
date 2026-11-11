@@ -18,6 +18,7 @@ import {
   Search,
 } from "lucide-react";
 
+import { useBusinessTimeZone } from "@/components/business-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -562,6 +563,8 @@ function PaymentDetailsStep({
   onBack: () => void;
   onSuccess: (summary: SuccessSummary) => void;
 }) {
+  const timeZone = useBusinessTimeZone();
+
   const [state, formAction, isPending] = React.useActionState(action, initialPaymentState);
   const [amount, setAmount] = React.useState(kind === "invoice_payment" ? (invoice?.balanceDue ?? "") : "");
   const [method, setMethod] = React.useState("");
@@ -629,7 +632,13 @@ function PaymentDetailsStep({
       <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <div className="grid min-w-0 gap-2">
           <Label htmlFor="payment-dialog-date">Payment date</Label>
-          <Input id="payment-dialog-date" name="paidOn" type="date" defaultValue={toDateInputValue()} required />
+          <Input
+            id="payment-dialog-date"
+            name="paidOn"
+            type="date"
+            defaultValue={toDateInputValue(undefined, timeZone)}
+            required
+          />
         </div>
         <div className="grid min-w-0 gap-2">
           <Label htmlFor="payment-dialog-amount">Amount</Label>

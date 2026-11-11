@@ -1,5 +1,4 @@
-import { format } from "date-fns";
-
+import { formatCalendarDate } from "@/lib/business-time";
 import { prisma } from "@/lib/prisma";
 import { toHours } from "@/lib/time-tracking";
 
@@ -10,7 +9,7 @@ function formatDecimal(value: { toString: () => string } | null) {
 }
 
 function dateToInput(value: Date | null) {
-  return value ? format(value, "yyyy-MM-dd") : undefined;
+  return value ? formatCalendarDate(value, "yyyy-MM-dd") : undefined;
 }
 
 function mapEmployee(
@@ -68,7 +67,7 @@ function mapEmployee(
     active: employee.active,
     createdAt: employee.createdAt.toISOString(),
     updatedAt: employee.updatedAt.toISOString(),
-    lastWorkedOn: lastEntry ? format(lastEntry.workedOn, "yyyy-MM-dd") : undefined,
+    lastWorkedOn: lastEntry ? formatCalendarDate(lastEntry.workedOn, "yyyy-MM-dd") : undefined,
     totalHours,
     dashboardAccess,
   };

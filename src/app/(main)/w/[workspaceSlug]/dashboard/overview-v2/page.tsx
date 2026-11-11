@@ -1,8 +1,10 @@
-import { addHours, differenceInCalendarDays, endOfDay, format, startOfToday } from "date-fns";
+import { addHours, format } from "date-fns";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { getDisplayName } from "@/lib/auth";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { businessDateKey, calendarDateKey, calendarDaysUntil } from "@/lib/business-time";
+import { getWorkspaceTimeZone } from "@/lib/business-time-server";
 import { calculateOutstandingBalance, toMoneyNumber } from "@/lib/customer-billing";
 import { prisma } from "@/lib/prisma";
 import { getTimeTrackingRange } from "@/lib/time-tracking";
@@ -33,19 +35,20 @@ export default async function Page() {
   const canViewTime = can(membership, "time.view");
   const canApproveTime = can(membership, "time.approve");
 
-  const today = startOfToday();
+  const timeZone = await getWorkspaceTimeZone(workspaceId);
   const now = new Date();
-  const { weekEnd, weekStart } = getTimeTrackingRange();
+  const today = new Date(`${businessDateKey(now, timeZone)}T00:00:00Z`);
+  const { weekEnd, weekStart } = getTimeTrackingRange(undefined, timeZone);
   const localHour = Number(
     new Intl.DateTimeFormat("en-US", {
       hour: "numeric",
       hour12: false,
-      timeZone: "America/Chicago",
+      timeZone,
     }).format(now),
   );
   const [actionQueue, leads, jobs, activeEmployeeCount, currentWeekHours, pendingCurrentWeekTime, dueTasks] =
     await Promise.all([
-      getManagerActionQueue(workspaceId, undefined, membership),
+      getManagerActionQueue(workspaceId, undefined, membership, timeZone),
       canViewLeads
         ? prisma.lead.findMany({
             where: {
@@ -118,7 +121,7 @@ export default async function Page() {
             where: {
               ownerId: workspaceId,
               scheduledFor: {
-                lte: endOfDay(now),
+                lte: new Date(today.getTime() + 86400000 - 1),
               },
               status: {
                 not: "Completed",
@@ -200,7 +203,7 @@ export default async function Page() {
     .map((job) => ({
       customerName: job.customer?.name ?? "Customer not assigned",
       date: job.dateEnd?.toISOString() ?? today.toISOString(),
-      days: differenceInCalendarDays(today, job.dateEnd as Date),
+      days: -calendarDaysUntil(job.dateEnd as Date, now, timeZone),
       href: `/dashboard/jobs/${job.id}`,
       id: job.id,
       title: job.description,
@@ -212,7 +215,7 @@ export default async function Page() {
     .map((job) => ({
       customerName: job.customer?.name ?? "Customer not assigned",
       date: job.dateBegin?.toISOString() ?? today.toISOString(),
-      days: differenceInCalendarDays(today, job.dateBegin as Date),
+      days: -calendarDaysUntil(job.dateBegin as Date, now, timeZone),
       href: `/dashboard/jobs/${job.id}`,
       id: job.id,
       title: job.description,
@@ -237,7 +240,7 @@ export default async function Page() {
       dateLabel={new Intl.DateTimeFormat("en-US", {
         day: "numeric",
         month: "long",
-        timeZone: "America/Chicago",
+        timeZone,
         weekday: "long",
       }).format(now)}
       displayName={getDisplayName(currentUser).split(" ")[0]}
@@ -247,7 +250,7 @@ export default async function Page() {
         id: task.id,
         isOverdue: task.scheduledFor < today,
         priority: task.priority,
-        scheduledFor: task.scheduledFor.toISOString(),
+        scheduledFor: calendarDateKey(task.scheduledFor),
         title: task.title,
       }))}
       greeting={localHour < 12 ? "Good morning" : localHour < 18 ? "Good afternoon" : "Good evening"}
@@ -263,7 +266,7 @@ export default async function Page() {
       timeLabel={new Intl.DateTimeFormat("en-US", {
         hour: "numeric",
         minute: "2-digit",
-        timeZone: "America/Chicago",
+        timeZone,
       }).format(now)}
       timeWarning={timeWarning}
       statusReviewCount={statusReviewCount}

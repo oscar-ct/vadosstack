@@ -1,5 +1,3 @@
-import { addDays } from "date-fns";
-
 import { AuthRequiredState } from "@/components/auth-required-state";
 import { can, getPermittedDashboardAuthorization } from "@/lib/authorization";
 import { calculateOutstandingBalance } from "@/lib/customer-billing";
@@ -25,7 +23,6 @@ function getJobActivityDate(job: { dateBegin: Date | null; createdAt: Date }) {
 
 async function getCustomers(
   ownerId: string,
-  invoiceDueDays: number,
   access: { invoices: boolean; jobs: boolean; orders: boolean },
 ): Promise<RecentCustomerRow[]> {
   const customers = await prisma.customer.findMany({
@@ -92,7 +89,7 @@ async function getCustomers(
         invoiceNumber: invoice.invoiceNumber ?? undefined,
         status: invoice.paymentStatus,
         issuedAt: invoice.issuedAt.toISOString(),
-        dueAt: addDays(invoice.issuedAt, invoiceDueDays).toISOString(),
+        dueAt: invoice.dueAt.toISOString(),
         total: formatMoney(invoice.finalCost) ?? "$0",
         balance: formatMoney(invoice.balanceDue) ?? "$0",
         balanceValue: Number(invoice.balanceDue),
@@ -199,9 +196,9 @@ export default async function Page({
 
   const workspace = await prisma.workspace.findUniqueOrThrow({
     where: { id: authorization.workspaceId },
-    select: { invoiceDueDays: true, workspaceMode: true },
+    select: { workspaceMode: true },
   });
-  const customers = await getCustomers(authorization.workspaceId, workspace.invoiceDueDays, {
+  const customers = await getCustomers(authorization.workspaceId, {
     invoices: can(authorization.membership, "invoices.view"),
     jobs: can(authorization.membership, "jobs.view"),
     orders: can(authorization.membership, "orders.view"),

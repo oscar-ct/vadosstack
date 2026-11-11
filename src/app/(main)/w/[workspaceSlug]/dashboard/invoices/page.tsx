@@ -1,4 +1,3 @@
-import { addDays } from "date-fns";
 import { ReceiptText } from "lucide-react";
 
 import { AuthRequiredState } from "@/components/auth-required-state";
@@ -42,7 +41,7 @@ export default async function Page() {
         issuedAt: "desc",
       },
     }),
-    prisma.workspace.findUnique({ where: { id: workspaceId }, select: { invoiceDueDays: true } }),
+    prisma.workspace.findUnique({ where: { id: workspaceId }, select: { timeZone: true } }),
   ]);
 
   if (!workspace) {
@@ -64,7 +63,8 @@ export default async function Page() {
     invoiceNumber: invoice.invoiceNumber ?? invoiceNumbers.get(invoice.id) ?? formatDocumentNumber("INV", 1),
     href: `/dashboard/invoices/${invoice.id}`,
     issuedAt: invoice.issuedAt.toISOString(),
-    dueAt: addDays(invoice.issuedAt, workspace.invoiceDueDays).toISOString(),
+    dueAt: invoice.dueAt.toISOString(),
+    timeZone: workspace.timeZone,
     jobTitle: invoice.jobTitle,
     jobDescription: invoice.jobDescription ?? undefined,
     jobNumber: invoice.jobId.slice(-6).toUpperCase(),

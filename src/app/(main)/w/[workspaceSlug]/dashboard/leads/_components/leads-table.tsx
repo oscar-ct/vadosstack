@@ -1,8 +1,7 @@
 "use client";
-
 import * as React from "react";
 
-import { format, isBefore, startOfToday } from "date-fns";
+import { isBefore, startOfToday } from "date-fns";
 import {
   CalendarDays,
   ChevronLeft,
@@ -43,6 +42,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { formatCalendarDate } from "@/lib/business-time";
 import { formatPhoneNumber } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
@@ -99,7 +99,7 @@ function statusClassName(status: string) {
 
 function formatFollowUp(lead: LeadRow) {
   if (!lead.followUpAt) return "No follow-up";
-  return format(new Date(lead.followUpAt), "MMM d, yyyy");
+  return formatCalendarDate(lead.followUpAt, "MMM d, yyyy");
 }
 
 function shouldIgnoreRowClick(target: EventTarget | null) {

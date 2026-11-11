@@ -121,6 +121,7 @@ export async function resolveInvoicePaymentLink(token: string, accessedAt = new 
                 companyEmail: true,
                 companyPhone: true,
                 invoiceDueDays: true,
+                timeZone: true,
                 invoiceMessageAlign: true,
                 invoiceMessageEnabled: true,
                 invoiceMessageText: true,

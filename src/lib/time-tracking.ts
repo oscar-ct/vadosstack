@@ -1,42 +1,45 @@
-import { addDays, addMonths, format, isValid, parse, startOfDay, startOfMonth, startOfWeek } from "date-fns";
+import { Temporal } from "temporal-polyfill";
 
 import type {
   EmployeeSummary,
   TimeEntryRow,
 } from "@/app/(main)/w/[workspaceSlug]/dashboard/time-tracking/_components/time-tracking-dashboard";
+import { businessDateKey, calendarDateKey, DEFAULT_BUSINESS_TIME_ZONE, formatCalendarDate } from "@/lib/business-time";
 
 export function toHours(value: { toString: () => string }) {
   return Number(value.toString());
 }
 
-export function getSelectedWeek(week?: string) {
+export function getSelectedWeek(week?: string, timeZone = DEFAULT_BUSINESS_TIME_ZONE) {
+  let day = Temporal.PlainDate.from(businessDateKey(new Date(), timeZone));
   if (week) {
-    const parsedWeek = parse(week, "yyyy-MM-dd", new Date());
-
-    if (isValid(parsedWeek)) return startOfWeek(parsedWeek, { weekStartsOn: 1 });
+    try {
+      day = Temporal.PlainDate.from(week);
+    } catch {
+      /* Invalid bookmarks use the current business week. */
+    }
   }
-
-  return startOfWeek(startOfDay(new Date()), { weekStartsOn: 1 });
+  return new Date(`${day.subtract({ days: day.dayOfWeek - 1 }).toString()}T00:00:00.000Z`);
 }
-
-export function getTimeTrackingRange(week?: string) {
-  const weekStart = getSelectedWeek(week);
-  const weekEnd = addDays(weekStart, 7);
-  const monthStart = startOfMonth(weekStart);
-  const monthEnd = addMonths(monthStart, 1);
-  const weekLastDay = addDays(weekEnd, -1);
+export function getTimeTrackingRange(week?: string, timeZone = DEFAULT_BUSINESS_TIME_ZONE) {
+  const weekStart = getSelectedWeek(week, timeZone);
+  const day = Temporal.PlainDate.from(calendarDateKey(weekStart));
+  const asDate = (d: typeof day) => new Date(`${d.toString()}T00:00:00.000Z`);
+  const weekEnd = asDate(day.add({ days: 7 }));
+  const monthStart = asDate(day.with({ day: 1 }));
+  const monthEnd = asDate(day.with({ day: 1 }).add({ months: 1 }));
+  const last = asDate(day.add({ days: 6 }));
   const monthLabel =
-    format(weekStart, "yyyy-MM") === format(weekLastDay, "yyyy-MM")
-      ? format(weekStart, "MMMM yyyy")
-      : `${format(weekStart, "MMM yyyy")} - ${format(weekLastDay, "MMM yyyy")}`;
-
+    formatCalendarDate(weekStart, "yyyy-MM") === formatCalendarDate(last, "yyyy-MM")
+      ? formatCalendarDate(weekStart, "MMMM yyyy")
+      : `${formatCalendarDate(weekStart, "MMM yyyy")} - ${formatCalendarDate(last, "MMM yyyy")}`;
   return {
     monthEnd,
     monthLabel,
     monthStart,
-    nextWeek: format(addDays(weekStart, 7), "yyyy-MM-dd"),
-    periodLabel: `${format(weekStart, "MMM d")} - ${format(addDays(weekEnd, -1), "MMM d")}`,
-    previousWeek: format(addDays(weekStart, -7), "yyyy-MM-dd"),
+    nextWeek: day.add({ days: 7 }).toString(),
+    previousWeek: day.subtract({ days: 7 }).toString(),
+    periodLabel: `${formatCalendarDate(weekStart, "MMM d")} - ${formatCalendarDate(last, "MMM d")}`,
     weekEnd,
     weekStart,
   };
@@ -80,7 +83,7 @@ export function mapTimeEntry(entry: {
     lunchMinutes: hasTimeRange ? entry.lunchMinutes : 0,
     notes: entry.notes ?? undefined,
     startTime: entry.startTime ?? undefined,
-    workedOn: format(entry.workedOn, "yyyy-MM-dd"),
+    workedOn: calendarDateKey(entry.workedOn),
   };
 }
 
@@ -104,7 +107,7 @@ export function mapEmployeeSummary(employee: {
     department: employee.department ?? undefined,
     id: employee.id,
     employeeNumber: employee.employeeNumber,
-    lastWorkedOn: lastEntry ? format(lastEntry.workedOn, "yyyy-MM-dd") : undefined,
+    lastWorkedOn: lastEntry ? calendarDateKey(lastEntry.workedOn) : undefined,
     name: employee.name,
     totalHours: employee.timeEntries.reduce((total, entry) => total + toHours(entry.hours), 0),
   };

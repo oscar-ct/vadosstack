@@ -1,6 +1,16 @@
-import { addMonths, differenceInCalendarDays, endOfToday, format, isAfter, startOfToday, subDays } from "date-fns";
+import { isAfter } from "date-fns";
+import { Temporal } from "temporal-polyfill";
 
 import { can, type WorkspaceMembershipSummary } from "@/lib/authorization";
+import {
+  addCalendarDays,
+  businessDateKey,
+  businessDayStart,
+  calendarDaysUntil,
+  DEFAULT_BUSINESS_TIME_ZONE,
+  formatBusinessDate,
+  formatCalendarDate,
+} from "@/lib/business-time";
 import { prisma } from "@/lib/prisma";
 
 const FOLLOW_UP_ESTIMATE_STATUSES = new Set(["Estimate Provided", "Waiting on Customer"]);
@@ -124,6 +134,7 @@ export function buildManagerActionQueue({
   limit,
   tasks = [],
   timeRequests,
+  timeZone = DEFAULT_BUSINESS_TIME_ZONE,
 }: {
   estimates: QueueEstimate[];
   jobs: QueueJob[];
@@ -131,10 +142,12 @@ export function buildManagerActionQueue({
   limit?: number;
   tasks?: QueueTask[];
   timeRequests: QueueTimeRequest[];
+  timeZone?: string;
 }): ManagerActionQueueItem[] {
-  const today = startOfToday();
-  const todayEnd = endOfToday();
-  const staleCutoff = subDays(today, 14);
+  const day = businessDateKey(new Date(), timeZone);
+  const today = new Date(`${day}T00:00:00Z`);
+  const todayEnd = new Date(today.getTime() + 86400000 - 1);
+  const staleCutoff = businessDayStart(addCalendarDays(day, -14), timeZone);
 
   const pendingTimeRequests = timeRequests.filter((request) => request.action && request);
   const staleEstimates = estimates
@@ -176,7 +189,11 @@ export function buildManagerActionQueue({
     );
   const openLeadFollowUps = leads
     .filter((lead) => lead.status !== "Won" && lead.status !== "Lost")
-    .filter((lead) => lead.followUpAt && !isAfter(lead.followUpAt, addMonths(today, 1)))
+    .filter(
+      (lead) =>
+        lead.followUpAt &&
+        !isAfter(lead.followUpAt, new Date(`${Temporal.PlainDate.from(day).add({ months: 1 }).toString()}T23:59:59Z`)),
+    )
     .sort((a, b) => (a.followUpAt?.getTime() ?? 0) - (b.followUpAt?.getTime() ?? 0));
   const openLeadFollowUpIds = new Set(openLeadFollowUps.map((lead) => lead.id));
   const newLeads = leads
@@ -190,13 +207,13 @@ export function buildManagerActionQueue({
 
   const queue = [
     ...overdueJobs.map((job) => {
-      const daysOverdue = differenceInCalendarDays(today, job.dateEnd as Date);
+      const daysOverdue = -calendarDaysUntil(job.dateEnd as Date, new Date(), timeZone);
 
       return {
         id: job.id,
         type: "Overdue job",
         title: compactTitle(job.description, "Job is overdue"),
-        detail: `${job.customer?.name ?? "Customer not assigned"} · ended ${format(job.dateEnd as Date, "MMM d")}`,
+        detail: `${job.customer?.name ?? "Customer not assigned"} · ended ${formatCalendarDate(job.dateEnd as Date, "MMM d")}`,
         href: `/dashboard/jobs/${job.id}`,
         priority: "Review now",
         severity: "rose" as const,
@@ -204,13 +221,13 @@ export function buildManagerActionQueue({
       };
     }),
     ...jobsNeedingStatusReview.map((job) => {
-      const daysSinceStart = differenceInCalendarDays(today, job.dateBegin as Date);
+      const daysSinceStart = -calendarDaysUntil(job.dateBegin as Date, new Date(), timeZone);
 
       return {
         id: job.id,
         type: "Job status",
         title: compactTitle(job.description, "Job needs a status review"),
-        detail: `${job.customer?.name ?? "Customer not assigned"} · started ${format(job.dateBegin as Date, "MMM d")}`,
+        detail: `${job.customer?.name ?? "Customer not assigned"} · started ${formatCalendarDate(job.dateBegin as Date, "MMM d")}`,
         href: `/dashboard/jobs/${job.id}`,
         priority: "Update status",
         severity: "amber" as const,
@@ -222,7 +239,7 @@ export function buildManagerActionQueue({
       type: "Lead",
       title: compactTitle(lead.name, "Lead needs follow-up"),
       detail: lead.followUpAt
-        ? `${lead.serviceType ?? "Inquiry"} · follow up ${format(lead.followUpAt, "MMM d")}`
+        ? `${lead.serviceType ?? "Inquiry"} · follow up ${formatCalendarDate(lead.followUpAt, "MMM d")}`
         : `${lead.serviceType ?? "Inquiry"} · follow-up date not set`,
       href: `/dashboard/leads/${lead.id}`,
       priority: "Follow up",
@@ -254,8 +271,8 @@ export function buildManagerActionQueue({
       type: "Time review",
       title: `${request.employee.name} requested ${formatTimeRequestAction(request.action)}`,
       detail: request.workedOn
-        ? `Worked ${format(request.workedOn, "MMM d")} · submitted ${format(request.requestedAt, "MMM d")}`
-        : `Submitted ${format(request.requestedAt, "MMM d")}`,
+        ? `Worked ${formatCalendarDate(request.workedOn, "MMM d")} · submitted ${formatBusinessDate(request.requestedAt, "MMM d", timeZone)}`
+        : `Submitted ${formatBusinessDate(request.requestedAt, "MMM d", timeZone)}`,
       href: `/dashboard/time-tracking?request=${request.id}`,
       priority: "Review",
       severity: "amber" as const,
@@ -305,7 +322,7 @@ export function buildManagerActionQueue({
       id: estimate.id,
       type: "Estimate",
       title: compactTitle(estimate.description, "Estimate needs follow-up"),
-      detail: `${estimate.customer?.name ?? "Customer not assigned"} · ${differenceInCalendarDays(today, estimate.createdAt)} days old`,
+      detail: `${estimate.customer?.name ?? "Customer not assigned"} · ${-calendarDaysUntil(businessDateKey(estimate.createdAt, timeZone), new Date(), timeZone)} days old`,
       href: `/dashboard/estimates/records/${estimate.id}`,
       priority: "Follow up",
       severity: "cyan" as const,
@@ -336,7 +353,12 @@ export function buildManagerActionQueue({
   return typeof limit === "number" ? queue.slice(0, limit) : queue;
 }
 
-export async function getManagerActionQueue(ownerId: string, limit?: number, membership?: WorkspaceMembershipSummary) {
+export async function getManagerActionQueue(
+  ownerId: string,
+  limit?: number,
+  membership?: WorkspaceMembershipSummary,
+  timeZone = DEFAULT_BUSINESS_TIME_ZONE,
+) {
   const mayRead = (permission: Parameters<typeof can>[1]) => !membership || can(membership, permission);
   const [leads, jobs, estimates, tasks, timeRequests] = await Promise.all([
     mayRead("leads.view")
@@ -374,8 +396,8 @@ export async function getManagerActionQueue(ownerId: string, limit?: number, mem
           where: {
             ownerId,
             scheduledFor: {
-              gte: startOfToday(),
-              lte: endOfToday(),
+              gte: new Date(`${businessDateKey(new Date(), timeZone)}T00:00:00Z`),
+              lte: new Date(`${businessDateKey(new Date(), timeZone)}T23:59:59.999Z`),
             },
             status: {
               not: "Completed",
@@ -408,5 +430,6 @@ export async function getManagerActionQueue(ownerId: string, limit?: number, mem
     limit,
     tasks,
     timeRequests,
+    timeZone,
   });
 }

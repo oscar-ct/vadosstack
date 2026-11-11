@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
 import { Document, Font, Image, Page, Path, renderToBuffer, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
-import { format } from "date-fns";
 
+import { formatBusinessDate, formatCalendarDate } from "@/lib/business-time";
 import { type DocumentMessageAlign, getDocumentMessageLineItems } from "@/lib/document-messages";
 
 import type { PricingLineItem } from "../../jobs/_components/pricing-items";
@@ -31,6 +31,7 @@ export type EstimatePdfData = {
   estimateNumber: string;
   estimatedTotal: { toString: () => string };
   issuedAt: Date;
+  timeZone?: string;
   jobDescription: string | null;
   jobTitle: string;
   laborCost: { toString: () => string };
@@ -363,7 +364,7 @@ function optionalMoney(value?: string) {
 }
 
 function maybeDate(value: Date | null) {
-  return value ? format(value, "MMM d, yyyy") : "Not scheduled";
+  return value ? formatCalendarDate(value, "MMM d, yyyy") : "Not scheduled";
 }
 
 function canRenderLogo(value?: string | null) {
@@ -577,15 +578,15 @@ function EstimatePdfDocument({ data }: { data: EstimatePdfData }) {
             <Text style={styles.documentTitle}>Estimate</Text>
             <View style={styles.documentMeta}>
               <Text>Estimate #{data.estimateNumber}</Text>
-              <Text>Issued {format(data.issuedAt, "MMM d, yyyy")}</Text>
-              <Text>Valid through {format(data.validThrough, "MMM d, yyyy")}</Text>
+              <Text>Issued {formatBusinessDate(data.issuedAt, "MMM d, yyyy", data.timeZone)}</Text>
+              <Text>Valid through {formatCalendarDate(data.validThrough, "MMM d, yyyy")}</Text>
             </View>
           </View>
 
           <View style={styles.totalPanel}>
             <Text style={styles.totalLabel}>Estimated total</Text>
             <Text style={styles.totalAmount}>{money(data.estimatedTotal)}</Text>
-            <Text style={styles.totalMeta}>valid through {format(data.validThrough, "MMM d, yyyy")}</Text>
+            <Text style={styles.totalMeta}>valid through {formatCalendarDate(data.validThrough, "MMM d, yyyy")}</Text>
           </View>
         </View>
 

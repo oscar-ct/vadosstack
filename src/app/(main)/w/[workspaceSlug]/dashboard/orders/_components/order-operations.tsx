@@ -1,10 +1,10 @@
 "use client";
-
 import * as React from "react";
 
 import { Banknote, PackageCheck, RotateCcw, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -360,7 +360,7 @@ export function OrderOperations({
       </div>
       {order.reservationExpiresAt ? (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-800 text-xs dark:bg-amber-950 dark:text-amber-300">
-          Unpaid stock is held until {new Date(order.reservationExpiresAt).toLocaleDateString()}.
+          Unpaid stock is held until {<BusinessDateTime value={order.reservationExpiresAt} pattern="MMM d, yyyy" />}.
         </p>
       ) : null}
       <FulfillmentWizard
@@ -632,7 +632,8 @@ export function OrderOperations({
               }}
             >
               <p className="text-muted-foreground text-sm">
-                Fulfillment recorded {new Date(latestActiveShipment.shippedAt).toLocaleDateString()}.
+                Fulfillment recorded {<BusinessDateTime value={latestActiveShipment.shippedAt} pattern="MMM d, yyyy" />}
+                .
               </p>
               <OperationField label="Reason" htmlFor="operation-fulfillment-reversal-reason">
                 <Input
@@ -702,7 +703,7 @@ export function OrderOperations({
                         {adjustment.kind === "Cancellation" ? "Items cancelled" : adjustment.kind}
                       </p>
                       <p className="text-muted-foreground text-xs">
-                        {new Date(adjustment.effectiveAt).toLocaleString()} · {adjustment.reason}
+                        {<BusinessDateTime value={adjustment.effectiveAt} />} · {adjustment.reason}
                       </p>
                     </div>
                     <p className="font-semibold tabular-nums">-{formatCurrency(credit)}</p>
@@ -742,14 +743,15 @@ export function OrderOperations({
                 <div key={entry.id} className="grid gap-0.5 text-muted-foreground">
                   <p>
                     <span className="font-medium text-foreground">
-                      {new Date(entry.shippedAt).toLocaleDateString()}
+                      {<BusinessDateTime value={entry.shippedAt} pattern="MMM d, yyyy" />}
                     </span>{" "}
                     · {entry.carrier || "Pickup"} · {entry.trackingNumber || "No tracking number"}
                     {entry.reversal ? " · Corrected" : ""}
                   </p>
                   {entry.reversal ? (
                     <p className="text-xs">
-                      Corrected {new Date(entry.reversal.reversedAt).toLocaleDateString()} · {entry.reversal.reason}
+                      Corrected {<BusinessDateTime value={entry.reversal.reversedAt} pattern="MMM d, yyyy" />} ·{" "}
+                      {entry.reversal.reason}
                     </p>
                   ) : null}
                 </div>

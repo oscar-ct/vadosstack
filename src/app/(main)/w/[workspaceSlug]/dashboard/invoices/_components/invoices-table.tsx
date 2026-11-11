@@ -15,7 +15,6 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { differenceInCalendarDays, parseISO } from "date-fns";
 import {
   ArrowUpDown,
   CalendarDays,
@@ -72,6 +71,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
+import { calendarDaysUntil, formatBusinessDate } from "@/lib/business-time";
 import { formatDateOnly, toDateInputValue } from "@/lib/date-only";
 import { formatPaymentReference } from "@/lib/payments/presentation";
 import { formatCurrency } from "@/lib/utils";
@@ -134,7 +134,7 @@ const invoiceExportColumns: CsvColumn<InvoiceTableItem>[] = [
   { header: "Customer", value: (invoice) => invoice.customerName },
   { header: "Job title", value: (invoice) => invoice.jobTitle },
   { header: "Job number", value: (invoice) => invoice.jobNumber },
-  { header: "Issued date", value: (invoice) => formatDate(invoice.issuedAt) },
+  { header: "Issued date", value: (invoice) => formatBusinessDate(invoice.issuedAt, "MMM d, yyyy", invoice.timeZone) },
   { header: "Due date", value: (invoice) => formatDate(invoice.dueAt) },
   { header: "Status", value: (invoice) => getInvoiceStatus(invoice) },
   { header: "Payment status", value: (invoice) => invoice.paymentStatus },
@@ -181,7 +181,7 @@ function getDueState(invoice: InvoiceTableItem) {
     };
   }
 
-  const daysUntilDue = differenceInCalendarDays(parseISO(invoice.dueAt), new Date());
+  const daysUntilDue = calendarDaysUntil(invoice.dueAt, new Date(), invoice.timeZone);
 
   if (daysUntilDue < 0) {
     const daysPastDue = Math.abs(daysUntilDue);
@@ -328,7 +328,7 @@ export function InvoiceDetailsDialog({
               <DialogDescription>
                 <CustomerLink customerId={invoice.customerId} name={invoice.customerName} />
                 {" - issued "}
-                {formatDate(invoice.issuedAt)}
+                {formatBusinessDate(invoice.issuedAt, "MMM d, yyyy", invoice.timeZone)}
               </DialogDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -458,7 +458,7 @@ export function InvoiceDetailsDialog({
                     id={`invoice-payment-date-${invoice.id}`}
                     name="paidOn"
                     type="date"
-                    defaultValue={toDateInputValue()}
+                    defaultValue={toDateInputValue(undefined, invoice.timeZone)}
                     required
                   />
                 </div>
@@ -1002,7 +1002,7 @@ export function InvoicesTable({
                   <div className="flex min-w-0 flex-col gap-3">
                     <div className="grid gap-1">
                       <span className="text-muted-foreground text-xs">Issued</span>
-                      <span>{formatDate(invoice.issuedAt)}</span>
+                      <span>{formatBusinessDate(invoice.issuedAt, "MMM d, yyyy", invoice.timeZone)}</span>
                     </div>
                     <div className="grid gap-1">
                       <span className="text-muted-foreground text-xs">Paid</span>

@@ -1,5 +1,4 @@
 "use client";
-
 import * as React from "react";
 
 import { addDays, format, parseISO } from "date-fns";
@@ -33,6 +32,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { BusinessDateTime } from "@/components/business-time";
 import { OptionalDatePicker } from "@/components/optional-date-picker";
 import { PermissionDisabledButton } from "@/components/permission-disabled-button";
 import {
@@ -73,6 +73,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Textarea } from "@/components/ui/textarea";
 import { WorkspaceLink as Link, useWorkspaceRouter as useRouter } from "@/components/workspace-path-provider";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { formatCalendarDate } from "@/lib/business-time";
 import { type EmployeeAccent, getEmployeeAccent as getStoredEmployeeAccent } from "@/lib/employee-colors";
 import { getNoWorkDayReasonLabel, noWorkDayReasons } from "@/lib/no-work-days";
 import { cn } from "@/lib/utils";
@@ -414,7 +415,7 @@ function TimelineSegmentPopover({
   const pinned = React.useRef(false);
   const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const entry = segment.entry;
-  const sourceDay = format(parseISO(entry.workedOn), "EEEE");
+  const sourceDay = formatCalendarDate(entry.workedOn, "EEEE");
   const displayedStart = segment.isContinuation ? "12:00 AM" : formatTime12(entry.startTime);
   const displayedEnd = segment.isContinuation ? formatTime12(entry.endTime) : formatTime12(entry.endTime);
 
@@ -1117,7 +1118,7 @@ function NoWorkDayTimeline({
                 <CalendarX2 className="size-4 text-muted-foreground" /> No work
               </div>
               <div className="text-muted-foreground text-xs">
-                {record.employeeName} · {format(parseISO(record.workedOn), "EEEE, MMM d")}
+                {record.employeeName} · {formatCalendarDate(record.workedOn, "EEEE, MMM d")}
               </div>
             </div>
             <Badge variant="secondary" className="shrink-0">
@@ -1326,7 +1327,7 @@ function EditHoursDialog({
         <DialogHeader>
           <DialogTitle>Edit hours</DialogTitle>
           <DialogDescription>
-            Update {entry.employeeName} on {format(parseISO(entry.workedOn), "EEEE, MMM d")}.
+            Update {entry.employeeName} on {formatCalendarDate(entry.workedOn, "EEEE, MMM d")}.
             {requiresApproval ? " Changes from this portal require manager review before they take effect." : ""}
           </DialogDescription>
         </DialogHeader>
@@ -1450,7 +1451,7 @@ function DeleteHoursDialog({
           <AlertDialogTitle>Delete these hours?</AlertDialogTitle>
           <AlertDialogDescription>
             This removes {formatHours(entry.hours)} for {entry.employeeName} on{" "}
-            {format(parseISO(entry.workedOn), "MMM d")}.
+            {formatCalendarDate(entry.workedOn, "MMM d")}.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {state.message && !state.success ? <p className="text-destructive text-sm">{state.message}</p> : null}
@@ -1580,7 +1581,7 @@ function ReviewTimeRequestDialog({
           </DialogTitle>
           <DialogDescription>
             {request.employeeName} #{request.employeeNumber} sent a {request.action.toLowerCase()} request on{" "}
-            {format(parseISO(request.requestedAt), "MMM d, h:mm a")}.
+            {<BusinessDateTime value={request.requestedAt} pattern={"MMM d, h:mm a"} />}.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
@@ -1715,7 +1716,7 @@ function PendingTimeRequestsCard({
                         <div className="text-amber-700 text-xs">Conflict—entry changed</div>
                       ) : null}
                       <div className="text-[11px] text-muted-foreground">
-                        {format(parseISO(request.requestedAt), "MMM d, h:mm a")}
+                        {<BusinessDateTime value={request.requestedAt} pattern={"MMM d, h:mm a"} />}
                       </div>
                     </div>
                   </div>
@@ -2044,7 +2045,7 @@ function EmployeeRequestRow({
             <RequestStatusBadge status={request.status} />
           </div>
           <div className="text-muted-foreground text-xs">
-            {request.workedOn ? format(parseISO(request.workedOn), "MMM d") : "No date"} ·{" "}
+            {request.workedOn ? formatCalendarDate(request.workedOn, "MMM d") : "No date"} ·{" "}
             {formatReviewTimeRange(request)}
           </div>
           <div className="text-muted-foreground text-xs">
@@ -2057,11 +2058,11 @@ function EmployeeRequestRow({
           ) : null}
           {request.reviewedAt ? (
             <div className="text-[11px] text-muted-foreground">
-              Reviewed {format(parseISO(request.reviewedAt), "MMM d, h:mm a")}
+              Reviewed {<BusinessDateTime value={request.reviewedAt} pattern={"MMM d, h:mm a"} />}
             </div>
           ) : (
             <div className="text-[11px] text-muted-foreground">
-              Submitted {format(parseISO(request.requestedAt), "MMM d, h:mm a")}
+              Submitted {<BusinessDateTime value={request.requestedAt} pattern={"MMM d, h:mm a"} />}
             </div>
           )}
           {request.reviewReason ? (
@@ -2405,7 +2406,7 @@ function TimeEntryAuditCard({ events, jobs }: { events: TimeEntryAuditRow[]; job
                             {presentation.performedBy}{" "}
                             <span className="font-medium text-foreground">{event.actorName}</span>
                             {event.source === "EmployeeRequest" ? " · Approved request" : ""} ·{" "}
-                            {format(parseISO(event.createdAt), "MMM d, h:mm a")}
+                            {<BusinessDateTime value={event.createdAt} pattern={"MMM d, h:mm a"} />}
                           </span>
                         </span>
                         <ChevronRight className="mt-2 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
@@ -2418,7 +2419,8 @@ function TimeEntryAuditCard({ events, jobs }: { events: TimeEntryAuditRow[]; job
                         {presentation.recordLabel} {presentation.verb.toLowerCase()}
                       </DialogTitle>
                       <DialogDescription>
-                        {event.employeeName} #{event.employeeNumber} · {format(parseISO(event.createdAt), "PPp")}
+                        {event.employeeName} #{event.employeeNumber} ·{" "}
+                        {<BusinessDateTime value={event.createdAt} pattern={"PPp"} />}
                       </DialogDescription>
                     </DialogHeader>
 
@@ -2638,7 +2640,7 @@ export function TimeTrackingDashboard({
     if (attentionOnly && !entryNeedsAttention(entry)) continue;
     if (!entry.startTime || !entry.endTime || entry.endTime >= entry.startTime) continue;
 
-    const continuationDate = format(addDays(parseISO(entry.workedOn), 1), "yyyy-MM-dd");
+    const continuationDate = formatCalendarDate(addDays(parseISO(entry.workedOn), 1), "yyyy-MM-dd");
     const continuations = overnightContinuations.get(continuationDate) ?? [];
     continuations.push(entry);
     overnightContinuations.set(continuationDate, continuations);

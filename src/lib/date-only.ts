@@ -1,5 +1,7 @@
 import { format } from "date-fns";
 
+import { businessDateKey } from "@/lib/business-time";
+
 const DATE_INPUT_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export function parseDateInput(value: string) {
@@ -24,6 +26,6 @@ export function formatDateOnly(value: Date | string | null | undefined) {
   return format(new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()), "MMM d, yyyy");
 }
 
-export function toDateInputValue(date = new Date()) {
-  return format(date, "yyyy-MM-dd");
+export function toDateInputValue(date?: Date, timeZone?: string) {
+  return date ? format(date, "yyyy-MM-dd") : businessDateKey(new Date(), timeZone);
 }

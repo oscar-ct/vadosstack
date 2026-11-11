@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { addDays, format } from "date-fns";
-
 import { getPermittedDashboardAuthorization } from "@/lib/authorization";
+import { formatCalendarDate, invoiceDueDate } from "@/lib/business-time";
 import { getCompanyLogoSrc } from "@/lib/company-logo";
 import { normalizeDocumentMessageAlign, renderDocumentMessage } from "@/lib/document-messages";
 import { formatDocumentNumber } from "@/lib/document-number";
@@ -92,7 +91,7 @@ export async function GET(
   if (!workspace) return new NextResponse("Workspace not found", { status: 404 });
   const estimateNumber = estimate.estimateNumber ?? formatDocumentNumber("EST", estimateSequence);
   const serviceLocation = formatServiceAddress(estimate);
-  const validThrough = addDays(estimate.issuedAt, workspace.estimateValidDays);
+  const validThrough = invoiceDueDate(estimate.issuedAt, workspace.estimateValidDays, workspace.timeZone);
   const companyLogoSrc = await getCompanyLogoSrc(workspaceId);
   const paymentAmount = Number(estimate.estimatedTotal.toString()) / 2;
   const documentMessageAlign = normalizeDocumentMessageAlign(workspace.estimateMessageAlign);
@@ -105,7 +104,7 @@ export async function GET(
         estimateTotal: money(estimate.estimatedTotal),
         jobTitle: estimate.jobTitle,
         serviceLocation,
-        validThrough: format(validThrough, "MMM d, yyyy"),
+        validThrough: formatCalendarDate(validThrough, "MMM d, yyyy"),
       })
     : "";
   const snapshotMaterials = parseEstimateMaterials(estimate.materials);
@@ -127,6 +126,7 @@ export async function GET(
     estimatedTotal: estimate.estimatedTotal,
     estimateNumber,
     issuedAt: estimate.issuedAt,
+    timeZone: workspace.timeZone,
     jobDescription: estimate.jobDescription,
     jobTitle: estimate.jobTitle,
     laborCost: estimate.laborCost,
