@@ -452,7 +452,7 @@ export function JobsTable({
                 <Card
                   key={row.id}
                   size="sm"
-                  className="cursor-pointer gap-0 transition-colors hover:bg-muted/40"
+                  className="cursor-pointer gap-0 bg-card transition-shadow hover:shadow-sm data-[size=sm]:pt-0"
                   role="link"
                   tabIndex={0}
                   onClick={(event) => {
@@ -468,7 +468,7 @@ export function JobsTable({
                   }}
                 >
                   <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden sm:grid-cols-[minmax(0,1fr)_minmax(19rem,1fr)] sm:gap-x-6">
-                    <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="-mx-3 flex min-w-0 items-start justify-between gap-3 bg-linear-to-r from-[#7544ce] to-[#4f5dce] px-3 py-4 text-white sm:col-span-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <div className="line-clamp-2 min-w-0 font-medium text-sm">{row.original.description}</div>
@@ -476,10 +476,10 @@ export function JobsTable({
                         <CustomerLink
                           customerId={row.original.customerId}
                           name={row.original.customerName}
-                          className="block truncate font-medium text-sm"
+                          className="mt-1 block truncate text-white text-xs"
                         />
                       </div>
-                      <Badge variant="outline" className="shrink-0 bg-muted-foreground/10 px-1.5">
+                      <Badge variant="outline" className="shrink-0 bg-background/95 px-1.5">
                         {statusIcon(row.original.status)}
                         {row.original.status}
                       </Badge>
@@ -489,8 +489,8 @@ export function JobsTable({
                         Overdue since {getJobOverdueDate(row.original)}
                       </div>
                     ) : null}
-                    <div className="grid min-w-0 gap-2 text-sm sm:col-start-2 sm:row-span-4 sm:row-start-1 sm:border-l sm:pl-6">
-                      <MobileLocationCard address={serviceLocation} modalLabel="Job site" />
+                    <div className="grid min-w-0 gap-2 text-sm sm:col-start-2 sm:row-span-4 sm:row-start-2 sm:border-l sm:pl-6">
+                      <MobileLocationCard address={serviceLocation} modalLabel="Job site" compact />
                       <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">Start Date</span>
                         <span className="min-w-0 text-right">

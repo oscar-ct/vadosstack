@@ -83,7 +83,6 @@ export function MobileLocationCard({
           <Button asChild size="sm" variant="outline">
             <a href={directionsUrl} aria-label={`Get directions to ${normalizedAddress}`}>
               <Navigation />
-              Directions
             </a>
           </Button>
         </div>
@@ -94,14 +93,8 @@ export function MobileLocationCard({
           className="group mt-1.5 flex w-full min-w-0 items-center gap-2.5 rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           aria-label={`View ${normalizedAddress} on a map`}
         >
-          <Image
-            src="/google-maps-ios.png"
-            alt=""
-            width={32}
-            height={32}
-            className="size-8 shrink-0 rounded-lg shadow-xs ring-1 ring-foreground/10"
-          />
-          <span className="line-clamp-2 min-w-0 flex-1 break-words font-medium text-sm leading-5 group-hover:underline">
+          <Image src="/google-maps-ios.png" alt="" width={32} height={32} className="size-8 shrink-0" />
+          <span className="line-clamp-2 min-w-0 flex-1 break-words text-sm leading-5 group-hover:underline">
             {normalizedAddress}
           </span>
           <Expand className="size-3.5 shrink-0 text-muted-foreground" />

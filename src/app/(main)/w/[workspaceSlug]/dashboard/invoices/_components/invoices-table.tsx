@@ -16,12 +16,14 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import {
+  ArrowRight,
   ArrowUpDown,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  CircleAlert,
   CircleDollarSign,
   Search,
   SlidersHorizontal,
@@ -763,25 +765,37 @@ export function InvoicesTable({
         aria-pressed={dueFilter === "overdue"}
         className={
           dueSummary.pastDueCount > 0
-            ? "grid gap-1 rounded-lg border border-rose-200 bg-rose-50 p-3 text-left text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/35"
-            : "grid gap-1 rounded-lg border bg-muted/20 p-3 text-left text-muted-foreground"
+            ? "flex items-center gap-3 rounded-xl border border-rose-200/80 bg-rose-50/70 p-3 text-left text-rose-950 transition-colors hover:bg-rose-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-100 dark:hover:bg-rose-950/35"
+            : "flex items-center gap-3 rounded-xl border bg-muted/20 p-3 text-left text-muted-foreground"
         }
       >
-        <div className="flex items-center justify-between gap-3 font-medium text-sm">
-          <span>
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+          <CircleAlert className="size-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="font-medium text-sm">Past due</span>
+            <span className="text-rose-700/75 text-xs dark:text-rose-300/80">
+              {dueSummary.pastDueCount > 0
+                ? `${dueSummary.pastDueCount} invoice${dueSummary.pastDueCount === 1 ? "" : "s"}`
+                : "No invoices"}
+            </span>
+          </div>
+          <div className="mt-0.5 font-semibold text-base tabular-nums">
+            {dueSummary.pastDueCount > 0 ? formatMoney(dueSummary.pastDueBalance) : "$0.00"}
+          </div>
+          <div className="text-rose-700/75 text-xs dark:text-rose-300/80">
             {dueSummary.pastDueCount > 0
-              ? `${dueSummary.pastDueCount} past due invoice${dueSummary.pastDueCount === 1 ? "" : "s"}`
-              : "No past due invoices"}
+              ? "Outstanding balance needs attention"
+              : "All invoices are within their due window"}
+          </div>
+        </div>
+        {dueSummary.pastDueCount > 0 ? (
+          <span className="hidden shrink-0 items-center gap-1 font-medium text-xs md:flex">
+            {dueFilter === "overdue" ? "Show all" : "View overdue"}
+            <ArrowRight className="size-3.5" aria-hidden="true" />
           </span>
-          {dueSummary.pastDueCount > 0 ? (
-            <span className="hidden text-xs md:inline">{dueFilter === "overdue" ? "Show all" : "View overdue"} →</span>
-          ) : null}
-        </div>
-        <div className="text-sm">
-          {dueSummary.pastDueCount > 0
-            ? `${formatMoney(dueSummary.pastDueBalance)} currently past due`
-            : "Outstanding invoices are still within their due window."}
-        </div>
+        ) : null}
       </button>
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap items-center gap-2">
@@ -979,7 +993,7 @@ export function InvoicesTable({
             return (
               <div
                 key={row.id}
-                className="relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_minmax(18rem,1fr)] sm:gap-x-6"
+                className="relative grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 overflow-hidden rounded-lg border bg-card p-3 pt-0 transition-shadow hover:shadow-sm sm:grid-cols-[minmax(0,1fr)_minmax(18rem,1fr)] sm:gap-x-6"
               >
                 <Link
                   prefetch={false}
@@ -987,18 +1001,18 @@ export function InvoicesTable({
                   className="absolute inset-0 z-10 rounded-lg"
                   aria-label={`Open invoice ${invoice.invoiceNumber}`}
                 />
-                <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="-mx-3 flex min-w-0 items-start justify-between gap-3 bg-linear-to-r from-[#7544ce] to-[#4f5dce] px-3 py-4 text-white sm:col-span-2">
                   <div className="min-w-0 flex-1">
                     <div className="font-medium">{invoice.invoiceNumber}</div>
                     <CustomerLink
                       customerId={invoice.customerId}
                       name={invoice.customerName}
-                      className="relative z-20 block truncate text-muted-foreground text-sm"
+                      className="relative z-20 mt-1 block truncate text-white text-xs"
                     />
                   </div>
                   <div className="shrink-0 font-semibold text-sm tabular-nums">{formatMoney(invoice.total)}</div>
                 </div>
-                <div className="grid min-w-0 grid-cols-2 gap-3 text-sm sm:row-span-2">
+                <div className="grid min-w-0 grid-cols-2 gap-3 text-sm sm:col-span-2">
                   <div className="flex min-w-0 flex-col gap-3">
                     <div className="grid gap-1">
                       <span className="text-muted-foreground text-xs">Issued</span>
@@ -1027,7 +1041,7 @@ export function InvoicesTable({
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 sm:col-span-2">
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="outline" className={getStatusClassName(getInvoiceStatus(invoice))}>
                       {getInvoiceStatus(invoice)}

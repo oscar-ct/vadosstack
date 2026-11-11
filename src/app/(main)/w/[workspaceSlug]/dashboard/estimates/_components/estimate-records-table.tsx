@@ -361,7 +361,7 @@ export function EstimateRecordsTable({
                   type="button"
                   className={cn(
                     "group relative grid min-h-20 content-between gap-1.5 overflow-hidden rounded-lg border bg-card p-2.5 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-28 sm:gap-2 sm:rounded-xl sm:p-3",
-                    isActive && "border-primary bg-primary/[0.06] shadow-sm ring-1 ring-primary/15",
+                    isActive && "bg-primary/[0.06] shadow-sm",
                   )}
                   onClick={() => updateStatusFilter(stage.status)}
                   aria-pressed={isActive}
@@ -559,7 +559,7 @@ export function EstimateRecordsTable({
             <Card
               key={estimate.id}
               size="sm"
-              className="cursor-pointer gap-0 transition-colors hover:bg-muted/40"
+              className="cursor-pointer gap-0 transition-shadow hover:shadow-sm data-[size=sm]:pt-0"
               role="link"
               tabIndex={0}
               onClick={(event) => {
@@ -573,29 +573,27 @@ export function EstimateRecordsTable({
               }}
             >
               <CardContent className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden sm:grid-cols-[minmax(0,1fr)_minmax(18rem,1fr)] sm:gap-x-6">
-                <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="-mx-3 flex min-w-0 items-start justify-between gap-3 bg-linear-to-r from-[#7544ce] to-[#4f5dce] px-3 py-4 text-white sm:col-span-2">
                   <div className="min-w-0 flex-1">
-                    <div className="mb-1 font-medium font-mono text-muted-foreground text-xs">
-                      {estimate.estimateNumber ?? "Not issued"}
-                    </div>
+                    <div className="mb-1 font-medium font-mono text-xs">{estimate.estimateNumber ?? "Not issued"}</div>
                     <div className="line-clamp-2 min-w-0 font-medium text-sm">{estimate.description}</div>
-                    <CustomerLink
-                      customerId={estimate.customerId}
-                      fallback="No customer or lead"
-                      name={estimate.customerName ?? estimate.leadName}
-                      className="block truncate text-muted-foreground text-sm"
-                    />
-                    {!estimate.customerEmail ? (
-                      <span className="mt-1 flex w-fit items-center gap-1.5 text-amber-700 text-xs dark:text-amber-300">
-                        <MailWarning className="size-3 shrink-0" />
-                        Email missing
-                      </span>
-                    ) : null}
                   </div>
                   <span className="shrink-0 font-medium text-sm">{formatMoney(estimate.estimatedTotal)}</span>
                 </div>
-                <div className="grid min-w-0 gap-2 text-sm sm:row-span-2">
-                  <MobileLocationCard address={estimate.serviceLocation} />
+                <div className="grid min-w-0 gap-2 text-sm sm:col-span-2">
+                  <CustomerLink
+                    customerId={estimate.customerId}
+                    fallback="No customer or lead"
+                    name={estimate.customerName ?? estimate.leadName}
+                    className="block truncate font-medium text-sm"
+                  />
+                  {!estimate.customerEmail ? (
+                    <span className="flex w-fit items-center gap-1.5 text-amber-700 text-xs dark:text-amber-300">
+                      <MailWarning className="size-3 shrink-0" />
+                      Email missing
+                    </span>
+                  ) : null}
+                  <MobileLocationCard address={estimate.serviceLocation} compact />
                   <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                     <span className="text-muted-foreground text-xs">Status</span>
                     <Badge variant="outline" className={`${estimateStatusClassName(estimate.status)} justify-self-end`}>
@@ -622,7 +620,7 @@ export function EstimateRecordsTable({
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-end sm:col-span-2">
                   <span className="text-muted-foreground text-sm">Open estimate</span>
                 </div>
               </CardContent>
