@@ -490,7 +490,7 @@ export function JobsTable({
                       </div>
                     ) : null}
                     <div className="grid min-w-0 gap-2 text-sm sm:col-start-2 sm:row-span-4 sm:row-start-2 sm:border-l sm:pl-6">
-                      <MobileLocationCard address={serviceLocation} modalLabel="Job site" compact />
+                      <MobileLocationCard address={serviceLocation} modalLabel="Job site" />
                       <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                         <span className="text-muted-foreground text-xs">Start Date</span>
                         <span className="min-w-0 text-right">

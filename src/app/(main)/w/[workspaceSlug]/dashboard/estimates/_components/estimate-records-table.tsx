@@ -593,7 +593,7 @@ export function EstimateRecordsTable({
                       Email missing
                     </span>
                   ) : null}
-                  <MobileLocationCard address={estimate.serviceLocation} compact />
+                  <MobileLocationCard address={estimate.serviceLocation} />
                   <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
                     <span className="text-muted-foreground text-xs">Status</span>
                     <Badge variant="outline" className={`${estimateStatusClassName(estimate.status)} justify-self-end`}>
