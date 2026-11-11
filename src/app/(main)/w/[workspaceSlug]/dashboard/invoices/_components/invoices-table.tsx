@@ -1078,13 +1078,14 @@ export function InvoicesTable({
                   role="link"
                   className="cursor-pointer"
                   onClick={(event) => {
-                    if ((event.target as HTMLElement).closest("[data-invoice-row-ignore]")) {
+                    if ((event.target as HTMLElement).closest("[data-invoice-row-ignore], a")) {
                       return;
                     }
 
                     router.push(row.original.href);
                   }}
                   onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       router.push(row.original.href);

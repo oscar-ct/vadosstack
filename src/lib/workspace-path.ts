@@ -1,5 +1,17 @@
 const SCOPED_DASHBOARD_PATH = /^\/w\/[^/]+(\/dashboard(?:\/.*)?)$/;
 
+export function getDashboardNavigationPath(href: string, currentHref: string) {
+  try {
+    const current = new URL(currentHref);
+    const destination = new URL(href, current);
+    if (destination.origin !== current.origin || destination.pathname === current.pathname) return null;
+    const path = getLegacyDashboardPath(destination.pathname);
+    return path === "/dashboard" || path.startsWith("/dashboard/") ? destination.pathname : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getLegacyDashboardPath(pathname: string) {
   return pathname.match(SCOPED_DASHBOARD_PATH)?.[1] ?? pathname;
 }

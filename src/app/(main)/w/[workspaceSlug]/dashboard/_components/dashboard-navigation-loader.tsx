@@ -6,8 +6,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+
+import { WorkspaceNavigationFeedbackProvider } from "@/components/workspace-path-provider";
 import { cn } from "@/lib/utils";
-import { getLegacyDashboardPath } from "@/lib/workspace-path";
+import { getDashboardNavigationPath, getLegacyDashboardPath } from "@/lib/workspace-path";
 
 type DashboardNavigationLoaderContextValue = {
   isNavigating: boolean;
@@ -75,14 +78,11 @@ export function DashboardNavigationLoaderProvider({ children }: Readonly<{ child
     return () => window.clearTimeout(timeout);
   }, [isNavigating, workspaceTransition]);
 
-  const startNavigation = React.useCallback(
-    (url: string, isNewTab?: boolean) => {
-      if (isNewTab || url === pathname) return;
+  const startNavigation = React.useCallback((url: string, isNewTab?: boolean) => {
+    if (isNewTab || !getDashboardNavigationPath(url, window.location.href)) return;
 
-      setIsNavigating(true);
-    },
-    [pathname],
-  );
+    setIsNavigating(true);
+  }, []);
 
   const startWorkspaceNavigation = React.useCallback(
     (url: string, workspaceName: string, isNewTab?: boolean) => {
@@ -101,7 +101,7 @@ export function DashboardNavigationLoaderProvider({ children }: Readonly<{ child
 
   return (
     <DashboardNavigationLoaderContext.Provider value={contextValue}>
-      {children}
+      <WorkspaceNavigationFeedbackProvider onNavigate={startNavigation}>{children}</WorkspaceNavigationFeedbackProvider>
       {workspaceTransition ? <WorkspaceTransitionLoader workspaceName={workspaceTransition.name} /> : null}
     </DashboardNavigationLoaderContext.Provider>
   );
@@ -112,11 +112,13 @@ export function DashboardNavigationContent({
   className,
 }: Readonly<{ children: React.ReactNode; className?: string }>) {
   const { isNavigating } = useDashboardNavigationLoader();
+  const contentRef = React.useRef<HTMLDivElement>(null);
   const dashboardPath = getLegacyDashboardPath(usePathname());
   const isOverviewPage = dashboardPath === "/dashboard/overview" || dashboardPath === "/dashboard/overview-v2";
 
   return (
     <div
+      ref={contentRef}
       className={cn(
         "relative h-full p-0 md:p-6 print:bg-transparent print:p-0",
         isOverviewPage
@@ -126,38 +128,102 @@ export function DashboardNavigationContent({
       )}
     >
       {children}
-      {isNavigating ? <DashboardNavigationLoader /> : null}
+      <DashboardNavigationLoader contentRef={contentRef} active={isNavigating} />
     </div>
   );
 }
 
-function DashboardNavigationLoader() {
+function useContentBounds(contentRef: React.RefObject<HTMLDivElement | null>) {
+  const [bounds, setBounds] = React.useState<{ left: number; right: number; top: number } | null>(null);
+
+  React.useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const header = content.previousElementSibling;
+    const measure = () => {
+      const rect = content.getBoundingClientRect();
+      const next = {
+        left: Math.max(0, rect.left),
+        right: Math.max(0, window.innerWidth - rect.right),
+        top: Math.min(window.innerHeight, Math.max(0, header?.getBoundingClientRect().bottom ?? rect.top)),
+      };
+      setBounds((previous) =>
+        previous?.left === next.left && previous.right === next.right && previous.top === next.top ? previous : next,
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    if (header) observer.observe(header);
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, { capture: true, passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [contentRef]);
+
+  return bounds;
+}
+
+function DashboardNavigationLoader({
+  contentRef,
+  active,
+}: {
+  contentRef: React.RefObject<HTMLDivElement | null>;
+  active: boolean;
+}) {
+  const bounds = useContentBounds(contentRef);
+  const reduceMotion = useReducedMotion();
+
   return (
-    <div
-      className="absolute inset-0 z-40 cursor-wait overflow-hidden bg-background/20 backdrop-blur-[2px] print:hidden"
-      role="status"
-      aria-live="polite"
-      aria-label="Loading page"
-    >
-      <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden bg-border/50">
-        <div className="h-full w-1/2 animate-pulse rounded-r-full bg-primary shadow-[0_0_16px_hsl(var(--primary)/0.35)]" />
-      </div>
-      <div className="absolute inset-x-0 top-[calc(50svh-3rem)] flex -translate-y-1/2 justify-center px-4">
-        <div className="flex min-w-36 flex-col items-center rounded-2xl border bg-background/95 px-5 py-4 text-center text-sm shadow-xl ring-1 ring-foreground/5">
-          <span className="relative flex size-10 items-center justify-center rounded-full bg-primary/10">
-            <Image
-              src="/apple-icon.png"
-              alt=""
-              width={28}
-              height={28}
-              className="relative z-10 size-7 animate-pulse object-contain"
+    <AnimatePresence>
+      {active && bounds ? (
+        <motion.div
+          key="motion-navigation"
+          className="fixed bottom-0 z-40 cursor-wait overflow-hidden print:hidden"
+          style={bounds}
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.14 }}
+          role="status"
+          aria-live="polite"
+          aria-label="Loading page"
+        >
+          <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden bg-border/40" aria-hidden="true">
+            <motion.div
+              className="h-full w-2/5 rounded-full bg-primary"
+              initial={{ x: "-100%" }}
+              animate={{ x: reduceMotion ? "75%" : ["-100%", "250%"] }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 2, ease: "easeInOut", repeat: Infinity }}
             />
-            <span className="pointer-events-none absolute size-full animate-ping rounded-full bg-primary/15" />
-          </span>
-          <span className="mt-2 font-medium">Loading page...</span>
-        </div>
-      </div>
-    </div>
+          </div>
+          <motion.div
+            className="absolute inset-0 grid place-items-center bg-background/10 px-4 backdrop-blur-[1.5px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: reduceMotion ? 0 : 0.16 }}
+          >
+            <motion.div
+              className="flex size-28 flex-col items-center justify-center gap-3 rounded-[28px] border border-white/10 bg-black/75 text-sm text-white shadow-xl backdrop-blur-md sm:size-32 sm:rounded-[32px]"
+              initial={{ y: reduceMotion ? 0 : 4 }}
+              animate={{ y: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <motion.span
+                aria-hidden="true"
+                className="size-8 rounded-full border-[3px] border-white/25 border-t-white"
+                animate={{ rotate: reduceMotion ? 0 : 360 }}
+                transition={{ duration: 0.8, ease: "linear", repeat: reduceMotion ? 0 : Infinity }}
+              />
+              Loading…
+            </motion.div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 

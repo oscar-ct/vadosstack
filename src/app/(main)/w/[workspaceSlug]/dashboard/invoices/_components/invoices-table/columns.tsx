@@ -116,7 +116,7 @@ export function getInvoicesColumns(): ColumnDef<InvoiceTableItem>[] {
       accessorKey: "customerName",
       header: "Customer",
       cell: ({ row }) => (
-        <span className="line-clamp-2 max-h-10 w-40 max-w-40 overflow-hidden leading-snug" data-invoice-row-ignore>
+        <span className="line-clamp-2 max-h-10 w-40 max-w-40 overflow-hidden leading-snug">
           <CustomerLink
             customerId={row.original.customerId}
             name={row.original.customerName}
