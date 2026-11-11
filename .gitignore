@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/.pnpm-store/
 /.pnp
 .pnp.js
 .yarn/install-state.gz
@@ -15,6 +16,11 @@
 
 # production
 /build
+
+# Local backups and generated previews
+/.backups/
+/tmp/
+/output/
 
 # misc
 .DS_Store

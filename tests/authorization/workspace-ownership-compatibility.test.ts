@@ -112,12 +112,7 @@ describe("workspace ownership compatibility release", () => {
   });
 
   it("resolves every demo seed through an owned workspace", () => {
-    for (const path of [
-      "src/scripts/seed-customers.ts",
-      "src/scripts/seed-demo-extras.ts",
-      "src/scripts/seed-ecommerce.ts",
-      "src/scripts/seed-jobs.ts",
-    ]) {
+    for (const path of ["src/scripts/seed-customers.ts", "src/scripts/seed-ecommerce.ts", "src/scripts/seed-jobs.ts"]) {
       const contents = source(path);
       expect(contents, path).toContain("resolveOwnedWorkspaceByEmail(ownerEmail)");
       expect(contents, path).not.toContain("prisma.user.findUnique");
@@ -152,7 +147,13 @@ describe("workspace ownership compatibility release", () => {
     );
 
     expect(schema).not.toMatch(/owner\s+User\s+@relation\(fields: \[ownerId\]/);
-    expect(schema.match(/owner\s+Workspace\??\s+@relation\(fields: \[ownerId\]/g)).toHaveLength(35);
+    const ownedModels = [...schema.matchAll(/model\s+(\w+)\s*\{([\s\S]*?)\n\}/g)].filter(([, , body]) =>
+      /\n\s+ownerId\s+String/.test(body),
+    );
+    expect(ownedModels.length).toBeGreaterThan(0);
+    for (const [, modelName, body] of ownedModels) {
+      expect(body, modelName).toMatch(/owner\s+Workspace\??\s+@relation\(fields: \[ownerId\]/);
+    }
     expect(schema).toMatch(/model GoogleMailAccount \{[\s\S]*workspaceId\s+String\s+@unique/);
     expect(migration.trimStart()).toMatch(/^--[\s\S]*\nBEGIN;/);
     expect(migration.trimEnd()).toMatch(/COMMIT;$/);

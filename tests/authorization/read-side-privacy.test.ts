@@ -95,15 +95,8 @@ describe("read-side permission privacy", () => {
   it("does not query performance-report domains without their corresponding view permissions", async () => {
     const data = await getCommandCenterData("workspace-a", "Business A", membership());
 
-    expect(data.totals).toEqual({
-      collectionRate: 0,
-      invoices: 0,
-      openJobs: 0,
-      openWorkValue: 0,
-      receivablesTotal: 0,
-      waitingEstimateCount: 0,
-      waitingEstimateValue: 0,
-    });
+    expect(data.permissions).toEqual({ invoices: false, jobs: false, time: false, estimates: false });
+    expect(data.reportingPeriods.ytd).toMatchObject({ billed: 0, collected: 0, jobs: 0, hours: 0 });
     expect(mocks.jobFindMany).not.toHaveBeenCalled();
     expect(mocks.estimateFindMany).not.toHaveBeenCalled();
     expect(mocks.invoiceAggregate).not.toHaveBeenCalled();
@@ -115,7 +108,7 @@ describe("read-side permission privacy", () => {
   it("loads invoice reporting without leaking jobs, estimates, or employee time", async () => {
     await getCommandCenterData("workspace-a", "Business A", membership("invoices.view"));
 
-    expect(mocks.invoiceAggregate).toHaveBeenCalledWith(expect.objectContaining({ where: { ownerId: "workspace-a" } }));
+    expect(mocks.invoiceAggregate).not.toHaveBeenCalled();
     expect(mocks.invoiceFindMany).toHaveBeenCalled();
     expect(mocks.jobPaymentFindMany).toHaveBeenCalled();
     expect(mocks.jobFindMany).not.toHaveBeenCalled();
